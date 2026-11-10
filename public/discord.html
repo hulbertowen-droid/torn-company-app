@@ -9,6 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/global.css?v=4.0.0">
+    <script src="/auth-gate.js?v=4.1.0"></script>
     <style>
         
         :root {
@@ -1887,6 +1888,49 @@
         .toast-msg.error { border-color: rgba(255, 71, 87, 0.4); background: rgba(255, 71, 87, 0.12); color: #ff4757; }
         .toast-msg.warning { border-color: rgba(255, 165, 2, 0.4); background: rgba(255, 165, 2, 0.12); color: #ffa502; }
         @keyframes toastSlideIn { from { transform: translateX(50px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+        /* Real-Time Faction Co-op Sync Animations & Notification Banner */
+        @keyframes peerSyncGlow {
+            0% { box-shadow: 0 0 0 rgba(46, 213, 115, 0); transform: scale(1); }
+            35% { box-shadow: 0 0 25px rgba(46, 213, 115, 0.7); border-color: var(--green); transform: scale(1.015); }
+            100% { box-shadow: 0 0 0 rgba(46, 213, 115, 0); transform: scale(1); }
+        }
+        .peer-sync-flash {
+            animation: peerSyncGlow 1.2s ease-out !important;
+        }
+        .sync-notification-banner {
+            position: fixed;
+            top: 68px;
+            right: 24px;
+            z-index: 999999;
+            background: rgba(14, 20, 36, 0.95);
+            border: 1px solid rgba(46, 213, 115, 0.45);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.65), 0 0 20px rgba(46, 213, 115, 0.2);
+            color: #ffffff;
+            padding: 10px 18px;
+            border-radius: 10px;
+            font-size: 0.86em;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            pointer-events: none;
+            backdrop-filter: blur(12px);
+            animation: syncBannerIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            transition: opacity 0.3s, transform 0.3s;
+        }
+        @keyframes syncBannerIn {
+            from { transform: translateY(-20px) scale(0.95); opacity: 0; }
+            to { transform: translateY(0) scale(1); opacity: 1; }
+        }
+        .hero-sync-pill {
+            display: inline-flex; align-items: center; gap: 6px; font-size: 0.74em; font-weight: 700;
+            padding: 2px 8px; border-radius: 12px; background: rgba(0, 206, 201, 0.12);
+            color: #00cec9; border: 1px solid rgba(0, 206, 201, 0.3);
+        }
+        .hero-sync-pill.reconnecting {
+            background: rgba(255, 165, 2, 0.12); color: #ffa502; border-color: rgba(255, 165, 2, 0.3);
+        }
     </style>
 </head>
 <body>
@@ -1970,7 +2014,8 @@
                     <div class="hero-bot-info">
                         <div class="hero-bot-name-row">
                             <span class="hero-bot-name">F.R.I.D.A.Y. Sentinel</span>
-                            <span class="hero-conn-pill connected" id="hero-conn-pill"><span id="connection-indicator">🟢 Connected • Spider-Verse [52355]</span></span>
+                            <span class="hero-conn-pill connected" id="hero-conn-pill"><span id="connection-indicator">🟢 Connected</span></span>
+                            <span class="hero-sync-pill" id="hero-faction-sync-pill" title="Live Shared Configuration across all Faction Members"><span class="pulse-indicator" style="background:#00cec9; box-shadow:0 0 8px #00cec9; width:7px; height:7px; border-radius:50%; display:inline-block;"></span> <span id="hero-faction-sync-text">⚡ Faction Synced</span></span>
                         </div>
                         <div class="hero-guild-stats">
                             <span id="hero-channels-count"><span id="discovered-channels-count">20</span> Channels</span> • <span id="hero-roles-count"><span id="discovered-roles-label">10 Roles Discovered</span></span>
@@ -4572,6 +4617,250 @@ let serverRoles = [];
 let isKillswitchActive = false;
 let currentBotInfo = { username: 'F.R.I.D.A.Y', avatar: null };
 
+// ── Real-Time Multi-Tenant Faction Co-op Synchronization Engine ──
+window.myClientId = 'cli_' + Math.random().toString(36).substring(2, 9) + '_' + Date.now().toString(36);
+let currentConfigRev = 1;
+let factionEventSource = null;
+let fallbackSyncTimer = null;
+let debounceSettingTimers = {};
+
+function showSyncNotification(msg) {
+    let banner = document.getElementById('faction-sync-toast-banner');
+    if (!banner) {
+        banner = document.createElement('div');
+        banner.id = 'faction-sync-toast-banner';
+        banner.className = 'sync-notification-banner';
+        document.body.appendChild(banner);
+    }
+    banner.innerHTML = `<span>⚡</span> <span>${msg}</span>`;
+    banner.style.display = 'flex';
+    banner.style.opacity = '1';
+    banner.style.transform = 'translateY(0) scale(1)';
+
+    if (banner._hideTimer) clearTimeout(banner._hideTimer);
+    banner._hideTimer = setTimeout(() => {
+        banner.style.opacity = '0';
+        banner.style.transform = 'translateY(-15px) scale(0.95)';
+        setTimeout(() => { banner.style.display = 'none'; }, 300);
+    }, 4500);
+}
+
+function flashPeerUpdate(element) {
+    if (!element) return;
+    element.classList.remove('peer-sync-flash');
+    void element.offsetWidth; // force reflow
+    element.classList.add('peer-sync-flash');
+    setTimeout(() => { element.classList.remove('peer-sync-flash'); }, 1300);
+}
+
+function updateFactionSyncPill(status, peersCount = 1, fId = '') {
+    const pill = document.getElementById('hero-faction-sync-pill');
+    const text = document.getElementById('hero-faction-sync-text');
+    if (!pill || !text) return;
+
+    const fac = fId || localStorage.getItem('warboard_myFactionId') || '52355';
+    if (status === 'connected') {
+        pill.className = 'hero-sync-pill';
+        text.textContent = peersCount > 1 ? `⚡ Faction Synced (${peersCount} online)` : `⚡ Faction Synced [${fac}]`;
+    } else if (status === 'reconnecting') {
+        pill.className = 'hero-sync-pill reconnecting';
+        text.textContent = '🔄 Reconnecting...';
+    }
+}
+
+async function syncFactionToggle(key, value) {
+    try {
+        const res = await fetch('/api/faction-config/toggle', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                type: 'toggle',
+                key,
+                value,
+                clientId: window.myClientId
+            })
+        });
+        const data = await res.json();
+        if (data && data.rev) {
+            currentConfigRev = data.rev;
+        }
+    } catch(e) {
+        console.warn('[FactionSync] Error broadcasting toggle:', e.message);
+    }
+}
+
+async function syncCommandToggle(cmd, enabled) {
+    try {
+        const res = await fetch('/api/faction-config/toggle', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                type: 'command',
+                command: cmd,
+                value: enabled,
+                clientId: window.myClientId
+            })
+        });
+        const data = await res.json();
+        if (data && data.rev) {
+            currentConfigRev = data.rev;
+        }
+    } catch(e) {
+        console.warn('[FactionSync] Error broadcasting command toggle:', e.message);
+    }
+}
+
+async function syncCategoryCommands(commands, enabled) {
+    try {
+        const res = await fetch('/api/faction-config/toggle', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                type: 'commands_bulk',
+                commands,
+                value: enabled,
+                clientId: window.myClientId
+            })
+        });
+        const data = await res.json();
+        if (data && data.rev) currentConfigRev = data.rev;
+    } catch(e) {
+        console.warn('[FactionSync] Error broadcasting category commands:', e.message);
+    }
+}
+
+function debouncedSyncSetting(key, value) {
+    if (debounceSettingTimers[key]) clearTimeout(debounceSettingTimers[key]);
+    debounceSettingTimers[key] = setTimeout(async () => {
+        try {
+            const res = await fetch('/api/faction-config/toggle', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    type: 'setting',
+                    key,
+                    value,
+                    clientId: window.myClientId
+                })
+            });
+            const data = await res.json();
+            if (data && data.rev) currentConfigRev = data.rev;
+        } catch(e) {}
+    }, 800);
+}
+
+function initFactionSyncStream() {
+    if (factionEventSource) {
+        try { factionEventSource.close(); } catch(e) {}
+    }
+    const token = localStorage.getItem('sv_session_token') || '';
+    const facId = localStorage.getItem('warboard_myFactionId') || (window.currentUser?.factionId) || '';
+    const url = `/api/faction-stream?token=${encodeURIComponent(token)}&factionId=${encodeURIComponent(facId)}`;
+
+    try {
+        factionEventSource = new EventSource(url);
+
+        factionEventSource.onmessage = function(event) {
+            try {
+                const data = JSON.parse(event.data);
+                handleIncomingFactionSync(data);
+            } catch(e) {}
+        };
+
+        factionEventSource.onerror = function() {
+            updateFactionSyncPill('reconnecting');
+        };
+    } catch(e) {
+        console.warn('[FactionSync] EventSource init error:', e.message);
+    }
+}
+
+function startFallbackSync() {
+    if (fallbackSyncTimer) clearInterval(fallbackSyncTimer);
+    fallbackSyncTimer = setInterval(async () => {
+        try {
+            const res = await fetch(`/api/faction-config/sync?rev=${currentConfigRev}`);
+            const data = await res.json();
+            if (data && data.updated && data.config) {
+                currentConfigRev = data.rev;
+                applyConfigToDOM(data.config);
+                showSyncNotification(`Faction configuration updated by ${data.updatedBy || 'Faction Member'}`);
+            }
+        } catch(e) {}
+    }, 15000);
+}
+
+function handleIncomingFactionSync(data) {
+    if (!data) return;
+    if (data.rev && data.rev > currentConfigRev) {
+        currentConfigRev = data.rev;
+    }
+
+    if (data.type === 'connected') {
+        updateFactionSyncPill('connected', data.activePeers, data.factionId);
+        return;
+    }
+
+    // Ignore events that originated from this exact client tab
+    if (data.senderClientId && data.senderClientId === window.myClientId) {
+        return;
+    }
+
+    const who = data.updatedBy || 'Faction Member';
+
+    if (data.type === 'toggle') {
+        const el = document.getElementById(data.key);
+        if (el && el.type === 'checkbox') {
+            el.checked = Boolean(data.value);
+            const row = el.closest('.trigger-row');
+            if (row) {
+                row.classList.toggle('on', el.checked);
+                flashPeerUpdate(row);
+            }
+            updateActiveCount();
+            calculateSetupProgress();
+            const alertTitle = row ? (row.querySelector('.trigger-name')?.textContent || data.key) : data.key;
+            showSyncNotification(`${who} turned ${data.value ? 'ON' : 'OFF'} "${alertTitle.trim()}"`);
+        }
+    } else if (data.type === 'command') {
+        const cmdChk = document.querySelector(`.cmd-toggle[data-cmd="${data.command}"]`);
+        if (cmdChk) {
+            cmdChk.checked = Boolean(data.value);
+            const card = cmdChk.closest('.cmd-card') || cmdChk.closest('.trigger-row');
+            if (card) {
+                card.classList.toggle('on', cmdChk.checked);
+                flashPeerUpdate(card);
+            }
+            updateCommandsBadge();
+            showSyncNotification(`${who} ${data.value ? 'enabled' : 'disabled'} /${data.command}`);
+        }
+    } else if (data.type === 'commands_bulk') {
+        if (Array.isArray(data.commands)) {
+            data.commands.forEach(cmd => {
+                const cmdChk = document.querySelector(`.cmd-toggle[data-cmd="${cmd}"]`);
+                if (cmdChk) {
+                    cmdChk.checked = Boolean(data.value);
+                    const card = cmdChk.closest('.cmd-card') || cmdChk.closest('.trigger-row');
+                    if (card) card.classList.toggle('on', cmdChk.checked);
+                }
+            });
+            updateCommandsBadge();
+            showSyncNotification(`${who} updated ${data.commands.length} commands`);
+        }
+    } else if (data.type === 'setting') {
+        const inputEl = document.getElementById(data.key) || document.querySelector(`[name="${data.key}"]`);
+        if (inputEl && document.activeElement !== inputEl) {
+            inputEl.value = data.value;
+            flashPeerUpdate(inputEl);
+        }
+    } else if (data.type === 'full_config') {
+        if (data.config) {
+            applyConfigToDOM(data.config);
+            showSyncNotification(`Full Faction configuration saved by ${who}`);
+        }
+    }
+}
+
 function showToast(msg, type = 'info') {
     const container = document.getElementById('toast-container');
     if (!container) return;
@@ -4650,6 +4939,8 @@ function onToggle(checkbox) {
     if (item) item.classList.toggle('on', checkbox.checked);
     updateActiveCount();
     calculateSetupProgress();
+    // Instant real-time multi-tenant sync to all faction members
+    syncFactionToggle(checkbox.id, checkbox.checked);
 }
 
 function updateActiveCount() {
@@ -5163,7 +5454,10 @@ function updateInviteLink() {
 
 function setConnectionStatus(connected, guildName) {
     if (connected && guildName) connectedGuildName = guildName;
-    const name = guildName || connectedGuildName || 'Spider-Verse [52355]';
+    const userFac = (window.currentUser && window.currentUser.factionName)
+        ? `${window.currentUser.factionName} [${window.currentUser.factionId}]`
+        : (localStorage.getItem('warboard_myFactionId') ? `Faction [${localStorage.getItem('warboard_myFactionId')}]` : 'Spider-Verse [52355]');
+    const name = guildName || connectedGuildName || userFac;
     const heroPill = document.getElementById('hero-conn-pill');
     if (heroPill) {
         heroPill.className = 'hero-conn-pill ' + (connected ? 'connected' : 'disconnected');
@@ -5191,6 +5485,8 @@ function onCommandToggle(el) {
     const card = el.closest('.cmd-card') || el.closest('.trigger-row');
     if (card) card.classList.toggle('on', el.checked);
     updateCommandsBadge();
+    // Instant real-time multi-tenant sync to all faction members
+    if (el.dataset.cmd) syncCommandToggle(el.dataset.cmd, el.checked);
 }
 
 function updateSlashCommandBadges() {
@@ -5213,13 +5509,16 @@ function toggleCmdCategory(btn) {
     const toggles = block.querySelectorAll('.cmd-toggle');
     const checked = block.querySelectorAll('.cmd-toggle:checked');
     const enable = checked.length < toggles.length;
+    const cmdList = [];
     toggles.forEach(t => {
         t.checked = enable;
         const card = t.closest('.cmd-card') || t.closest('.trigger-row');
         if (card) card.classList.toggle('on', enable);
+        if (t.dataset.cmd) cmdList.push(t.dataset.cmd);
     });
     updateCommandsBadge();
     trackDirty();
+    if (cmdList.length > 0) syncCategoryCommands(cmdList, enable);
 }
 
 function updateCommandsBadge() {
@@ -5582,8 +5881,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         const res = await fetch('/api/get-discord-config');
         const cfg = await res.json();
         initialConfigSnapshot = JSON.parse(JSON.stringify(cfg));
+        if (cfg.rev) currentConfigRev = cfg.rev;
         try { sessionStorage.setItem('sv_cache_discord_cfg', JSON.stringify(cfg)); } catch(e) {}
         applyConfigToDOM(cfg);
+        initFactionSyncStream();
+        startFallbackSync();
     } catch (e) {
         setConnectionStatus(false);
     }
@@ -5593,10 +5895,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 async function saveDiscordConfig() {
     const statusEl = document.getElementById('status-msg');
     const btn = document.getElementById('save-btn');
+    const token = localStorage.getItem('sv_session_token');
+    const user = window.currentUser || (sessionStorage.getItem('sv_user') ? JSON.parse(sessionStorage.getItem('sv_user')) : null);
     const myKey = localStorage.getItem('warboard_apikey') || '';
-    if (!myKey) {
-        if (statusEl) { statusEl.style.color = 'var(--spider-red)'; statusEl.textContent = '❌ Missing API Key — go to Settings first.'; }
-        showToast('Missing API Key — open Settings to set your Torn API key.', 'error');
+    if (!token && !user && !myKey) {
+        if (statusEl) { statusEl.style.color = 'var(--spider-red)'; statusEl.textContent = '❌ Please connect your Torn account first.'; }
+        showToast('Please connect your Torn account to save faction settings.', 'error');
         return;
     }
     const rawTokenInput = document.getElementById('global-bottoken')?.value || '';
@@ -5783,6 +6087,7 @@ async function saveDiscordConfig() {
                 .filter(el => !el.checked)
                 .map(el => (el.dataset.cmd || '').toLowerCase().trim())
                 .filter(Boolean),
+            clientId: window.myClientId
         };
 
         const curApiKey = localStorage.getItem('warboard_apikey') || myKey;
@@ -5809,6 +6114,7 @@ async function saveDiscordConfig() {
             throw new Error(`Server returned HTTP ${res.status}. Please try again shortly.`);
         }
         if (data.success !== false) {
+            if (data.rev) currentConfigRev = data.rev;
             localStorage.setItem('warboard_disabled_commands', JSON.stringify(payload.disabledCommands));
             if (statusEl) {
                 statusEl.style.color = 'var(--green)';

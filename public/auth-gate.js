@@ -29,6 +29,7 @@
     window.fetch = function(url, options = {}) {
         const token = localStorage.getItem('sv_session_token');
         const apiKey = localStorage.getItem('warboard_apikey');
+        const facId = localStorage.getItem('warboard_myFactionId');
         if (typeof url === 'string' && (url.startsWith('/api/') || url.startsWith('http://' + window.location.host + '/api/') || url.startsWith('https://' + window.location.host + '/api/'))) {
             options = Object.assign({}, options);
             if (!options.headers) {
@@ -41,15 +42,22 @@
                 if (apiKey && !options.headers.has('x-api-key')) {
                     options.headers.append('x-api-key', apiKey);
                 }
+                if (facId && !options.headers.has('x-faction-id')) {
+                    options.headers.append('x-faction-id', facId);
+                }
             } else if (Array.isArray(options.headers)) {
                 if (token) options.headers.push(['x-session-token', token]);
                 if (apiKey) options.headers.push(['x-api-key', apiKey]);
+                if (facId) options.headers.push(['x-faction-id', facId]);
             } else {
                 if (token && !options.headers['x-session-token']) {
                     options.headers['x-session-token'] = token;
                 }
                 if (apiKey && !options.headers['x-api-key']) {
                     options.headers['x-api-key'] = apiKey;
+                }
+                if (facId && !options.headers['x-faction-id']) {
+                    options.headers['x-faction-id'] = facId;
                 }
             }
         }
@@ -399,7 +407,8 @@
         injectUserBadge(user);
 
         const isRestricted = isSpiderVerseRestrictedPage();
-        if (isRestricted && !user.isSpiderVerse) {
+        const hasFaction = user && user.factionId && String(user.factionId) !== '0';
+        if (isRestricted && !user.isSpiderVerse && !hasFaction) {
             renderRestrictedBanner(user);
         } else {
             // Authorized! Trigger page initialization functions if present

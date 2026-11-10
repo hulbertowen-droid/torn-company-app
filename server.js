@@ -160,6 +160,172 @@ let slashCommandBot = null;
 let slashBotStarted = false;
 let isStartingSlashBot = false;
 
+// --- MULTI-TENANT REAL-TIME FACTION CONFIGURATIONS ---
+const FACTION_CONFIGS_FILE = path.join(__dirname, 'data', 'faction_configs.json');
+const factionConfigs = new Map(); // factionId (string) -> factionConfig object
+const factionSseClients = new Map(); // factionId (string) -> Set<res>
+
+function initFactionConfigsDisk() {
+    try {
+        if (fs.existsSync(FACTION_CONFIGS_FILE)) {
+            const raw = fs.readFileSync(FACTION_CONFIGS_FILE, 'utf8');
+            const parsed = JSON.parse(raw);
+            for (const [fid, cfg] of Object.entries(parsed)) {
+                if (cfg && typeof cfg === 'object') {
+                    factionConfigs.set(String(fid), cfg);
+                }
+            }
+            console.log(`[FactionConfigs] Loaded configurations for ${factionConfigs.size} faction(s) from disk.`);
+        }
+    } catch(e) {
+        console.warn('[FactionConfigs] Error loading data/faction_configs.json:', e.message);
+    }
+}
+initFactionConfigsDisk();
+
+function resolveFactionId(req) {
+    if (req.userSession && req.userSession.factionId && String(req.userSession.factionId) !== '0') {
+        return String(req.userSession.factionId).trim();
+    }
+    const headerFac = req.headers ? req.headers['x-faction-id'] : null;
+    if (headerFac && String(headerFac) !== '0' && String(headerFac) !== 'null' && String(headerFac) !== 'undefined') {
+        return String(headerFac).trim();
+    }
+    const queryFac = req.query ? (req.query.factionId || req.query.faction_id) : null;
+    if (queryFac && String(queryFac) !== '0' && String(queryFac) !== 'null' && String(queryFac) !== 'undefined') {
+        return String(queryFac).trim();
+    }
+    const bodyFac = req.body ? (req.body.factionId || req.body.faction_id) : null;
+    if (bodyFac && String(bodyFac) !== '0' && String(bodyFac) !== 'null' && String(bodyFac) !== 'undefined') {
+        return String(bodyFac).trim();
+    }
+    if (req.query && req.query.token) {
+        const sess = sessionManager.getSession(req.query.token);
+        if (sess && sess.factionId && String(sess.factionId) !== '0') {
+            return String(sess.factionId).trim();
+        }
+    }
+    return String(discordConfig.factionId || '52355').trim();
+}
+
+function getFactionDiscordConfig(facId) {
+    const fid = String(facId || discordConfig.factionId || '52355').trim();
+    if (!factionConfigs.has(fid)) {
+        const template = JSON.parse(JSON.stringify(discordConfig));
+        template.factionId = fid;
+        template.rev = 1;
+        template.updatedAt = Date.now();
+        template.updatedBy = 'System Default';
+        factionConfigs.set(fid, template);
+    }
+    const cfg = factionConfigs.get(fid);
+    if (typeof cfg.rev !== 'number') cfg.rev = 1;
+    return cfg;
+}
+
+function saveFactionDiscordConfig(facId, updates, updatedBy = 'Faction Member') {
+    const fid = String(facId || discordConfig.factionId || '52355').trim();
+    const current = getFactionDiscordConfig(fid);
+    const nextRev = (current.rev || 0) + 1;
+    const merged = {
+        ...current,
+        ...updates,
+        factionId: fid,
+        rev: nextRev,
+        updatedAt: Date.now(),
+        updatedBy: String(updatedBy || 'Faction Member').slice(0, 50)
+    };
+    factionConfigs.set(fid, merged);
+
+    // If host faction, also update discordConfig in memory and on disk
+    if (fid === String(discordConfig.factionId || '52355').trim()) {
+        discordConfig = { ...discordConfig, ...updates, rev: nextRev };
+        try { fs.writeFileSync('discord_config.json', JSON.stringify(discordConfig)); } catch(e) {}
+    }
+
+    try {
+        const dataDir = path.join(__dirname, 'data');
+        if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+        const obj = {};
+        for (const [k, v] of factionConfigs.entries()) obj[k] = v;
+        fs.writeFileSync(FACTION_CONFIGS_FILE, JSON.stringify(obj, null, 2), 'utf8');
+    } catch(e) {
+        console.error('[FactionConfigs] Error saving file:', e.message);
+    }
+
+    saveToMongo();
+    return merged;
+}
+
+function broadcastFactionEvent(factionId, payload) {
+    const fid = String(factionId).trim();
+    const clients = factionSseClients.get(fid);
+    if (!clients || clients.size === 0) return;
+    const dataStr = `data: ${JSON.stringify(payload)}\n\n`;
+    for (const client of Array.from(clients)) {
+        try {
+            client.write(dataStr);
+        } catch(e) {
+            clients.delete(client);
+        }
+    }
+}
+
+function sanitizeConfigForClient(rawConfig) {
+    const fullConfig = {
+        ...rawConfig,
+        retalChannelId: rawConfig.retalChannelId || "1491499332044591176",
+        retalRoleId: rawConfig.retalRoleId || "",
+        inactivityChannelId: rawConfig.inactivityChannelId || "",
+        promotionChannelId: rawConfig.promotionChannelId || "",
+        overdoseChannelId: rawConfig.overdoseChannelId || "",
+        overdoseRoleId: rawConfig.overdoseRoleId || "",
+        alertOverdose: rawConfig.alertOverdose !== false,
+        ocChannelId: ocConfig.globalChannelId || rawConfig.ocChannelId || "",
+        ocRoleId: ocConfig.roleId || rawConfig.ocRoleId || "",
+        ocManagerRoleId: ocConfig.ocManagerRoleId || "",
+        ocManagerUserIds: rawConfig.ocManagerUserIds || ocConfig.ocManagerUserIds || "",
+        dmOcManagersOnLowCpr: ocConfig.dmOcManagersOnLowCpr !== false,
+        dmPlayerOnLowCpr: ocConfig.dmPlayerOnLowCpr !== false,
+        alertOcPlanned: ocConfig.alertPlanned !== false,
+        alertCountdown4h: ocConfig.alertCountdown4h !== false,
+        alertCountdown2h: ocConfig.alertCountdown2h !== false,
+        alertOcUpcoming: ocConfig.alertUpcoming !== false,
+        ocUpcomingMinutes: ocConfig.upcomingMinutes || 30,
+        alertOcReady: ocConfig.alertReady !== false,
+        alertOcDelayed: ocConfig.alertDelayed !== false,
+        alertOcMissingItems: ocConfig.alertMissingItems !== false,
+        alertOcCompleted: ocConfig.alertCompleted !== false,
+        alertOcLowCpr: ocConfig.alertLowCpr !== false,
+        lowCprDefaultThreshold: ocConfig.lowCprDefaultThreshold || 40,
+        lowCprLevels: ocConfig.lowCprLevels || { 1: 0, 2: 0, 3: 50, 4: 50, 5: 40, 6: 40, 7: 80, 8: 85 },
+        alertOcNoParticipation: ocConfig.alertNoParticipation !== false,
+        noParticipationDays: ocConfig.noParticipationDays || 1,
+        welcomeChannelId: rawConfig.welcomeChannelId || "",
+        postWelcomeRulesOnJoin: rawConfig.postWelcomeRulesOnJoin !== false,
+        welcomeRulesTitle: rawConfig.welcomeRulesTitle || "📜 Welcome to the Faction & Server Rules",
+        welcomeRulesContent: rawConfig.welcomeRulesContent || DEFAULT_WELCOME_RULES,
+        rev: rawConfig.rev || 1,
+        updatedAt: rawConfig.updatedAt || Date.now(),
+        updatedBy: rawConfig.updatedBy || 'System',
+        factionId: rawConfig.factionId || '52355'
+    };
+    // Scrub sensitive credentials and external keys
+    delete fullConfig.apiKey;
+    delete fullConfig.ffKey;
+    delete fullConfig.tsKey;
+    delete fullConfig.githubToken;
+    delete fullConfig.globalBotToken;
+    delete fullConfig.personalDiscordId;
+    delete fullConfig.geminiApiKey;
+    delete fullConfig.geminiApiKeys;
+    delete fullConfig.openrouterApiKey;
+    for (let i = 0; fullConfig[i] !== undefined; i++) delete fullConfig[i];
+    fullConfig.hasBotToken = !!(rawConfig.globalBotToken && rawConfig.globalBotToken.length > 20);
+    fullConfig.botTokenTail = (rawConfig.globalBotToken && rawConfig.globalBotToken.length > 20) ? rawConfig.globalBotToken.slice(-4) : '';
+    return fullConfig;
+}
+
 const configSchema = new mongoose.Schema({
     _id: { type: String, default: 'master' },
     discordConfig: Object,
@@ -313,6 +479,19 @@ async function loadConfigFromMongo() {
             if (saved.bugs && Array.isArray(saved.bugs)) {
                 bugsMemory = saved.bugs;
                 console.log(`[Mongo] Restored ${bugsMemory.length} bug reports from MongoDB Atlas.`);
+            }
+            if (saved.factionConfigs && typeof saved.factionConfigs === 'object') {
+                for (const [fid, fcfg] of Object.entries(saved.factionConfigs)) {
+                    if (!factionConfigs.has(String(fid))) {
+                        factionConfigs.set(String(fid), fcfg);
+                    } else {
+                        const cur = factionConfigs.get(String(fid));
+                        if ((fcfg.rev || 0) > (cur.rev || 0)) {
+                            factionConfigs.set(String(fid), fcfg);
+                        }
+                    }
+                }
+                console.log(`[Mongo] Restored ${Object.keys(saved.factionConfigs).length} faction configuration(s) from MongoDB Atlas.`);
             }
             if (saved.lastWarboardPayload && (!lastGoodWarboardPayload || !lastGoodWarboardPayload.friendly || lastGoodWarboardPayload.friendly.length === 0)) {
                 lastGoodWarboardPayload = saved.lastWarboardPayload;
@@ -995,6 +1174,7 @@ function saveToMongo() {
         if (mongoose.connection.readyState === 1) {
             const setPayload = {
                 discordConfig,
+                factionConfigs: Object.fromEntries(factionConfigs),
                 companyConfig,
                 ocConfig,
                 marketConfig,
@@ -3862,77 +4042,168 @@ app.get('/health', (req, res) => res.status(200).send("OK"));
 
 
 app.get('/api/get-discord-config', (req, res) => {
+    const factionId = resolveFactionId(req);
+    const rawConfig = getFactionDiscordConfig(factionId);
+
     // Safety check: ensure globalChannelId never leaks or stores a bot token
-    if (discordConfig.globalChannelId && (discordConfig.globalChannelId.includes('.') || /[a-zA-Z]/.test(discordConfig.globalChannelId))) {
-        if (!discordConfig.globalBotToken && discordConfig.globalChannelId.length > 30) {
-            discordConfig.globalBotToken = discordConfig.globalChannelId.trim();
+    if (rawConfig.globalChannelId && (rawConfig.globalChannelId.includes('.') || /[a-zA-Z]/.test(rawConfig.globalChannelId))) {
+        if (!rawConfig.globalBotToken && rawConfig.globalChannelId.length > 30) {
+            rawConfig.globalBotToken = rawConfig.globalChannelId.trim();
         }
-        discordConfig.globalChannelId = "";
-        saveDiscordConfig();
+        rawConfig.globalChannelId = "";
+        saveFactionDiscordConfig(factionId, { globalChannelId: "", globalBotToken: rawConfig.globalBotToken });
     }
-    if (discordConfig.bankingChannelId && (discordConfig.bankingChannelId.includes('.') || /[a-zA-Z]/.test(discordConfig.bankingChannelId))) {
-        discordConfig.bankingChannelId = "";
-        saveDiscordConfig();
+    if (rawConfig.bankingChannelId && (rawConfig.bankingChannelId.includes('.') || /[a-zA-Z]/.test(rawConfig.bankingChannelId))) {
+        rawConfig.bankingChannelId = "";
+        saveFactionDiscordConfig(factionId, { bankingChannelId: "" });
     }
-    const fullConfig = {
-        ...discordConfig,
-        retalChannelId: discordConfig.retalChannelId || "1491499332044591176",
-        retalRoleId: discordConfig.retalRoleId || "",
-        inactivityChannelId: discordConfig.inactivityChannelId || "",
-        promotionChannelId: discordConfig.promotionChannelId || "",
-        overdoseChannelId: discordConfig.overdoseChannelId || "",
-        overdoseRoleId: discordConfig.overdoseRoleId || "",
-        alertOverdose: discordConfig.alertOverdose !== false,
-        ocChannelId: ocConfig.globalChannelId || discordConfig.ocChannelId || "",
-        ocRoleId: ocConfig.roleId || discordConfig.ocRoleId || "",
-        ocManagerRoleId: ocConfig.ocManagerRoleId || "",
-        ocManagerUserIds: ocConfig.ocManagerUserIds || "",
-        dmOcManagersOnLowCpr: ocConfig.dmOcManagersOnLowCpr !== false,
-        dmPlayerOnLowCpr: ocConfig.dmPlayerOnLowCpr !== false,
-        alertOcPlanned: ocConfig.alertPlanned !== false,
-        alertCountdown4h: ocConfig.alertCountdown4h !== false,
-        alertCountdown2h: ocConfig.alertCountdown2h !== false,
-        alertOcUpcoming: ocConfig.alertUpcoming !== false,
-        ocUpcomingMinutes: ocConfig.upcomingMinutes || 30,
-        alertOcReady: ocConfig.alertReady !== false,
-        alertOcDelayed: ocConfig.alertDelayed !== false,
-        alertOcMissingItems: ocConfig.alertMissingItems !== false,
-        alertOcCompleted: ocConfig.alertCompleted !== false,
-        alertOcLowCpr: ocConfig.alertLowCpr !== false,
-        lowCprDefaultThreshold: ocConfig.lowCprDefaultThreshold || 40,
-        lowCprLevels: ocConfig.lowCprLevels || { 1: 0, 2: 0, 3: 50, 4: 50, 5: 40, 6: 40, 7: 80, 8: 85 },
-        alertOcNoParticipation: ocConfig.alertNoParticipation !== false,
-        noParticipationDays: ocConfig.noParticipationDays || 1,
-        welcomeChannelId: discordConfig.welcomeChannelId || "",
-        postWelcomeRulesOnJoin: discordConfig.postWelcomeRulesOnJoin !== false,
-        welcomeRulesTitle: discordConfig.welcomeRulesTitle || "📜 Welcome to the Faction & Server Rules",
-        welcomeRulesContent: discordConfig.welcomeRulesContent || DEFAULT_WELCOME_RULES
-    };
-    // Scrub sensitive credentials and external keys from client response
-    delete fullConfig.apiKey;
-    delete fullConfig.ffKey;
-    delete fullConfig.tsKey;
-    delete fullConfig.githubToken;
-    delete fullConfig.globalBotToken;
-    delete fullConfig.personalDiscordId;
-    delete fullConfig.geminiApiKey;
-    delete fullConfig.geminiApiKeys;
-    delete fullConfig.openrouterApiKey;
-    for (let i = 0; fullConfig[i] !== undefined; i++) {
-        delete fullConfig[i];
-    }
-    fullConfig.hasBotToken = !!(discordConfig.globalBotToken && discordConfig.globalBotToken.length > 20);
-    fullConfig.botTokenTail = (discordConfig.globalBotToken && discordConfig.globalBotToken.length > 20) ? discordConfig.globalBotToken.slice(-4) : '';
+
+    const fullConfig = sanitizeConfigForClient(rawConfig);
     res.json(fullConfig);
 });
 
-app.post('/api/save-discord-config', async (req, res) => { 
+// Real-Time Server-Sent Events (SSE) Stream for Faction Co-op Synchronization
+app.get('/api/faction-stream', (req, res) => {
+    const factionId = resolveFactionId(req);
+    const cfg = getFactionDiscordConfig(factionId);
+
+    res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache, no-transform',
+        'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no',
+        'Access-Control-Allow-Origin': '*'
+    });
+    if (res.flushHeaders) res.flushHeaders();
+
+    if (!factionSseClients.has(factionId)) {
+        factionSseClients.set(factionId, new Set());
+    }
+    const clientSet = factionSseClients.get(factionId);
+    clientSet.add(res);
+
+    // Initial connection handshake
+    res.write(`data: ${JSON.stringify({
+        type: 'connected',
+        factionId,
+        rev: cfg.rev || 1,
+        activePeers: clientSet.size,
+        updatedBy: cfg.updatedBy || 'System',
+        updatedAt: cfg.updatedAt || Date.now()
+    })}\n\n`);
+
+    const keepAliveTimer = setInterval(() => {
+        try {
+            res.write(': keepalive\n\n');
+        } catch(e) {
+            clearInterval(keepAliveTimer);
+            clientSet.delete(res);
+        }
+    }, 20000);
+
+    req.on('close', () => {
+        clearInterval(keepAliveTimer);
+        clientSet.delete(res);
+    });
+});
+
+// Instant Toggle & Setting Push Endpoint (< 50ms propagation across faction members)
+app.post('/api/faction-config/toggle', async (req, res) => {
+    const factionId = resolveFactionId(req);
     const callerKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey;
     const isOwner = callerKey && (callerKey === discordConfig.apiKey || callerKey === ADMIN_API_KEY || callerKey === TORN_API_KEY);
-    const isAdmin = Boolean(req.userSession && req.userSession.isSpiderVerse);
-    if (!isOwner && !isAdmin) {
-        return res.status(403).json({ error: "Administrator authorization required to update server configuration." });
+    const isMember = Boolean(req.userSession && (req.userSession.isSpiderVerse || (req.userSession.factionId && req.userSession.factionId !== '0')));
+    if (!isOwner && !isMember) {
+        return res.status(403).json({ error: "Authorization required to modify faction configuration." });
     }
+
+    const callerName = req.userSession?.playerName || (isOwner ? 'Faction Admin' : 'Faction Member');
+    const { key, value, type, command, commands, clientId } = req.body || {};
+
+    const cfg = getFactionDiscordConfig(factionId);
+    let updates = {};
+
+    if (type === 'command') {
+        const cmdName = String(command || key || '').toLowerCase().trim();
+        let disabledList = Array.isArray(cfg.disabledCommands) ? [...cfg.disabledCommands] : [];
+        if (value === false) {
+            if (!disabledList.includes(cmdName)) disabledList.push(cmdName);
+        } else {
+            disabledList = disabledList.filter(c => c !== cmdName && !(cmdName === 'revive' && c === 'revives'));
+        }
+        updates.disabledCommands = disabledList;
+    } else if (type === 'commands_bulk') {
+        const cmdList = Array.isArray(commands) ? commands.map(c => String(c).toLowerCase().trim()) : [];
+        let disabledList = Array.isArray(cfg.disabledCommands) ? [...cfg.disabledCommands] : [];
+        if (value === false) {
+            for (const c of cmdList) {
+                if (!disabledList.includes(c)) disabledList.push(c);
+            }
+        } else {
+            disabledList = disabledList.filter(c => !cmdList.includes(c));
+        }
+        updates.disabledCommands = disabledList;
+    } else if (type === 'setting') {
+        if (key && typeof key === 'string') {
+            updates[key] = value;
+        }
+    } else {
+        if (key && typeof key === 'string') {
+            updates[key] = Boolean(value);
+        }
+    }
+
+    const saved = saveFactionDiscordConfig(factionId, updates, callerName);
+
+    // Push real-time event to all connected members of this faction
+    broadcastFactionEvent(factionId, {
+        type: type || 'toggle',
+        key,
+        value,
+        command,
+        commands,
+        disabledCommands: saved.disabledCommands || [],
+        rev: saved.rev,
+        updatedBy: callerName,
+        senderClientId: clientId || null,
+        timestamp: Date.now()
+    });
+
+    res.json({
+        success: true,
+        rev: saved.rev,
+        factionId,
+        updatedBy: callerName,
+        disabledCommands: saved.disabledCommands || []
+    });
+});
+
+// Lightweight fallback polling endpoint for reconnecting clients
+app.get('/api/faction-config/sync', (req, res) => {
+    const factionId = resolveFactionId(req);
+    const clientRev = parseInt(req.query.rev, 10) || 0;
+    const cfg = getFactionDiscordConfig(factionId);
+    if ((cfg.rev || 1) > clientRev) {
+        return res.json({
+            updated: true,
+            rev: cfg.rev || 1,
+            config: sanitizeConfigForClient(cfg),
+            updatedBy: cfg.updatedBy || 'System',
+            updatedAt: cfg.updatedAt || Date.now()
+        });
+    }
+    return res.json({ updated: false, rev: cfg.rev || 1 });
+});
+
+app.post('/api/save-discord-config', async (req, res) => { 
+    const factionId = resolveFactionId(req);
+    const callerKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey;
+    const isOwner = callerKey && (callerKey === discordConfig.apiKey || callerKey === ADMIN_API_KEY || callerKey === TORN_API_KEY);
+    const isMember = Boolean(req.userSession && (req.userSession.isSpiderVerse || (req.userSession.factionId && req.userSession.factionId !== '0')));
+    if (!isOwner && !isMember) {
+        return res.status(403).json({ error: "Administrator or verified faction membership required to update configuration." });
+    }
+    const callerName = req.userSession?.playerName || (isOwner ? 'Faction Admin' : 'Faction Member');
 
     const payload = { ...req.body };
 
@@ -4087,34 +4358,45 @@ app.post('/api/save-discord-config', async (req, res) => {
     delete payload.apiKey;
     delete payload.ffKey;
 
-    discordConfig = { ...discordConfig, ...payload }; 
-    if (discordConfig.apiKey) {
+    const saved = saveFactionDiscordConfig(factionId, payload, callerName);
+
+    if (saved.apiKey) {
         try {
-            const profileRes = await fetch(`https://api.torn.com/user/?selections=profile&key=${discordConfig.apiKey}`);
+            const profileRes = await fetch(`https://api.torn.com/user/?selections=profile&key=${saved.apiKey}`);
             const profileData = await profileRes.json();
             if (profileData.faction && profileData.faction.faction_id) {
-                discordConfig.factionId = profileData.faction.faction_id.toString();
-                if (!apiPoolConfig.keys.includes(discordConfig.apiKey)) {
-                    apiPoolConfig.keys.push(discordConfig.apiKey);
+                saved.factionId = profileData.faction.faction_id.toString();
+                if (!apiPoolConfig.keys.includes(saved.apiKey)) {
+                    apiPoolConfig.keys.push(saved.apiKey);
                     saveApiPool();
                 }
             }
         } catch(e) {}
         try {
-            userKeys.syncOwnerDetails(discordConfig.apiKey, discordConfig.personalDiscordId);
+            userKeys.syncOwnerDetails(saved.apiKey, saved.personalDiscordId);
         } catch(e) {}
     }
-    saveDiscordConfig(); 
+
+    // Broadcast full updated config to all connected faction members
+    broadcastFactionEvent(factionId, {
+        type: 'full_config',
+        config: sanitizeConfigForClient(saved),
+        rev: saved.rev,
+        updatedBy: callerName,
+        senderClientId: req.body.clientId || null,
+        timestamp: Date.now()
+    });
 
     // Auto-start slash command bot and re-sync active slash commands whenever config is saved
-    if (discordConfig.globalBotToken && discordConfig.globalBotToken.trim().length > 20) {
-        startSlashCommandBot(discordConfig.globalBotToken.trim()).catch(() => {});
-        registerSlashCommands(discordConfig.globalBotToken.trim(), discordConfig.guildId).catch(err => {
+    const activeToken = saved.globalBotToken || discordConfig.globalBotToken;
+    if (activeToken && activeToken.trim().length > 20) {
+        startSlashCommandBot(activeToken.trim()).catch(() => {});
+        registerSlashCommands(activeToken.trim(), saved.guildId || discordConfig.guildId).catch(err => {
             console.warn('[Slash Bot] Auto re-sync on save failed:', err.message);
         });
     }
 
-    res.json({ success: true, disabledCommands: discordConfig.disabledCommands || [] }); 
+    res.json({ success: true, rev: saved.rev, disabledCommands: saved.disabledCommands || [] }); 
 });
 
 app.post('/api/discord/post-verification-card', async (req, res) => {
