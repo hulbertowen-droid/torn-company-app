@@ -706,7 +706,15 @@ app.use(express.static('public', {
     etag: false,
     setHeaders: (res, filePath) => {
         const p = filePath.toLowerCase();
-        if (p.endsWith('.user.js') || p.endsWith('.html') || p.endsWith('.js') || p.endsWith('.css')) {
+        if (p.endsWith('sw.js')) {
+            // Service worker: never cache, set Service-Worker-Allowed header
+            res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0');
+            res.setHeader('Service-Worker-Allowed', '/');
+            res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+        } else if (p.endsWith('manifest.json')) {
+            res.setHeader('Content-Type', 'application/manifest+json; charset=utf-8');
+            res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0');
+        } else if (p.endsWith('.user.js') || p.endsWith('.html') || p.endsWith('.js') || p.endsWith('.css')) {
             // Immediate fresh delivery for scripts, pages, and styles — never stale
             res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0');
             res.setHeader('Pragma', 'no-cache');
