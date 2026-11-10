@@ -10,12 +10,12 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/global.css?v=4.0.0">
+    <link rel="stylesheet" href="/global.css?v=4.2.0">
     
     <!-- Scripts & Auth -->
-    <script src="/auth-gate.js?v=4.0.0"></script>
-    <script src="/global_settings.js?v=4.0.0"></script>
-    <script src="/global-topbar.js?v=4.0.0"></script>
+    <script src="/auth-gate.js?v=4.2.0"></script>
+    <script src="/global_settings.js?v=4.2.0"></script>
+    <script src="/global-topbar.js?v=4.2.0"></script>
 
     <style>
     /* ─── Page-Specific Dashboard, Armory & Sentinel Styling ─── */
@@ -117,6 +117,30 @@
     }
 
     /* Modular Navigation Tabs */
+    .stat-window-pill {
+        background: transparent;
+        border: 1px solid transparent;
+        color: #94a3b8;
+        padding: 4px 10px;
+        border-radius: 6px;
+        font-size: 0.78em;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        user-select: none;
+    }
+    .stat-window-pill:hover {
+        color: #f1f5f9;
+        background: rgba(255, 255, 255, 0.05);
+    }
+    .stat-window-pill.active {
+        background: rgba(59, 130, 246, 0.2);
+        border: 1px solid #3b82f6;
+        color: #60a5fa;
+        font-weight: 700;
+        box-shadow: 0 0 10px rgba(59, 130, 246, 0.25);
+    }
+
     .ops-nav-tabs {
         display: flex;
         gap: 8px;
@@ -2349,7 +2373,222 @@
                     </div>
                 </div>
             </div>
+
+            <!-- 3. FACTION PLAYER STAT GAINS & GYM PROGRESSION TRACKER CARD -->
+            <div class="card" id="card-stat-gains-tracker" style="margin-top:20px;">
+                <div class="card-header" style="flex-wrap:wrap; gap:12px; justify-content:space-between; align-items:center;">
+                    <div>
+                        <div class="card-title" style="color:var(--accent-cyan); display:flex; align-items:center; gap:8px;">
+                            <span>🏋️ Faction Player Stat Gains &amp; Gym Progression Tracker</span>
+                            <span style="font-size:0.68em; background:rgba(56,189,248,0.12); color:#38bdf8; border:1px solid rgba(56,189,248,0.3); padding:2px 8px; border-radius:12px; font-weight:700;">Battle Stats &amp; Gym Velocity</span>
+                        </div>
+                        <div style="font-size:0.78em; color:var(--text-tertiary); margin-top:2px;">
+                            Track verified battle stats (Strength, Defense, Speed, Dexterity, Total), net gains over time, drug/gym momentum, and player training velocities.
+                        </div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                        <!-- Time Window Selector Pills (Matching Screenshot 1) -->
+                        <div style="display:inline-flex; align-items:center; background:#0c1017; border:1px solid #1e293b; border-radius:8px; padding:4px 8px; gap:4px;">
+                            <span style="font-size:0.74em; font-weight:700; color:#38bdf8; display:flex; align-items:center; gap:4px; margin-right:4px;">⏱️ WINDOW:</span>
+                            <button class="stat-window-pill" data-window="24h" onclick="setStatGainsWindow('24h', this)">24 Hours</button>
+                            <button class="stat-window-pill" data-window="3d" onclick="setStatGainsWindow('3d', this)">3 Days</button>
+                            <button class="stat-window-pill active" data-window="7d" onclick="setStatGainsWindow('7d', this)">7 Days</button>
+                            <button class="stat-window-pill" data-window="14d" onclick="setStatGainsWindow('14d', this)">14 Days</button>
+                            <button class="stat-window-pill" data-window="30d" onclick="setStatGainsWindow('30d', this)">30 Days</button>
+                            <button class="stat-window-pill" data-window="all" onclick="setStatGainsWindow('all', this)">All Time</button>
+                        </div>
+                        <button class="btn btn-sm btn-outline" id="btn-stat-snapshot" onclick="triggerStatSnapshot()" style="padding:6px 12px; font-size:0.78em; display:inline-flex; align-items:center; gap:5px;" title="Snapshot current stats for all connected faction members">
+                            <span>📸</span> Snapshot Now
+                        </button>
+                        <button class="refresh-btn" onclick="loadFactionStatGains(true)" id="btn-refresh-stat-gains" style="padding:6px 12px; font-size:0.8em;">↻ Refresh</button>
+                    </div>
+                </div>
+
+                <div class="card-body" style="padding:16px 18px;">
+                    <!-- 5 KPI METRIC CARDS STRIP -->
+                    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(170px, 1fr)); gap:10px; margin-bottom:16px;">
+                        <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border-default); border-radius:8px; padding:12px; text-align:center;">
+                            <div style="font-size:0.72em; color:var(--text-tertiary); text-transform:uppercase; font-weight:700; letter-spacing:0.5px;">📈 Total Faction Gains</div>
+                            <div style="font-size:1.5em; font-weight:900; color:var(--accent-emerald); margin-top:2px;" id="stat-kpi-total-gains">+0</div>
+                            <div style="font-size:0.72em; color:var(--text-tertiary);" id="stat-kpi-total-gains-sub">In selected window</div>
+                        </div>
+                        <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border-default); border-radius:8px; padding:12px; text-align:center;">
+                            <div style="font-size:0.72em; color:var(--text-tertiary); text-transform:uppercase; font-weight:700; letter-spacing:0.5px;">🥇 Top Stat Gainer</div>
+                            <div style="font-size:1.35em; font-weight:900; color:var(--accent-amber); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" id="stat-kpi-top-gainer">—</div>
+                            <div style="font-size:0.72em; color:var(--accent-emerald);" id="stat-kpi-top-gainer-sub">+0 gained</div>
+                        </div>
+                        <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border-default); border-radius:8px; padding:12px; text-align:center;">
+                            <div style="font-size:0.72em; color:var(--text-tertiary); text-transform:uppercase; font-weight:700; letter-spacing:0.5px;">💊 Drug &amp; Gym Momentum</div>
+                            <div style="font-size:1.5em; font-weight:900; color:var(--accent-purple); margin-top:2px;" id="stat-kpi-momentum">0 / 0</div>
+                            <div style="font-size:0.72em; color:var(--text-tertiary);" id="stat-kpi-momentum-sub">Xanax &amp; Refills Used</div>
+                        </div>
+                        <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border-default); border-radius:8px; padding:12px; text-align:center;">
+                            <div style="font-size:0.72em; color:var(--text-tertiary); text-transform:uppercase; font-weight:700; letter-spacing:0.5px;">⚡ Combat Power (Total)</div>
+                            <div style="font-size:1.5em; font-weight:900; color:var(--accent-cyan); margin-top:2px;" id="stat-kpi-total-power">0</div>
+                            <div style="font-size:0.72em; color:var(--text-tertiary);" id="stat-kpi-total-power-sub">Verified Faction Total</div>
+                        </div>
+                        <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border-default); border-radius:8px; padding:12px; text-align:center;">
+                            <div style="font-size:0.72em; color:var(--text-tertiary); text-transform:uppercase; font-weight:700; letter-spacing:0.5px;">😴 Stat Slackers (&lt;1K)</div>
+                            <div style="font-size:1.5em; font-weight:900; color:var(--accent-crimson); margin-top:2px;" id="stat-kpi-slackers">0</div>
+                            <div style="font-size:0.72em; color:var(--text-tertiary);" id="stat-kpi-slackers-sub">Needs training push</div>
+                        </div>
+                    </div>
+
+                    <!-- MULTI-FILTER CONTROLS BAR -->
+                    <div style="background:rgba(0,0,0,0.2); border:1px solid var(--border-default); border-radius:8px; padding:10px 14px; margin-bottom:14px; display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:space-between;">
+                        <!-- Filter Chips -->
+                        <div style="display:flex; flex-wrap:wrap; gap:6px; align-items:center;" id="stat-filter-chips">
+                            <span style="font-size:0.74em; color:var(--text-tertiary); font-weight:700; text-transform:uppercase;">Filter:</span>
+                            <button class="filter-pill active" onclick="setStatGainsFilter('all', this)">All Members</button>
+                            <button class="filter-pill" onclick="setStatGainsFilter('top', this)">🔥 Top Gainers (&gt;10K)</button>
+                            <button class="filter-pill" onclick="setStatGainsFilter('str', this)">💪 Strength</button>
+                            <button class="filter-pill" onclick="setStatGainsFilter('def', this)">🛡️ Defense</button>
+                            <button class="filter-pill" onclick="setStatGainsFilter('spd', this)">⚡ Speed</button>
+                            <button class="filter-pill" onclick="setStatGainsFilter('dex', this)">🎯 Dexterity</button>
+                            <button class="filter-pill" onclick="setStatGainsFilter('slackers', this)">😴 Slackers (&lt;1K)</button>
+                            <button class="filter-pill" onclick="setStatGainsFilter('verified', this)">🔒 Verified Only</button>
+                        </div>
+
+                        <!-- Live Search & Sort Dropdown -->
+                        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-left:auto;">
+                            <input type="text" id="stat-gains-search" placeholder="🔍 Search player or ID..." class="sort-select" style="min-width:180px; padding:5px 10px; font-size:0.8em;" oninput="onStatGainsSearch(this.value)">
+                            <select id="stat-gains-sort-select" class="sort-select" onchange="onStatGainsSortChange(this.value)" style="padding:5px 10px; font-size:0.8em;">
+                                <option value="gainTotal_desc">Gain: High → Low</option>
+                                <option value="gainTotal_asc">Gain: Low → High</option>
+                                <option value="totalStats_desc">Total Stats: High → Low</option>
+                                <option value="gainStr_desc">Strength Gain: High → Low</option>
+                                <option value="gainDef_desc">Defense Gain: High → Low</option>
+                                <option value="gainSpd_desc">Speed Gain: High → Low</option>
+                                <option value="gainDex_desc">Dexterity Gain: High → Low</option>
+                                <option value="xanax_desc">Xanax Used: High → Low</option>
+                                <option value="name_asc">Player Name: A → Z</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- MASTER STAT GAINS TABLE -->
+                    <div class="scrollable" style="max-height:540px; border:1px solid var(--border-default); border-radius:8px;">
+                        <table class="armory-table" id="stat-gains-table">
+                            <thead>
+                                <tr>
+                                    <th class="sortable-th" onclick="sortStatGains('name')" style="min-width:160px;">Member <span id="sort-ind-sg-name">↕</span></th>
+                                    <th class="sortable-th" onclick="sortStatGains('totalStats')" style="min-width:120px;">Total Stats <span id="sort-ind-sg-totalStats">↕</span></th>
+                                    <th class="sortable-th" onclick="sortStatGains('gainTotal')" style="min-width:130px;">Total Gain (Δ) <span id="sort-ind-sg-gainTotal">↓</span></th>
+                                    <th class="sortable-th" onclick="sortStatGains('gainStr')" style="min-width:110px;">Strength <span id="sort-ind-sg-gainStr">↕</span></th>
+                                    <th class="sortable-th" onclick="sortStatGains('gainDef')" style="min-width:110px;">Defense <span id="sort-ind-sg-gainDef">↕</span></th>
+                                    <th class="sortable-th" onclick="sortStatGains('gainSpd')" style="min-width:110px;">Speed <span id="sort-ind-sg-gainSpd">↕</span></th>
+                                    <th class="sortable-th" onclick="sortStatGains('gainDex')" style="min-width:110px;">Dexterity <span id="sort-ind-sg-gainDex">↕</span></th>
+                                    <th class="sortable-th" onclick="sortStatGains('xanax')" style="min-width:90px;">Momentum <span id="sort-ind-sg-xanax">↕</span></th>
+                                    <th style="min-width:140px;">Stat Distribution</th>
+                                    <th style="text-align:center; min-width:80px;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="stat-gains-tbody">
+                                <tr><td colspan="10" style="text-align:center; padding:28px; color:var(--text-tertiary);">Loading faction battle stats and progression tracking...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
         </div>
+
+    <!-- PLAYER STAT PROGRESSION & FORECAST MODAL -->
+    <div id="stat-player-modal" class="modal-backdrop" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); backdrop-filter:blur(4px); z-index:9999; justify-content:center; align-items:center; padding:16px;">
+        <div style="background:#0c1017; border:1px solid #1e293b; border-radius:12px; width:100%; max-width:760px; max-height:90vh; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 10px 40px rgba(0,0,0,0.7);">
+            <!-- Modal Header -->
+            <div style="padding:16px 20px; border-bottom:1px solid #1e293b; display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.02);">
+                <div style="display:flex; align-items:center; gap:12px;">
+                    <div style="font-size:1.8em;">🏋️</div>
+                    <div>
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <span id="sp-modal-name" style="font-size:1.15em; font-weight:800; color:var(--text-primary);">Player Progression</span>
+                            <span id="sp-modal-id" style="font-size:0.8em; color:var(--text-tertiary);">[—]</span>
+                            <span id="sp-modal-badge" style="font-size:0.72em; padding:2px 6px; border-radius:4px; font-weight:700;">—</span>
+                        </div>
+                        <div id="sp-modal-sub" style="font-size:0.75em; color:var(--text-secondary); margin-top:2px;">Last snapshot: —</div>
+                    </div>
+                </div>
+                <button onclick="closeStatPlayerModal()" style="background:transparent; border:none; color:var(--text-tertiary); font-size:1.4em; cursor:pointer; padding:4px 8px; line-height:1;">✕</button>
+            </div>
+
+            <!-- Modal Body Scrollable -->
+            <div style="padding:18px 20px; overflow-y:auto; flex:1; display:flex; flex-direction:column; gap:16px;">
+                <!-- 4 STAT TILES -->
+                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:10px;">
+                    <div style="background:rgba(239,68,68,0.08); border:1px solid rgba(239,68,68,0.25); border-radius:8px; padding:10px; text-align:center;">
+                        <div style="font-size:0.72em; color:var(--accent-crimson); font-weight:700; text-transform:uppercase;">💪 Strength</div>
+                        <div id="sp-stat-str" style="font-size:1.25em; font-weight:900; font-family:var(--font-mono); color:var(--accent-crimson); margin:2px 0;">0</div>
+                        <div id="sp-pct-str" style="font-size:0.7em; color:var(--text-tertiary);">0% of total</div>
+                    </div>
+                    <div style="background:rgba(59,130,246,0.08); border:1px solid rgba(59,130,246,0.25); border-radius:8px; padding:10px; text-align:center;">
+                        <div style="font-size:0.72em; color:var(--accent-cobalt); font-weight:700; text-transform:uppercase;">🛡️ Defense</div>
+                        <div id="sp-stat-def" style="font-size:1.25em; font-weight:900; font-family:var(--font-mono); color:var(--accent-cobalt); margin:2px 0;">0</div>
+                        <div id="sp-pct-def" style="font-size:0.7em; color:var(--text-tertiary);">0% of total</div>
+                    </div>
+                    <div style="background:rgba(245,158,11,0.08); border:1px solid rgba(245,158,11,0.25); border-radius:8px; padding:10px; text-align:center;">
+                        <div style="font-size:0.72em; color:var(--accent-amber); font-weight:700; text-transform:uppercase;">⚡ Speed</div>
+                        <div id="sp-stat-spd" style="font-size:1.25em; font-weight:900; font-family:var(--font-mono); color:var(--accent-amber); margin:2px 0;">0</div>
+                        <div id="sp-pct-spd" style="font-size:0.7em; color:var(--text-tertiary);">0% of total</div>
+                    </div>
+                    <div style="background:rgba(168,85,247,0.08); border:1px solid rgba(168,85,247,0.25); border-radius:8px; padding:10px; text-align:center;">
+                        <div style="font-size:0.72em; color:var(--accent-purple); font-weight:700; text-transform:uppercase;">🎯 Dexterity</div>
+                        <div id="sp-stat-dex" style="font-size:1.25em; font-weight:900; font-family:var(--font-mono); color:var(--accent-purple); margin:2px 0;">0</div>
+                        <div id="sp-pct-dex" style="font-size:0.7em; color:var(--text-tertiary);">0% of total</div>
+                    </div>
+                </div>
+
+                <!-- 30-DAY & 90-DAY PROJECTIONS -->
+                <div style="background:rgba(0,0,0,0.3); border:1px solid #1e293b; border-radius:8px; padding:14px; display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:12px;">
+                    <div>
+                        <div style="font-size:0.72em; color:var(--text-tertiary); text-transform:uppercase; font-weight:700;">Training Velocity</div>
+                        <div id="sp-vel-daily" style="font-size:1.2em; font-weight:800; color:var(--accent-emerald); font-family:var(--font-mono); margin-top:2px;">+0 / day</div>
+                        <div style="font-size:0.7em; color:var(--text-tertiary);">Historical average pace</div>
+                    </div>
+                    <div>
+                        <div style="font-size:0.72em; color:var(--text-tertiary); text-transform:uppercase; font-weight:700;">30-Day Projection</div>
+                        <div id="sp-proj-30" style="font-size:1.2em; font-weight:800; color:var(--accent-cyan); font-family:var(--font-mono); margin-top:2px;">—</div>
+                        <div id="sp-proj-30-sub" style="font-size:0.7em; color:var(--text-tertiary);">+0 forecast gain</div>
+                    </div>
+                    <div>
+                        <div style="font-size:0.72em; color:var(--text-tertiary); text-transform:uppercase; font-weight:700;">90-Day Projection</div>
+                        <div id="sp-proj-90" style="font-size:1.2em; font-weight:800; color:#38bdf8; font-family:var(--font-mono); margin-top:2px;">—</div>
+                        <div id="sp-proj-90-sub" style="font-size:0.7em; color:var(--text-tertiary);">+0 forecast gain</div>
+                    </div>
+                </div>
+
+                <!-- HISTORICAL SNAPSHOT LOG TABLE -->
+                <div>
+                    <div style="font-size:0.82em; font-weight:700; color:var(--text-primary); margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
+                        <span>📋 Historical Snapshot Log</span>
+                        <span id="sp-history-count" style="font-size:0.75em; color:var(--text-tertiary);">0 snapshots</span>
+                    </div>
+                    <div class="scrollable" style="max-height:240px; border:1px solid #1e293b; border-radius:6px;">
+                        <table class="armory-table" style="font-size:0.78em;">
+                            <thead>
+                                <tr>
+                                    <th>Timestamp</th>
+                                    <th>Total Stats</th>
+                                    <th>Interval Delta</th>
+                                    <th>Strength</th>
+                                    <th>Defense</th>
+                                    <th>Speed</th>
+                                    <th>Dexterity</th>
+                                </tr>
+                            </thead>
+                            <tbody id="sp-history-tbody">
+                                <tr><td colspan="7" style="text-align:center; padding:16px; color:var(--text-tertiary);">No snapshots recorded yet.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modal Footer -->
+            <div style="padding:12px 20px; border-top:1px solid #1e293b; display:flex; justify-content:flex-end; background:rgba(255,255,255,0.01);">
+                <button class="btn btn-sm btn-outline" onclick="closeStatPlayerModal()">Close</button>
+            </div>
+        </div>
+    </div>
 
     </main>
     </div>
@@ -2446,6 +2685,7 @@ function switchOpsTab(tabId) {
 
     if (tabId === 'sentinel') {
         initSentinel();
+        if (typeof loadFactionStatGains === 'function') loadFactionStatGains();
     }
     if (tabId === 'armory') {
         if (typeof initTrackerDates === 'function') initTrackerDates();
@@ -2576,6 +2816,9 @@ function renderAll(d, wars) {
     renderStatusBreakdown(d);
     renderRecentWars(wars);
     renderArmory(d);
+    if (activeOpsTab === 'sentinel' && typeof loadFactionStatGains === 'function') {
+        loadFactionStatGains();
+    }
 }
 
 // ─── Render Faction Hero ───
@@ -3176,7 +3419,15 @@ async function setTrackerPreset(preset, btn) {
 
         if (!warsList.length) {
             try {
-                const res = await fetch('/api/war-list');
+                const cachedWars = JSON.parse(sessionStorage.getItem('sv_cache_wars') || '{}');
+                if (cachedWars.wars && Array.isArray(cachedWars.wars)) warsList = cachedWars.wars;
+            } catch(e) {}
+        }
+
+        if (!warsList.length) {
+            try {
+                const myKey = typeof getApiKey === 'function' ? getApiKey() : '';
+                const res = await fetch('/api/war-list', { headers: { 'x-api-key': myKey } });
                 const wd = await res.json();
                 if (wd && wd.wars && Array.isArray(wd.wars)) {
                     warsList = wd.wars;
@@ -3188,14 +3439,20 @@ async function setTrackerPreset(preset, btn) {
             }
         }
 
-        // Sort wars by start timestamp descending so the most recent war is first
-        const sortedWars = [...warsList].sort((a, b) => (b.start || 0) - (a.start || 0));
-        const targetWar = sortedWars[0] || dashData?.dash?.activeWar || currentArmoryData?.activeWar;
+        // Check active war from dashData if any
+        const activeWar = dashData?.dash?.activeWar || currentArmoryData?.activeWar;
 
-        if (targetWar && targetWar.start) {
-            fromStr = new Date(targetWar.start * 1000).toISOString().split('T')[0];
-            if (targetWar.end && targetWar.end > 0) {
-                toStr = new Date(targetWar.end * 1000).toISOString().split('T')[0];
+        // Sort wars by start timestamp descending so the most recent war is first
+        const sortedWars = [...warsList].sort((a, b) => (Number(b.start || b.war?.start || 0)) - (Number(a.start || a.war?.start || 0)));
+        const targetWar = sortedWars[0] || activeWar;
+
+        const wStart = targetWar?.start || targetWar?.war?.start;
+        const wEnd = targetWar?.end || targetWar?.war?.end;
+
+        if (targetWar && wStart) {
+            fromStr = new Date(wStart * 1000).toISOString().split('T')[0];
+            if (wEnd && wEnd > 0) {
+                toStr = new Date(wEnd * 1000).toISOString().split('T')[0];
             } else {
                 toStr = todayStr;
             }
@@ -4642,6 +4899,386 @@ function renderCrossFactionLoadouts(data) {
             <td><strong>${m.hitsMade}</strong> hits &bull; <strong>${m.timesHit || 0}</strong> def${usageSnippet}</td>
         </tr>`;
     }).join('');
+}
+
+// ─── FACTION PLAYER STAT GAINS & PROGRESSION TRACKER ───
+let currentStatGainsData = null;
+let statGainsWindow = '7d';
+let statGainsFilter = 'all';
+let statGainsSortCol = 'gainTotal';
+let statGainsSortAsc = false;
+let statGainsSearchQuery = '';
+
+function setStatGainsWindow(windowStr, btn) {
+    statGainsWindow = windowStr;
+    document.querySelectorAll('.stat-window-pill').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+    loadFactionStatGains(true);
+}
+
+async function loadFactionStatGains(force = false) {
+    const tbody = document.getElementById('stat-gains-tbody');
+    const refreshBtn = document.getElementById('btn-refresh-stat-gains');
+    if (!currentStatGainsData && tbody) {
+        tbody.innerHTML = `<tr><td colspan="10" style="text-align:center; padding:28px; color:var(--text-tertiary);"><span class="loading-spinner"></span> Loading faction player battle stats and gym progression...</td></tr>`;
+    }
+    if (refreshBtn) refreshBtn.classList.add('spinning');
+
+    try {
+        const myKey = typeof getApiKey === 'function' ? getApiKey() : '';
+        const res = await fetch(`/api/faction/stat-gains?window=${statGainsWindow}${force ? '&force=true' : ''}`, {
+            headers: { 'x-api-key': myKey }
+        });
+        const data = await res.json();
+        if (data && data.success) {
+            currentStatGainsData = data;
+            renderStatGainsTracker();
+        } else {
+            if (tbody) tbody.innerHTML = `<tr><td colspan="10" style="text-align:center; padding:24px; color:var(--accent-crimson);">Failed to load stat gains: ${escapeHtml(data.error || 'Unknown error')}</td></tr>`;
+        }
+    } catch(err) {
+        console.error('Error loading faction stat gains:', err);
+        if (tbody) tbody.innerHTML = `<tr><td colspan="10" style="text-align:center; padding:24px; color:var(--accent-crimson);">Network error loading stat gains.</td></tr>`;
+    } finally {
+        if (refreshBtn) refreshBtn.classList.remove('spinning');
+    }
+}
+
+async function triggerStatSnapshot() {
+    const btn = document.getElementById('btn-stat-snapshot');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = `<span>⏳</span> Capturing...`;
+    }
+    try {
+        const myKey = typeof getApiKey === 'function' ? getApiKey() : '';
+        const res = await fetch('/api/faction/stat-gains/snapshot', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-api-key': myKey }
+        });
+        const data = await res.json();
+        if (data && data.success) {
+            showToast(`📸 Snapshot recorded! Updated ${data.updatedCount || 0} connected members.`, 'success');
+            await loadFactionStatGains(true);
+        } else {
+            showToast(`Snapshot notice: ${data.error || 'No updates'}`, 'warn');
+        }
+    } catch(e) {
+        showToast('Failed to trigger stat snapshot.', 'error');
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = `<span>📸</span> Snapshot Now`;
+        }
+    }
+}
+
+function setStatGainsFilter(filterKey, btn) {
+    statGainsFilter = filterKey;
+    document.querySelectorAll('#stat-filter-chips .filter-pill').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+    renderStatGainsTracker();
+}
+
+function onStatGainsSearch(query) {
+    statGainsSearchQuery = (query || '').toLowerCase().trim();
+    renderStatGainsTracker();
+}
+
+function onStatGainsSortChange(sortVal) {
+    const parts = sortVal.split('_');
+    statGainsSortCol = parts[0];
+    statGainsSortAsc = (parts[1] === 'asc');
+    renderStatGainsTracker();
+}
+
+function sortStatGains(col) {
+    if (statGainsSortCol === col) {
+        statGainsSortAsc = !statGainsSortAsc;
+    } else {
+        statGainsSortCol = col;
+        statGainsSortAsc = (col === 'name');
+    }
+    const select = document.getElementById('stat-gains-sort-select');
+    if (select) select.value = `${col}_${statGainsSortAsc ? 'asc' : 'desc'}`;
+    renderStatGainsTracker();
+}
+
+function renderStatGainsTracker() {
+    if (!currentStatGainsData || !currentStatGainsData.members) return;
+    const { kpis, members } = currentStatGainsData;
+
+    // 1. Update 5 KPI metric tiles
+    const totalGainsEl = document.getElementById('stat-kpi-total-gains');
+    const totalGainsSub = document.getElementById('stat-kpi-total-gains-sub');
+    if (totalGainsEl) totalGainsEl.textContent = `+${fmtNum(kpis.totalFactionGains || 0)}`;
+    if (totalGainsSub) totalGainsSub.textContent = `Across ${kpis.trackedCount || 0} tracked members`;
+
+    const topGainerEl = document.getElementById('stat-kpi-top-gainer');
+    const topGainerSub = document.getElementById('stat-kpi-top-gainer-sub');
+    if (topGainerEl) {
+        if (kpis.topGainer) {
+            topGainerEl.innerHTML = `<a href="https://www.torn.com/profiles.php?XID=${kpis.topGainer.id}" target="_blank" style="color:var(--accent-amber); text-decoration:none;">${escapeHtml(kpis.topGainer.name)}</a>`;
+            if (topGainerSub) topGainerSub.textContent = `+${fmtNum(kpis.topGainer.gain)} (+${kpis.topGainer.pct || 0}%)`;
+        } else {
+            topGainerEl.textContent = '—';
+            if (topGainerSub) topGainerSub.textContent = '+0 gained';
+        }
+    }
+
+    const momentumEl = document.getElementById('stat-kpi-momentum');
+    if (momentumEl) momentumEl.textContent = `${fmtNum(kpis.totalXanaxTaken || 0)} 💊 • ${fmtNum(kpis.totalRefillsUsed || 0)} ⚡`;
+
+    const totalPowerEl = document.getElementById('stat-kpi-total-power');
+    if (totalPowerEl) totalPowerEl.textContent = fmtNum(kpis.totalFactionCombatPower || 0);
+
+    const slackersEl = document.getElementById('stat-kpi-slackers');
+    if (slackersEl) slackersEl.textContent = fmtNum(kpis.slackersCount || 0);
+
+    // 2. Filter member list
+    let list = members.filter(m => {
+        if (statGainsFilter === 'top' && m.gains.total < 10000) return false;
+        if (statGainsFilter === 'str' && m.specialty !== 'Strength') return false;
+        if (statGainsFilter === 'def' && m.specialty !== 'Defense') return false;
+        if (statGainsFilter === 'spd' && m.specialty !== 'Speed') return false;
+        if (statGainsFilter === 'dex' && m.specialty !== 'Dexterity') return false;
+        if (statGainsFilter === 'slackers' && m.gains.total >= 1000) return false;
+        if (statGainsFilter === 'verified' && !m.verified) return false;
+
+        if (statGainsSearchQuery) {
+            const nameMatch = (m.playerName || '').toLowerCase().includes(statGainsSearchQuery);
+            const idMatch = String(m.playerId).includes(statGainsSearchQuery);
+            if (!nameMatch && !idMatch) return false;
+        }
+        return true;
+    });
+
+    // 3. Sort list
+    list.sort((a, b) => {
+        let va, vb;
+        switch (statGainsSortCol) {
+            case 'name': return statGainsSortAsc ? a.playerName.localeCompare(b.playerName) : b.playerName.localeCompare(a.playerName);
+            case 'totalStats': va = a.stats.total; vb = b.stats.total; break;
+            case 'gainTotal': va = a.gains.total; vb = b.gains.total; break;
+            case 'gainStr': va = a.gains.strength; vb = b.gains.strength; break;
+            case 'gainDef': va = a.gains.defense; vb = b.gains.defense; break;
+            case 'gainSpd': va = a.gains.speed; vb = b.gains.speed; break;
+            case 'gainDex': va = a.gains.dexterity; vb = b.gains.dexterity; break;
+            case 'xanax': va = a.momentum.xanax || 0; vb = b.momentum.xanax || 0; break;
+            default: va = a.gains.total; vb = b.gains.total; break;
+        }
+        return statGainsSortAsc ? (va - vb) : (vb - va);
+    });
+
+    // Update sort header indicators
+    const sortCols = ['name', 'totalStats', 'gainTotal', 'gainStr', 'gainDef', 'gainSpd', 'gainDex', 'xanax'];
+    sortCols.forEach(c => {
+        const ind = document.getElementById(`sort-ind-sg-${c}`);
+        if (ind) {
+            if (statGainsSortCol === c) {
+                ind.textContent = statGainsSortAsc ? '↑' : '↓';
+                ind.style.color = 'var(--accent-cyan)';
+            } else {
+                ind.textContent = '↕';
+                ind.style.color = 'var(--text-tertiary)';
+            }
+        }
+    });
+
+    // 4. Render Table
+    const tbody = document.getElementById('stat-gains-tbody');
+    if (!tbody) return;
+
+    if (!list.length) {
+        tbody.innerHTML = `<tr><td colspan="10" style="text-align:center; padding:28px; color:var(--text-tertiary);">No faction members match current filters.</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = list.map(m => {
+        const verifiedTag = m.verified
+            ? `<span style="display:inline-block; font-size:0.68em; background:rgba(46,213,115,0.12); color:var(--accent-emerald, #2ed573); border:1px solid rgba(46,213,115,0.3); border-radius:3px; padding:1px 4px; font-weight:700;">✓ Verified</span>`
+            : `<span style="display:inline-block; font-size:0.68em; background:rgba(245,158,11,0.12); color:var(--accent-amber, #f59e0b); border:1px solid rgba(245,158,11,0.3); border-radius:3px; padding:1px 4px;">⚠️ Pending Key</span>`;
+
+        let gainBadge = `<span style="color:var(--text-tertiary); font-weight:700;">0</span>`;
+        if (m.gains.total > 0) {
+            gainBadge = `<span style="font-family:var(--font-mono); font-weight:800; color:var(--accent-emerald); font-size:1.05em;">+${fmtNum(m.gains.total)}</span>
+                         <span style="font-size:0.72em; background:rgba(46,213,115,0.12); color:var(--accent-emerald); border-radius:3px; padding:1px 4px; margin-left:3px; font-weight:700;">+${m.gains.pct}%</span>`;
+        } else if (m.gains.total < 0) {
+            gainBadge = `<span style="font-family:var(--font-mono); font-weight:800; color:var(--accent-crimson); font-size:1.05em;">-${fmtNum(Math.abs(m.gains.total))}</span>`;
+        }
+
+        const strGainChip = m.gains.strength !== 0
+            ? `<div style="font-size:0.7em; color:${m.gains.strength > 0 ? 'var(--accent-emerald)' : 'var(--accent-crimson)'}; font-family:var(--font-mono);">${m.gains.strength > 0 ? '+' : ''}${fmtNum(m.gains.strength)}</div>`
+            : '';
+        const defGainChip = m.gains.defense !== 0
+            ? `<div style="font-size:0.7em; color:${m.gains.defense > 0 ? 'var(--accent-emerald)' : 'var(--accent-crimson)'}; font-family:var(--font-mono);">${m.gains.defense > 0 ? '+' : ''}${fmtNum(m.gains.defense)}</div>`
+            : '';
+        const spdGainChip = m.gains.speed !== 0
+            ? `<div style="font-size:0.7em; color:${m.gains.speed > 0 ? 'var(--accent-emerald)' : 'var(--accent-crimson)'}; font-family:var(--font-mono);">${m.gains.speed > 0 ? '+' : ''}${fmtNum(m.gains.speed)}</div>`
+            : '';
+        const dexGainChip = m.gains.dexterity !== 0
+            ? `<div style="font-size:0.7em; color:${m.gains.dexterity > 0 ? 'var(--accent-emerald)' : 'var(--accent-crimson)'}; font-family:var(--font-mono);">${m.gains.dexterity > 0 ? '+' : ''}${fmtNum(m.gains.dexterity)}</div>`
+            : '';
+
+        // Specialty badge
+        const specMap = {
+            'Strength': '💪 Strength Specialist',
+            'Defense': '🛡️ Defense Wall',
+            'Speed': '⚡ Speed Demon',
+            'Dexterity': '🎯 Dexterity Ghost',
+            'Balanced': '⚖️ Balanced Fighter'
+        };
+        const specLabel = specMap[m.specialty] || m.specialty;
+
+        // 4-Color balance progress bar
+        const b = m.balance || { strengthPct: 25, defensePct: 25, speedPct: 25, dexterityPct: 25 };
+        const balanceBar = `
+            <div style="display:flex; height:5px; border-radius:3px; overflow:hidden; background:rgba(255,255,255,0.06); margin-top:4px;" title="Str ${b.strengthPct}% | Def ${b.defensePct}% | Spd ${b.speedPct}% | Dex ${b.dexterityPct}%">
+                <div style="width:${b.strengthPct}%; background:var(--accent-crimson, #ef4444);"></div>
+                <div style="width:${b.defensePct}%; background:var(--accent-cobalt, #3b82f6);"></div>
+                <div style="width:${b.speedPct}%; background:var(--accent-amber, #f59e0b);"></div>
+                <div style="width:${b.dexterityPct}%; background:var(--accent-purple, #a855f7);"></div>
+            </div>`;
+
+        return `<tr>
+            <td style="vertical-align:top;">
+                <div style="font-weight:700; display:flex; align-items:center; gap:6px;">
+                    <a href="https://www.torn.com/profiles.php?XID=${m.playerId}" target="_blank" style="color:var(--text-primary); text-decoration:none;">${escapeHtml(m.playerName)}</a>
+                    ${verifiedTag}
+                </div>
+                <div style="font-size:0.74em; color:var(--text-tertiary); margin-top:2px;">
+                    [${m.playerId}] • Lv ${m.level || 1} ${m.daysInFaction ? `• ${m.daysInFaction}d in faction` : ''}
+                </div>
+            </td>
+            <td style="vertical-align:top;">
+                <div style="font-family:var(--font-mono); font-weight:800; color:var(--accent-cyan); font-size:1.02em;">${fmtNum(m.stats.total)}</div>
+                <div style="font-size:0.72em; color:var(--text-tertiary);">Combat Power</div>
+            </td>
+            <td style="vertical-align:top;">
+                <div>${gainBadge}</div>
+                <div style="font-size:0.7em; color:var(--text-tertiary); margin-top:2px;">~${fmtNum(m.dailyAvg)}/day</div>
+            </td>
+            <td style="vertical-align:top;">
+                <div style="font-family:var(--font-mono); font-weight:700; color:var(--text-primary); font-size:0.95em;">${fmtNum(m.stats.strength)}</div>
+                ${strGainChip}
+            </td>
+            <td style="vertical-align:top;">
+                <div style="font-family:var(--font-mono); font-weight:700; color:var(--text-primary); font-size:0.95em;">${fmtNum(m.stats.defense)}</div>
+                ${defGainChip}
+            </td>
+            <td style="vertical-align:top;">
+                <div style="font-family:var(--font-mono); font-weight:700; color:var(--text-primary); font-size:0.95em;">${fmtNum(m.stats.speed)}</div>
+                ${spdGainChip}
+            </td>
+            <td style="vertical-align:top;">
+                <div style="font-family:var(--font-mono); font-weight:700; color:var(--text-primary); font-size:0.95em;">${fmtNum(m.stats.dexterity)}</div>
+                ${dexGainChip}
+            </td>
+            <td style="vertical-align:top;">
+                <div style="font-family:var(--font-mono); font-size:0.85em; color:var(--accent-purple); font-weight:700;">💊 ${fmtNum(m.momentum.xanax || 0)}</div>
+                <div style="font-family:var(--font-mono); font-size:0.72em; color:var(--accent-amber);">⚡ ${fmtNum(m.momentum.refills || 0)} ref</div>
+            </td>
+            <td style="vertical-align:top;">
+                <div style="font-size:0.74em; font-weight:600; color:var(--text-secondary);">${specLabel}</div>
+                ${balanceBar}
+            </td>
+            <td style="vertical-align:top; text-align:center;">
+                <button class="btn btn-sm btn-outline" onclick="openPlayerStatModal('${m.playerId}')" style="padding:3px 9px; font-size:0.74em; display:inline-flex; align-items:center; gap:4px;" title="View individual progression history &amp; forecast">
+                    <span>📊</span> Log
+                </button>
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+async function openPlayerStatModal(playerId) {
+    const modal = document.getElementById('stat-player-modal');
+    if (!modal) return;
+    modal.style.display = 'flex';
+
+    document.getElementById('sp-modal-name').textContent = 'Loading...';
+    document.getElementById('sp-modal-id').textContent = `[${playerId}]`;
+    document.getElementById('sp-history-tbody').innerHTML = `<tr><td colspan="7" style="text-align:center; padding:18px; color:var(--text-tertiary);"><span class="loading-spinner"></span> Loading progression records...</td></tr>`;
+
+    try {
+        const myKey = typeof getApiKey === 'function' ? getApiKey() : '';
+        const res = await fetch(`/api/faction/player-stats/${playerId}`, { headers: { 'x-api-key': myKey } });
+        const data = await res.json();
+        if (data && data.success && data.player) {
+            const p = data.player;
+            document.getElementById('sp-modal-name').textContent = p.playerName;
+            document.getElementById('sp-modal-id').textContent = `[${p.playerId}]`;
+            document.getElementById('sp-modal-sub').textContent = `Last snapshot: ${new Date(p.lastUpdated).toUTCString()}`;
+
+            const badge = document.getElementById('sp-modal-badge');
+            if (badge) {
+                badge.textContent = '✓ Verified Key';
+                badge.style.background = 'rgba(46,213,115,0.15)';
+                badge.style.color = 'var(--accent-emerald)';
+            }
+
+            const stats = p.stats || {};
+            const total = stats.total || (stats.strength + stats.defense + stats.speed + stats.dexterity) || 1;
+
+            document.getElementById('sp-stat-str').textContent = fmtNum(stats.strength || 0);
+            document.getElementById('sp-pct-str').textContent = `${((stats.strength || 0)/total*100).toFixed(1)}% of total`;
+
+            document.getElementById('sp-stat-def').textContent = fmtNum(stats.defense || 0);
+            document.getElementById('sp-pct-def').textContent = `${((stats.defense || 0)/total*100).toFixed(1)}% of total`;
+
+            document.getElementById('sp-stat-spd').textContent = fmtNum(stats.speed || 0);
+            document.getElementById('sp-pct-spd').textContent = `${((stats.speed || 0)/total*100).toFixed(1)}% of total`;
+
+            document.getElementById('sp-stat-dex').textContent = fmtNum(stats.dexterity || 0);
+            document.getElementById('sp-pct-dex').textContent = `${((stats.dexterity || 0)/total*100).toFixed(1)}% of total`;
+
+            const vel = p.velocity || {};
+            document.getElementById('sp-vel-daily').textContent = `+${fmtNum(vel.dailyGain || 0)} / day`;
+            document.getElementById('sp-proj-30').textContent = fmtNum(vel.projected30d || stats.total);
+            document.getElementById('sp-proj-30-sub').textContent = `+${fmtNum(vel.gain30d || 0)} forecast gain`;
+            document.getElementById('sp-proj-90').textContent = fmtNum(vel.projected90d || stats.total);
+            document.getElementById('sp-proj-90-sub').textContent = `+${fmtNum(vel.gain90d || 0)} forecast gain`;
+
+            const hist = p.history || [];
+            document.getElementById('sp-history-count').textContent = `${hist.length} snapshots`;
+
+            const hBody = document.getElementById('sp-history-tbody');
+            if (!hist.length) {
+                hBody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:16px; color:var(--text-tertiary);">No historical snapshots recorded yet.</td></tr>`;
+            } else {
+                hBody.innerHTML = hist.map((h, idx) => {
+                    const dt = new Date(h.timestamp);
+                    const delta = (h.gains && h.gains.total !== undefined) ? h.gains.total : (idx < hist.length - 1 ? ((h.total || 0) - (hist[idx + 1].total || 0)) : 0);
+                    let deltaBadge = `<span style="color:var(--text-tertiary);">0</span>`;
+                    if (delta > 0) deltaBadge = `<span style="color:var(--accent-emerald); font-weight:700;">+${fmtNum(delta)}</span>`;
+                    else if (delta < 0) deltaBadge = `<span style="color:var(--accent-crimson); font-weight:700;">-${fmtNum(Math.abs(delta))}</span>`;
+
+                    return `<tr>
+                        <td>
+                            <div>${dt.toLocaleDateString()} ${dt.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</div>
+                            <div style="font-size:0.7em; color:var(--text-tertiary);">${timeSince(Math.floor(h.timestamp / 1000))}</div>
+                        </td>
+                        <td style="font-weight:700; color:var(--accent-cyan);">${fmtNum(h.total)}</td>
+                        <td>${deltaBadge}</td>
+                        <td style="color:var(--accent-crimson);">${fmtNum(h.strength)}</td>
+                        <td style="color:var(--accent-cobalt);">${fmtNum(h.defense)}</td>
+                        <td style="color:var(--accent-amber);">${fmtNum(h.speed)}</td>
+                        <td style="color:var(--accent-purple);">${fmtNum(h.dexterity)}</td>
+                    </tr>`;
+                }).join('');
+            }
+        } else {
+            document.getElementById('sp-modal-name').textContent = 'Player Progression';
+            document.getElementById('sp-history-tbody').innerHTML = `<tr><td colspan="7" style="text-align:center; padding:16px; color:var(--accent-crimson);">No historical snapshots found for this member.</td></tr>`;
+        }
+    } catch(e) {
+        document.getElementById('sp-history-tbody').innerHTML = `<tr><td colspan="7" style="text-align:center; padding:16px; color:var(--accent-crimson);">Error loading player stats: ${escapeHtml(e.message)}</td></tr>`;
+    }
+}
+
+function closeStatPlayerModal() {
+    const modal = document.getElementById('stat-player-modal');
+    if (modal) modal.style.display = 'none';
 }
 
 // ─── War Analyst Functions ───

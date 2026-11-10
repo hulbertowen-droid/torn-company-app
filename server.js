@@ -4195,6 +4195,386 @@ app.get('/api/faction-config/sync', (req, res) => {
     return res.json({ updated: false, rev: cfg.rev || 1 });
 });
 
+// ── FACTION PLAYER STAT GAINS & PROGRESSION TRACKER API ──
+app.get('/api/faction/stat-gains', async (req, res) => {
+    try {
+        const factionId = resolveFactionId(req);
+        const windowStr = String(req.query.window || '7d').toLowerCase();
+        const now = Date.now();
+        let windowMs = 7 * 86400000;
+        if (windowStr === '24h') windowMs = 86400000;
+        else if (windowStr === '3d') windowMs = 3 * 86400000;
+        else if (windowStr === '7d') windowMs = 7 * 86400000;
+        else if (windowStr === '14d') windowMs = 14 * 86400000;
+        else if (windowStr === '30d') windowMs = 30 * 86400000;
+        else if (windowStr === 'all' || windowStr === 'all_time') windowMs = 0;
+
+        const cutoff = windowMs > 0 ? now - windowMs : 0;
+
+        // 1. Gather all faction members
+        const memberRoster = new Map();
+
+        // Check dashboardDataCache
+        for (const [k, c] of Object.entries(dashboardDataCache)) {
+            if (c?.data?.members && typeof c.data.members === 'object') {
+                for (const [mId, mInfo] of Object.entries(c.data.members)) {
+                    if (!memberRoster.has(Number(mId))) {
+                        memberRoster.set(Number(mId), {
+                            id: Number(mId),
+                            name: mInfo.name || `Player [${mId}]`,
+                            level: Number(mInfo.level || 1),
+                            days_in_faction: Number(mInfo.days_in_faction || 0),
+                            last_action: mInfo.last_action || null
+                        });
+                    }
+                }
+            }
+        }
+
+        // Add all members in battlestats_history
+        if (typeof battleStatsHistory !== 'undefined' && battleStatsHistory) {
+            for (const [id, rec] of Object.entries(battleStatsHistory)) {
+                if (id.startsWith('discord_') || !rec || typeof rec !== 'object') continue;
+                const pId = Number(id);
+                if (!memberRoster.has(pId)) {
+                    memberRoster.set(pId, {
+                        id: pId,
+                        name: rec.playerName || `Player [${pId}]`,
+                        level: Number(rec.level || 1),
+                        days_in_faction: 0,
+                        last_action: null
+                    });
+                } else {
+                    const existing = memberRoster.get(pId);
+                    if (rec.playerName && (!existing.name || existing.name.startsWith('Player ['))) {
+                        existing.name = rec.playerName;
+                    }
+                }
+            }
+        }
+
+        // 2. Compute gains for each member
+        const membersResult = [];
+        let totalFactionStats = 0;
+        let totalFactionGains = 0;
+        let totalXanaxTaken = 0;
+        let totalRefillsUsed = 0;
+
+        for (const [pId, info] of memberRoster.entries()) {
+            const bRec = (typeof battleStatsHistory !== 'undefined' && battleStatsHistory) ? battleStatsHistory[String(pId)] : null;
+            const spyRec = (typeof spyDatabase !== 'undefined' && spyDatabase) ? spyDatabase[String(pId)] : null;
+
+            let curStats = { strength: 0, defense: 0, speed: 0, dexterity: 0, total: 0 };
+            let curTs = now;
+            let isVerified = false;
+            let hist = [];
+
+            if (bRec) {
+                if (bRec.stats && Number(bRec.stats.total || 0) > 0) {
+                    curStats = {
+                        strength: Number(bRec.stats.strength || 0),
+                        defense: Number(bRec.stats.defense || 0),
+                        speed: Number(bRec.stats.speed || 0),
+                        dexterity: Number(bRec.stats.dexterity || 0),
+                        total: Number(bRec.stats.total || 0)
+                    };
+                    curTs = bRec.lastUpdated || now;
+                    isVerified = true;
+                } else if (Array.isArray(bRec.history) && bRec.history.length > 0) {
+                    const latest = bRec.history[0];
+                    curStats = {
+                        strength: Number(latest.strength || 0),
+                        defense: Number(latest.defense || 0),
+                        speed: Number(latest.speed || 0),
+                        dexterity: Number(latest.dexterity || 0),
+                        total: Number(latest.total || 0)
+                    };
+                    curTs = latest.timestamp || now;
+                    isVerified = true;
+                }
+                if (Array.isArray(bRec.history)) {
+                    hist = [...bRec.history].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+                }
+            } else if (spyRec && Number(spyRec.total || 0) > 0) {
+                curStats = {
+                    strength: Number(spyRec.strength || 0),
+                    defense: Number(spyRec.defense || 0),
+                    speed: Number(spyRec.speed || 0),
+                    dexterity: Number(spyRec.dexterity || 0),
+                    total: Number(spyRec.total || 0)
+                };
+                curTs = spyRec.timestamp || now;
+            }
+
+            // Fallback total calculation if 0
+            if (curStats.total === 0 && (curStats.strength || curStats.defense || curStats.speed || curStats.dexterity)) {
+                curStats.total = curStats.strength + curStats.defense + curStats.speed + curStats.dexterity;
+            }
+
+            // Find baseline stats for requested window
+            let baseStats = { ...curStats };
+            let baseTs = curTs;
+
+            if (hist.length > 1) {
+                if (cutoff === 0) {
+                    // All time -> oldest snapshot
+                    const oldest = hist[hist.length - 1];
+                    if (Number(oldest.total || 0) > 0) {
+                        baseStats = {
+                            strength: Number(oldest.strength || 0),
+                            defense: Number(oldest.defense || 0),
+                            speed: Number(oldest.speed || 0),
+                            dexterity: Number(oldest.dexterity || 0),
+                            total: Number(oldest.total || 0)
+                        };
+                        baseTs = oldest.timestamp || baseTs;
+                    }
+                } else {
+                    // Window -> snapshot closest to cutoff
+                    let match = hist.find(h => (h.timestamp || 0) <= cutoff && Number(h.total || 0) > 0);
+                    if (!match) match = hist[hist.length - 1];
+                    if (match && Number(match.total || 0) > 0) {
+                        baseStats = {
+                            strength: Number(match.strength || 0),
+                            defense: Number(match.defense || 0),
+                            speed: Number(match.speed || 0),
+                            dexterity: Number(match.dexterity || 0),
+                            total: Number(match.total || 0)
+                        };
+                        baseTs = match.timestamp || baseTs;
+                    }
+                }
+            }
+
+            // Calculate deltas
+            const gainStr = curStats.strength - baseStats.strength;
+            const gainDef = curStats.defense - baseStats.defense;
+            const gainSpd = curStats.speed - baseStats.speed;
+            const gainDex = curStats.dexterity - baseStats.dexterity;
+            const gainTotal = curStats.total - baseStats.total;
+            const gainPct = baseStats.total > 0 ? Number(((gainTotal / baseStats.total) * 100).toFixed(2)) : 0;
+
+            const daysTracked = Math.max(1, Math.round((curTs - baseTs) / 86400000));
+            const dailyAvg = Math.round(gainTotal / daysTracked);
+
+            // Determine specialty
+            let specialty = 'Balanced';
+            const maxVal = Math.max(curStats.strength, curStats.defense, curStats.speed, curStats.dexterity);
+            if (curStats.total > 0 && (maxVal / curStats.total) >= 0.38) {
+                if (maxVal === curStats.strength) specialty = 'Strength';
+                else if (maxVal === curStats.defense) specialty = 'Defense';
+                else if (maxVal === curStats.speed) specialty = 'Speed';
+                else if (maxVal === curStats.dexterity) specialty = 'Dexterity';
+            }
+
+            // Stat balance percentages
+            const balance = {
+                strengthPct: curStats.total > 0 ? Number(((curStats.strength / curStats.total) * 100).toFixed(1)) : 25,
+                defensePct: curStats.total > 0 ? Number(((curStats.defense / curStats.total) * 100).toFixed(1)) : 25,
+                speedPct: curStats.total > 0 ? Number(((curStats.speed / curStats.total) * 100).toFixed(1)) : 25,
+                dexterityPct: curStats.total > 0 ? Number(((curStats.dexterity / curStats.total) * 100).toFixed(1)) : 25
+            };
+
+            // Drug/Gym momentum from personal stats or userKeys if present
+            const xanax = Number(bRec?.personalStats?.xantaken || bRec?.stats?.xanax || 0);
+            const refills = Number(bRec?.personalStats?.refills || bRec?.stats?.refills || 0);
+
+            if (curStats.total > 0) totalFactionStats += curStats.total;
+            if (gainTotal > 0) totalFactionGains += gainTotal;
+            totalXanaxTaken += xanax;
+            totalRefillsUsed += refills;
+
+            membersResult.push({
+                playerId: pId,
+                playerName: info.name,
+                level: info.level,
+                daysInFaction: info.days_in_faction,
+                stats: curStats,
+                baselineStats: baseStats,
+                gains: {
+                    strength: gainStr,
+                    defense: gainDef,
+                    speed: gainSpd,
+                    dexterity: gainDex,
+                    total: gainTotal,
+                    pct: gainPct
+                },
+                balance,
+                dailyAvg,
+                daysTracked,
+                specialty,
+                momentum: { xanax, refills },
+                verified: isVerified,
+                historyCount: hist.length,
+                lastUpdated: curTs
+            });
+        }
+
+        // Sort descending by gain total, then by current total
+        membersResult.sort((a, b) => (b.gains.total - a.gains.total) || (b.stats.total - a.stats.total));
+
+        const verifiedList = membersResult.filter(m => m.verified && m.stats.total > 0);
+        const topGainer = verifiedList.length > 0 ? verifiedList[0] : (membersResult[0] || null);
+        const slackersCount = verifiedList.filter(m => m.gains.total < 1000).length;
+
+        res.json({
+            success: true,
+            factionId,
+            window: windowStr,
+            windowMs,
+            kpis: {
+                totalFactionGains,
+                totalFactionCombatPower: totalFactionStats,
+                topGainer: topGainer ? {
+                    id: topGainer.playerId,
+                    name: topGainer.playerName,
+                    gain: topGainer.gains.total,
+                    pct: topGainer.gains.pct,
+                    total: topGainer.stats.total
+                } : null,
+                totalXanaxTaken,
+                totalRefillsUsed,
+                slackersCount,
+                verifiedCount: verifiedList.length,
+                totalMembers: membersResult.length
+            },
+            members: membersResult
+        });
+    } catch(err) {
+        console.error('[StatGains API] Error:', err);
+        res.status(500).json({ success: false, error: 'Failed to compute faction stat gains: ' + err.message });
+    }
+});
+
+// Snapshot endpoint to record current battlestats immediately
+app.post('/api/faction/stat-gains/snapshot', async (req, res) => {
+    try {
+        let updatedCount = 0;
+        const now = Date.now();
+
+        if (typeof userKeys !== 'undefined' && userKeys.getAllConnectedMembers) {
+            const connected = userKeys.getAllConnectedMembers();
+            for (const member of connected) {
+                try {
+                    const uData = await userKeys.fetchUserLiveStats(member.key, 'battlestats,personalstats');
+                    if (uData && uData.battlestats && uData.battlestats.total > 0) {
+                        const recKey = String(member.tornId);
+                        if (!battleStatsHistory[recKey]) {
+                            battleStatsHistory[recKey] = {
+                                playerId: member.tornId,
+                                playerName: member.playerName || uData.playerName,
+                                history: [],
+                                stats: {},
+                                lastUpdated: now
+                            };
+                        }
+                        const bRec = battleStatsHistory[recKey];
+                        if (!Array.isArray(bRec.history)) bRec.history = [];
+
+                        const prevTotal = Number(bRec.stats?.total || 0);
+                        const curTotal = Number(uData.battlestats.total || 0);
+                        const prevStr = Number(bRec.stats?.strength || 0);
+                        const prevDef = Number(bRec.stats?.defense || 0);
+                        const prevSpd = Number(bRec.stats?.speed || 0);
+                        const prevDex = Number(bRec.stats?.dexterity || 0);
+
+                        bRec.history.unshift({
+                            timestamp: now,
+                            strength: Number(uData.battlestats.strength || 0),
+                            defense: Number(uData.battlestats.defense || 0),
+                            speed: Number(uData.battlestats.speed || 0),
+                            dexterity: Number(uData.battlestats.dexterity || 0),
+                            total: curTotal,
+                            gains: {
+                                strength: prevStr > 0 ? (Number(uData.battlestats.strength || 0) - prevStr) : 0,
+                                defense: prevDef > 0 ? (Number(uData.battlestats.defense || 0) - prevDef) : 0,
+                                speed: prevSpd > 0 ? (Number(uData.battlestats.speed || 0) - prevSpd) : 0,
+                                dexterity: prevDex > 0 ? (Number(uData.battlestats.dexterity || 0) - prevDex) : 0,
+                                total: prevTotal > 0 ? (curTotal - prevTotal) : 0
+                            }
+                        });
+
+                        if (bRec.history.length > 60) bRec.history = bRec.history.slice(0, 60);
+
+                        bRec.stats = {
+                            strength: Number(uData.battlestats.strength || 0),
+                            defense: Number(uData.battlestats.defense || 0),
+                            speed: Number(uData.battlestats.speed || 0),
+                            dexterity: Number(uData.battlestats.dexterity || 0),
+                            total: curTotal,
+                            modifiers: uData.battlestats.modifiers || { strength: 0, defense: 0, speed: 0, dexterity: 0 }
+                        };
+                        bRec.playerName = member.playerName || uData.playerName;
+                        bRec.lastUpdated = now;
+                        updatedCount++;
+                    }
+                } catch(e) {
+                    console.warn(`[StatGains Snapshot] Failed snapshot for member ${member.tornId}:`, e.message);
+                }
+            }
+        }
+
+        if (updatedCount > 0) {
+            saveBattleStatsHistory();
+        }
+
+        res.json({ success: true, updatedCount, timestamp: now });
+    } catch(err) {
+        console.error('[StatGains Snapshot API] Error:', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Single player stats timeline and projection endpoint
+app.get('/api/faction/player-stats/:playerId', async (req, res) => {
+    try {
+        const playerId = String(req.params.playerId);
+        const bRec = (typeof battleStatsHistory !== 'undefined' && battleStatsHistory) ? battleStatsHistory[playerId] : null;
+        if (!bRec) {
+            return res.status(404).json({ success: false, error: 'No battle stats history found for this player.' });
+        }
+
+        const hist = Array.isArray(bRec.history) ? [...bRec.history].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)) : [];
+        const curStats = bRec.stats || (hist.length > 0 ? hist[0] : { total: 0 });
+
+        // Calculate 30-day and 90-day projections based on training velocity
+        let dailyVelocity = 0;
+        if (hist.length > 1) {
+            const newest = hist[0];
+            const oldest = hist[hist.length - 1];
+            const days = Math.max(1, (newest.timestamp - oldest.timestamp) / 86400000);
+            const totalGain = (newest.total || 0) - (oldest.total || 0);
+            dailyVelocity = Math.max(0, Math.round(totalGain / days));
+        }
+
+        const gain30d = dailyVelocity * 30;
+        const gain90d = dailyVelocity * 90;
+        const projected30d = (curStats.total || 0) + gain30d;
+        const projected90d = (curStats.total || 0) + gain90d;
+
+        res.json({
+            success: true,
+            player: {
+                playerId: Number(playerId),
+                playerName: bRec.playerName || `Player [${playerId}]`,
+                discordUserId: bRec.discordUserId || null,
+                lastUpdated: bRec.lastUpdated || (hist[0]?.timestamp || Date.now()),
+                stats: curStats,
+                history: hist,
+                velocity: {
+                    dailyGain: dailyVelocity,
+                    projected30d,
+                    projected90d,
+                    gain30d,
+                    gain90d
+                }
+            }
+        });
+    } catch(err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 app.post('/api/save-discord-config', async (req, res) => { 
     const factionId = resolveFactionId(req);
     const callerKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey;
