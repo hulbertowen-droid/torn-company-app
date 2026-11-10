@@ -26,13 +26,13 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/global.css?v=4.2.0">
+    <link rel="stylesheet" href="/global.css?v=4.3.0">
     
     <!-- Scripts & Auth -->
-    <script src="/auth-gate.js?v=4.2.0"></script>
-    <script src="/global_settings.js?v=4.2.0"></script>
-    <script src="/global-topbar.js?v=4.2.0"></script>
-    <script src="/pwa-helper.js?v=1.0.0" defer></script>
+    <script src="/auth-gate.js?v=4.3.0"></script>
+    <script src="/global_settings.js?v=4.3.0"></script>
+    <script src="/global-topbar.js?v=4.3.0"></script>
+    <script src="/pwa-helper.js?v=1.1.0" defer></script>
 
     <style>
     /* ─── Page-Specific Dashboard, Armory & Sentinel Styling ─── */
@@ -1765,6 +1765,7 @@
                         <button class="filter-pill" data-preset="lastwar" onclick="setTrackerPreset('lastwar', this)">⚔️ Last Ranked War</button>
                     </div>
                     <div class="date-range-inputs">
+                        <span id="tracker-active-war-badge" style="display:none; font-size:0.78em; padding:4px 10px; border-radius:6px; background:rgba(59,130,246,0.18); color:var(--accent-cobalt, #3b82f6); border:1px solid rgba(59,130,246,0.35); font-weight:700; align-items:center; gap:5px;"></span>
                         <input type="date" id="tracker-date-from" class="date-input-field" title="Start Date">
                         <span style="color:var(--text-tertiary); font-weight:700;">→</span>
                         <input type="date" id="tracker-date-to" class="date-input-field" title="End Date">
@@ -3417,6 +3418,7 @@ async function setTrackerPreset(preset, btn) {
     const todayStr = now.toISOString().split('T')[0];
     let fromStr = todayStr;
     let toStr = todayStr;
+    let warLabel = '';
 
     if (preset === 'today') {
         fromStr = todayStr;
@@ -3447,7 +3449,11 @@ async function setTrackerPreset(preset, btn) {
 
         if (!warsList.length) {
             try {
-                const res = await fetch('/api/war-list');
+                const h = {};
+                const tok = localStorage.getItem('sv_session_token');
+                if (tok) h['x-session-token'] = tok;
+                if (typeof myKey !== 'undefined' && myKey) h['x-api-key'] = myKey;
+                const res = await fetch('/api/war-list', Object.keys(h).length ? { headers: h } : {});
                 const wd = await res.json();
                 if (wd && wd.wars && Array.isArray(wd.wars)) {
                     warsList = wd.wars;
@@ -3462,9 +3468,11 @@ async function setTrackerPreset(preset, btn) {
         // Check active war from dashData if any
         const activeWar = dashData?.dash?.activeWar || currentArmoryData?.activeWar;
 
-        // Sort wars by start timestamp descending so the most recent war is first
+        // Sort wars by start timestamp descending
         const sortedWars = [...warsList].sort((a, b) => (Number(b.start || b.war?.start || 0)) - (Number(a.start || a.war?.start || 0)));
-        const targetWar = sortedWars[0] || activeWar;
+        // Select target war: preference for the most recent completed war (with start and end dates), or activeWar
+        const completedWar = sortedWars.find(w => !w.isOngoing && (Number(w.end || w.war?.end || 0) > 0));
+        const targetWar = completedWar || sortedWars[0] || activeWar;
 
         const wStart = Number(targetWar?.start || targetWar?.war?.start || 0);
         const wEnd = Number(targetWar?.end || targetWar?.war?.end || 0);
@@ -3477,11 +3485,22 @@ async function setTrackerPreset(preset, btn) {
                 toStr = todayStr;
             }
             const enemy = targetWar.enemy || targetWar.enemyFaction || targetWar.enemyName || 'Enemy';
-            showToast(`⚔️ Ranked War vs ${enemy}: ${fromStr} → ${toStr}`, 'success');
+            warLabel = `⚔️ Ranked War vs ${enemy}: ${fromStr} → ${toStr}`;
+            showToast(warLabel, 'success');
         } else {
             const d = new Date(now.getTime() - (86400000 * 7));
             fromStr = d.toISOString().split('T')[0];
             showToast('No ranked war found, defaulting to 7 days', 'warn');
+        }
+    }
+
+    const warBadge = document.getElementById('tracker-active-war-badge');
+    if (warBadge) {
+        if (warLabel) {
+            warBadge.textContent = warLabel;
+            warBadge.style.display = 'inline-flex';
+        } else {
+            warBadge.style.display = 'none';
         }
     }
 
@@ -3520,17 +3539,18 @@ async function fetchConsumptionData() {
 
     const userKey = currentArmoryData?.userKey || localStorage.getItem('torn_api_key') || (typeof myKey !== 'undefined' ? myKey : '') || '';
     const hasToken = !!localStorage.getItem('sv_session_token');
-    if (!userKey && !hasToken) {
-        showToast('Please connect an API key first', 'error');
-        return;
-    }
 
     if (btn) btn.disabled = true;
     if (icon) icon.textContent = '⏳';
 
     try {
         const keyParam = userKey ? `&key=${encodeURIComponent(userKey)}` : '';
-        const resp = await fetch(`/api/armory-history?from=${fromTs}&to=${toTs}&pages=8${keyParam}`);
+        const h = {};
+        const tok = localStorage.getItem('sv_session_token');
+        if (tok) h['x-session-token'] = tok;
+        if (userKey) h['x-api-key'] = userKey;
+
+        const resp = await fetch(`/api/armory-history?from=${fromTs}&to=${toTs}&pages=8${keyParam}`, Object.keys(h).length ? { headers: h } : {});
         const data = await resp.json();
         if (data.error) throw new Error(data.error);
 
@@ -3740,6 +3760,31 @@ function formatMemberItemChips(itemsMap, type, fallbackCategoryCounts = null) {
     }
     html += `</div>`;
     return html;
+}
+
+function renderDrawerItemPills(itemsMap, type) {
+    if (!itemsMap || typeof itemsMap !== 'object') return '<span style="color:var(--text-tertiary); font-size:0.8em;">No items recorded</span>';
+    const entries = Object.entries(itemsMap).filter(([_, q]) => q > 0).sort((a, b) => b[1] - a[1]);
+    if (!entries.length) return '<span style="color:var(--text-tertiary); font-size:0.8em;">No items recorded</span>';
+    const sign = type === 'inflow' ? '+' : '-';
+    const color = type === 'inflow' ? 'var(--accent-emerald, #2ed573)' : 'var(--accent-crimson, #ff4757)';
+    const bg = type === 'inflow' ? 'rgba(46,213,115,0.12)' : 'rgba(255,71,87,0.12)';
+    const bdr = type === 'inflow' ? 'rgba(46,213,115,0.3)' : 'rgba(255,71,87,0.3)';
+    return entries.map(([name, qty]) => `
+        <span class="usage-item-chip" onclick="setArmoryItemFilter('${escapeHtml(name)}')" title="Filter by ${escapeHtml(name)}" style="display:inline-flex; align-items:center; gap:4px; font-size:0.75em; padding:3px 8px; border-radius:4px; background:${bg}; color:${color}; border:1px solid ${bdr}; font-family:var(--font-mono, monospace); cursor:pointer;">
+            <span>${escapeHtml(name)}:</span>
+            <strong>${sign}${fmtNum(qty)}</strong>
+        </span>
+    `).join('');
+}
+
+function toggleMemberRowDrawer(id) {
+    const el = document.getElementById('member-drawer-' + id);
+    const btn = document.getElementById('btn-drawer-' + id);
+    if (!el) return;
+    const isHidden = el.style.display === 'none';
+    el.style.display = isHidden ? 'table-row' : 'none';
+    if (btn) btn.innerHTML = isHidden ? '<span>▲</span> Hide' : '<span>▼</span> Items';
 }
 
 function renderItemUsageTracker() {
@@ -4163,9 +4208,38 @@ function renderItemUsageTracker() {
                     </td>
                     <td style="vertical-align:top; text-align:right; font-size:0.82em; color:var(--text-tertiary);" title="${m.lastActionTs ? new Date(m.lastActionTs * 1000).toUTCString() : ''}">${timeSince(m.lastActionTs)}</td>
                     <td style="vertical-align:top; text-align:center;">
-                        <button class="btn btn-sm btn-outline" onclick="openMemberLogModal('${m.id}', '${escapeHtml(m.name)}')" title="View item-by-item audit log" style="padding:3px 8px; font-size:0.75em;">
-                            <span>📋</span> Log
-                        </button>
+                        <div style="display:flex; flex-direction:column; gap:4px; align-items:center;">
+                            <button class="btn btn-sm btn-outline" id="btn-drawer-${m.id}" onclick="toggleMemberRowDrawer('${m.id}')" title="Show all items deposited &amp; used by this member" style="padding:3px 8px; font-size:0.75em; min-width:68px;">
+                                <span>▼</span> Items
+                            </button>
+                            <button class="btn btn-sm btn-secondary" onclick="openMemberLogModal('${m.id}', '${escapeHtml(m.name)}')" title="View item-by-item audit log" style="padding:3px 8px; font-size:0.75em; min-width:68px;">
+                                <span>📋</span> Log
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+                <tr id="member-drawer-${m.id}" class="member-detail-drawer" style="display:none; background:rgba(15,23,42,0.85); border-left:3px solid var(--accent-cobalt);">
+                    <td colspan="11" style="padding:14px 20px;">
+                        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:16px;">
+                            <div style="background:var(--bg-elevated); border:1px solid var(--border-subtle); border-radius:8px; padding:12px;">
+                                <div style="font-weight:700; color:var(--accent-emerald); font-size:0.85em; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
+                                    <span>🟢 Items Deposited by ${escapeHtml(m.name)}</span>
+                                    <span style="font-family:var(--font-mono); font-size:1.05em; font-weight:800;">+${fmtNum(m.totalDeposited)} total</span>
+                                </div>
+                                <div style="display:flex; flex-wrap:wrap; gap:4px;">
+                                    ${renderDrawerItemPills(m.depositedItems, 'inflow')}
+                                </div>
+                            </div>
+                            <div style="background:var(--bg-elevated); border:1px solid var(--border-subtle); border-radius:8px; padding:12px;">
+                                <div style="font-weight:700; color:var(--accent-crimson); font-size:0.85em; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
+                                    <span>🔴 Items Used &amp; Consumed by ${escapeHtml(m.name)}</span>
+                                    <span style="font-family:var(--font-mono); font-size:1.05em; font-weight:800;">-${fmtNum(m.totalUsed)} total</span>
+                                </div>
+                                <div style="display:flex; flex-wrap:wrap; gap:4px;">
+                                    ${renderDrawerItemPills(m.usedItems, 'outflow')}
+                                </div>
+                            </div>
+                        </div>
                     </td>
                 </tr>`;
             }).join('');

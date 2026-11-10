@@ -4487,6 +4487,8 @@ async function performBattleStatsSnapshot() {
 
                     bRec.history.unshift({
                         timestamp: now,
+                        isManual: false,
+                        source: 'automated_snapshot',
                         strength: Number(uData.battlestats.strength || 0),
                         defense: Number(uData.battlestats.defense || 0),
                         speed: Number(uData.battlestats.speed || 0),
@@ -4503,6 +4505,7 @@ async function performBattleStatsSnapshot() {
 
                     if (bRec.history.length > 60) bRec.history = bRec.history.slice(0, 60);
 
+                    // Update live / current stats for web dashboards without overwriting user's manual Discord /bs baseline
                     bRec.stats = {
                         strength: Number(uData.battlestats.strength || 0),
                         defense: Number(uData.battlestats.defense || 0),
@@ -4511,6 +4514,8 @@ async function performBattleStatsSnapshot() {
                         total: curTotal,
                         modifiers: uData.battlestats.modifiers || { strength: 0, defense: 0, speed: 0, dexterity: 0 }
                     };
+                    bRec.liveStats = { ...bRec.stats };
+                    bRec.lastBackgroundSync = now;
                     bRec.personalStats = {
                         xantaken: Number(uData.personalstats?.xantaken || 0),
                         refills: Number(uData.personalstats?.refills || 0),
@@ -4518,6 +4523,8 @@ async function performBattleStatsSnapshot() {
                     };
                     if (uData.level) bRec.level = Number(uData.level);
                     bRec.playerName = member.playerName || uData.playerName;
+                    // Note: do NOT overwrite bRec.lastManualUpdate or bRec.manualStats here!
+                    // If no manual baseline exists yet, initialize bRec.lastUpdated but don't clobber future baselines
                     bRec.lastUpdated = now;
                     updatedCount++;
                 }
@@ -6388,7 +6395,7 @@ const warListCache = {};
 app.get('/api/war-list', async (req, res) => {
     let userKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey;
     if (!userKey || userKey === "null" || userKey.trim() === "") {
-        if (req.userSession || req.headers['x-session-token']) {
+        if (req.userSession || req.headers['x-session-token'] || discordConfig.apiKey) {
             userKey = discordConfig.apiKey;
         } else {
             return res.status(401).json({ error: "Authentication required" });
@@ -6412,7 +6419,8 @@ app.get('/api/war-list', async (req, res) => {
             : `https://api.torn.com/faction/?selections=basic,rankedwars&key=${userKey}`;
         let facRes = await fetch(facUrl, { signal: AbortSignal.timeout(8000) });
         let facData = await facRes.json();
-        if (facData.error && facData.error.code === 6) {
+        if (facData.error && (facData.error.code === 6 || facData.error.code === 7 || facData.error.code === 2) && discordConfig.apiKey && userKey !== discordConfig.apiKey) {
+            userKey = discordConfig.apiKey;
             facRes = await fetch(`https://api.torn.com/faction/?selections=basic,rankedwars&key=${userKey}`, { signal: AbortSignal.timeout(8000) });
             facData = await facRes.json();
         }
@@ -7319,7 +7327,13 @@ app.get('/api/dashboard-data', async (req, res) => {
         let armoryError = false;
         let armoryData = armoryResp ? await armoryResp.json().catch(() => ({ error: true })) : { error: true };
 
-        // Fallback to minimal armory selections if multi-selection returned an error
+        // Fallback to server faction key if user key lacks permissions (code 7) or errored
+        if (armoryData.error && discordConfig.apiKey && userKey !== discordConfig.apiKey) {
+            try {
+                const fallbackResp = await fetch(`https://api.torn.com/faction/?selections=armor,weapons,temporary,medical,drugs,boosters,donations,armorynews&from=${thirtyDaysAgo}&key=${discordConfig.apiKey}`).catch(e => null);
+                if (fallbackResp) armoryData = await fallbackResp.json().catch(() => ({ error: true }));
+            } catch(e) {}
+        }
         if (armoryData.error) {
             try {
                 const fallbackResp = await fetch(`https://api.torn.com/faction/?selections=armor,weapons,temporary&key=${userKey}`).catch(e => null);
@@ -7634,8 +7648,8 @@ app.get('/api/dashboard-data', async (req, res) => {
 app.get('/api/armory-history', async (req, res) => {
     let userKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey || req.query.key;
     if (!userKey || userKey === 'null' || userKey.trim() === '') {
-        // Fall back to server's configured faction key if user is in an active session
-        if (req.userSession || req.headers['x-session-token']) {
+        // Fall back to server's configured faction key if user is in an active session or server key is configured
+        if (req.userSession || req.headers['x-session-token'] || discordConfig.apiKey) {
             userKey = discordConfig.apiKey;
         } else {
             return res.status(401).json({ error: "Authentication required" });
@@ -22967,6 +22981,40 @@ function getStatArchetype(str, def, spd, dex) {
     return '📈 Hybrid Build';
 }
 
+function getLastManualRecord(rec) {
+    if (!rec) return null;
+    if (rec.lastManualUpdate && rec.manualStats) {
+        return {
+            timestamp: Number(rec.lastManualUpdate),
+            stats: rec.manualStats
+        };
+    }
+    // Search history for the newest manual command entry
+    if (Array.isArray(rec.history) && rec.history.length > 0) {
+        const manualEntry = rec.history.find(h => h.isManual === true || h.source === 'manual_command');
+        if (manualEntry) {
+            return {
+                timestamp: Number(manualEntry.timestamp),
+                stats: {
+                    strength: Number(manualEntry.strength || 0),
+                    defense: Number(manualEntry.defense || 0),
+                    speed: Number(manualEntry.speed || 0),
+                    dexterity: Number(manualEntry.dexterity || 0),
+                    total: Number(manualEntry.total || 0)
+                }
+            };
+        }
+    }
+    // Fallback for legacy records that haven't recorded a manualStats baseline yet
+    if (rec.lastUpdated && rec.stats) {
+        return {
+            timestamp: Number(rec.lastUpdated),
+            stats: rec.stats
+        };
+    }
+    return null;
+}
+
 async function handleBattleStatsUpdate(interaction, options = {}) {
     const { forceUpdate = true, keyInput = null, isPublic = true, isButton = false } = options;
 
@@ -23075,7 +23123,8 @@ async function handleBattleStatsUpdate(interaction, options = {}) {
 
         // 4. View Mode: show existing record or current stats without recording new baseline
         if (!forceUpdate) {
-            const lastUpdatedTime = prevRecord?.lastUpdated ? formatTimeSince(Date.now() - prevRecord.lastUpdated) : null;
+            const lastManual = getLastManualRecord(prevRecord);
+            const lastUpdatedTime = lastManual?.timestamp ? formatTimeSince(Date.now() - lastManual.timestamp) : null;
             const archetype = getStatArchetype(str, def, spd, dex);
             const updateHint = lastUpdatedTime ? `Updated ${lastUpdatedTime} · Run /bs update to track gains.` : 'No baseline recorded yet — run /bs update to track gains.';
             const userAvatarUrl = interaction.user?.displayAvatarURL?.({ extension: 'png', size: 64 }) || null;
@@ -23103,20 +23152,21 @@ async function handleBattleStatsUpdate(interaction, options = {}) {
             return await interaction.editReply({ embeds: [sanitizeEmbed(embed)], components: buttonRows });
         }
 
-        // 5. Update Mode: Calculate gains against previous record
+        // 5. Update Mode: Calculate gains against previous manual baseline record (isolated from automated snapshots)
         let diffStr = 0, diffDef = 0, diffSpd = 0, diffDex = 0, diffTotal = 0;
         let hasPrevious = false;
         let elapsedMs = 0;
         let timeAgo = '';
 
-        if (prevRecord && prevRecord.stats && prevRecord.lastUpdated) {
+        const lastManual = getLastManualRecord(prevRecord);
+        if (lastManual && lastManual.stats && lastManual.timestamp) {
             hasPrevious = true;
-            diffStr = str - (Number(prevRecord.stats.strength) || 0);
-            diffDef = def - (Number(prevRecord.stats.defense) || 0);
-            diffSpd = spd - (Number(prevRecord.stats.speed) || 0);
-            diffDex = dex - (Number(prevRecord.stats.dexterity) || 0);
-            diffTotal = total - (Number(prevRecord.stats.total) || 0);
-            elapsedMs = Math.max(0, Date.now() - prevRecord.lastUpdated);
+            diffStr = str - (Number(lastManual.stats.strength) || 0);
+            diffDef = def - (Number(lastManual.stats.defense) || 0);
+            diffSpd = spd - (Number(lastManual.stats.speed) || 0);
+            diffDex = dex - (Number(lastManual.stats.dexterity) || 0);
+            diffTotal = total - (Number(lastManual.stats.total) || 0);
+            elapsedMs = Math.max(0, Date.now() - lastManual.timestamp);
             timeAgo = formatTimeSince(elapsedMs);
         }
 
@@ -23144,7 +23194,8 @@ async function handleBattleStatsUpdate(interaction, options = {}) {
             }
         }
 
-        // 6. Save update to history
+        // 6. Save update to history with explicit manual flag and preserve manual baseline
+        const updateNow = Date.now();
         if (!battleStatsHistory[recordKey]) {
             battleStatsHistory[recordKey] = {
                 playerId,
@@ -23159,12 +23210,14 @@ async function handleBattleStatsUpdate(interaction, options = {}) {
 
         if (hasPrevious) {
             battleStatsHistory[recordKey].history.unshift({
-                timestamp: prevRecord.lastUpdated,
-                strength: prevRecord.stats.strength,
-                defense: prevRecord.stats.defense,
-                speed: prevRecord.stats.speed,
-                dexterity: prevRecord.stats.dexterity,
-                total: prevRecord.stats.total,
+                timestamp: lastManual.timestamp,
+                isManual: true,
+                source: 'manual_command',
+                strength: lastManual.stats.strength,
+                defense: lastManual.stats.defense,
+                speed: lastManual.stats.speed,
+                dexterity: lastManual.stats.dexterity,
+                total: lastManual.stats.total,
                 gains: {
                     strength: diffStr,
                     defense: diffDef,
@@ -23173,14 +23226,22 @@ async function handleBattleStatsUpdate(interaction, options = {}) {
                     total: diffTotal
                 }
             });
-            if (battleStatsHistory[recordKey].history.length > 50) {
-                battleStatsHistory[recordKey].history = battleStatsHistory[recordKey].history.slice(0, 50);
+            if (battleStatsHistory[recordKey].history.length > 60) {
+                battleStatsHistory[recordKey].history = battleStatsHistory[recordKey].history.slice(0, 60);
             }
         }
 
         battleStatsHistory[recordKey].playerName = playerName;
         battleStatsHistory[recordKey].discordUserId = interaction.user.id;
-        battleStatsHistory[recordKey].lastUpdated = Date.now();
+        battleStatsHistory[recordKey].lastManualUpdate = updateNow;
+        battleStatsHistory[recordKey].manualStats = {
+            strength: str,
+            defense: def,
+            speed: spd,
+            dexterity: dex,
+            total: total
+        };
+        battleStatsHistory[recordKey].lastUpdated = updateNow;
         battleStatsHistory[recordKey].stats = {
             strength: str,
             defense: def,
