@@ -1355,6 +1355,7 @@
             </a>
             <a href="/payout.html" class="nav-link"><span class="nav-icon">💰</span> <span class="nav-text">War Payouts</span></a>
             <a href="/members.html" class="nav-link"><span class="nav-icon">👥</span> <span class="nav-text">Faction Roster</span></a>
+            <a href="/gym-stats.html" class="nav-link"><span class="nav-icon">🏋️</span> <span class="nav-text">Gym &amp; Stat Tracker</span></a>
             <a href="/oc.html" class="nav-link"><span class="nav-icon">💼</span> <span class="nav-text">OC Manager</span></a>
 
             <div class="nav-section-title">Tactical Desk</div>
@@ -2387,16 +2388,17 @@
                         </div>
                     </div>
                     <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
-                        <!-- Time Window Selector Pills (Matching Screenshot 1) -->
-                        <div style="display:inline-flex; align-items:center; background:#0c1017; border:1px solid #1e293b; border-radius:8px; padding:4px 8px; gap:4px;">
-                            <span style="font-size:0.74em; font-weight:700; color:#38bdf8; display:flex; align-items:center; gap:4px; margin-right:4px;">⏱️ WINDOW:</span>
-                            <button class="stat-window-pill" data-window="24h" onclick="setStatGainsWindow('24h', this)">24 Hours</button>
-                            <button class="stat-window-pill" data-window="3d" onclick="setStatGainsWindow('3d', this)">3 Days</button>
-                            <button class="stat-window-pill active" data-window="7d" onclick="setStatGainsWindow('7d', this)">7 Days</button>
-                            <button class="stat-window-pill" data-window="14d" onclick="setStatGainsWindow('14d', this)">14 Days</button>
-                            <button class="stat-window-pill" data-window="30d" onclick="setStatGainsWindow('30d', this)">30 Days</button>
-                            <button class="stat-window-pill" data-window="all" onclick="setStatGainsWindow('all', this)">All Time</button>
-                        </div>
+                        <a href="/gym-stats.html" class="btn btn-sm btn-primary" style="padding:6px 14px; font-size:0.8em; display:inline-flex; align-items:center; gap:6px; font-weight:700; text-decoration:none;">
+                            <span>🏋️</span> Open Full Gym &amp; Stat Tracker App →
+                        </a>
+                        <select id="stat-window-select" class="sort-select" onchange="setStatGainsWindow(this.value)" style="padding:6px 10px; font-size:0.8em; background:#0c1017; border:1px solid #1e293b; color:#f1f5f9; border-radius:6px;">
+                            <option value="24h">⏱️ Last 24 Hours</option>
+                            <option value="3d">⏱️ Last 3 Days</option>
+                            <option value="7d" selected>⏱️ Last 7 Days</option>
+                            <option value="14d">⏱️ Last 14 Days</option>
+                            <option value="30d">⏱️ Last 30 Days</option>
+                            <option value="all">⏱️ All Time Recorded</option>
+                        </select>
                         <button class="btn btn-sm btn-outline" id="btn-stat-snapshot" onclick="triggerStatSnapshot()" style="padding:6px 12px; font-size:0.78em; display:inline-flex; align-items:center; gap:5px;" title="Snapshot current stats for all connected faction members">
                             <span>📸</span> Snapshot Now
                         </button>
@@ -2756,9 +2758,11 @@ async function loadAll() {
     if (lastUpdatedEl) lastUpdatedEl.innerText = 'Refreshing...';
 
     try {
+        const reqHeaders = {};
+        if (myKey) reqHeaders['x-api-key'] = myKey;
         const [dashRes, warRes] = await Promise.all([
-            fetch(`/api/dashboard-data`, { headers: { 'x-api-key': myKey } }),
-            fetch(`/api/war-list`, { headers: { 'x-api-key': myKey } })
+            fetch(`/api/dashboard-data`, Object.keys(reqHeaders).length ? { headers: reqHeaders } : {}),
+            fetch(`/api/war-list`, Object.keys(reqHeaders).length ? { headers: reqHeaders } : {})
         ]);
         const dash = await dashRes.json();
         const wars = await warRes.json();
@@ -3426,8 +3430,7 @@ async function setTrackerPreset(preset, btn) {
 
         if (!warsList.length) {
             try {
-                const myKey = typeof getApiKey === 'function' ? getApiKey() : '';
-                const res = await fetch('/api/war-list', { headers: { 'x-api-key': myKey } });
+                const res = await fetch('/api/war-list');
                 const wd = await res.json();
                 if (wd && wd.wars && Array.isArray(wd.wars)) {
                     warsList = wd.wars;
@@ -3446,18 +3449,18 @@ async function setTrackerPreset(preset, btn) {
         const sortedWars = [...warsList].sort((a, b) => (Number(b.start || b.war?.start || 0)) - (Number(a.start || a.war?.start || 0)));
         const targetWar = sortedWars[0] || activeWar;
 
-        const wStart = targetWar?.start || targetWar?.war?.start;
-        const wEnd = targetWar?.end || targetWar?.war?.end;
+        const wStart = Number(targetWar?.start || targetWar?.war?.start || 0);
+        const wEnd = Number(targetWar?.end || targetWar?.war?.end || 0);
 
-        if (targetWar && wStart) {
+        if (targetWar && wStart > 0) {
             fromStr = new Date(wStart * 1000).toISOString().split('T')[0];
-            if (wEnd && wEnd > 0) {
+            if (wEnd > 0 && !targetWar.isOngoing) {
                 toStr = new Date(wEnd * 1000).toISOString().split('T')[0];
             } else {
                 toStr = todayStr;
             }
             const enemy = targetWar.enemy || targetWar.enemyFaction || targetWar.enemyName || 'Enemy';
-            showToast(`⚔️ Last Ranked War vs ${enemy}: ${fromStr} → ${toStr}`, 'success');
+            showToast(`⚔️ Ranked War vs ${enemy}: ${fromStr} → ${toStr}`, 'success');
         } else {
             const d = new Date(now.getTime() - (86400000 * 7));
             fromStr = d.toISOString().split('T')[0];
@@ -3467,8 +3470,14 @@ async function setTrackerPreset(preset, btn) {
 
     const fromInput = document.getElementById('tracker-date-from');
     const toInput = document.getElementById('tracker-date-to');
-    if (fromInput) fromInput.value = fromStr;
-    if (toInput) toInput.value = toStr;
+    if (fromInput) {
+        fromInput.value = fromStr;
+        fromInput.dispatchEvent(new Event('change'));
+    }
+    if (toInput) {
+        toInput.value = toStr;
+        toInput.dispatchEvent(new Event('change'));
+    }
 
     await fetchConsumptionData();
 }
@@ -4911,6 +4920,8 @@ let statGainsSearchQuery = '';
 
 function setStatGainsWindow(windowStr, btn) {
     statGainsWindow = windowStr;
+    const sel = document.getElementById('stat-window-select');
+    if (sel && sel.value !== windowStr) sel.value = windowStr;
     document.querySelectorAll('.stat-window-pill').forEach(b => b.classList.remove('active'));
     if (btn) btn.classList.add('active');
     loadFactionStatGains(true);
@@ -4925,10 +4936,7 @@ async function loadFactionStatGains(force = false) {
     if (refreshBtn) refreshBtn.classList.add('spinning');
 
     try {
-        const myKey = typeof getApiKey === 'function' ? getApiKey() : '';
-        const res = await fetch(`/api/faction/stat-gains?window=${statGainsWindow}${force ? '&force=true' : ''}`, {
-            headers: { 'x-api-key': myKey }
-        });
+        const res = await fetch(`/api/faction/stat-gains?window=${statGainsWindow}${force ? '&force=true' : ''}`);
         const data = await res.json();
         if (data && data.success) {
             currentStatGainsData = data;
@@ -4951,10 +4959,9 @@ async function triggerStatSnapshot() {
         btn.innerHTML = `<span>⏳</span> Capturing...`;
     }
     try {
-        const myKey = typeof getApiKey === 'function' ? getApiKey() : '';
         const res = await fetch('/api/faction/stat-gains/snapshot', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'x-api-key': myKey }
+            headers: { 'Content-Type': 'application/json' }
         });
         const data = await res.json();
         if (data && data.success) {
@@ -5201,8 +5208,7 @@ async function openPlayerStatModal(playerId) {
     document.getElementById('sp-history-tbody').innerHTML = `<tr><td colspan="7" style="text-align:center; padding:18px; color:var(--text-tertiary);"><span class="loading-spinner"></span> Loading progression records...</td></tr>`;
 
     try {
-        const myKey = typeof getApiKey === 'function' ? getApiKey() : '';
-        const res = await fetch(`/api/faction/player-stats/${playerId}`, { headers: { 'x-api-key': myKey } });
+        const res = await fetch(`/api/faction/player-stats/${playerId}`);
         const data = await res.json();
         if (data && data.success && data.player) {
             const p = data.player;

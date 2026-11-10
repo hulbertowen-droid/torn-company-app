@@ -4446,84 +4446,107 @@ app.get('/api/faction/stat-gains', async (req, res) => {
     }
 });
 
+// Core battlestats snapshot worker function
+async function performBattleStatsSnapshot() {
+    let updatedCount = 0;
+    const now = Date.now();
+
+    if (typeof userKeys !== 'undefined' && userKeys.getAllConnectedMembers) {
+        const connected = userKeys.getAllConnectedMembers();
+        for (const member of connected) {
+            try {
+                const uData = await userKeys.fetchUserLiveStats(member.key, 'battlestats,personalstats');
+                if (uData && uData.battlestats && uData.battlestats.total > 0) {
+                    const recKey = String(member.tornId);
+                    if (!battleStatsHistory[recKey]) {
+                        battleStatsHistory[recKey] = {
+                            playerId: member.tornId,
+                            playerName: member.playerName || uData.playerName,
+                            history: [],
+                            stats: {},
+                            lastUpdated: now
+                        };
+                    }
+                    const bRec = battleStatsHistory[recKey];
+                    if (!Array.isArray(bRec.history)) bRec.history = [];
+
+                    const prevTotal = Number(bRec.stats?.total || 0);
+                    const curTotal = Number(uData.battlestats.total || 0);
+                    const prevStr = Number(bRec.stats?.strength || 0);
+                    const prevDef = Number(bRec.stats?.defense || 0);
+                    const prevSpd = Number(bRec.stats?.speed || 0);
+                    const prevDex = Number(bRec.stats?.dexterity || 0);
+
+                    bRec.history.unshift({
+                        timestamp: now,
+                        strength: Number(uData.battlestats.strength || 0),
+                        defense: Number(uData.battlestats.defense || 0),
+                        speed: Number(uData.battlestats.speed || 0),
+                        dexterity: Number(uData.battlestats.dexterity || 0),
+                        total: curTotal,
+                        gains: {
+                            strength: prevStr > 0 ? (Number(uData.battlestats.strength || 0) - prevStr) : 0,
+                            defense: prevDef > 0 ? (Number(uData.battlestats.defense || 0) - prevDef) : 0,
+                            speed: prevSpd > 0 ? (Number(uData.battlestats.speed || 0) - prevSpd) : 0,
+                            dexterity: prevDex > 0 ? (Number(uData.battlestats.dexterity || 0) - prevDex) : 0,
+                            total: prevTotal > 0 ? (curTotal - prevTotal) : 0
+                        }
+                    });
+
+                    if (bRec.history.length > 60) bRec.history = bRec.history.slice(0, 60);
+
+                    bRec.stats = {
+                        strength: Number(uData.battlestats.strength || 0),
+                        defense: Number(uData.battlestats.defense || 0),
+                        speed: Number(uData.battlestats.speed || 0),
+                        dexterity: Number(uData.battlestats.dexterity || 0),
+                        total: curTotal,
+                        modifiers: uData.battlestats.modifiers || { strength: 0, defense: 0, speed: 0, dexterity: 0 }
+                    };
+                    bRec.playerName = member.playerName || uData.playerName;
+                    bRec.lastUpdated = now;
+                    updatedCount++;
+                }
+            } catch(e) {
+                console.warn(`[StatGains Snapshot] Failed snapshot for member ${member.tornId}:`, e.message);
+            }
+        }
+    }
+
+    if (updatedCount > 0) {
+        saveBattleStatsHistory();
+    }
+    return { updatedCount, timestamp: now };
+}
+
 // Snapshot endpoint to record current battlestats immediately
 app.post('/api/faction/stat-gains/snapshot', async (req, res) => {
     try {
-        let updatedCount = 0;
-        const now = Date.now();
-
-        if (typeof userKeys !== 'undefined' && userKeys.getAllConnectedMembers) {
-            const connected = userKeys.getAllConnectedMembers();
-            for (const member of connected) {
-                try {
-                    const uData = await userKeys.fetchUserLiveStats(member.key, 'battlestats,personalstats');
-                    if (uData && uData.battlestats && uData.battlestats.total > 0) {
-                        const recKey = String(member.tornId);
-                        if (!battleStatsHistory[recKey]) {
-                            battleStatsHistory[recKey] = {
-                                playerId: member.tornId,
-                                playerName: member.playerName || uData.playerName,
-                                history: [],
-                                stats: {},
-                                lastUpdated: now
-                            };
-                        }
-                        const bRec = battleStatsHistory[recKey];
-                        if (!Array.isArray(bRec.history)) bRec.history = [];
-
-                        const prevTotal = Number(bRec.stats?.total || 0);
-                        const curTotal = Number(uData.battlestats.total || 0);
-                        const prevStr = Number(bRec.stats?.strength || 0);
-                        const prevDef = Number(bRec.stats?.defense || 0);
-                        const prevSpd = Number(bRec.stats?.speed || 0);
-                        const prevDex = Number(bRec.stats?.dexterity || 0);
-
-                        bRec.history.unshift({
-                            timestamp: now,
-                            strength: Number(uData.battlestats.strength || 0),
-                            defense: Number(uData.battlestats.defense || 0),
-                            speed: Number(uData.battlestats.speed || 0),
-                            dexterity: Number(uData.battlestats.dexterity || 0),
-                            total: curTotal,
-                            gains: {
-                                strength: prevStr > 0 ? (Number(uData.battlestats.strength || 0) - prevStr) : 0,
-                                defense: prevDef > 0 ? (Number(uData.battlestats.defense || 0) - prevDef) : 0,
-                                speed: prevSpd > 0 ? (Number(uData.battlestats.speed || 0) - prevSpd) : 0,
-                                dexterity: prevDex > 0 ? (Number(uData.battlestats.dexterity || 0) - prevDex) : 0,
-                                total: prevTotal > 0 ? (curTotal - prevTotal) : 0
-                            }
-                        });
-
-                        if (bRec.history.length > 60) bRec.history = bRec.history.slice(0, 60);
-
-                        bRec.stats = {
-                            strength: Number(uData.battlestats.strength || 0),
-                            defense: Number(uData.battlestats.defense || 0),
-                            speed: Number(uData.battlestats.speed || 0),
-                            dexterity: Number(uData.battlestats.dexterity || 0),
-                            total: curTotal,
-                            modifiers: uData.battlestats.modifiers || { strength: 0, defense: 0, speed: 0, dexterity: 0 }
-                        };
-                        bRec.playerName = member.playerName || uData.playerName;
-                        bRec.lastUpdated = now;
-                        updatedCount++;
-                    }
-                } catch(e) {
-                    console.warn(`[StatGains Snapshot] Failed snapshot for member ${member.tornId}:`, e.message);
-                }
-            }
-        }
-
-        if (updatedCount > 0) {
-            saveBattleStatsHistory();
-        }
-
-        res.json({ success: true, updatedCount, timestamp: now });
+        const result = await performBattleStatsSnapshot();
+        res.json({ success: true, ...result });
     } catch(err) {
         console.error('[StatGains Snapshot API] Error:', err);
         res.status(500).json({ success: false, error: err.message });
     }
 });
+
+// Automated Torn Midnight (00:00 TCT) and periodic Snapshot Worker
+let lastMidnightSnapshotDay = -1;
+setInterval(async () => {
+    try {
+        const d = new Date();
+        const utcHour = d.getUTCHours();
+        const utcMin = d.getUTCMinutes();
+        const utcDay = d.getUTCDate();
+        if (utcHour === 0 && utcMin <= 5 && lastMidnightSnapshotDay !== utcDay) {
+            lastMidnightSnapshotDay = utcDay;
+            console.log('[Torn Midnight 00:00 TCT] Taking automated daily battle stats snapshot...');
+            await performBattleStatsSnapshot();
+        }
+    } catch (e) {
+        console.error('[Torn Midnight Snapshot Worker] Error:', e);
+    }
+}, 60000);
 
 // Single player stats timeline and projection endpoint
 app.get('/api/faction/player-stats/:playerId', async (req, res) => {
@@ -10418,6 +10441,9 @@ app.post('/api/ai/chat', async (req, res) => {
 const bazaarRoutes = require('./routes/bazaar');
 const { fetchWeav3rMarketplace } = bazaarRoutes;
 app.use('/api/bazaar', bazaarRoutes);
+
+const gymTrackerRoutes = require('./routes/gym-tracker');
+app.use('/api/gym-tracker', gymTrackerRoutes);
 
 app.get('/api/weav3r-price/:itemId', async (req, res) => {
     const { itemId } = req.params;

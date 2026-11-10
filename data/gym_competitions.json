@@ -1,0 +1,30 @@
+[
+  {
+    "id": "blitz-1",
+    "title": "7-Day Pre-War Strength Blitz",
+    "description": "Max energy dump into Strength ahead of our ranked war against Run It Industries!",
+    "targetType": "stat_gain",
+    "targetStat": "strength",
+    "startTime": 1793750400000,
+    "endTime": 1794355200000,
+    "prizePool": 250000000,
+    "prizeDescription": "$250M Faction Bank Distribution (50% 1st, 30% 2nd, 20% 3rd)",
+    "creatorId": 3776908,
+    "creatorName": "Owen777",
+    "status": "active"
+  },
+  {
+    "id": "derby-1",
+    "title": "Xanax & Gym Energy Derby",
+    "description": "Faction-wide energy utilization contest. Highest total estimated gym energy expended wins!",
+    "targetType": "energy_spent",
+    "targetStat": null,
+    "startTime": 1793664000000,
+    "endTime": 1794268800000,
+    "prizePool": 150000000,
+    "prizeDescription": "$150M + 50 Faction Xanax to winner",
+    "creatorId": 3776908,
+    "creatorName": "Owen777",
+    "status": "active"
+  }
+]

@@ -1,0 +1,1547 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Faction Gym &amp; Battle Stat Tracker | FactionOS</title>
+    <meta name="description" content="Production-grade Torn City Faction Gym &amp; Battle Stat Tracker: Real-time stat sync, multi-window gains analytics, energy utilization, slacker detection, competitions, and war readiness.">
+
+    <!-- Fonts & Core Design System -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/global.css?v=4.2.0">
+
+    <!-- Chart.js for Velocity & Radar Visualizations -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- Scripts & Authentication -->
+    <script src="/auth-gate.js?v=4.2.0"></script>
+    <script src="/global_settings.js?v=4.2.0"></script>
+    <script src="/global-topbar.js?v=4.2.0"></script>
+
+    <style>
+    :root {
+        --bg-base: #0D1117;
+        --bg-surface: #161B22;
+        --border-subtle: #30363D;
+        --accent-amber: #FF9800;
+        --accent-amber-light: #FFA726;
+        --stat-str: #E53935;
+        --stat-spd: #00B0FF;
+        --stat-def: #00E676;
+        --stat-dex: #AB47BC;
+        --status-active: #00E676;
+        --status-warning: #FFD600;
+        --status-danger: #FF1744;
+    }
+
+    body {
+        background-color: var(--bg-base);
+        color: var(--text-primary, #E6EDF3);
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    .font-mono {
+        font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* Gym Tracker Hero & Ribbon */
+    .gym-hero {
+        background: linear-gradient(135deg, rgba(22, 27, 34, 0.98) 0%, rgba(13, 17, 23, 0.98) 50%, rgba(26, 32, 44, 0.95) 100%);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-lg, 12px);
+        padding: 24px 28px;
+        margin-bottom: 22px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 20px;
+        position: relative;
+        overflow: hidden;
+        box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+    }
+    .gym-hero::before {
+        content: '';
+        position: absolute;
+        top: -40%;
+        right: -10%;
+        width: 380px;
+        height: 380px;
+        background: radial-gradient(circle, rgba(255, 152, 0, 0.08) 0%, transparent 70%);
+        pointer-events: none;
+    }
+
+    /* 4-Stat Color Badges */
+    .stat-badge-str { background: rgba(229, 57, 53, 0.15); color: var(--stat-str); border: 1px solid rgba(229, 57, 53, 0.35); }
+    .stat-badge-spd { background: rgba(0, 176, 255, 0.15); color: var(--stat-spd); border: 1px solid rgba(0, 176, 255, 0.35); }
+    .stat-badge-def { background: rgba(0, 230, 118, 0.15); color: var(--stat-def); border: 1px solid rgba(0, 230, 118, 0.35); }
+    .stat-badge-dex { background: rgba(171, 71, 188, 0.15); color: var(--stat-dex); border: 1px solid rgba(171, 71, 188, 0.35); }
+
+    /* Time Window Selector Pills */
+    .stat-window-pill {
+        background: transparent;
+        border: 1px solid transparent;
+        color: #94A3B8;
+        padding: 5px 12px;
+        border-radius: 6px;
+        font-size: 0.8em;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        user-select: none;
+    }
+    .stat-window-pill:hover {
+        color: #F1F5F9;
+        background: rgba(255, 255, 255, 0.06);
+    }
+    .stat-window-pill.active {
+        background: rgba(255, 152, 0, 0.18);
+        border: 1px solid var(--accent-amber);
+        color: var(--accent-amber-light);
+        font-weight: 700;
+        box-shadow: 0 0 10px rgba(255, 152, 0, 0.3);
+    }
+
+    /* Slacker Warning Banner */
+    .slacker-strip {
+        background: rgba(255, 23, 68, 0.08);
+        border: 1px solid rgba(255, 23, 68, 0.3);
+        border-radius: 8px;
+        padding: 10px 16px;
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        font-size: 0.82em;
+    }
+
+    /* Steadfast Perks Ribbon */
+    .steadfast-strip {
+        background: rgba(0, 0, 0, 0.25);
+        border: 1px solid var(--border-subtle);
+        border-radius: 8px;
+        padding: 10px 16px;
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+
+    /* Tab Panes */
+    .tracker-tab-pane {
+        display: none;
+    }
+    .tracker-tab-pane.active {
+        display: block;
+        animation: fadeIn 0.2s ease-in-out;
+    }
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(4px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Xanax Pill Icons */
+    .xan-pill {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        margin-right: 2px;
+        font-size: 9px;
+    }
+    .xan-pill.active { background: var(--status-active); color: #000; }
+    .xan-pill.inactive { background: rgba(255, 255, 255, 0.1); color: transparent; border: 1px solid rgba(255,255,255,0.2); }
+
+    /* Detail Drawer */
+    .drawer-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.75);
+        backdrop-filter: blur(4px);
+        z-index: 10000;
+        display: none;
+        justify-content: flex-end;
+    }
+    .drawer-overlay.open {
+        display: flex;
+    }
+    .drawer-panel {
+        width: 100%;
+        max-width: 640px;
+        height: 100vh;
+        background: var(--bg-surface);
+        border-left: 1px solid var(--border-subtle);
+        display: flex;
+        flex-direction: column;
+        overflow-y: auto;
+        box-shadow: -8px 0 32px rgba(0, 0, 0, 0.6);
+        animation: slideLeft 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    @keyframes slideLeft {
+        from { transform: translateX(100%); }
+        to { transform: translateX(0); }
+    }
+
+    /* Podium Styles */
+    .podium-card {
+        background: rgba(0, 0, 0, 0.3);
+        border: 1px solid var(--border-subtle);
+        border-radius: 10px;
+        padding: 16px;
+        text-align: center;
+        position: relative;
+        overflow: hidden;
+    }
+    .podium-gold { border-color: rgba(255, 215, 0, 0.5); box-shadow: 0 0 16px rgba(255, 215, 0, 0.15); }
+    .podium-silver { border-color: rgba(192, 192, 192, 0.4); }
+    .podium-bronze { border-color: rgba(205, 127, 50, 0.4); }
+
+    /* Custom Table High Density */
+    .tracker-table th, .tracker-table td {
+        padding: 10px 12px;
+        vertical-align: middle;
+        font-size: 0.84em;
+    }
+    </style>
+</head>
+<body>
+    <!-- SIDEBAR NAVIGATION -->
+    <nav class="sidebar" id="app-sidebar">
+        <div class="sidebar-header">
+            <div class="sidebar-logo">
+                <span class="brand-icon">🕷️</span>
+                <span class="brand-text">FactionOS</span>
+            </div>
+            <div class="sidebar-actions">
+                <button class="theme-toggle" onclick="toggleTheme()" title="Toggle Dark/Light Mode">🌗</button>
+                <button class="toggle-btn" onclick="toggleSidebar()" title="Collapse Sidebar">☰</button>
+            </div>
+        </div>
+        <div class="nav-items">
+            <div class="nav-section-title">Live Operations</div>
+            <a href="/" class="nav-link"><span class="nav-icon">📡</span> <span class="nav-text">Live Warboard</span></a>
+            <a href="/dashboard.html" class="nav-link"><span class="nav-icon">📊</span> <span class="nav-text">Operations Hub</span></a>
+            <a href="/gym-stats.html" class="nav-link active"><span class="nav-icon">🏋️</span> <span class="nav-text">Gym &amp; Stat Tracker</span></a>
+            <a href="/chain.html" class="nav-link"><span class="nav-icon">🔗</span> <span class="nav-text">Chain Sentinel</span></a>
+            <a href="/dashboard.html#armory" class="nav-link"><span class="nav-icon">🛡️</span> <span class="nav-text">Armory Tracker</span></a>
+            <a href="/payout.html" class="nav-link"><span class="nav-icon">💰</span> <span class="nav-text">War Payouts</span></a>
+            <a href="/members.html" class="nav-link"><span class="nav-icon">👥</span> <span class="nav-text">Faction Roster</span></a>
+            <a href="/oc.html" class="nav-link"><span class="nav-icon">💼</span> <span class="nav-text">OC Manager</span></a>
+
+            <div class="nav-section-title">Tactical Desk</div>
+            <a href="/dashboard.html#sentinel" class="nav-link"><span class="nav-icon">✈️</span> <span class="nav-text">Flight &amp; War Sentinel</span></a>
+            <a href="/travel.html" class="nav-link"><span class="nav-icon">✈️</span> <span class="nav-text">Travel Profit Desk</span></a>
+            <a href="/bazaar.html" class="nav-link"><span class="nav-icon">🛒</span> <span class="nav-text">Market &amp; Bazaar</span></a>
+            <a href="/company.html" class="nav-link"><span class="nav-icon">🏢</span> <span class="nav-text">Company Hub</span></a>
+            <a href="/gamble.html" class="nav-link"><span class="nav-icon">🎰</span> <span class="nav-text">Casino Analytics</span></a>
+        </div>
+        <div class="sidebar-user">
+            <div class="user-avatar" id="nav-user-avatar">🕷️</div>
+            <div class="user-info">
+                <div class="user-name" id="nav-user-name">Operative</div>
+                <div class="user-sub" id="nav-user-sub">Spider-Verse [52355]</div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- MAIN APP CONTAINER -->
+    <div class="main-wrapper">
+        <!-- GLOBAL TOPBAR -->
+        <header class="topbar">
+            <div class="topbar-left">
+                <button class="mobile-toggle" onclick="toggleSidebar()">☰</button>
+                <div class="breadcrumb">
+                    <span class="crumb-root">FACTION</span>
+                    <span class="crumb-separator">/</span>
+                    <span class="crumb-active" style="color:var(--accent-amber);">GYM &amp; BATTLE STAT TRACKER</span>
+                </div>
+            </div>
+            <div class="topbar-right">
+                <div class="tct-clock">
+                    <span class="tct-icon">⏱️</span>
+                    <span class="tct-val font-mono" id="topbar-tct-clock">00:00:00 TCT</span>
+                </div>
+                <div class="ws-status connected" id="ws-status-indicator" title="Live Telemetry Synchronized">
+                    <span class="ws-dot"></span>
+                    <span class="ws-text">SYNCED</span>
+                </div>
+                <button class="btn btn-sm btn-outline" onclick="openGlobalSettings()" title="Settings &amp; Keys">
+                    <span>⚙️</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- APP CONTENT -->
+        <main class="content-area" style="padding: 24px;">
+            <!-- EXECUTIVE GYM HERO -->
+            <div class="gym-hero">
+                <div>
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <h1 style="margin:0; font-size:1.7em; font-weight:900; letter-spacing:-0.5px; color:#FFF; display:flex; align-items:center; gap:8px;">
+                            <span>🏋️ Faction Gym &amp; Battle Stat Command</span>
+                        </h1>
+                        <span class="badge" style="background:rgba(255,152,0,0.15); color:var(--accent-amber); border:1px solid rgba(255,152,0,0.35); font-weight:700;">Torn v1 &amp; v2 Engine</span>
+                    </div>
+                    <div style="font-size:0.86em; color:var(--text-secondary); margin-top:6px; max-width:720px; line-height:1.4;">
+                        Track real battle stat deltas, energy utilization velocity, Xanax compliance, slacker detection, and tactical war readiness across customizable training windows.
+                    </div>
+                </div>
+                <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                    <button class="btn btn-sm btn-outline" onclick="openPrivacySettingsModal()" title="Manage Battle Stat Privacy Tiers">
+                        <span>🔒</span> Privacy Tiers
+                    </button>
+                    <button class="btn btn-sm btn-outline" onclick="openNewContestModal()" title="Launch Timed Training Competition">
+                        <span>🏆</span> New Contest
+                    </button>
+                    <button class="btn btn-sm btn-primary" id="btn-force-sync" onclick="syncGymData(true)" style="background:var(--accent-amber); border-color:var(--accent-amber); color:#000; font-weight:700;">
+                        <span id="sync-icon">🔄</span> Sync Live Stats
+                    </button>
+                </div>
+            </div>
+
+            <!-- SLACKER ALERTS STRIP (Conditionally displayed when slackers exist) -->
+            <div class="slacker-strip" id="slacker-banner" style="display:none;">
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <span style="font-size:1.4em;">🚨</span>
+                    <div>
+                        <strong style="color:var(--status-danger);">Slacker &amp; Energy Waste Alert:</strong>
+                        <span id="slacker-banner-text">3 members have logged 0 trains over 24h or fallen below weekly quota.</span>
+                    </div>
+                </div>
+                <button class="btn btn-xs btn-outline" onclick="switchTrackerView('roster', 'slacker')" style="border-color:rgba(255,23,68,0.5); color:var(--status-danger);">
+                    Inspect Slackers →
+                </button>
+            </div>
+
+            <!-- STEADFAST FACTION PERKS BAR -->
+            <div class="steadfast-strip">
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <span style="font-size:1.1em;">🏛️</span>
+                    <span style="font-size:0.8em; font-weight:700; color:var(--text-tertiary); text-transform:uppercase;">Steadfast Perks:</span>
+                </div>
+                <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                    <span class="stat-badge-str badge" id="perk-str">💪 Strength: +15%</span>
+                    <span class="stat-badge-spd badge" id="perk-spd">⚡ Speed: +15%</span>
+                    <span class="stat-badge-def badge" id="perk-def">🛡️ Defense: +18%</span>
+                    <span class="stat-badge-dex badge" id="perk-dex">🎯 Dexterity: +12%</span>
+                </div>
+                <div style="font-size:0.75em; color:var(--text-tertiary);" id="last-midnight-sync">
+                    Daily Snapshot: Torn Midnight (00:00 TCT)
+                </div>
+            </div>
+
+            <!-- 4-CARD HIGH IMPACT KPI RIBBON -->
+            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(210px, 1fr)); gap:14px; margin-bottom:22px;">
+                <div class="card" style="padding:16px; background:var(--bg-surface); border:1px solid var(--border-subtle);">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <span style="font-size:0.72em; text-transform:uppercase; font-weight:700; color:var(--text-tertiary);">Total Faction Stats (TBS)</span>
+                        <span>⚡</span>
+                    </div>
+                    <div class="font-mono" style="font-size:1.75em; font-weight:900; color:var(--accent-amber); margin-top:4px;" id="kpi-total-tbs">—</div>
+                    <div style="font-size:0.72em; color:var(--text-tertiary); margin-top:2px;" id="kpi-avg-tbs">Average: — / member</div>
+                </div>
+                <div class="card" style="padding:16px; background:var(--bg-surface); border:1px solid var(--border-subtle);">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <span style="font-size:0.72em; text-transform:uppercase; font-weight:700; color:var(--text-tertiary);">Net Gains (24h / 7d)</span>
+                        <span>📈</span>
+                    </div>
+                    <div class="font-mono" style="font-size:1.75em; font-weight:900; color:var(--status-active); margin-top:4px;" id="kpi-gains-delta">+0</div>
+                    <div style="font-size:0.72em; color:var(--text-tertiary); margin-top:2px;" id="kpi-gains-sub">7d: +0 total</div>
+                </div>
+                <div class="card" style="padding:16px; background:var(--bg-surface); border:1px solid var(--border-subtle);">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <span style="font-size:0.72em; text-transform:uppercase; font-weight:700; color:var(--text-tertiary);">Active Trainers Today</span>
+                        <span>🏃</span>
+                    </div>
+                    <div class="font-mono" style="font-size:1.75em; font-weight:900; color:#00B0FF; margin-top:4px;" id="kpi-active-trainers">0%</div>
+                    <div style="font-size:0.72em; color:var(--text-tertiary); margin-top:2px;" id="kpi-active-sub">0 of 0 trained today</div>
+                </div>
+                <div class="card" style="padding:16px; background:var(--bg-surface); border:1px solid var(--border-subtle);">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <span style="font-size:0.72em; text-transform:uppercase; font-weight:700; color:var(--text-tertiary);">Average Xanax / Day</span>
+                        <span>💊</span>
+                    </div>
+                    <div class="font-mono" style="font-size:1.75em; font-weight:900; color:#AB47BC; margin-top:4px;" id="kpi-avg-xanax">0.0 / 3.0</div>
+                    <div style="font-size:0.72em; color:var(--text-tertiary); margin-top:2px;" id="kpi-xanax-sub">Target: 2 to 3 pills daily</div>
+                </div>
+            </div>
+
+            <!-- MODULAR VIEW NAVIGATION TABS -->
+            <div style="display:flex; gap:8px; border-bottom:1px solid var(--border-subtle); margin-bottom:20px; overflow-x:auto;">
+                <button class="ops-tab-btn active" id="tab-overview" onclick="switchTrackerView('overview')">
+                    <span>📊</span> Faction Overview
+                </button>
+                <button class="ops-tab-btn" id="tab-roster" onclick="switchTrackerView('roster')">
+                    <span>👥</span> Member Roster &amp; Data Grid
+                </button>
+                <button class="ops-tab-btn" id="tab-contests" onclick="switchTrackerView('contests')">
+                    <span>🏆</span> Contests &amp; Gamification
+                </button>
+                <button class="ops-tab-btn" id="tab-war" onclick="switchTrackerView('war')">
+                    <span>⚔️</span> War Room &amp; Fair Fight
+                </button>
+            </div>
+
+            <!-- ══════════════════════════════════════════════════════════ -->
+            <!-- VIEW 1: FACTION OVERVIEW -->
+            <!-- ══════════════════════════════════════════════════════════ -->
+            <div class="tracker-tab-pane active" id="pane-overview">
+                <div style="display:grid; grid-template-columns:2fr 1fr; gap:20px; margin-bottom:22px;">
+                    <!-- Stat Velocity Chart -->
+                    <div class="card" style="padding:20px; background:var(--bg-surface); border:1px solid var(--border-subtle);">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+                            <div>
+                                <h3 style="margin:0; font-size:1.05em; font-weight:800; color:var(--text-primary); display:flex; align-items:center; gap:8px;">
+                                    <span>📈 Faction Stat Growth Velocity</span>
+                                    <span style="font-size:0.7em; color:var(--text-tertiary); font-weight:500;">(Cumulative Trajectory)</span>
+                                </h3>
+                            </div>
+                            <div style="display:flex; gap:6px;">
+                                <button class="btn btn-xs btn-outline" id="btn-chart-30d" onclick="toggleChartRange(30)" style="font-size:0.75em; padding:3px 8px;">30 Days</button>
+                                <button class="btn btn-xs btn-outline" id="btn-chart-90d" onclick="toggleChartRange(90)" style="font-size:0.75em; padding:3px 8px;">90 Days</button>
+                            </div>
+                        </div>
+                        <div style="position:relative; height:280px; width:100%;">
+                            <canvas id="velocityChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Faction Stat Radar & Balance Distribution -->
+                    <div class="card" style="padding:20px; background:var(--bg-surface); border:1px solid var(--border-subtle); display:flex; flex-direction:column; justify-content:space-between;">
+                        <div>
+                            <h3 style="margin:0 0 10px 0; font-size:1.05em; font-weight:800; color:var(--text-primary); display:flex; align-items:center; gap:8px;">
+                                <span>🎯 Faction Stat Balance</span>
+                            </h3>
+                            <div style="font-size:0.75em; color:var(--text-tertiary); margin-bottom:12px;">
+                                Radar map highlighting faction-wide stat distribution &amp; deficiency areas.
+                            </div>
+                        </div>
+                        <div style="position:relative; height:220px; width:100%;">
+                            <canvas id="factionRadarChart"></canvas>
+                        </div>
+                        <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:6px; margin-top:12px; font-size:0.75em;" id="radar-legend-chips">
+                            <!-- Injected percentages -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Top Gainers Spotlight Strip -->
+                <div class="card" style="padding:20px; background:var(--bg-surface); border:1px solid var(--border-subtle); margin-bottom:20px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+                        <h3 style="margin:0; font-size:1.05em; font-weight:800; color:var(--text-primary); display:flex; align-items:center; gap:8px;">
+                            <span>🥇 Top Gainers Spotlight (Last 7 Days)</span>
+                        </h3>
+                        <span style="font-size:0.75em; color:var(--text-tertiary);">Updated hourly</span>
+                    </div>
+                    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:14px;" id="spotlight-gainers-grid">
+                        <!-- Injected Top 3 Gainers -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- ══════════════════════════════════════════════════════════ -->
+            <!-- VIEW 2: MASTER MEMBER ROSTER & DATA GRID -->
+            <!-- ══════════════════════════════════════════════════════════ -->
+            <div class="tracker-tab-pane" id="pane-roster">
+                <div class="card" style="background:var(--bg-surface); border:1px solid var(--border-subtle); border-radius:10px; overflow:hidden;">
+                    <!-- Roster Controls & Filters Bar -->
+                    <div style="padding:16px 20px; border-bottom:1px solid var(--border-subtle); display:flex; flex-wrap:wrap; gap:12px; justify-content:space-between; align-items:center; background:rgba(0,0,0,0.15);">
+                        <!-- Left: Time Window Pills -->
+                        <div style="display:inline-flex; align-items:center; background:#0c1017; border:1px solid var(--border-subtle); border-radius:8px; padding:4px 6px; gap:4px;">
+                            <span style="font-size:0.75em; font-weight:700; color:var(--accent-amber); margin:0 6px;">⏱️ WINDOW:</span>
+                            <button class="stat-window-pill" data-window="24h" onclick="setRosterTimeframe('24h', this)">24 Hours</button>
+                            <button class="stat-window-pill active" data-window="7d" onclick="setRosterTimeframe('7d', this)">7 Days</button>
+                            <button class="stat-window-pill" data-window="30d" onclick="setRosterTimeframe('30d', this)">30 Days</button>
+                            <button class="stat-window-pill" data-window="stats" onclick="setRosterTimeframe('stats', this)">Actual Stats</button>
+                        </div>
+
+                        <!-- Right: Search, Filter Dropdowns, and Export -->
+                        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                            <input type="text" id="roster-search" placeholder="🔍 Search member name or ID..." class="sort-select" style="min-width:180px; padding:6px 12px; font-size:0.8em;" oninput="filterRosterDebounced()">
+                            <select id="roster-filter-bracket" class="sort-select" onchange="filterRoster()" style="padding:6px 10px; font-size:0.8em;">
+                                <option value="all">All Stat Brackets</option>
+                                <option value="under10m">&lt; 10M Stats</option>
+                                <option value="10m-100m">10M – 100M</option>
+                                <option value="100m-1b">100M – 1B</option>
+                                <option value="over1b">1B+ High Rollers</option>
+                            </select>
+                            <select id="roster-filter-archetype" class="sort-select" onchange="filterRoster()" style="padding:6px 10px; font-size:0.8em;">
+                                <option value="all">All Archetypes</option>
+                                <option value="HankBalanced">⚖️ Hank Balanced</option>
+                                <option value="StrengthSpecialist">💪 Strength Specialist</option>
+                                <option value="SpeedSpecialist">⚡ Speed Specialist</option>
+                                <option value="DefenseTank">🛡️ Defense Tank</option>
+                                <option value="DexterityGhost">🎯 Dexterity Ghost</option>
+                                <option value="GlassCannon">💥 Glass Cannon</option>
+                            </select>
+                            <button class="btn btn-sm btn-outline" id="btn-toggle-slackers" onclick="toggleSlackerFilter()" style="font-size:0.78em; padding:6px 10px;">
+                                <span>😴</span> Show Slackers Only
+                            </button>
+                            <button class="btn btn-sm btn-outline" onclick="exportRosterCSV()" title="Export CSV Ledger">
+                                <span>📊</span> CSV
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Member Data Table -->
+                    <div class="scrollable" style="max-height:640px; overflow-x:auto;">
+                        <table class="armory-table tracker-table" id="master-roster-table">
+                            <thead>
+                                <tr>
+                                    <th onclick="sortRoster('name')" style="cursor:pointer; min-width:170px;">Member <span id="sind-name">↕</span></th>
+                                    <th onclick="sortRoster('level')" style="cursor:pointer; min-width:80px;">Level <span id="sind-level">↕</span></th>
+                                    <th onclick="sortRoster('status')" style="cursor:pointer; min-width:110px;">Status <span id="sind-status">↕</span></th>
+                                    <th onclick="sortRoster('str')" style="cursor:pointer; min-width:130px;"><span style="color:var(--stat-str);">💪 Strength</span> <span id="sind-str">↕</span></th>
+                                    <th onclick="sortRoster('spd')" style="cursor:pointer; min-width:130px;"><span style="color:var(--stat-spd);">⚡ Speed</span> <span id="sind-spd">↕</span></th>
+                                    <th onclick="sortRoster('def')" style="cursor:pointer; min-width:130px;"><span style="color:var(--stat-def);">🛡️ Defense</span> <span id="sind-def">↕</span></th>
+                                    <th onclick="sortRoster('dex')" style="cursor:pointer; min-width:130px;"><span style="color:var(--stat-dex);">🎯 Dexterity</span> <span id="sind-dex">↕</span></th>
+                                    <th onclick="sortRoster('total')" style="cursor:pointer; min-width:140px;">Total / Gain (Δ) <span id="sind-total">↓</span></th>
+                                    <th onclick="sortRoster('energy')" style="cursor:pointer; min-width:120px;">Est. Energy <span id="sind-energy">↕</span></th>
+                                    <th onclick="sortRoster('xanax')" style="cursor:pointer; min-width:100px;">Xanax (3/d) <span id="sind-xanax">↕</span></th>
+                                    <th style="text-align:center; min-width:90px;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="roster-tbody">
+                                <tr><td colspan="11" style="text-align:center; padding:32px; color:var(--text-tertiary);"><span class="loading-spinner"></span> Loading faction gym and battle stat telemetry...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ══════════════════════════════════════════════════════════ -->
+            <!-- VIEW 3: CONTESTS & GAMIFICATION -->
+            <!-- ══════════════════════════════════════════════════════════ -->
+            <div class="tracker-tab-pane" id="pane-contests">
+                <!-- Active Competition Banner -->
+                <div class="card" style="padding:22px; background:linear-gradient(135deg, rgba(255,152,0,0.12) 0%, rgba(22,27,34,0.95) 100%); border:1px solid rgba(255,152,0,0.4); margin-bottom:24px; position:relative;" id="active-contest-banner">
+                    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+                        <div>
+                            <span class="badge" style="background:var(--accent-amber); color:#000; font-weight:800; font-size:0.72em;">ACTIVE CONTEST</span>
+                            <h2 style="margin:8px 0 4px 0; font-size:1.4em; font-weight:900; color:#FFF;" id="contest-title">7-Day Pre-War Strength Blitz</h2>
+                            <div style="font-size:0.82em; color:var(--text-secondary);" id="contest-desc">Max energy dump into Strength ahead of our ranked war against Run It Industries!</div>
+                        </div>
+                        <div style="text-align:right;">
+                            <div style="font-size:0.72em; text-transform:uppercase; color:var(--text-tertiary); font-weight:700;">Prize Pool</div>
+                            <div class="font-mono" style="font-size:1.6em; font-weight:900; color:var(--accent-amber);" id="contest-prizepool">$250,000,000</div>
+                            <div style="font-size:0.75em; color:var(--status-active);" id="contest-countdown">⏳ 4d 18h remaining</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Podium Top 3 Highlights -->
+                <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:16px; margin-bottom:24px;" id="contest-podium-grid">
+                    <!-- Injected Gold, Silver, Bronze Cards -->
+                </div>
+
+                <!-- Full Live Leaderboard Table -->
+                <div class="card" style="background:var(--bg-surface); border:1px solid var(--border-subtle); border-radius:10px; overflow:hidden;">
+                    <div style="padding:14px 20px; border-bottom:1px solid var(--border-subtle); display:flex; justify-content:space-between; align-items:center;">
+                        <h3 style="margin:0; font-size:1em; font-weight:800; color:var(--text-primary);">🏅 Live Contest Standings</h3>
+                        <span style="font-size:0.75em; color:var(--text-tertiary);">Rewards distributed at contest expiration</span>
+                    </div>
+                    <div class="scrollable" style="max-height:480px;">
+                        <table class="armory-table tracker-table">
+                            <thead>
+                                <tr>
+                                    <th style="width:60px;">Rank</th>
+                                    <th>Member</th>
+                                    <th>Contest Score</th>
+                                    <th style="min-width:200px;">Progress</th>
+                                    <th>Projected Reward</th>
+                                </tr>
+                            </thead>
+                            <tbody id="contest-leaderboard-tbody">
+                                <tr><td colspan="5" style="text-align:center; padding:24px; color:var(--text-tertiary);">Loading contest standings...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ══════════════════════════════════════════════════════════ -->
+            <!-- VIEW 4: WAR ROOM & FAIR FIGHT TACTICAL MATCHER -->
+            <!-- ══════════════════════════════════════════════════════════ -->
+            <div class="tracker-tab-pane" id="pane-war">
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:24px;">
+                    <!-- Tactical Role Breakdown -->
+                    <div class="card" style="padding:20px; background:var(--bg-surface); border:1px solid var(--border-subtle);">
+                        <h3 style="margin:0 0 10px 0; font-size:1.05em; font-weight:800; color:var(--text-primary); display:flex; align-items:center; gap:8px;">
+                            <span>🪖 Faction War Role Distribution</span>
+                        </h3>
+                        <div style="font-size:0.78em; color:var(--text-tertiary); margin-bottom:16px;">
+                            Classified by battle stat ratio for specialized offensive &amp; defensive war tasks.
+                        </div>
+
+                        <div style="display:flex; flex-direction:column; gap:12px;">
+                            <div style="background:rgba(229,57,53,0.08); border:1px solid rgba(229,57,53,0.3); border-radius:8px; padding:12px; display:flex; justify-content:space-between; align-items:center;">
+                                <div>
+                                    <strong style="color:var(--stat-str);">💥 Frontline Breakers</strong>
+                                    <div style="font-size:0.74em; color:var(--text-tertiary);">High Strength &amp; Speed specialists designed to crack defensive bunker walls.</div>
+                                </div>
+                                <div class="font-mono" style="font-size:1.4em; font-weight:900; color:var(--stat-str);" id="role-count-breakers">0</div>
+                            </div>
+                            <div style="background:rgba(0,230,118,0.08); border:1px solid rgba(0,230,118,0.3); border-radius:8px; padding:12px; display:flex; justify-content:space-between; align-items:center;">
+                                <div>
+                                    <strong style="color:var(--stat-def);">🛡️ Bunker Tanks</strong>
+                                    <div style="font-size:0.74em; color:var(--text-tertiary);">Extreme Defense specialists built to stall enemy hits and drain enemy energy.</div>
+                                </div>
+                                <div class="font-mono" style="font-size:1.4em; font-weight:900; color:var(--stat-def);" id="role-count-tanks">0</div>
+                            </div>
+                            <div style="background:rgba(0,176,255,0.08); border:1px solid rgba(0,176,255,0.3); border-radius:8px; padding:12px; display:flex; justify-content:space-between; align-items:center;">
+                                <div>
+                                    <strong style="color:var(--stat-spd);">⚖️ Balanced Flex (Hank's)</strong>
+                                    <div style="font-size:0.74em; color:var(--text-tertiary);">Balanced fighters ready for sustained combat and defensive stalemates.</div>
+                                </div>
+                                <div class="font-mono" style="font-size:1.4em; font-weight:900; color:var(--stat-spd);" id="role-count-flex">0</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Fair Fight (FF) Calculator & Matcher -->
+                    <div class="card" style="padding:20px; background:var(--bg-surface); border:1px solid var(--border-subtle);">
+                        <h3 style="margin:0 0 10px 0; font-size:1.05em; font-weight:800; color:var(--text-primary); display:flex; align-items:center; gap:8px;">
+                            <span>🎯 Fair Fight (FF) Target Matcher</span>
+                        </h3>
+                        <div style="font-size:0.78em; color:var(--text-tertiary); margin-bottom:16px;">
+                            Calculate optimal attackers to maximize respect multiplier (1.0 – 3.0 FF).
+                        </div>
+
+                        <div style="display:flex; gap:10px; margin-bottom:16px;">
+                            <input type="number" id="ff-target-stats" placeholder="Enemy Total Stats (e.g. 5000000)" class="sort-select" style="flex:1; padding:8px 12px; font-size:0.85em;" value="10000000">
+                            <button class="btn btn-sm btn-primary" onclick="queryFairFightMatches()" style="background:var(--accent-amber); border-color:var(--accent-amber); color:#000; font-weight:700;">
+                                Calculate Matches
+                            </button>
+                        </div>
+
+                        <div style="font-size:0.75em; color:var(--text-secondary); margin-bottom:10px;">
+                            <strong>Optimal Respect Bracket:</strong> Multiplier 2.0x – 3.0x yields maximum respect gain per attack.
+                        </div>
+
+                        <div class="scrollable" style="max-height:220px; border:1px solid var(--border-subtle); border-radius:6px;">
+                            <table class="armory-table tracker-table">
+                                <thead>
+                                    <tr>
+                                        <th>Attacker</th>
+                                        <th>Your Stats</th>
+                                        <th>FF Multiplier</th>
+                                        <th>Match Rating</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="ff-matches-tbody">
+                                    <tr><td colspan="4" style="text-align:center; padding:16px; color:var(--text-tertiary);">Click 'Calculate Matches' to view optimal attackers.</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <!-- SLIDE-OUT MEMBER DOSSIER DRAWER -->
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <div class="drawer-overlay" id="member-drawer-overlay" onclick="closeDrawerOnBackdrop(event)">
+        <div class="drawer-panel" id="member-drawer-panel">
+            <div style="padding:20px; border-bottom:1px solid var(--border-subtle); display:flex; justify-content:space-between; align-items:center; background:rgba(0,0,0,0.2);">
+                <div style="display:flex; align-items:center; gap:12px;">
+                    <div style="font-size:2em;" id="dossier-avatar">🏋️</div>
+                    <div>
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <h2 style="margin:0; font-size:1.25em; font-weight:900; color:#FFF;" id="dossier-name">Player Dossier</h2>
+                            <span class="badge" id="dossier-id" style="font-size:0.7em;">[—]</span>
+                            <span class="badge" id="dossier-verified" style="font-size:0.68em; background:rgba(0,230,118,0.15); color:var(--status-active);">Verified Key</span>
+                        </div>
+                        <div style="font-size:0.76em; color:var(--text-tertiary); margin-top:2px;" id="dossier-sub">Level — • Role: —</div>
+                    </div>
+                </div>
+                <button onclick="closeMemberDrawer()" style="background:transparent; border:none; color:var(--text-tertiary); font-size:1.6em; cursor:pointer;">✕</button>
+            </div>
+
+            <div style="padding:20px; flex:1; display:flex; flex-direction:column; gap:20px;">
+                <!-- 4 Stat Values Grid -->
+                <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:10px;">
+                    <div style="background:rgba(229,57,53,0.08); border:1px solid rgba(229,57,53,0.3); border-radius:8px; padding:12px;">
+                        <div style="font-size:0.72em; text-transform:uppercase; font-weight:700; color:var(--stat-str);">💪 Strength</div>
+                        <div class="font-mono" style="font-size:1.35em; font-weight:900; color:var(--stat-str); margin:2px 0;" id="dos-stat-str">—</div>
+                        <div style="font-size:0.7em; color:var(--text-tertiary);" id="dos-pct-str">0% of total</div>
+                    </div>
+                    <div style="background:rgba(0,176,255,0.08); border:1px solid rgba(0,176,255,0.3); border-radius:8px; padding:12px;">
+                        <div style="font-size:0.72em; text-transform:uppercase; font-weight:700; color:var(--stat-spd);">⚡ Speed</div>
+                        <div class="font-mono" style="font-size:1.35em; font-weight:900; color:var(--stat-spd); margin:2px 0;" id="dos-stat-spd">—</div>
+                        <div style="font-size:0.7em; color:var(--text-tertiary);" id="dos-pct-spd">0% of total</div>
+                    </div>
+                    <div style="background:rgba(0,230,118,0.08); border:1px solid rgba(0,230,118,0.3); border-radius:8px; padding:12px;">
+                        <div style="font-size:0.72em; text-transform:uppercase; font-weight:700; color:var(--stat-def);">🛡️ Defense</div>
+                        <div class="font-mono" style="font-size:1.35em; font-weight:900; color:var(--stat-def); margin:2px 0;" id="dos-stat-def">—</div>
+                        <div style="font-size:0.7em; color:var(--text-tertiary);" id="dos-pct-def">0% of total</div>
+                    </div>
+                    <div style="background:rgba(171,71,188,0.08); border:1px solid rgba(171,71,188,0.3); border-radius:8px; padding:12px;">
+                        <div style="font-size:0.72em; text-transform:uppercase; font-weight:700; color:var(--stat-dex);">🎯 Dexterity</div>
+                        <div class="font-mono" style="font-size:1.35em; font-weight:900; color:var(--stat-dex); margin:2px 0;" id="dos-stat-dex">—</div>
+                        <div style="font-size:0.7em; color:var(--text-tertiary);" id="dos-pct-dex">0% of total</div>
+                    </div>
+                </div>
+
+                <!-- Personal Milestone Goal -->
+                <div class="card" style="padding:14px; background:rgba(0,0,0,0.25); border:1px solid var(--border-subtle);">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                        <span style="font-size:0.78em; font-weight:700; color:var(--accent-amber);" id="dos-goal-title">🎯 Road to 50M Soft Cap</span>
+                        <span class="font-mono" style="font-size:0.78em; font-weight:800; color:#FFF;" id="dos-goal-pct">0%</span>
+                    </div>
+                    <div style="height:6px; background:rgba(255,255,255,0.08); border-radius:3px; overflow:hidden;">
+                        <div id="dos-goal-bar" style="width:0%; height:100%; background:var(--accent-amber); transition:width 0.4s ease;"></div>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; font-size:0.7em; color:var(--text-tertiary); margin-top:4px;">
+                        <span id="dos-goal-cur">Current: 0</span>
+                        <span id="dos-goal-target">Target: 50,000,000</span>
+                    </div>
+                </div>
+
+                <!-- Individual Radar Chart -->
+                <div class="card" style="padding:16px; background:rgba(0,0,0,0.2); border:1px solid var(--border-subtle);">
+                    <div style="font-size:0.82em; font-weight:700; color:var(--text-primary); margin-bottom:10px;">
+                        ⚖️ Individual vs Faction Average Balance
+                    </div>
+                    <div style="position:relative; height:200px; width:100%;">
+                        <canvas id="memberRadarChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- 30-Day Historical Timeline -->
+                <div>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                        <strong style="font-size:0.82em; color:var(--text-primary);">📋 30-Day Historical Train Ledger</strong>
+                        <span style="font-size:0.72em; color:var(--text-tertiary);" id="dos-history-count">0 snapshots</span>
+                    </div>
+                    <div class="scrollable" style="max-height:220px; border:1px solid var(--border-subtle); border-radius:6px;">
+                        <table class="armory-table tracker-table" style="font-size:0.76em;">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Total Stats</th>
+                                    <th>Daily Gain (Δ)</th>
+                                    <th>Est. Energy</th>
+                                </tr>
+                            </thead>
+                            <tbody id="dos-timeline-tbody">
+                                <tr><td colspan="4" style="text-align:center; padding:14px; color:var(--text-tertiary);">Loading train history...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Privacy Settings for Self -->
+                <div class="card" style="padding:14px; background:rgba(0,0,0,0.3); border:1px solid var(--border-subtle);" id="dos-privacy-box">
+                    <div style="font-size:0.8em; font-weight:700; color:var(--text-primary); margin-bottom:6px;">🔒 Member Privacy Tier</div>
+                    <div style="font-size:0.72em; color:var(--text-tertiary); margin-bottom:8px;">Control how your stats appear to other faction members.</div>
+                    <select id="dos-privacy-select" class="sort-select" style="width:100%; padding:6px 10px; font-size:0.8em;" onchange="saveMemberPrivacy(this.value)">
+                        <option value="full">Full Visibility (Actual Stats Visible to All)</option>
+                        <option value="gains_only">Gains Only (Actual Stats Masked; Deltas Visible)</option>
+                        <option value="leadership_only">Leadership Only (Stats &amp; Gains Hidden from Members)</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- NEW CONTEST MODAL -->
+    <div id="new-contest-modal" class="modal-backdrop" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:10001; justify-content:center; align-items:center; padding:16px;">
+        <div style="background:var(--bg-surface); border:1px solid var(--border-subtle); border-radius:12px; width:100%; max-width:540px; overflow:hidden; box-shadow:0 12px 48px rgba(0,0,0,0.7);">
+            <div style="padding:16px 20px; border-bottom:1px solid var(--border-subtle); display:flex; justify-content:space-between; align-items:center;">
+                <h3 style="margin:0; font-size:1.15em; font-weight:900; color:#FFF;">🏆 Launch Faction Competition</h3>
+                <button onclick="closeNewContestModal()" style="background:transparent; border:none; color:var(--text-tertiary); font-size:1.4em; cursor:pointer;">✕</button>
+            </div>
+            <div style="padding:20px; display:flex; flex-direction:column; gap:14px;">
+                <div>
+                    <label style="font-size:0.78em; font-weight:700; color:var(--text-tertiary); text-transform:uppercase;">Competition Title</label>
+                    <input type="text" id="contest-input-title" placeholder="e.g. 7-Day Pre-War Strength Blitz" class="sort-select" style="width:100%; padding:8px 12px; margin-top:4px;">
+                </div>
+                <div>
+                    <label style="font-size:0.78em; font-weight:700; color:var(--text-tertiary); text-transform:uppercase;">Contest Goal / Target Type</label>
+                    <select id="contest-input-type" class="sort-select" style="width:100%; padding:8px 12px; margin-top:4px;" onchange="toggleContestStatSelect(this.value)">
+                        <option value="total_gain">Highest Total Battle Stat Gain (Δ)</option>
+                        <option value="pct_gain">Highest Percentage Gain (%)</option>
+                        <option value="stat_gain">Specific Stat Focus (Str, Spd, Def, Dex)</option>
+                        <option value="energy_spent">Most Energy Expended in Gym</option>
+                    </select>
+                </div>
+                <div id="contest-stat-field" style="display:none;">
+                    <label style="font-size:0.78em; font-weight:700; color:var(--text-tertiary); text-transform:uppercase;">Target Stat</label>
+                    <select id="contest-input-stat" class="sort-select" style="width:100%; padding:8px 12px; margin-top:4px;">
+                        <option value="strength">💪 Strength</option>
+                        <option value="speed">⚡ Speed</option>
+                        <option value="defense">🛡️ Defense</option>
+                        <option value="dexterity">🎯 Dexterity</option>
+                    </select>
+                </div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+                    <div>
+                        <label style="font-size:0.78em; font-weight:700; color:var(--text-tertiary); text-transform:uppercase;">Duration (Days)</label>
+                        <input type="number" id="contest-input-duration" value="7" min="1" max="30" class="sort-select" style="width:100%; padding:8px 12px; margin-top:4px;">
+                    </div>
+                    <div>
+                        <label style="font-size:0.78em; font-weight:700; color:var(--text-tertiary); text-transform:uppercase;">Prize Pool ($)</label>
+                        <input type="number" id="contest-input-prize" value="250000000" class="sort-select" style="width:100%; padding:8px 12px; margin-top:4px;">
+                    </div>
+                </div>
+                <div>
+                    <label style="font-size:0.78em; font-weight:700; color:var(--text-tertiary); text-transform:uppercase;">Description &amp; Payout Rules</label>
+                    <textarea id="contest-input-desc" rows="2" class="sort-select" style="width:100%; padding:8px 12px; margin-top:4px;" placeholder="Faction Bank distribution: 50% 1st, 30% 2nd, 20% 3rd"></textarea>
+                </div>
+            </div>
+            <div style="padding:14px 20px; border-top:1px solid var(--border-subtle); display:flex; justify-content:flex-end; gap:10px; background:rgba(0,0,0,0.1);">
+                <button class="btn btn-sm btn-outline" onclick="closeNewContestModal()">Cancel</button>
+                <button class="btn btn-sm btn-primary" onclick="submitNewContest()" style="background:var(--accent-amber); border-color:var(--accent-amber); color:#000; font-weight:700;">Launch Contest</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- TOAST NOTIFICATION CONTAINER -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- JAVASCRIPT CONTROLLER & CHART SUITE -->
+    <script>
+    'use strict';
+
+    let currentDashboard = null;
+    let currentRoster = [];
+    let currentFilteredRoster = [];
+    let currentActiveView = 'overview';
+    let currentRosterTimeframe = '7d';
+    let rosterSortCol = 'total';
+    let rosterSortAsc = false;
+    let showSlackersOnly = false;
+
+    // Chart instances
+    let velocityChartInstance = null;
+    let factionRadarChartInstance = null;
+    let memberRadarChartInstance = null;
+
+    // Number formatting utility
+    function fmt(n) {
+        if (n === null || n === undefined) return '0';
+        if (typeof n === 'string') return n;
+        return Number(n).toLocaleString('en-US');
+    }
+
+    function timeSince(ts) {
+        if (!ts) return 'Never';
+        const sec = Math.floor(Date.now() / 1000 - Number(ts));
+        if (sec < 60) return `${sec}s ago`;
+        const min = Math.floor(sec / 60);
+        if (min < 60) return `${min}m ago`;
+        const hr = Math.floor(min / 60);
+        if (hr < 24) return `${hr}h ago`;
+        return `${Math.floor(hr / 24)}d ago`;
+    }
+
+    function showToast(msg, type = 'success') {
+        const c = document.getElementById('toast-container');
+        if (!c) return;
+        const t = document.createElement('div');
+        t.className = `toast-msg ${type}`;
+        t.innerHTML = `<span>${type === 'success' ? '✅' : (type === 'warn' ? '⚠️' : '❌')}</span> <span>${msg}</span>`;
+        c.appendChild(t);
+        setTimeout(() => {
+            t.style.opacity = '0';
+            t.style.transform = 'translateY(10px)';
+            setTimeout(() => t.remove(), 300);
+        }, 4000);
+    }
+
+    // ─── Tab Switching ───
+    function switchTrackerView(viewKey, subFilter = null) {
+        currentActiveView = viewKey;
+        document.querySelectorAll('.ops-tab-btn').forEach(b => b.classList.toggle('active', b.id === `tab-${viewKey}`));
+        document.querySelectorAll('.tracker-tab-pane').forEach(p => p.classList.toggle('active', p.id === `pane-${viewKey}`));
+
+        if (viewKey === 'roster') {
+            if (subFilter === 'slacker') {
+                showSlackersOnly = true;
+                const btn = document.getElementById('btn-toggle-slackers');
+                if (btn) btn.classList.add('active');
+            }
+            renderRosterTable();
+        } else if (viewKey === 'contests') {
+            loadCompetitions();
+        } else if (viewKey === 'war') {
+            loadWarReadiness();
+        }
+    }
+
+    // ─── Load Dashboard Data ───
+    async function loadDashboard() {
+        try {
+            const myKey = typeof getApiKey === 'function' ? getApiKey() : '';
+            const res = await fetch('/api/gym-tracker/dashboard', { headers: { 'x-api-key': myKey } });
+            const data = await res.json();
+            if (data && data.success) {
+                currentDashboard = data;
+                renderDashboard(data);
+            }
+        } catch(e) {
+            console.error('Failed to load gym dashboard:', e);
+        }
+    }
+
+    function renderDashboard(data) {
+        const { kpis, steadfast, radarAverages, velocityChart } = data;
+
+        // KPI Ribbon
+        document.getElementById('kpi-total-tbs').textContent = fmt(kpis.totalBattleStats);
+        document.getElementById('kpi-avg-tbs').textContent = `Average: ${fmt(kpis.averageBattleStats)} / member`;
+        document.getElementById('kpi-gains-delta').textContent = `+${fmt(kpis.totalGains24h)}`;
+        document.getElementById('kpi-gains-sub').textContent = `7d: +${fmt(kpis.totalGains7d)} total`;
+        document.getElementById('kpi-active-trainers').textContent = `${kpis.activeTrainersPct}%`;
+        document.getElementById('kpi-active-sub').textContent = `${kpis.activeTrainersToday} of ${kpis.totalMembersCount} trained today`;
+        document.getElementById('kpi-avg-xanax').textContent = `${kpis.avgXanaxPerDay} / 3.0`;
+
+        // Slacker Banner
+        const slackerBanner = document.getElementById('slacker-banner');
+        if (slackerBanner) {
+            if (kpis.slackerCount > 0) {
+                slackerBanner.style.display = 'flex';
+                document.getElementById('slacker-banner-text').textContent = `${kpis.slackerCount} members have logged 0 trains over 24h or fallen below weekly quota.`;
+            } else {
+                slackerBanner.style.display = 'none';
+            }
+        }
+
+        // Steadfast Perks
+        if (steadfast) {
+            document.getElementById('perk-str').textContent = `💪 Strength: +${steadfast.strengthBonusPct}%`;
+            document.getElementById('perk-spd').textContent = `⚡ Speed: +${steadfast.speedBonusPct}%`;
+            document.getElementById('perk-def').textContent = `🛡️ Defense: +${steadfast.defenseBonusPct}%`;
+            document.getElementById('perk-dex').textContent = `🎯 Dexterity: +${steadfast.dexterityBonusPct}%`;
+        }
+
+        // Velocity Chart
+        renderVelocityChart(velocityChart);
+
+        // Faction Radar Chart
+        renderFactionRadar(radarAverages);
+    }
+
+    // ─── Velocity Line/Area Chart ───
+    function renderVelocityChart(vcData) {
+        if (!vcData) return;
+        const ctx = document.getElementById('velocityChart')?.getContext('2d');
+        if (!ctx) return;
+
+        if (velocityChartInstance) velocityChartInstance.destroy();
+
+        const gradient = ctx.createLinearGradient(0, 0, 0, 260);
+        gradient.addColorStop(0, 'rgba(255, 152, 0, 0.35)');
+        gradient.addColorStop(1, 'rgba(255, 152, 0, 0.0)');
+
+        velocityChartInstance = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: vcData.dates,
+                datasets: [{
+                    label: 'Faction Total Battle Stats',
+                    data: vcData.factionTotals,
+                    borderColor: '#FF9800',
+                    backgroundColor: gradient,
+                    borderWidth: 2.5,
+                    fill: true,
+                    tension: 0.35,
+                    pointRadius: 2,
+                    pointHoverRadius: 5
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: (ctx) => `TBS: ${ctx.parsed.y.toLocaleString()}`
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                        ticks: { color: '#64748B', font: { size: 10 } }
+                    },
+                    y: {
+                        grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                        ticks: {
+                            color: '#64748B',
+                            font: { size: 10 },
+                            callback: (val) => (val >= 1e6 ? `${(val/1e6).toFixed(1)}M` : val.toLocaleString())
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // ─── Faction Radar Chart ───
+    function renderFactionRadar(radarData) {
+        if (!radarData) return;
+        const ctx = document.getElementById('factionRadarChart')?.getContext('2d');
+        if (!ctx) return;
+
+        if (factionRadarChartInstance) factionRadarChartInstance.destroy();
+
+        factionRadarChartInstance = new Chart(ctx, {
+            type: 'radar',
+            data: {
+                labels: ['Strength', 'Speed', 'Defense', 'Dexterity'],
+                datasets: [{
+                    label: 'Faction Average %',
+                    data: [radarData.strengthPct, radarData.speedPct, radarData.defensePct, radarData.dexterityPct],
+                    backgroundColor: 'rgba(255, 152, 0, 0.25)',
+                    borderColor: '#FF9800',
+                    borderWidth: 2,
+                    pointBackgroundColor: '#FF9800'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    r: {
+                        angleLines: { color: 'rgba(255, 255, 255, 0.1)' },
+                        grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                        pointLabels: { color: '#E2E8F0', font: { size: 11, weight: '700' } },
+                        ticks: { display: false, maxTicksLimit: 4 }
+                    }
+                }
+            }
+        });
+
+        const leg = document.getElementById('radar-legend-chips');
+        if (leg) {
+            leg.innerHTML = `
+                <div class="stat-badge-str badge">Str: ${radarData.strengthPct}%</div>
+                <div class="stat-badge-spd badge">Spd: ${radarData.speedPct}%</div>
+                <div class="stat-badge-def badge">Def: ${radarData.defensePct}%</div>
+                <div class="stat-badge-dex badge">Dex: ${radarData.dexterityPct}%</div>
+            `;
+        }
+    }
+
+    // ─── Load Roster Grid ───
+    async function loadRoster() {
+        try {
+            const myKey = typeof getApiKey === 'function' ? getApiKey() : '';
+            const res = await fetch(`/api/gym-tracker/roster?timeframe=${currentRosterTimeframe}`, {
+                headers: { 'x-api-key': myKey }
+            });
+            const data = await res.json();
+            if (data && data.success) {
+                currentRoster = data.members || [];
+                renderSpotlightGainers(currentRoster);
+                filterRoster();
+            }
+        } catch(e) {
+            console.error('Failed to load roster:', e);
+        }
+    }
+
+    function renderSpotlightGainers(roster) {
+        const grid = document.getElementById('spotlight-gainers-grid');
+        if (!grid) return;
+        const sorted = [...roster].sort((a, b) => b.gains.gain7d.total - a.gains.gain7d.total).slice(0, 3);
+        grid.innerHTML = sorted.map((m, idx) => {
+            const medal = idx === 0 ? '🥇 #1 Gainer' : (idx === 1 ? '🥈 #2 Gainer' : '🥉 #3 Gainer');
+            return `
+                <div class="podium-card ${idx === 0 ? 'podium-gold' : (idx === 1 ? 'podium-silver' : 'podium-bronze')}">
+                    <div style="font-size:0.75em; font-weight:800; color:var(--accent-amber); margin-bottom:4px;">${medal}</div>
+                    <div style="font-weight:800; font-size:1.1em; color:#FFF;">
+                        <a href="https://www.torn.com/profiles.php?XID=${m.playerId}" target="_blank" style="color:#FFF; text-decoration:none;">${m.playerName}</a>
+                    </div>
+                    <div class="font-mono" style="font-size:1.3em; font-weight:900; color:var(--status-active); margin:6px 0;">+${fmt(m.gains.gain7d.total)}</div>
+                    <div style="font-size:0.72em; color:var(--text-tertiary);">7-Day Growth (+${m.gains.gain7d.pct}%)</div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    function setRosterTimeframe(tf, btn) {
+        currentRosterTimeframe = tf;
+        document.querySelectorAll('.stat-window-pill').forEach(b => b.classList.remove('active'));
+        if (btn) btn.classList.add('active');
+        renderRosterTable();
+    }
+
+    function filterRoster() {
+        const query = (document.getElementById('roster-search')?.value || '').toLowerCase().trim();
+        const bracket = document.getElementById('roster-filter-bracket')?.value || 'all';
+        const archetype = document.getElementById('roster-filter-archetype')?.value || 'all';
+
+        currentFilteredRoster = currentRoster.filter(m => {
+            if (query && !m.playerName.toLowerCase().includes(query) && !String(m.playerId).includes(query)) return false;
+
+            if (showSlackersOnly && !m.slacker.isSlacking) return false;
+
+            if (archetype !== 'all' && m.archetype !== archetype) return false;
+
+            const t = typeof m.stats.total === 'number' ? m.stats.total : 0;
+            if (bracket === 'under10m' && t >= 10000000) return false;
+            if (bracket === '10m-100m' && (t < 10000000 || t >= 100000000)) return false;
+            if (bracket === '100m-1b' && (t < 100000000 || t >= 1000000000)) return false;
+            if (bracket === 'over1b' && t < 1000000000) return false;
+
+            return true;
+        });
+
+        // Sort
+        currentFilteredRoster.sort((a, b) => {
+            let va = a.stats.total;
+            let vb = b.stats.total;
+            if (currentRosterTimeframe === '24h') { va = a.gains.gain24h.total; vb = b.gains.gain24h.total; }
+            else if (currentRosterTimeframe === '7d') { va = a.gains.gain7d.total; vb = b.gains.gain7d.total; }
+            else if (currentRosterTimeframe === '30d') { va = a.gains.gain30d.total; vb = b.gains.gain30d.total; }
+            return rosterSortAsc ? (va - vb) : (vb - va);
+        });
+
+        renderRosterTable();
+    }
+
+    const filterRosterDebounced = debounce(filterRoster, 200);
+
+    function toggleSlackerFilter() {
+        showSlackersOnly = !showSlackersOnly;
+        const btn = document.getElementById('btn-toggle-slackers');
+        if (btn) btn.classList.toggle('active', showSlackersOnly);
+        filterRoster();
+    }
+
+    function renderRosterTable() {
+        const tbody = document.getElementById('roster-tbody');
+        if (!tbody) return;
+
+        if (!currentFilteredRoster.length) {
+            tbody.innerHTML = `<tr><td colspan="11" style="text-align:center; padding:32px; color:var(--text-tertiary);">No members matching the current filters.</td></tr>`;
+            return;
+        }
+
+        const isGainsView = (currentRosterTimeframe !== 'stats');
+
+        tbody.innerHTML = currentFilteredRoster.map(m => {
+            let totalValDisplay = '';
+            let strVal = '';
+            let spdVal = '';
+            let defVal = '';
+            let dexVal = '';
+
+            if (isGainsView) {
+                let g = m.gains.gain7d;
+                if (currentRosterTimeframe === '24h') g = m.gains.gain24h;
+                if (currentRosterTimeframe === '30d') g = m.gains.gain30d;
+
+                totalValDisplay = `<span style="color:var(--status-active); font-weight:800;">+${fmt(g.total)}</span> <span style="font-size:0.7em; background:rgba(0,230,118,0.12); padding:1px 4px; border-radius:3px;">+${g.pct}%</span>`;
+                strVal = `<span style="color:var(--stat-str); font-weight:700;">+${fmt(g.strength)}</span>`;
+                spdVal = `<span style="color:var(--stat-spd); font-weight:700;">+${fmt(g.speed)}</span>`;
+                defVal = `<span style="color:var(--stat-def); font-weight:700;">+${fmt(g.defense)}</span>`;
+                dexVal = `<span style="color:var(--stat-dex); font-weight:700;">+${fmt(g.dexterity)}</span>`;
+            } else {
+                totalValDisplay = m.stats.masked ? `<span style="color:var(--text-tertiary);">🔒 Hidden</span>` : `<span style="color:var(--accent-amber); font-weight:800;">${fmt(m.stats.total)}</span>`;
+                strVal = m.stats.masked ? '🔒' : fmt(m.stats.strength);
+                spdVal = m.stats.masked ? '🔒' : fmt(m.stats.speed);
+                defVal = m.stats.masked ? '🔒' : fmt(m.stats.defense);
+                dexVal = m.stats.masked ? '🔒' : fmt(m.stats.dexterity);
+            }
+
+            // Xanax 3/day pills indicator
+            const xanCount = m.energy.xanaxTakenCount || 0;
+            const xanPillsHtml = `
+                <span class="xan-pill ${xanCount >= 1 ? 'active' : 'inactive'}"></span>
+                <span class="xan-pill ${xanCount >= 2 ? 'active' : 'inactive'}"></span>
+                <span class="xan-pill ${xanCount >= 3 ? 'active' : 'inactive'}"></span>
+            `;
+
+            const statusDot = m.onlineStatus === 'online' ? '🟢' : (m.onlineStatus === 'idle' ? '🟡' : '⚪');
+
+            const slackerTag = m.slacker.isSlacking ? `<span class="badge" style="background:rgba(255,23,68,0.15); color:var(--status-danger); font-size:0.68em; margin-left:4px;" title="${m.slacker.warningReasons.join(', ')}">⚠️ Slacking</span>` : '';
+
+            return `
+                <tr>
+                    <td>
+                        <div style="font-weight:700; display:flex; align-items:center;">
+                            <a href="https://www.torn.com/profiles.php?XID=${m.playerId}" target="_blank" style="color:var(--text-primary); text-decoration:none;">${m.playerName}</a>
+                            ${slackerTag}
+                        </div>
+                        <div style="font-size:0.75em; color:var(--text-tertiary);">[${m.playerId}]</div>
+                    </td>
+                    <td>Lv ${m.level}</td>
+                    <td>
+                        <div>${statusDot} ${m.onlineStatus}</div>
+                        <div style="font-size:0.72em; color:var(--text-tertiary);">${timeSince(m.lastActionTimestamp)}</div>
+                    </td>
+                    <td class="font-mono">${strVal}</td>
+                    <td class="font-mono">${spdVal}</td>
+                    <td class="font-mono">${defVal}</td>
+                    <td class="font-mono">${dexVal}</td>
+                    <td class="font-mono">${totalValDisplay}</td>
+                    <td>
+                        <div class="font-mono" style="color:var(--text-primary);">${fmt(m.energy.energySpentEst)}e</div>
+                        <div style="font-size:0.7em; color:var(--text-tertiary);">${m.energy.efficiencyScore}% Eff.</div>
+                    </td>
+                    <td>
+                        <div style="display:flex; align-items:center;">${xanPillsHtml}</div>
+                    </td>
+                    <td style="text-align:center;">
+                        <button class="btn btn-xs btn-outline" onclick="openMemberDrawer('${m.playerId}')" style="font-size:0.74em; padding:3px 8px;">
+                            <span>🔍</span> Inspect
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    // ─── Member Deep-Dive Drawer ───
+    async function openMemberDrawer(playerId) {
+        const overlay = document.getElementById('member-drawer-overlay');
+        if (!overlay) return;
+        overlay.classList.add('open');
+
+        document.getElementById('dossier-name').textContent = 'Loading...';
+        document.getElementById('dossier-id').textContent = `[${playerId}]`;
+
+        try {
+            const myKey = typeof getApiKey === 'function' ? getApiKey() : '';
+            const res = await fetch(`/api/gym-tracker/member/${playerId}`, { headers: { 'x-api-key': myKey } });
+            const data = await res.json();
+            if (data && data.success) {
+                renderMemberDrawer(data);
+            }
+        } catch(e) {
+            console.error('Failed to open member drawer:', e);
+        }
+    }
+
+    function renderMemberDrawer(d) {
+        const m = d.member;
+        document.getElementById('dossier-name').textContent = m.playerName;
+        document.getElementById('dossier-id').textContent = `[${m.playerId}]`;
+        document.getElementById('dossier-sub').textContent = `Level ${m.level} • ${m.role} • ${m.daysInFaction}d in faction`;
+
+        const s = m.stats;
+        document.getElementById('dos-stat-str').textContent = s.masked ? '🔒' : fmt(s.strength);
+        document.getElementById('dos-stat-spd').textContent = s.masked ? '🔒' : fmt(s.speed);
+        document.getElementById('dos-stat-def').textContent = s.masked ? '🔒' : fmt(s.defense);
+        document.getElementById('dos-stat-dex').textContent = s.masked ? '🔒' : fmt(s.dexterity);
+
+        document.getElementById('dos-pct-str').textContent = `${m.balance.strengthPct}% of total`;
+        document.getElementById('dos-pct-spd').textContent = `${m.balance.speedPct}% of total`;
+        document.getElementById('dos-pct-def').textContent = `${m.balance.defensePct}% of total`;
+        document.getElementById('dos-pct-dex').textContent = `${m.balance.dexterityPct}% of total`;
+
+        // Milestone Goal
+        if (m.goal) {
+            document.getElementById('dos-goal-title').textContent = `🎯 ${m.goal.title}`;
+            document.getElementById('dos-goal-pct').textContent = `${m.goal.progressPct}%`;
+            document.getElementById('dos-goal-bar').style.width = `${m.goal.progressPct}%`;
+            document.getElementById('dos-goal-cur').textContent = `Current: ${fmt(m.goal.currentValue)}`;
+            document.getElementById('dos-goal-target').textContent = `Target: ${fmt(m.goal.targetValue)}`;
+        }
+
+        // Privacy select
+        const pSel = document.getElementById('dos-privacy-select');
+        if (pSel) pSel.value = m.privacy;
+
+        // Individual Radar Chart
+        renderMemberRadar(m.balance, d.factionAverageRadar);
+
+        // Timeline
+        const tbody = document.getElementById('dos-timeline-tbody');
+        if (tbody) {
+            if (!d.timeline30d || !d.timeline30d.length) {
+                tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; padding:12px; color:var(--text-tertiary);">No historical snapshots found.</td></tr>`;
+            } else {
+                tbody.innerHTML = d.timeline30d.map(h => `
+                    <tr>
+                        <td>${h.date}</td>
+                        <td class="font-mono" style="color:var(--accent-amber);">${fmt(h.total)}</td>
+                        <td class="font-mono" style="color:var(--status-active); font-weight:700;">+${fmt(h.gain)}</td>
+                        <td class="font-mono">${fmt(h.energySpentEst)}e</td>
+                    </tr>
+                `).join('');
+            }
+        }
+    }
+
+    function renderMemberRadar(userBal, facBal) {
+        const ctx = document.getElementById('memberRadarChart')?.getContext('2d');
+        if (!ctx) return;
+
+        if (memberRadarChartInstance) memberRadarChartInstance.destroy();
+
+        memberRadarChartInstance = new Chart(ctx, {
+            type: 'radar',
+            data: {
+                labels: ['Strength', 'Speed', 'Defense', 'Dexterity'],
+                datasets: [
+                    {
+                        label: 'Player Balance %',
+                        data: [userBal.strengthPct, userBal.speedPct, userBal.defensePct, userBal.dexterityPct],
+                        borderColor: '#00E676',
+                        backgroundColor: 'rgba(0, 230, 118, 0.25)',
+                        borderWidth: 2
+                    },
+                    {
+                        label: 'Faction Average %',
+                        data: [facBal.strengthPct, facBal.speedPct, facBal.defensePct, facBal.dexterityPct],
+                        borderColor: '#FF9800',
+                        backgroundColor: 'rgba(255, 152, 0, 0.1)',
+                        borderWidth: 1.5,
+                        borderDash: [4, 4]
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    r: {
+                        angleLines: { color: 'rgba(255,255,255,0.1)' },
+                        grid: { color: 'rgba(255,255,255,0.1)' },
+                        pointLabels: { color: '#E2E8F0', font: { size: 10, weight: '700' } },
+                        ticks: { display: false }
+                    }
+                }
+            }
+        });
+    }
+
+    function closeMemberDrawer() {
+        document.getElementById('member-drawer-overlay')?.classList.remove('open');
+    }
+
+    function closeDrawerOnBackdrop(e) {
+        if (e.target.id === 'member-drawer-overlay') closeMemberDrawer();
+    }
+
+    // ─── Privacy Tier Update ───
+    async function saveMemberPrivacy(tier) {
+        try {
+            const myKey = typeof getApiKey === 'function' ? getApiKey() : '';
+            const res = await fetch('/api/gym-tracker/privacy', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'x-api-key': myKey },
+                body: JSON.stringify({ tier })
+            });
+            const data = await res.json();
+            if (data && data.success) {
+                showToast(`Privacy tier set to: ${tier}`, 'success');
+                loadRoster();
+            }
+        } catch(e) {
+            showToast('Failed to update privacy preference.', 'error');
+        }
+    }
+
+    // ─── Competitions Engine ───
+    async function loadCompetitions() {
+        try {
+            const res = await fetch('/api/gym-tracker/competitions');
+            const data = await res.json();
+            if (data && data.success && data.competitions && data.competitions.length) {
+                const active = data.competitions[0];
+                document.getElementById('contest-title').textContent = active.title;
+                document.getElementById('contest-desc').textContent = active.description;
+                document.getElementById('contest-prizepool').textContent = `$${active.prizePool.toLocaleString()}`;
+
+                const podiumGrid = document.getElementById('contest-podium-grid');
+                if (podiumGrid && active.leaderboard) {
+                    const top3 = active.leaderboard.slice(0, 3);
+                    podiumGrid.innerHTML = top3.map((p, i) => `
+                        <div class="podium-card ${i === 0 ? 'podium-gold' : (i === 1 ? 'podium-silver' : 'podium-bronze')}">
+                            <div style="font-size:0.75em; font-weight:800; color:var(--accent-amber);">${p.rewardTier || `#${i+1}`}</div>
+                            <div style="font-weight:800; font-size:1.15em; color:#FFF; margin:4px 0;">${p.playerName}</div>
+                            <div class="font-mono" style="font-size:1.4em; font-weight:900; color:var(--status-active);">${p.scoreFormatted}</div>
+                            <div style="font-size:0.72em; color:var(--text-tertiary); margin-top:4px;">Prize: $${(p.rewardAmount || 0).toLocaleString()}</div>
+                        </div>
+                    `).join('');
+                }
+
+                const tbody = document.getElementById('contest-leaderboard-tbody');
+                if (tbody && active.leaderboard) {
+                    tbody.innerHTML = active.leaderboard.map(p => `
+                        <tr>
+                            <td class="font-mono" style="font-weight:800; color:var(--accent-amber);">#${p.rank}</td>
+                            <td style="font-weight:700;"><a href="https://www.torn.com/profiles.php?XID=${p.playerId}" target="_blank" style="color:#FFF; text-decoration:none;">${p.playerName}</a></td>
+                            <td class="font-mono" style="color:var(--status-active); font-weight:800;">${p.scoreFormatted}</td>
+                            <td>
+                                <div style="display:flex; align-items:center; gap:8px;">
+                                    <div style="flex:1; height:6px; background:rgba(255,255,255,0.08); border-radius:3px; overflow:hidden;">
+                                        <div style="width:${p.progressPct}%; height:100%; background:var(--status-active);"></div>
+                                    </div>
+                                    <span style="font-size:0.72em; color:var(--text-tertiary);">${p.progressPct}%</span>
+                                </div>
+                            </td>
+                            <td>${p.rewardTier || '—'}</td>
+                        </tr>
+                    `).join('');
+                }
+            }
+        } catch(e) {
+            console.error('Failed to load competitions:', e);
+        }
+    }
+
+    // ─── War Readiness & Fair Fight Matcher ───
+    async function loadWarReadiness() {
+        queryFairFightMatches();
+    }
+
+    async function queryFairFightMatches() {
+        const stats = Number(document.getElementById('ff-target-stats')?.value || 10000000);
+        try {
+            const res = await fetch(`/api/gym-tracker/war-readiness?targetStats=${stats}`);
+            const data = await res.json();
+            if (data && data.success) {
+                document.getElementById('role-count-breakers').textContent = data.rolesCount.FrontlineBreakers;
+                document.getElementById('role-count-tanks').textContent = data.rolesCount.BunkerTanks;
+                document.getElementById('role-count-flex').textContent = data.rolesCount.BalancedFlex;
+
+                const tbody = document.getElementById('ff-matches-tbody');
+                if (tbody) {
+                    tbody.innerHTML = (data.recommendedAttackers || []).map(a => {
+                        const ffClass = a.fairFightMultiplier >= 2.0 ? 'style="color:var(--status-active); font-weight:800;"' : 'style="color:var(--status-warning);"';
+                        const rating = a.fairFightMultiplier >= 2.5 ? '⭐ S-Tier Match' : (a.fairFightMultiplier >= 1.8 ? '🟢 Good Match' : '⚪ Suboptimal');
+                        return `
+                            <tr>
+                                <td style="font-weight:700;"><a href="https://www.torn.com/profiles.php?XID=${a.playerId}" target="_blank" style="color:#FFF; text-decoration:none;">${a.playerName}</a></td>
+                                <td class="font-mono">${fmt(a.totalStats)}</td>
+                                <td class="font-mono" ${ffClass}>${a.fairFightMultiplier.toFixed(2)}x</td>
+                                <td>${rating}</td>
+                            </tr>
+                        `;
+                    }).join('');
+                }
+            }
+        } catch(e) {
+            console.error('Failed to query Fair Fight matches:', e);
+        }
+    }
+
+    // ─── Force Sync Trigger ───
+    async function syncGymData(force = true) {
+        const btn = document.getElementById('btn-force-sync');
+        const icon = document.getElementById('sync-icon');
+        if (btn) btn.disabled = true;
+        if (icon) icon.textContent = '⏳';
+
+        try {
+            const myKey = typeof getApiKey === 'function' ? getApiKey() : '';
+            const res = await fetch('/api/faction/stat-gains/snapshot', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'x-api-key': myKey }
+            });
+            const data = await res.json();
+            showToast(`Sync complete! Updated ${data.updatedCount || 0} connected member stats.`, 'success');
+            await loadDashboard();
+            await loadRoster();
+        } catch(e) {
+            showToast('Sync failed: Network error', 'error');
+        } finally {
+            if (btn) btn.disabled = false;
+            if (icon) icon.textContent = '🔄';
+        }
+    }
+
+    // ─── Modal Open/Close ───
+    function openNewContestModal() {
+        document.getElementById('new-contest-modal').style.display = 'flex';
+    }
+    function closeNewContestModal() {
+        document.getElementById('new-contest-modal').style.display = 'none';
+    }
+    function toggleContestStatSelect(val) {
+        const f = document.getElementById('contest-stat-field');
+        if (f) f.style.display = (val === 'stat_gain') ? 'block' : 'none';
+    }
+    async function submitNewContest() {
+        const title = document.getElementById('contest-input-title').value.trim();
+        const targetType = document.getElementById('contest-input-type').value;
+        const targetStat = document.getElementById('contest-input-stat').value;
+        const durationDays = document.getElementById('contest-input-duration').value;
+        const prizePool = document.getElementById('contest-input-prize').value;
+        const description = document.getElementById('contest-input-desc').value.trim();
+
+        if (!title) {
+            showToast('Please enter a competition title', 'warn');
+            return;
+        }
+
+        try {
+            const myKey = typeof getApiKey === 'function' ? getApiKey() : '';
+            const res = await fetch('/api/gym-tracker/competitions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'x-api-key': myKey },
+                body: JSON.stringify({ title, targetType, targetStat, durationDays, prizePool, description })
+            });
+            const data = await res.json();
+            if (data && data.success) {
+                showToast('🏆 Competition launched successfully!', 'success');
+                closeNewContestModal();
+                loadCompetitions();
+            } else {
+                showToast(data.error || 'Failed to create competition', 'warn');
+            }
+        } catch(e) {
+            showToast('Error creating contest', 'error');
+        }
+    }
+
+    function exportRosterCSV() {
+        if (!currentFilteredRoster.length) return;
+        const headers = ["Player ID", "Name", "Level", "Role", "Strength", "Speed", "Defense", "Dexterity", "Total Stats", "7d Gain", "Est Energy", "Efficiency"];
+        const rows = currentFilteredRoster.map(m => [
+            m.playerId,
+            `"${m.playerName}"`,
+            m.level,
+            `"${m.role}"`,
+            m.stats.strength,
+            m.stats.speed,
+            m.stats.defense,
+            m.stats.dexterity,
+            m.stats.total,
+            m.gains.gain7d.total,
+            m.energy.energySpentEst,
+            `${m.energy.efficiencyScore}%`
+        ]);
+        const csvContent = "data:text/csv;charset=utf-8," + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", `faction_gym_stats_${new Date().toISOString().split('T')[0]}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+    }
+
+    // Debounce helper
+    function debounce(fn, wait = 200) {
+        let t;
+        return (...args) => {
+            clearTimeout(t);
+            t = setTimeout(() => fn.apply(this, args), wait);
+        };
+    }
+
+    // Initialization on DOMContentLoaded
+    document.addEventListener('DOMContentLoaded', () => {
+        loadDashboard();
+        loadRoster();
+    });
+    </script>
+</body>
+</html>

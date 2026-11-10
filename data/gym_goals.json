@@ -1,0 +1,6 @@
+{
+  "3490493": { "stat": "strength", "targetValue": 20000000, "title": "Road to 20M Strength" },
+  "3776908": { "stat": "defense", "targetValue": 50000000, "title": "Road to 50M Defense (Soft Cap)" },
+  "4208316": { "stat": "total", "targetValue": 1000000, "title": "Road to 1M Total Stats" },
+  "4324643": { "stat": "speed", "targetValue": 500000, "title": "Road to 500k Speed" }
+}
