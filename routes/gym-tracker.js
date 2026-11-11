@@ -155,6 +155,7 @@ async function getUnifiedFactionRoster(targetFacId = '52355', userKey = null) {
                     if (id) {
                         let ts = Number(mInfo.last_action?.timestamp || 0);
                         if (ts > 100000000000) ts = Math.floor(ts / 1000);
+                        const statusObj = mInfo.status || { state: mInfo.state || 'Okay', description: mInfo.statusDescription || 'Okay', until: mInfo.until || 0 };
                         map.set(id, {
                             id,
                             name: mInfo.name || `Player [${id}]`,
@@ -162,7 +163,8 @@ async function getUnifiedFactionRoster(targetFacId = '52355', userKey = null) {
                             position: mInfo.position || 'Member',
                             days_in_faction: Number(mInfo.days_in_faction || 0),
                             lastActionTimestamp: ts || Math.floor(Date.now() / 1000),
-                            onlineStatus: (mInfo.last_action?.status || 'offline').toLowerCase()
+                            onlineStatus: (mInfo.last_action?.status || 'offline').toLowerCase(),
+                            status: statusObj
                         });
                     }
                 }
@@ -188,6 +190,7 @@ async function getUnifiedFactionRoster(targetFacId = '52355', userKey = null) {
                     if (id) {
                         let ts = Number(mInfo.last_action?.timestamp || 0);
                         if (ts > 100000000000) ts = Math.floor(ts / 1000);
+                        const statusObj = mInfo.status || { state: mInfo.state || 'Okay', description: mInfo.statusDescription || 'Okay', until: mInfo.until || 0 };
                         map.set(id, {
                             id,
                             name: mInfo.name || `Player [${id}]`,
@@ -195,7 +198,8 @@ async function getUnifiedFactionRoster(targetFacId = '52355', userKey = null) {
                             position: mInfo.position || 'Member',
                             days_in_faction: Number(mInfo.days_in_faction || 0),
                             lastActionTimestamp: ts || Math.floor(Date.now() / 1000),
-                            onlineStatus: (mInfo.last_action?.status || 'offline').toLowerCase()
+                            onlineStatus: (mInfo.last_action?.status || 'offline').toLowerCase(),
+                            status: statusObj
                         });
                     }
                 }
@@ -240,6 +244,7 @@ async function getUnifiedFactionRoster(targetFacId = '52355', userKey = null) {
                     if (id) {
                         let ts = Number(m.lastActionTimestamp || 0);
                         if (ts > 100000000000) ts = Math.floor(ts / 1000);
+                        const statusObj = m.status || { state: m.state || 'Okay', description: m.statusDescription || 'Okay', until: m.until || 0 };
                         fallbackMap.set(id, {
                             id,
                             name: m.name || m.playerName || `Player [${id}]`,
@@ -247,7 +252,8 @@ async function getUnifiedFactionRoster(targetFacId = '52355', userKey = null) {
                             position: m.position || 'Member',
                             days_in_faction: Number(m.daysInFaction || m.days_in_faction || 0),
                             lastActionTimestamp: ts,
-                            onlineStatus: (m.onlineStatus || 'offline').toLowerCase()
+                            onlineStatus: (m.onlineStatus || 'offline').toLowerCase(),
+                            status: statusObj
                         });
                     }
                 });
@@ -276,11 +282,11 @@ function determineArchetype(str, spd, def, dex, total) {
     return 'HankBalanced';
 }
 
-// Calculate Fair Fight multiplier (bounded 1.0x to 3.0x) with Torn City combat formula
+// Calculate Fair Fight multiplier (bounded 1.0x to 3.0x) with Torn City combat formula: FF = 1 + 8/9 * (Defender / Attacker)
 function calculateFairFight(attackerTotal, defenderTotal) {
     if (!attackerTotal || !defenderTotal || defenderTotal <= 0) return 1.0;
     const ratio = defenderTotal / attackerTotal;
-    const ff = 1.0 + (ratio * 8 / 3);
+    const ff = 1.0 + (ratio * 8 / 9);
     return Math.min(3.0, Math.max(1.0, Number(ff.toFixed(2))));
 }
 
@@ -466,13 +472,63 @@ function buildMemberRecord(pId, bRec, info, callerId, isLeadership, customStart 
     
     // Flag wasted natural energy if online/idle and 0 trains in 24h
     const energyCapped = (zeroTrainHours >= 24 && hoursSinceActive < 4);
-    const isSlacking = (zeroTrainHours >= 24 && hoursSinceActive < 48) || (!quotaMet && hoursSinceActive < 48) || (hoursSinceActive >= 48);
 
+    // Extract state, description, position, days in faction for explicit exemption audit
+    const state = (info?.status?.state || info?.state || 'Okay').trim();
+    const statusDesc = (info?.status?.description || info?.statusDescription || '').trim();
+    const position = (info?.position || bRec?.position || 'Member').trim();
+    const daysInFaction = Number(info?.days_in_faction || info?.daysInFaction || bRec?.daysInFaction || 0);
+    const untilSec = Number(info?.status?.until || info?.until || 0);
+
+    let isExempt = false;
+    let exemptReason = '';
+
+    const descLower = statusDesc.toLowerCase();
+    const posLower = position.toLowerCase();
+
+    if (state === 'Federal' || descLower.includes('federal')) {
+        isExempt = true;
+        exemptReason = 'In Federal Jail';
+    } else if (state === 'Jail' || descLower.includes('jail')) {
+        isExempt = true;
+        exemptReason = 'In Jail';
+    } else if (state === 'Abroad' || state === 'Traveling' || descLower.includes('traveling') || descLower.includes('abroad') || descLower.includes('islands') || descLower.includes('switzerland') || descLower.includes('japan') || descLower.includes('argentina') || descLower.includes('china') || descLower.includes('mexico') || descLower.includes('canada') || descLower.includes('hawaii') || descLower.includes('united kingdom') || descLower.includes('south africa') || descLower.includes('uae')) {
+        isExempt = true;
+        exemptReason = state === 'Traveling' ? 'Traveling' : 'Abroad / Traveling';
+    } else if (state === 'Hospital' || descLower.includes('hospital')) {
+        isExempt = true;
+        exemptReason = 'Hospitalized';
+    } else if (daysInFaction < 3) {
+        isExempt = true;
+        exemptReason = 'New Recruit Grace Period (<3 days)';
+    } else if (descLower.includes('leave') || descLower.includes('vacation') || posLower.includes('leave') || posLower.includes('inactiv') || posLower.includes('vacation')) {
+        isExempt = true;
+        exemptReason = 'Inactivity / Vacation Leave';
+    }
+
+    // Single source of truth disjoint partitioning:
+    // 1. Active: trained in last 24h
+    // 2. Exempt: did not train in 24h, but has valid status exemption (travel, hospital, jail, leave, recruit)
+    // 3. Slacker: did not train in 24h and is not exempt
+    const trainedToday = (gain24h.total > 0);
+    let category = 'slacker';
+    if (trainedToday) {
+        category = 'active';
+    } else if (isExempt) {
+        category = 'exempt';
+    } else {
+        category = 'slacker';
+    }
+
+    const isSlacking = (category === 'slacker');
     const warningReasons = [];
-    if (zeroTrainHours >= 24 && hoursSinceActive < 48) warningReasons.push('0 trains recorded in last 24h while active');
-    if (energyCapped) warningReasons.push('⚠️ Wasted Natural Energy: Capped at maximum energy without training for >2h');
-    if (!quotaMet && hoursSinceActive < 48) warningReasons.push(`Below weekly quota (${energySpentEst} / ${weeklyQuota}e)`);
-    if (hoursSinceActive >= 48) warningReasons.push(`Inactive on Torn for ${hoursSinceActive}h`);
+    if (isSlacking) {
+        if (zeroTrainHours >= 24 && hoursSinceActive < 48) warningReasons.push('0 trains recorded in last 24h while active');
+        if (energyCapped) warningReasons.push('⚠️ Wasted Natural Energy: Capped at maximum energy without training for >2h');
+        if (!quotaMet && hoursSinceActive < 48) warningReasons.push(`Below weekly quota (${energySpentEst} / ${weeklyQuota}e)`);
+        if (hoursSinceActive >= 48) warningReasons.push(`Inactive on Torn for ${hoursSinceActive}h`);
+        if (warningReasons.length === 0) warningReasons.push('0 trains recorded in last 24h');
+    }
 
     // Goal tracker
     const customGoal = memberGoals[String(pId)];
@@ -528,6 +584,16 @@ function buildMemberRecord(pId, bRec, info, callerId, isLeadership, customStart 
         daysInFaction: Number(info?.days_in_faction || bRec?.daysInFaction || 0),
         onlineStatus: (info?.onlineStatus || getStatusString(info?.last_action?.status)),
         lastActionTimestamp: lastActiveSec,
+        status: {
+            state,
+            description: statusDesc,
+            until: untilSec
+        },
+        exempt: {
+            isExempt,
+            reason: exemptReason
+        },
+        category,
         stats: visibleStats,
         rawStats: { strength: curStr, speed: curSpd, defense: curDef, dexterity: curDex, total: curTotal },
         modifiers: bRec?.stats?.modifiers || { strength: 0, speed: 0, defense: 0, dexterity: 0 },
@@ -614,14 +680,17 @@ router.get('/dashboard', async (req, res) => {
         const totalGains7d = memberList.reduce((acc, m) => acc + (m.gains.gain7d.total > 0 ? m.gains.gain7d.total : 0), 0);
         const totalGains30d = memberList.reduce((acc, m) => acc + (m.gains.gain30d.total > 0 ? m.gains.gain30d.total : 0), 0);
 
-        const activeToday = memberList.filter(m => m.gains.gain24h.total > 0).length;
+        const activeList = memberList.filter(m => m.category === 'active');
+        const slackerList = memberList.filter(m => m.category === 'slacker');
+        const exemptList = memberList.filter(m => m.category === 'exempt');
+
+        const activeToday = activeList.length;
         const activePct = memberList.length > 0 ? Math.round((activeToday / memberList.length) * 100) : 0;
 
         // Accurate daily Xanax average
         const totalDailyXan = memberList.reduce((acc, m) => acc + (m.energy.xanaxTakenCount || 0), 0);
         const activeTrainerCount = Math.max(1, memberList.filter(m => m.verified).length);
         const avgXanax = Number((totalDailyXan / activeTrainerCount).toFixed(1));
-        const slackerList = memberList.filter(m => m.slacker.isSlacking);
 
         // Faction-wide radar averages
         let sumStr = 0, sumSpd = 0, sumDef = 0, sumDex = 0;
@@ -675,6 +744,7 @@ router.get('/dashboard', async (req, res) => {
                 totalXanax24h: totalDailyXan,
                 totalRefills24h: activeToday,
                 slackerCount: slackerList.length,
+                exemptCount: exemptList.length,
                 trackedMembersCount: memberList.length,
                 totalMembersCount: memberList.length
             },
@@ -696,6 +766,14 @@ router.get('/dashboard', async (req, res) => {
                 name: s.playerName,
                 reasons: s.slacker.warningReasons,
                 lastAction: s.lastActionTimestamp
+            })),
+            exempts: exemptList.map(e => ({
+                id: e.playerId,
+                name: e.playerName,
+                reason: e.exempt.reason,
+                state: e.status?.state || 'Exempt',
+                description: e.status?.description || e.exempt.reason,
+                lastAction: e.lastActionTimestamp
             }))
         });
     } catch(err) {
@@ -958,22 +1036,32 @@ router.post('/competitions', (req, res) => {
         }
 
         const { title, description, targetType, targetStat, durationDays, prizePool } = req.body;
-        if (!title || !targetType) {
-            return res.status(400).json({ success: false, error: "Title and targetType are required." });
+        if (!title || typeof title !== 'string' || title.trim().length < 3) {
+            return res.status(400).json({ success: false, error: "Contest title must be at least 3 characters." });
+        }
+        if (title.trim().toLowerCase() === 'test') {
+            return res.status(400).json({ success: false, error: "Please enter a descriptive competition title, not 'test'." });
+        }
+        if (!targetType) {
+            return res.status(400).json({ success: false, error: "targetType is required." });
         }
 
+        // Cap prize pool at realistic maximum ($10B) and ensure non-negative integer
+        const rawPool = parseInt(String(prizePool || '0').replace(/[^0-9]/g, ''), 10) || 0;
+        const cappedPool = Math.min(10000000000, Math.max(0, rawPool));
+
         const now = Date.now();
-        const days = Number(durationDays || 7);
+        const days = Math.min(30, Math.max(1, Number(durationDays || 7)));
         const newContest = {
             id: `contest-${Date.now()}`,
-            title,
-            description: description || "Faction Gym Contest",
+            title: title.trim(),
+            description: description?.trim() || "Faction Gym Contest",
             targetType,
             targetStat: targetStat || null,
             startTime: now,
             endTime: now + (days * 86400000),
-            prizePool: Number(prizePool || 0),
-            prizeDescription: `$${(Number(prizePool||0)).toLocaleString()} Prize Pool (50% / 30% / 20%)`,
+            prizePool: cappedPool,
+            prizeDescription: `$${cappedPool.toLocaleString()} Prize Pool (50% / 30% / 20%)`,
             creatorId: callerId || 3776908,
             creatorName: req.userSession?.playerName || "Faction Leadership",
             status: "active"
@@ -992,13 +1080,15 @@ router.post('/competitions', (req, res) => {
  * GET /api/gym-tracker/war-readiness
  * Enhanced Fair Fight Target Matcher with Stat Ratio Analysis & Defensive Warnings.
  */
-router.get('/war-readiness', (req, res) => {
+router.get('/war-readiness', async (req, res) => {
     try {
         let battleStats = {};
         if (fs.existsSync(BATTLESTATS_FILE)) {
             battleStats = JSON.parse(fs.readFileSync(BATTLESTATS_FILE, 'utf8'));
         }
 
+        const targetFacId = resolveFaction(req);
+        const userKey = resolveApiKey(req);
         const enemyTargetStats = Number(req.query.targetStats || 10000000);
         const enemyStr = Number(req.query.targetStr || (enemyTargetStats * 0.25));
         const enemySpd = Number(req.query.targetSpd || (enemyTargetStats * 0.25));
@@ -1013,7 +1103,7 @@ router.get('/war-readiness', (req, res) => {
             dexterity: enemyDex
         };
 
-        const rosterMap = getUnifiedFactionRoster();
+        const rosterMap = await getUnifiedFactionRoster(targetFacId, userKey);
         const roles = {
             FrontlineBreakers: [],
             BunkerTanks: [],

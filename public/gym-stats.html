@@ -59,10 +59,31 @@
         --status-danger: #ef4444;
     }
 
+    html, body {
+        min-height: 100vh;
+        height: auto;
+        overflow-y: auto;
+    }
+
     body {
         background-color: var(--bg-base);
         color: var(--text-primary, #F8FAFC);
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    .main-wrapper {
+        min-height: 100vh;
+        height: auto;
+        overflow: visible;
+    }
+
+    .roster-table-container, .scrollable {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .tracker-table {
+        min-width: 1100px;
     }
 
     .font-mono {
@@ -620,18 +641,30 @@
             <!-- VIEW 3: CONTESTS & GAMIFICATION -->
             <!-- ══════════════════════════════════════════════════════════ -->
             <div class="tracker-tab-pane" id="pane-contests">
+                <!-- Clean Empty State Card (Shown when no active contest exists) -->
+                <div id="contest-empty-state" style="display:none; text-align:center; padding:48px 24px; background:var(--bg-surface); border:1px dashed var(--border-subtle); border-radius:12px; margin-bottom:24px;">
+                    <div style="font-size:3em; margin-bottom:12px;">🏆</div>
+                    <h3 style="margin:0 0 8px 0; font-size:1.3em; font-weight:800; color:#FFF;">No Active Faction Competition</h3>
+                    <p style="color:var(--text-secondary); max-width:520px; margin:0 auto 20px auto; font-size:0.88em; line-height:1.5;">
+                        There are currently no active stat blitz or energy derby competitions running. Launch a competition to gamify training gains, track leaderboard progress, and prepare for war.
+                    </p>
+                    <button class="btn btn-primary" onclick="openNewContestModal()" style="font-weight:700; padding:10px 22px; background:var(--accent-amber); border-color:var(--accent-amber); color:#000;">
+                        ✨ Create Competition
+                    </button>
+                </div>
+
                 <!-- Active Competition Banner -->
                 <div class="card" style="padding:22px; background:linear-gradient(135deg, rgba(245,158,11,0.12) 0%, rgba(19,27,42,0.95) 100%); border:1px solid rgba(245,158,11,0.4); margin-bottom:24px; position:relative;" id="active-contest-banner">
                     <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
                         <div>
                             <span class="badge" style="background:var(--accent-amber); color:#000; font-weight:800; font-size:0.72em;">ACTIVE CONTEST</span>
-                            <h2 style="margin:8px 0 4px 0; font-size:1.4em; font-weight:900; color:#FFF;" id="contest-title">7-Day Pre-War Strength Blitz</h2>
-                            <div style="font-size:0.82em; color:var(--text-secondary);" id="contest-desc">Faction-wide competition: Boost raw strength in preparation for our upcoming Ranked War.</div>
+                            <h2 style="margin:8px 0 4px 0; font-size:1.4em; font-weight:900; color:#FFF;" id="contest-title">Faction Competition</h2>
+                            <div style="font-size:0.82em; color:var(--text-secondary);" id="contest-desc">Faction-wide competition.</div>
                         </div>
                         <div style="text-align:right;">
                             <div style="font-size:0.72em; text-transform:uppercase; color:var(--text-tertiary); font-weight:700;">Prize Pool</div>
-                            <div class="font-mono" style="font-size:1.6em; font-weight:900; color:var(--accent-amber);" id="contest-prizepool">$50,000,000</div>
-                            <div style="font-size:0.75em; color:var(--status-active); font-weight:700;" id="contest-countdown">⏳ 4d 18h remaining</div>
+                            <div class="font-mono" style="font-size:1.6em; font-weight:900; color:var(--accent-amber);" id="contest-prizepool">$0</div>
+                            <div style="font-size:0.75em; color:var(--status-active); font-weight:700;" id="contest-countdown">⏳ Calculating remaining time...</div>
                         </div>
                     </div>
                 </div>
@@ -642,7 +675,7 @@
                 </div>
 
                 <!-- Full Live Leaderboard Table -->
-                <div class="card" style="background:var(--bg-surface); border:1px solid var(--border-subtle); border-radius:10px; overflow:hidden;">
+                <div class="card" id="contest-standings-card" style="background:var(--bg-surface); border:1px solid var(--border-subtle); border-radius:10px; overflow:hidden;">
                     <div style="padding:14px 20px; border-bottom:1px solid var(--border-subtle); display:flex; justify-content:space-between; align-items:center;">
                         <h3 style="margin:0; font-size:1em; font-weight:800; color:var(--text-primary);">🏅 Live Contest Standings</h3>
                         <span style="font-size:0.75em; color:var(--text-tertiary);">Rewards distributed at contest expiration</span>
@@ -1118,7 +1151,7 @@
         document.getElementById('kpi-gains-delta').textContent = `+${fmt(kpis.totalGains24h)}`;
         document.getElementById('kpi-gains-sub').textContent = `7d: +${fmt(kpis.totalGains7d)} total`;
         document.getElementById('kpi-active-trainers').textContent = `${kpis.activeTrainersPct}%`;
-        document.getElementById('kpi-active-sub').textContent = `${kpis.activeTrainersToday} of ${kpis.totalMembersCount} trained today`;
+        document.getElementById('kpi-active-sub').textContent = `${kpis.activeTrainersToday} active • ${kpis.slackerCount} slacking • ${kpis.exemptCount || 0} exempt (${kpis.totalMembersCount} total)`;
         document.getElementById('kpi-avg-xanax').textContent = `${kpis.avgXanaxPerDay} / 3.0`;
 
         // Slacker Banner
@@ -1126,7 +1159,7 @@
         if (slackerBanner) {
             if (kpis.slackerCount > 0) {
                 slackerBanner.style.display = 'flex';
-                document.getElementById('slacker-banner-text').textContent = `${kpis.slackerCount} members have logged 0 trains over 24h, wasted natural energy, or fallen below weekly quota.`;
+                document.getElementById('slacker-banner-text').innerHTML = `<strong>${kpis.slackerCount} members</strong> flagged for zero gains or energy waste <span style="font-size:0.86em; color:var(--text-secondary); margin-left:6px;">(${kpis.activeTrainersToday} active • ${kpis.slackerCount} slacking • ${kpis.exemptCount || 0} exempt = ${kpis.totalMembersCount} total)</span>`;
             } else {
                 slackerBanner.style.display = 'none';
             }
@@ -1428,13 +1461,15 @@
             const relativeTimeStr = formatRelativeTime(m.lastActionTimestamp);
 
             const slackerTag = m.slacker.isSlacking ? `<span class="badge" style="background:rgba(239,68,68,0.15); color:var(--status-danger); font-size:0.68em; margin-left:4px;" title="${m.slacker.warningReasons.join('; ')}">⚠️ Slacking</span>` : '';
+            const exemptTag = (m.exempt && m.exempt.isExempt) ? `<span class="badge" style="background:rgba(148,163,184,0.15); color:#94a3b8; border:1px solid rgba(148,163,184,0.3); font-size:0.68em; margin-left:4px;" title="Exempt: ${m.exempt.reason}">🛡️ ${m.exempt.reason}</span>` : '';
 
             return `
                 <tr>
                     <td class="sticky-col">
-                        <div style="font-weight:700; display:flex; align-items:center;">
+                        <div style="font-weight:700; display:flex; align-items:center; flex-wrap:wrap; gap:4px;">
                             <a href="https://www.torn.com/profiles.php?XID=${m.playerId}" target="_blank" style="color:var(--text-primary); text-decoration:none;">${m.playerName}</a>
                             ${slackerTag}
+                            ${exemptTag}
                         </div>
                         <div style="font-size:0.75em; color:var(--text-tertiary);">${m.role} • [${m.playerId}]</div>
                     </td>
@@ -1636,12 +1671,13 @@
 
     // ─── Slacker Quick Actions ───
     function copySlackerDiscordPings() {
-        const slackers = (currentDashboard?.slackers || []).map(s => `[${s.name}](https://www.torn.com/profiles.php?XID=${s.id})`);
+        const slackers = currentDashboard?.slackers || [];
         if (!slackers.length) {
             showToast('No slackers currently flagged!', 'success');
             return;
         }
-        const text = `⚠️ **Faction Gym Slacker Ping** (${slackers.length} members):\n${slackers.join(', ')}\nPlease train natural energy and take your Xanax daily!`;
+        const pingLinks = slackers.map(s => `[${s.name}](https://www.torn.com/profiles.php?XID=${s.id})`);
+        const text = `⚠️ **Faction Gym Slacker Ping** (${slackers.length} members flagged):\n${pingLinks.join(', ')}\nPlease train natural energy and take your Xanax daily!`;
         navigator.clipboard.writeText(text).then(() => {
             showToast(`Copied ping list for ${slackers.length} slackers to clipboard!`, 'success');
         }).catch(() => {
@@ -1655,10 +1691,9 @@
             showToast('No slackers currently flagged!', 'success');
             return;
         }
-        const ids = slackers.map(s => s.id).join(',');
-        const subject = encodeURIComponent('Faction Gym Activity & Training Quota');
-        const msg = encodeURIComponent(`Hi Operative,\n\nYou have been flagged by the Faction OS Gym Tracker for 0 trains over the past 24 hours or falling below our weekly training quota. Please ensure you are expending natural energy and maintaining your daily gym targets ahead of war.\n\n— Faction Leadership`);
-        window.open(`https://www.torn.com/messages.php#/p=compose&XID=${slackers[0].id}&subject=${subject}&message=${msg}`, '_blank');
+        const slackerIds = slackers.map(s => s.id);
+        const encodedMessage = encodeURIComponent(`Hi Operative,\n\nYou have been flagged by the Faction OS Gym Tracker for 0 trains over the past 24 hours or falling below our weekly training quota. Please ensure you are expending natural energy and maintaining your daily gym targets ahead of war.\n\n— Faction Leadership`);
+        window.open(`https://www.torn.com/messages.php#/p=compose&XID=${slackerIds.join(',')}&msg=${encodedMessage}`, '_blank', 'noopener,noreferrer');
     }
 
     // ─── Perk Multipliers Calculator ───
@@ -1694,11 +1729,21 @@
         try {
             const res = await fetch('/api/gym-tracker/competitions');
             const data = await res.json();
-            if (data && data.success && data.competitions && data.competitions.length) {
+            const emptyState = document.getElementById('contest-empty-state');
+            const activeBanner = document.getElementById('active-contest-banner');
+            const podiumGrid = document.getElementById('contest-podium-grid');
+            const standingsCard = document.getElementById('contest-standings-card');
+
+            if (data && data.success && Array.isArray(data.competitions) && data.competitions.length > 0) {
+                if (emptyState) emptyState.style.display = 'none';
+                if (activeBanner) activeBanner.style.display = 'block';
+                if (podiumGrid) podiumGrid.style.display = 'grid';
+                if (standingsCard) standingsCard.style.display = 'block';
+
                 const active = data.competitions[0];
                 document.getElementById('contest-title').textContent = active.title;
                 document.getElementById('contest-desc').textContent = active.description;
-                document.getElementById('contest-prizepool').textContent = `$${active.prizePool.toLocaleString()}`;
+                document.getElementById('contest-prizepool').textContent = `$${(active.prizePool || 0).toLocaleString()}`;
 
                 // Live countdown
                 if (contestCountdownInterval) clearInterval(contestCountdownInterval);
@@ -1713,7 +1758,6 @@
                 updateCountdown();
                 contestCountdownInterval = setInterval(updateCountdown, 1000);
 
-                const podiumGrid = document.getElementById('contest-podium-grid');
                 if (podiumGrid && active.leaderboard) {
                     const top3 = active.leaderboard.slice(0, 3);
                     podiumGrid.innerHTML = top3.map((p, i) => `
@@ -1745,6 +1789,12 @@
                         </tr>
                     `).join('');
                 }
+            } else {
+                if (contestCountdownInterval) clearInterval(contestCountdownInterval);
+                if (emptyState) emptyState.style.display = 'block';
+                if (activeBanner) activeBanner.style.display = 'none';
+                if (podiumGrid) podiumGrid.style.display = 'none';
+                if (standingsCard) standingsCard.style.display = 'none';
             }
         } catch(e) {
             console.error('Failed to load competitions:', e);
@@ -1765,25 +1815,37 @@
     }
 
     async function queryFairFightMatches() {
-        const stats = Number(document.getElementById('ff-target-stats')?.value || 10000000);
+        const inp = document.getElementById('ff-target-stats');
+        const rawVal = inp ? String(inp.value).trim().replace(/[^0-9]/g, '') : '';
+        const stats = Math.max(1000, Number(rawVal) || 10000000);
+        const tbody = document.getElementById('ff-matches-tbody');
+
+        if (tbody) {
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:20px; color:var(--text-tertiary);">⏳ Calculating optimal Fair Fight matches across faction roster...</td></tr>';
+        }
+
         try {
             const res = await fetch(`/api/gym-tracker/war-readiness?targetStats=${stats}`);
             const data = await res.json();
             if (data && data.success) {
-                document.getElementById('role-count-breakers').textContent = data.rolesCount.FrontlineBreakers;
-                document.getElementById('role-count-tanks').textContent = data.rolesCount.BunkerTanks;
-                document.getElementById('role-count-flex').textContent = data.rolesCount.BalancedFlex;
+                if (document.getElementById('role-count-breakers')) document.getElementById('role-count-breakers').textContent = data.rolesCount?.FrontlineBreakers ?? 0;
+                if (document.getElementById('role-count-tanks')) document.getElementById('role-count-tanks').textContent = data.rolesCount?.BunkerTanks ?? 0;
+                if (document.getElementById('role-count-flex')) document.getElementById('role-count-flex').textContent = data.rolesCount?.BalancedFlex ?? 0;
 
-                const tbody = document.getElementById('ff-matches-tbody');
                 if (tbody) {
-                    tbody.innerHTML = (data.recommendedAttackers || []).map(a => {
+                    if (!data.recommendedAttackers || data.recommendedAttackers.length === 0) {
+                        tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; padding:24px; color:var(--text-tertiary);">No faction attackers found within the 1.00x–3.00x Fair Fight bracket for target stat (${fmt(stats)}). Try adjusting target stats or selecting another preset.</td></tr>`;
+                        return;
+                    }
+
+                    tbody.innerHTML = data.recommendedAttackers.map(a => {
                         const ffClass = a.fairFightMultiplier >= 2.0 ? 'style="color:var(--status-active); font-weight:800;"' : 'style="color:var(--status-warning);"';
                         const warnTags = (a.warnings || []).map(w => `<span class="badge" style="background:rgba(239,68,68,0.15); color:var(--status-danger); font-size:0.68em; margin-right:4px;">${w}</span>`).join('');
                         return `
                             <tr>
                                 <td style="font-weight:700;">
-                                    <a href="https://www.torn.com/profiles.php?XID=${a.playerId}" target="_blank" style="color:#FFF; text-decoration:none;">${a.playerName}</a>
-                                    <span style="font-size:0.72em; color:var(--text-tertiary);"> (Lv ${a.level})</span>
+                                    <a href="https://www.torn.com/profiles.php?XID=${a.playerId}" target="_blank" rel="noopener noreferrer" style="color:#FFF; text-decoration:none;">${a.playerName}</a>
+                                    <span style="font-size:0.72em; color:var(--text-tertiary);"> (Lv ${a.level || 1})</span>
                                 </td>
                                 <td class="font-mono">${fmt(a.totalStats)}</td>
                                 <td class="font-mono" ${ffClass}>${a.fairFightMultiplier.toFixed(2)}x</td>
@@ -1795,9 +1857,16 @@
                         `;
                     }).join('');
                 }
+            } else {
+                if (tbody) {
+                    tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; padding:20px; color:var(--status-danger);">Failed to calculate matches: ${data?.error || 'Unknown error'}</td></tr>`;
+                }
             }
         } catch(e) {
             console.error('Failed to query Fair Fight matches:', e);
+            if (tbody) {
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:20px; color:var(--status-danger);">Error querying Fair Fight matches. Check network connection.</td></tr>';
+            }
         }
     }
 
@@ -1873,20 +1942,31 @@
     function exportRosterCSV() {
         if (!currentFilteredRoster.length) return;
         const headers = ["Player ID", "Name", "Level", "Role", "Strength", "Speed", "Defense", "Dexterity", "Total Stats", "7d Gain", "Xanax Taken", "Est Energy", "Efficiency"];
+
+        function sanitizeCSVCell(val) {
+            if (val === null || val === undefined) return '""';
+            let str = String(val).trim();
+            // Mitigate CSV Formula Injection by prepending single quote if starting with =, +, -, @
+            if (/^[=\+\-@]/.test(str)) {
+                str = "'" + str;
+            }
+            return `"${str.replace(/"/g, '""')}"`;
+        }
+
         const rows = currentFilteredRoster.map(m => [
             m.playerId,
-            `"${m.playerName}"`,
+            sanitizeCSVCell(m.playerName),
             m.level || 1,
-            `"${m.role}"`,
-            m.stats.strength,
-            m.stats.speed,
-            m.stats.defense,
-            m.stats.dexterity,
-            m.stats.total,
+            sanitizeCSVCell(m.role),
+            typeof m.stats.strength === 'number' ? m.stats.strength : 0,
+            typeof m.stats.speed === 'number' ? m.stats.speed : 0,
+            typeof m.stats.defense === 'number' ? m.stats.defense : 0,
+            typeof m.stats.dexterity === 'number' ? m.stats.dexterity : 0,
+            typeof m.stats.total === 'number' ? m.stats.total : 0,
             m.gains.gain7d.total,
             m.energy.xanaxTakenCount || 0,
             m.energy.energySpentEst,
-            `${m.energy.efficiencyScore}%`
+            sanitizeCSVCell(`${m.energy.efficiencyScore}%`)
         ]);
         const csvContent = "data:text/csv;charset=utf-8," + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
         const encodedUri = encodeURI(csvContent);

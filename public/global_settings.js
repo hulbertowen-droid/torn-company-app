@@ -267,27 +267,33 @@ window.openGlobalSettings = async function() {
     const statusText = document.getElementById('gs-status-text');
     const logoutBtn = document.getElementById('gs-btn-logout');
 
-    if (token) {
-        try {
-            const res = await fetch('/api/auth/me');
+    if (statusText) {
+        statusText.innerHTML = '<span style="color:var(--text-secondary, #94a3b8); font-size:0.85em;">⏳ Verifying connection...</span>';
+    }
+
+    try {
+        const res = await fetch('/api/auth/me', { signal: AbortSignal.timeout(4000) });
+        if (res.ok) {
             const data = await res.json();
             if (data.authenticated && data.user) {
                 if (keyInput) keyInput.placeholder = `•••••••••••••••• (Verified: ${data.user.playerName} — paste new key to switch)`;
-                statusText.innerHTML = `<strong style="color:var(--accent-emerald, #10b981);">Verified Key: ${data.user.playerName} [${data.user.playerId}]</strong> (${data.user.factionName || 'Factionless'})`;
+                if (statusText) {
+                    statusText.innerHTML = `<span class="badge" style="background:rgba(16,185,129,0.15); color:#10b981; border:1px solid rgba(16,185,129,0.35); padding:4px 8px; border-radius:4px; font-weight:700;">🟢 Connected (${data.user.playerName} [${data.user.playerId}])</span>`;
+                }
                 if (logoutBtn) logoutBtn.style.display = 'block';
-            } else {
-                if (keyInput) keyInput.placeholder = "Paste Torn API Key to authenticate";
-                statusText.innerHTML = '<span style="color:var(--accent-amber, #f59e0b);">Unauthenticated</span>';
-                if (logoutBtn) logoutBtn.style.display = 'none';
+                return;
             }
-        } catch(e) {
-            if (keyInput) keyInput.placeholder = "•••••••••••••••• (Active Session — paste new key to switch)";
-            statusText.innerHTML = '<span style="color:var(--accent-emerald, #10b981);">Active Session</span>';
-            if (logoutBtn) logoutBtn.style.display = 'block';
         }
-    } else {
         if (keyInput) keyInput.placeholder = "Paste Torn API Key to authenticate";
-        statusText.innerHTML = '<span style="color:var(--text-tertiary, #64748b);">Not connected (Enter Key below)</span>';
+        if (statusText) {
+            statusText.innerHTML = '<span class="badge" style="background:rgba(239,68,68,0.15); color:#ef4444; border:1px solid rgba(239,68,68,0.35); padding:4px 8px; border-radius:4px; font-weight:700;">🔴 Authentication Error (Enter Key below)</span>';
+        }
+        if (logoutBtn) logoutBtn.style.display = 'none';
+    } catch(e) {
+        if (keyInput) keyInput.placeholder = "Paste Torn API Key to authenticate";
+        if (statusText) {
+            statusText.innerHTML = '<span class="badge" style="background:rgba(239,68,68,0.15); color:#ef4444; border:1px solid rgba(239,68,68,0.35); padding:4px 8px; border-radius:4px; font-weight:700;">🔴 Authentication Error</span>';
+        }
         if (logoutBtn) logoutBtn.style.display = 'none';
     }
 };
