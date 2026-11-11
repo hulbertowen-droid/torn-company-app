@@ -1372,7 +1372,7 @@
             </a>
             <a href="/payout.html" class="nav-link"><span class="nav-icon">💰</span> <span class="nav-text">War Payouts</span></a>
             <a href="/members.html" class="nav-link"><span class="nav-icon">👥</span> <span class="nav-text">Faction Roster</span></a>
-            <a href="/gym-stats.html" class="nav-link"><span class="nav-icon">🏋️</span> <span class="nav-text">Gym &amp; Stat Tracker</span></a>
+            <a href="#gym" onclick="switchOpsTab('gym')" class="nav-link" id="nav-link-gym"><span class="nav-icon">🏋️</span> <span class="nav-text">Gym &amp; Stat Tracker</span></a>
             <a href="/oc.html" class="nav-link"><span class="nav-icon">💼</span> <span class="nav-text">OC Manager</span></a>
 
             <div class="nav-section-title">Tactical Desk</div>
@@ -1518,6 +1518,9 @@
             </button>
             <button class="ops-tab-btn" id="tab-btn-sentinel" onclick="switchOpsTab('sentinel')">
                 <span>✈️</span> Flight &amp; War Sentinel
+            </button>
+            <button class="ops-tab-btn" id="tab-btn-gym" onclick="switchOpsTab('gym')">
+                <span>🏋️</span> Gym &amp; Stat Tracker
             </button>
         </div>
 
@@ -2349,52 +2352,8 @@
                 </div>
             </div>
 
-            <!-- CROSS-FACTION ARMORY & COMBAT LOADOUTS INTELLIGENCE -->
-            <div class="card span-full" style="margin-bottom:18px;">
-                <div class="card-header">
-                    <div class="card-title">🛡️ Cross-Faction Armory &amp; Combat Loadouts</div>
-                    <div style="font-size:0.8em;color:var(--text-tertiary);">Track member loadouts and faction armory gear utilization in combat</div>
-                </div>
-                <div class="card-body" style="padding:18px;">
-                    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:14px; margin-bottom:16px;">
-                        <div style="background:var(--bg-elevated); border:1px solid var(--border-subtle); border-radius:8px; padding:14px;">
-                            <div style="font-size:0.74em; color:var(--text-tertiary); text-transform:uppercase; font-weight:800;">🪖 Faction Gear in Combat</div>
-                            <div style="font-size:1.6em; font-weight:900; color:var(--accent-cobalt); margin-top:2px;" id="cf-gear-deployed">—</div>
-                            <div style="font-size:0.74em; color:var(--text-secondary);" id="cf-gear-deployed-sub">Loaned items held by combatants</div>
-                        </div>
-                        <div style="background:var(--bg-elevated); border:1px solid var(--border-subtle); border-radius:8px; padding:14px;">
-                            <div style="font-size:0.74em; color:var(--text-tertiary); text-transform:uppercase; font-weight:800;">⚡ Equipment Coverage</div>
-                            <div style="font-size:1.6em; font-weight:900; color:var(--accent-emerald); margin-top:2px;" id="cf-coverage-pct">—%</div>
-                            <div style="font-size:0.74em; color:var(--text-secondary);" id="cf-coverage-sub">War hitters carrying armory gear</div>
-                        </div>
-                        <div style="background:var(--bg-elevated); border:1px solid var(--border-subtle); border-radius:8px; padding:14px;">
-                            <div style="font-size:0.74em; color:var(--text-tertiary); text-transform:uppercase; font-weight:800;">🛡️ Combat Readiness</div>
-                            <div style="font-size:1.6em; font-weight:900; color:var(--accent-cyan); margin-top:2px;" id="cf-readiness-index">High</div>
-                            <div style="font-size:0.74em; color:var(--text-secondary);">Defensive armor &amp; weapon coverage</div>
-                        </div>
-                    </div>
-
-                    <div class="scrollable" style="max-height:280px; border:1px solid var(--border-default); border-radius:8px;">
-                        <table class="armory-table">
-                            <thead>
-                                <tr>
-                                    <th>Combatant</th>
-                                    <th>War Status</th>
-                                    <th>Weapon Loadout Status</th>
-                                    <th>Defensive Armor Assigned</th>
-                                    <th>Combat Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="cf-loadouts-tbody">
-                                <tr><td colspan="5" style="text-align:center; padding:20px; color:var(--text-tertiary);">Load a war above to audit cross-faction loadouts...</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-
-            <!-- 3. FACTION PLAYER STAT GAINS & GYM PROGRESSION TRACKER CARD -->
-            <div class="card" id="card-stat-gains-tracker" style="margin-top:20px;">
+            <!-- 2. FACTION PLAYER STAT GAINS & GYM PROGRESSION TRACKER CARD -->
+            <div class="card" id="card-stat-gains-tracker" style="margin-bottom:18px;">
                 <div class="card-header" style="flex-wrap:wrap; gap:12px; justify-content:space-between; align-items:center;">
                     <div>
                         <div class="card-title" style="color:var(--accent-cyan); display:flex; align-items:center; gap:8px;">
@@ -2417,7 +2376,7 @@
                             <option value="30d">⏱️ Last 30 Days</option>
                             <option value="all">⏱️ All Time Recorded</option>
                         </select>
-                        <button class="btn btn-sm btn-outline" id="btn-stat-snapshot" onclick="triggerStatSnapshot()" style="padding:6px 12px; font-size:0.78em; display:inline-flex; align-items:center; gap:5px;" title="Snapshot current stats for all connected faction members">
+                        <button class="btn btn-sm btn-outline btn-outline-amber" id="btn-stat-snapshot" onclick="triggerStatSnapshot()" style="padding:6px 12px; font-size:0.78em; display:inline-flex; align-items:center; gap:5px;" title="Snapshot current stats for all connected faction members">
                             <span>📸</span> Snapshot Now
                         </button>
                         <button class="refresh-btn" onclick="loadFactionStatGains(true)" id="btn-refresh-stat-gains" style="padding:6px 12px; font-size:0.8em;">↻ Refresh</button>
@@ -2508,6 +2467,191 @@
                             </tbody>
                         </table>
                     </div>
+                </div>
+            </div>
+
+            <!-- 3. CROSS-FACTION ARMORY & COMBAT LOADOUTS INTELLIGENCE -->
+            <div class="card span-full" style="margin-bottom:18px;">
+                <div class="card-header">
+                    <div class="card-title">🛡️ Cross-Faction Armory &amp; Combat Loadouts</div>
+                    <div style="font-size:0.8em;color:var(--text-tertiary);">Track member loadouts and faction armory gear utilization in combat</div>
+                </div>
+                <div class="card-body" style="padding:18px;">
+                    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:14px; margin-bottom:16px;">
+                        <div style="background:var(--bg-elevated); border:1px solid var(--border-subtle); border-radius:8px; padding:14px;">
+                            <div style="font-size:0.74em; color:var(--text-tertiary); text-transform:uppercase; font-weight:800;">🪖 Faction Gear in Combat</div>
+                            <div style="font-size:1.6em; font-weight:900; color:var(--accent-cobalt); margin-top:2px;" id="cf-gear-deployed">—</div>
+                            <div style="font-size:0.74em; color:var(--text-secondary);" id="cf-gear-deployed-sub">Loaned items held by combatants</div>
+                        </div>
+                        <div style="background:var(--bg-elevated); border:1px solid var(--border-subtle); border-radius:8px; padding:14px;">
+                            <div style="font-size:0.74em; color:var(--text-tertiary); text-transform:uppercase; font-weight:800;">⚡ Equipment Coverage</div>
+                            <div style="font-size:1.6em; font-weight:900; color:var(--accent-emerald); margin-top:2px;" id="cf-coverage-pct">—%</div>
+                            <div style="font-size:0.74em; color:var(--text-secondary);" id="cf-coverage-sub">War hitters carrying armory gear</div>
+                        </div>
+                        <div style="background:var(--bg-elevated); border:1px solid var(--border-subtle); border-radius:8px; padding:14px;">
+                            <div style="font-size:0.74em; color:var(--text-tertiary); text-transform:uppercase; font-weight:800;">🛡️ Combat Readiness</div>
+                            <div style="font-size:1.6em; font-weight:900; color:var(--accent-cyan); margin-top:2px;" id="cf-readiness-index">High</div>
+                            <div style="font-size:0.74em; color:var(--text-secondary);">Defensive armor &amp; weapon coverage</div>
+                        </div>
+                    </div>
+
+                    <div class="scrollable" style="max-height:280px; border:1px solid var(--border-default); border-radius:8px;">
+                        <table class="armory-table">
+                            <thead>
+                                <tr>
+                                    <th>Combatant</th>
+                                    <th>War Status</th>
+                                    <th>Weapon Loadout Status</th>
+                                    <th>Defensive Armor Assigned</th>
+                                    <th>Combat Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="cf-loadouts-tbody">
+                                <tr><td colspan="5" style="text-align:center; padding:20px; color:var(--text-tertiary);">Load a war above to audit cross-faction loadouts...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- TAB 4: GYM & BATTLE STAT TRACKER          -->
+        <!-- ========================================== -->
+        <div class="tab-pane" id="pane-gym">
+            <!-- EXECUTIVE GYM HERO CARD -->
+            <div class="card span-full" style="margin-bottom:18px; background:linear-gradient(135deg, rgba(18, 24, 36, 0.98) 0%, rgba(12, 16, 23, 0.98) 50%, rgba(18, 24, 36, 0.95) 100%); border:1px solid var(--border-default); border-radius:12px; padding:20px 24px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
+                    <div>
+                        <div style="display:flex; align-items:center; gap:10px;">
+                            <h2 style="margin:0; font-size:1.45em; font-weight:900; color:#fff; display:flex; align-items:center; gap:8px;">
+                                <span>🏋️ Faction Gym &amp; Battle Stat Command</span>
+                            </h2>
+                            <span class="badge" style="background:rgba(245,158,11,0.15); color:var(--accent-amber); border:1px solid rgba(245,158,11,0.35); font-weight:700;">Torn v1 &amp; v2 Engine</span>
+                        </div>
+                        <div style="font-size:0.82em; color:var(--text-secondary); margin-top:4px; max-width:680px;">
+                            Live battle stat velocity, Xanax compliance, energy utilization, and faction slacker detection across customizable training windows.
+                        </div>
+                    </div>
+                    <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                        <a href="/gym-stats.html" class="btn btn-sm btn-primary" style="background:var(--accent-amber); border-color:var(--accent-amber); color:#000; font-weight:800; text-decoration:none;">
+                            <span>🏋️</span> Launch Full Gym Desk →
+                        </a>
+                        <button class="btn btn-sm btn-outline btn-outline-amber" onclick="triggerStatSnapshot()" id="btn-gym-tab-snapshot">
+                            <span>📸</span> Snapshot Now
+                        </button>
+                        <button class="refresh-btn" onclick="loadGymTabDashboard(true); loadFactionStatGains(true);" id="btn-refresh-gym-tab">
+                            ↻ Refresh
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SLACKER WARNING ALERT BANNER -->
+            <div class="slacker-strip" id="tab-gym-slacker-banner" style="display:none; background:rgba(239,68,68,0.06); border:1px solid rgba(239,68,68,0.25); border-radius:10px; padding:12px 18px; margin-bottom:18px; align-items:center; justify-content:space-between; gap:14px; font-size:0.84em;">
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <span style="font-size:1.4em;">🚨</span>
+                    <div>
+                        <strong style="color:var(--status-danger, #ef4444);">Slacker &amp; Energy Waste Alert:</strong>
+                        <span id="tab-gym-slacker-text">Members flagged for zero gains or energy waste.</span>
+                    </div>
+                </div>
+                <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                    <a href="/gym-stats.html#roster" class="btn btn-xs btn-outline" style="border-color:rgba(239,68,68,0.5); color:#fca5a5; font-weight:700; text-decoration:none;">
+                        Filter Slackers →
+                    </a>
+                </div>
+            </div>
+
+            <!-- STEADFAST PERKS RIBBON -->
+            <div class="steadfast-strip" style="background:var(--bg-surface); border:1px solid var(--border-default); border-radius:10px; padding:10px 18px; margin-bottom:18px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <span style="font-size:1.1em;">🏛️</span>
+                    <span style="font-size:0.8em; font-weight:700; color:var(--text-tertiary); text-transform:uppercase;">Steadfast Perks:</span>
+                </div>
+                <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                    <span class="badge" style="background:rgba(239,68,68,0.1); color:#fca5a5; border:1px solid rgba(239,68,68,0.28);" id="tab-gym-perk-str">💪 Strength: +7%</span>
+                    <span class="badge" style="background:rgba(59,130,246,0.1); color:#93c5fd; border:1px solid rgba(59,130,246,0.28);" id="tab-gym-perk-spd">⚡ Speed: +4%</span>
+                    <span class="badge" style="background:rgba(16,185,129,0.1); color:#6ee7b7; border:1px solid rgba(16,185,129,0.28);" id="tab-gym-perk-def">🛡️ Defense: +7%</span>
+                    <span class="badge" style="background:rgba(168,85,247,0.1); color:#d8b4fe; border:1px solid rgba(168,85,247,0.28);" id="tab-gym-perk-dex">🎯 Dexterity: +3%</span>
+                </div>
+                <div style="font-size:0.75em; color:var(--text-tertiary);">
+                    Daily Snapshot: Torn Midnight (00:00 TCT)
+                </div>
+            </div>
+
+            <!-- 4-CARD HIGH IMPACT KPI RIBBON -->
+            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:12px; margin-bottom:20px;">
+                <div class="card" style="padding:16px; background:var(--bg-surface); border:1px solid var(--border-default);">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <span style="font-size:0.72em; text-transform:uppercase; font-weight:700; color:var(--text-tertiary);">Total Faction Stats (TBS)</span>
+                        <span>⚡</span>
+                    </div>
+                    <div class="font-mono" style="font-size:1.65em; font-weight:900; color:var(--accent-amber); margin-top:4px;" id="tab-gym-kpi-tbs">—</div>
+                    <div style="font-size:0.72em; color:var(--text-tertiary); margin-top:2px;">Verified Battle Stats</div>
+                </div>
+                <div class="card" style="padding:16px; background:var(--bg-surface); border:1px solid var(--border-default);">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <span style="font-size:0.72em; text-transform:uppercase; font-weight:700; color:var(--text-tertiary);">Net Gains (24h)</span>
+                        <span>📈</span>
+                    </div>
+                    <div class="font-mono" style="font-size:1.65em; font-weight:900; color:var(--accent-emerald); margin-top:4px;" id="tab-gym-kpi-gains">+0</div>
+                    <div style="font-size:0.72em; color:var(--text-tertiary); margin-top:2px;">24h training delta</div>
+                </div>
+                <div class="card" style="padding:16px; background:var(--bg-surface); border:1px solid var(--border-default);">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <span style="font-size:0.72em; text-transform:uppercase; font-weight:700; color:var(--text-tertiary);">Active Trainers Today</span>
+                        <span>🏃</span>
+                    </div>
+                    <div class="font-mono" style="font-size:1.65em; font-weight:900; color:#0EA5E9; margin-top:4px;" id="tab-gym-kpi-active">0%</div>
+                    <div style="font-size:0.72em; color:var(--text-tertiary); margin-top:2px;">Daily active training %</div>
+                </div>
+                <div class="card" style="padding:16px; background:var(--bg-surface); border:1px solid var(--border-default);">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <span style="font-size:0.72em; text-transform:uppercase; font-weight:700; color:var(--text-tertiary);">Average Xanax / Day</span>
+                        <span>💊</span>
+                    </div>
+                    <div class="font-mono" style="font-size:1.65em; font-weight:900; color:#8B5CF6; margin-top:4px;" id="tab-gym-kpi-xanax">—</div>
+                    <div style="font-size:0.72em; color:var(--text-tertiary); margin-top:2px;">Target: 2 to 3 pills daily</div>
+                </div>
+            </div>
+
+            <!-- EMBEDDED GYM TAB STAT GAINS VIEW -->
+            <div class="card span-full" style="background:var(--bg-surface); border:1px solid var(--border-default); border-radius:10px; padding:18px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:14px;">
+                    <div>
+                        <div style="font-size:1.05em; font-weight:800; color:var(--text-primary); display:flex; align-items:center; gap:8px;">
+                            <span>👥 Member Battle Stats &amp; Gains Grid</span>
+                        </div>
+                        <div style="font-size:0.76em; color:var(--text-tertiary); margin-top:2px;">
+                            Inspect exact stat deltas, drug intake, and energy progress across all tracked members.
+                        </div>
+                    </div>
+                    <div style="display:flex; gap:10px; align-items:center;">
+                        <a href="/gym-stats.html#roster" class="btn btn-sm btn-outline" style="text-decoration:none;">
+                            <span>🔍</span> Open Full Roster &amp; Filters →
+                        </a>
+                    </div>
+                </div>
+                <div class="scrollable" style="max-height:500px; border:1px solid var(--border-default); border-radius:8px;">
+                    <table class="armory-table" id="gym-tab-table">
+                        <thead>
+                            <tr>
+                                <th>Member</th>
+                                <th>Total Stats</th>
+                                <th>7d Net Gain (Δ)</th>
+                                <th>Strength</th>
+                                <th>Defense</th>
+                                <th>Speed</th>
+                                <th>Dexterity</th>
+                                <th>Drug Momentum</th>
+                                <th style="text-align:center;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="gym-tab-tbody">
+                            <tr><td colspan="9" style="text-align:center; padding:24px; color:var(--text-tertiary);">Switching to Gym &amp; Stat Tracker...</td></tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>
@@ -2692,7 +2836,8 @@ function switchOpsTab(tabId) {
     const crumbMap = {
         'overview': 'OVERVIEW',
         'armory': 'ARMORY & LOGISTICS',
-        'sentinel': 'FLIGHT & WAR SENTINEL'
+        'sentinel': 'FLIGHT & WAR SENTINEL',
+        'gym': 'GYM & BATTLE STAT TRACKER'
     };
     const crumbEl = document.getElementById('crumb-active-sub');
     if (crumbEl) crumbEl.textContent = crumbMap[tabId] || 'OVERVIEW';
@@ -2700,8 +2845,10 @@ function switchOpsTab(tabId) {
     // Sidebar active link highlights
     const navArmory = document.getElementById('nav-link-armory');
     const navSentinel = document.getElementById('nav-link-sentinel');
+    const navGym = document.getElementById('nav-link-gym');
     if (navArmory) navArmory.classList.toggle('active', tabId === 'armory');
     if (navSentinel) navSentinel.classList.toggle('active', tabId === 'sentinel');
+    if (navGym) navGym.classList.toggle('active', tabId === 'gym');
 
     if (tabId === 'sentinel') {
         initSentinel();
@@ -2710,20 +2857,26 @@ function switchOpsTab(tabId) {
     if (tabId === 'armory') {
         if (typeof initTrackerDates === 'function') initTrackerDates();
     }
+    if (tabId === 'gym') {
+        if (typeof loadGymTabDashboard === 'function') loadGymTabDashboard();
+        if (typeof loadFactionStatGains === 'function') loadFactionStatGains();
+    }
 }
 
 function handleInitialHash() {
     const hash = window.location.hash.replace('#', '').toLowerCase();
-    if (hash === 'armory' || hash === 'sentinel' || hash === 'war-audit') {
-        switchOpsTab(hash === 'war-audit' ? 'sentinel' : hash);
+    if (hash === 'armory' || hash === 'sentinel' || hash === 'war-audit' || hash === 'gym' || hash === 'gym-stats') {
+        if (hash === 'war-audit') switchOpsTab('sentinel');
+        else if (hash === 'gym' || hash === 'gym-stats') switchOpsTab('gym');
+        else switchOpsTab(hash);
     } else {
         switchOpsTab('overview');
     }
 }
 window.addEventListener('hashchange', () => {
     const hash = window.location.hash.replace('#', '').toLowerCase();
-    if (hash && (hash === 'overview' || hash === 'armory' || hash === 'sentinel')) {
-        switchOpsTab(hash);
+    if (hash && (hash === 'overview' || hash === 'armory' || hash === 'sentinel' || hash === 'gym' || hash === 'gym-stats')) {
+        switchOpsTab(hash === 'gym-stats' ? 'gym' : hash);
     }
 });
 
@@ -5287,6 +5440,114 @@ function renderStatGainsTracker() {
             </td>
         </tr>`;
     }).join('');
+
+    // Also populate Gym Tab table if open
+    renderGymTabTable(members);
+}
+
+function renderGymTabTable(membersList) {
+    const tbody = document.getElementById('gym-tab-tbody');
+    if (!tbody) return;
+    const list = membersList || (currentStatGainsData && currentStatGainsData.members) || [];
+    if (list.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; padding:24px; color:var(--text-tertiary);">No player battle stat records loaded.</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = list.map(m => {
+        const stats = m.stats || {};
+        const gains = m.gains || {};
+        const tbsVal = m.privacyTier === 'none' ? '******' : fmtNum(stats.total || 0);
+        const g7d = gains.total || 0;
+        const gClass = g7d > 0 ? 'text-green' : 'text-dim';
+        const gStr = g7d > 0 ? `+${fmtNum(g7d)}` : '0';
+        const strVal = m.privacyTier === 'none' ? '***' : fmtNum(stats.strength || 0);
+        const defVal = m.privacyTier === 'none' ? '***' : fmtNum(stats.defense || 0);
+        const spdVal = m.privacyTier === 'none' ? '***' : fmtNum(stats.speed || 0);
+        const dexVal = m.privacyTier === 'none' ? '***' : fmtNum(stats.dexterity || 0);
+
+        return `
+            <tr>
+                <td>
+                    <div style="font-weight:700;">
+                        <a href="https://www.torn.com/profiles.php?XID=${m.playerId}" target="_blank" style="color:var(--text-primary); text-decoration:none;">
+                            ${escapeHtml(m.playerName)}
+                        </a>
+                        <span style="font-size:0.8em; color:var(--text-tertiary); font-family:var(--font-mono);">[${m.playerId}]</span>
+                    </div>
+                    <div style="font-size:0.74em; color:var(--text-tertiary);">${escapeHtml(m.specialty || 'Balanced')}</div>
+                </td>
+                <td style="font-family:var(--font-mono); font-weight:700; color:var(--accent-amber);">${tbsVal}</td>
+                <td style="font-family:var(--font-mono); font-weight:700;" class="${gClass}">${gStr}</td>
+                <td style="font-family:var(--font-mono); color:#fca5a5;">${strVal}</td>
+                <td style="font-family:var(--font-mono); color:#6ee7b7;">${defVal}</td>
+                <td style="font-family:var(--font-mono); color:#93c5fd;">${spdVal}</td>
+                <td style="font-family:var(--font-mono); color:#d8b4fe;">${dexVal}</td>
+                <td style="font-size:0.82em;">${fmtNum(m.momentum?.xanax || 0)} 💊 • ${fmtNum(m.momentum?.refills || 0)} ⚡</td>
+                <td style="text-align:center;">
+                    <button class="btn btn-xs btn-outline" onclick="openPlayerStatModal('${m.playerId}')" style="font-size:0.74em; padding:3px 8px;">
+                        Log
+                    </button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+async function loadGymTabDashboard(force = false) {
+    const tbody = document.getElementById('gym-tab-tbody');
+    const refreshBtn = document.getElementById('btn-refresh-gym-tab');
+    if (refreshBtn) refreshBtn.classList.add('spinning');
+
+    try {
+        const myKey = typeof getApiKey === 'function' ? getApiKey() : (localStorage.getItem('warboard_apikey') || '');
+        const res = await fetch('/api/gym-tracker/dashboard' + (force ? '?force=true' : ''), {
+            headers: { 'x-api-key': myKey }
+        });
+        const data = await res.json();
+        if (data && data.success) {
+            const k = data.kpis || {};
+            const elTbs = document.getElementById('tab-gym-kpi-tbs');
+            const elGains = document.getElementById('tab-gym-kpi-gains');
+            const elActive = document.getElementById('tab-gym-kpi-active');
+            const elXanax = document.getElementById('tab-gym-kpi-xanax');
+            if (elTbs) elTbs.textContent = fmtNum(k.totalBattleStats || 0);
+            if (elGains) elGains.textContent = `+${fmtNum(k.totalGains24h || 0)}`;
+            if (elActive) elActive.textContent = `${k.activeTrainersPct || 0}%`;
+            if (elXanax) elXanax.textContent = `${k.avgXanaxPerDay || 0} / 3.0`;
+
+            const st = data.steadfast || {};
+            const pStr = document.getElementById('tab-gym-perk-str');
+            const pSpd = document.getElementById('tab-gym-perk-spd');
+            const pDef = document.getElementById('tab-gym-perk-def');
+            const pDex = document.getElementById('tab-gym-perk-dex');
+            if (pStr) pStr.textContent = `💪 Strength: +${st.strength || 0}%`;
+            if (pSpd) pSpd.textContent = `⚡ Speed: +${st.speed || 0}%`;
+            if (pDef) pDef.textContent = `🛡️ Defense: +${st.defense || 0}%`;
+            if (pDex) pDex.textContent = `🎯 Dexterity: +${st.dexterity || 0}%`;
+
+            const banner = document.getElementById('tab-gym-slacker-banner');
+            const bannerTxt = document.getElementById('tab-gym-slacker-text');
+            if (banner && bannerTxt) {
+                if (k.slackerCount > 0) {
+                    banner.style.display = 'flex';
+                    bannerTxt.innerHTML = `<strong>${k.slackerCount} members</strong> flagged for zero gains or energy waste (${k.activeTrainersToday} active • ${k.slackerCount} slacking • ${k.exemptCount || 0} exempt = ${k.totalMembersCount} total)`;
+                } else {
+                    banner.style.display = 'none';
+                }
+            }
+        }
+
+        if (!currentStatGainsData || force) {
+            await loadFactionStatGains(force);
+        } else {
+            renderGymTabTable();
+        }
+    } catch(err) {
+        console.error('Failed to load gym tab data:', err);
+    } finally {
+        if (refreshBtn) refreshBtn.classList.remove('spinning');
+    }
 }
 
 async function openPlayerStatModal(playerId) {
