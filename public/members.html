@@ -642,6 +642,7 @@
             <span class="sort-label">Sort by:</span>
             <select class="sort-select" id="sort-select" onchange="onSortChange()">
                 <option value="status">Status</option>
+                <option value="stats">Battle Stats (Highest first)</option>
                 <option value="inactivity">Longest Inactive</option>
                 <option value="lastAction">Most Recently Active</option>
                 <option value="level">Level</option>
@@ -1032,6 +1033,11 @@ function renderMembers() {
             const diff = stateOrder(getState(a)) - stateOrder(getState(b));
             return (sortAsc ? diff : -diff);
         }
+        if (sortKey === 'stats') {
+            const sa = typeof a.estStats === 'number' ? a.estStats : 0;
+            const sb = typeof b.estStats === 'number' ? b.estStats : 0;
+            return dir * (sb - sa);
+        }
         if (sortKey === 'inactivity') {
             return dir * ((b.lastActionTimestamp || 0) - (a.lastActionTimestamp || 0));
         }
@@ -1116,10 +1122,34 @@ function renderCard(m) {
         }
     }
 
-    // --- Est stats ---
+    // --- Battle stats: Confirmed vs Estimated ---
+    const isConfirmed = Boolean(
+        m.isConfirmed ||
+        (m.hasApiKey && typeof m.estStats === 'number' && m.estStats > 0) ||
+        (!m.isEstimated && m.statSource !== 'level_estimate' && m.statSource !== 'scouted' && typeof m.estStats === 'number' && m.estStats > 0)
+    );
     const statStr = typeof m.estStats === 'number'
         ? m.estStats.toLocaleString()
         : (m.estStats || '—');
+    const statLabel = isConfirmed ? '🟢 Confirmed Stats' : '⚠️ Est. Battle Stats';
+    const statBadge = isConfirmed
+        ? `<span class="badge" style="background:rgba(16,185,129,0.14); color:#6ee7b7; border:1px solid rgba(16,185,129,0.3); font-size:0.68em; padding:1px 6px; border-radius:4px; font-weight:700;" title="Confirmed via Torn API Key / Discord bot">API Confirmed</span>`
+        : `<span class="badge" style="background:rgba(245,158,11,0.12); color:#fbbf24; border:1px solid rgba(245,158,11,0.3); font-size:0.68em; padding:1px 6px; border-radius:4px; font-weight:700;" title="Estimated stats (No API key on file)">Estimated</span>`;
+    const statValColor = isConfirmed ? 'var(--accent-emerald, #10b981)' : 'var(--text-secondary, #94a3b8)';
+    const displayStatVal = isConfirmed ? statStr : (typeof m.estStats === 'number' ? `~${statStr}` : statStr);
+
+    let statBreakdownHtml = '';
+    if (isConfirmed && m.statsBreakdown && (m.statsBreakdown.strength > 0 || m.statsBreakdown.defense > 0)) {
+        const b = m.statsBreakdown;
+        statBreakdownHtml = `
+            <div style="display:flex; justify-content:space-between; font-size:0.75em; color:var(--text-tertiary); margin-top:6px; padding-top:5px; border-top:1px dashed rgba(255,255,255,0.08); font-family:var(--font-mono);">
+                <span title="Strength"><strong style="color:var(--stat-str,#f87171);">Str:</strong> ${Number(b.strength||0).toLocaleString()}</span>
+                <span title="Speed"><strong style="color:var(--stat-spd,#60a5fa);">Spd:</strong> ${Number(b.speed||0).toLocaleString()}</span>
+                <span title="Defense"><strong style="color:var(--stat-def,#34d399);">Def:</strong> ${Number(b.defense||0).toLocaleString()}</span>
+                <span title="Dexterity"><strong style="color:var(--stat-dex,#fbbf24);">Dex:</strong> ${Number(b.dexterity||0).toLocaleString()}</span>
+            </div>
+        `;
+    }
 
     // --- Last action & Inactive badge with proper spacing ---
     const lastStr = formatLastAction(m.lastActionTimestamp) || m.lastActionRelative || '—';
@@ -1166,6 +1196,7 @@ function renderCard(m) {
             <div class="mc-identity">
                 <div class="mc-name-row">
                     <div class="mc-name"><a href="https://www.torn.com/profiles.php?XID=${m.id}" target="_blank">${m.name || '?'}</a></div>
+                    ${isConfirmed ? `<span class="lvl-badge" style="background:rgba(16,185,129,0.14); color:#6ee7b7; border:1px solid rgba(16,185,129,0.3);" title="API Key Verified">🔑</span>` : ''}
                     ${m.level ? `<span class="lvl-badge">Lv ${m.level}</span>` : ''}
                     ${isInactive1d ? `<span class="inactive-badge">💤 1d+</span>` : ''}
                 </div>
@@ -1178,11 +1209,15 @@ function renderCard(m) {
         </div>
         ${timerHtml}
         <div class="mc-body">
-            <div class="info-item">
-                <div class="info-lbl">Est. Battle Stats</div>
-                <div class="info-val" style="color:var(--accent-cobalt)">${statStr}</div>
+            <div class="info-item" style="grid-column:1/-1;">
+                <div class="info-lbl" style="display:flex; align-items:center; justify-content:space-between; gap:6px;">
+                    <span>${statLabel}</span>
+                    ${statBadge}
+                </div>
+                <div class="info-val" style="color:${statValColor}; font-weight:800; font-size:1.15em;">${displayStatVal}</div>
+                ${statBreakdownHtml}
             </div>
-            <div class="info-item">
+            <div class="info-item" style="grid-column:1/-1;">
                 <div class="info-lbl">Last Action</div>
                 <div class="info-val">${lastStr}</div>
             </div>
@@ -1248,19 +1283,37 @@ function renderTable(members) {
             }
         }
 
+        const isConfirmed = Boolean(
+            m.isConfirmed ||
+            (m.hasApiKey && typeof m.estStats === 'number' && m.estStats > 0) ||
+            (!m.isEstimated && m.statSource !== 'level_estimate' && m.statSource !== 'scouted' && typeof m.estStats === 'number' && m.estStats > 0)
+        );
         const statStr = typeof m.estStats === 'number' ? m.estStats.toLocaleString() : (m.estStats || '—');
+        const statCellHtml = isConfirmed
+            ? `<div style="display:flex; align-items:center; gap:6px;">
+                <span style="color:var(--accent-emerald, #10b981); font-weight:800; font-family:var(--font-mono);">${statStr}</span>
+                <span title="Confirmed via Torn API key / Discord bot" style="font-size:0.7em; background:rgba(16,185,129,0.14); color:#6ee7b7; border:1px solid rgba(16,185,129,0.3); padding:1px 5px; border-radius:4px; font-weight:700;">🟢 Confirmed</span>
+               </div>`
+            : `<div style="display:flex; align-items:center; gap:6px;">
+                <span style="color:var(--text-secondary); font-weight:600; font-family:var(--font-mono); opacity:0.85;">${typeof m.estStats === 'number' ? '~' : ''}${statStr}</span>
+                <span title="Estimated from level / scouter (No API key on file)" style="font-size:0.7em; background:rgba(245,158,11,0.12); color:#fbbf24; border:1px solid rgba(245,158,11,0.3); padding:1px 5px; border-radius:4px; font-weight:700;">⚠️ Est</span>
+               </div>`;
+
         const last = formatLastAction(m.lastActionTimestamp) || m.lastActionRelative || '—';
         const isInactive1d = (m.lastActionTimestamp && (now - m.lastActionTimestamp) >= 86400);
 
         return `<tr>
             <td class="col-sticky-name">
-                <a class="tlink" href="https://www.torn.com/profiles.php?XID=${m.id}" target="_blank" style="font-weight:700;color:var(--text-primary);text-decoration:none;">${m.name}</a>
+                <div style="display:flex; align-items:center; gap:5px;">
+                    <a class="tlink" href="https://www.torn.com/profiles.php?XID=${m.id}" target="_blank" style="font-weight:700;color:var(--text-primary);text-decoration:none;">${m.name}</a>
+                    ${isConfirmed ? `<span title="API Key Verified" style="font-size:0.75em; color:var(--accent-emerald);">🔑</span>` : ''}
+                </div>
             </td>
             <td style="color:var(--accent-amber);font-weight:700;font-family:var(--font-mono);">${m.level || '?'}</td>
             <td><span class="sb ${sbCls}">${stLabel}</span></td>
             <td>${timerHtml}</td>
             <td style="color:var(--text-secondary);font-size:0.88em;">${m.position || 'Member'}</td>
-            <td style="color:var(--accent-cobalt);font-weight:700;font-family:var(--font-mono);">${statStr}</td>
+            <td>${statCellHtml}</td>
             <td style="color:var(--accent-cobalt);font-weight:700;font-family:var(--font-mono);">${hitsCount}</td>
             <td style="color:var(--accent-emerald);font-weight:700;font-family:var(--font-mono);">+${scoreVal.toLocaleString()}</td>
             <td style="color:var(--accent-amber);font-weight:700;font-family:var(--font-mono);">${chainCount}</td>
@@ -1286,7 +1339,7 @@ function renderTable(members) {
                     <th class="${sortKey === 'status' ? 'active-sort' : ''}" onclick="handleTableSort('status')">Status${getSortArrow('status')}</th>
                     <th>Location / ETA</th>
                     <th>Position</th>
-                    <th>Est. Stats</th>
+                    <th class="${sortKey === 'stats' ? 'active-sort' : ''}" onclick="handleTableSort('stats')">Battle Stats (Confirmed / Est.)${getSortArrow('stats')}</th>
                     <th class="${sortKey === 'attacks' ? 'active-sort' : ''}" onclick="handleTableSort('attacks')">Attacks (All)${getSortArrow('attacks')}</th>
                     <th class="${sortKey === 'score' ? 'active-sort' : ''}" onclick="handleTableSort('score')">Respect${getSortArrow('score')}</th>
                     <th class="${sortKey === 'chain' ? 'active-sort' : ''}" onclick="handleTableSort('chain')">Chain${getSortArrow('chain')}</th>

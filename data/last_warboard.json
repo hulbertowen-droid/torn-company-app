@@ -16,7 +16,7 @@
       "needsFfScouterForFlights": false,
       "claimedBy": null,
       "needsBackup": null,
-      "estStats": "🔒 Requires FF Scouter",
+      "estStats": 113724,
       "intelScore": null,
       "isManual": false,
       "attacks": 0,
@@ -31,7 +31,18 @@
       "warHitsTaken": 0,
       "outsideHitsTaken": 0,
       "score": 0,
-      "timeline": null
+      "timeline": null,
+      "isConfirmed": true,
+      "isEstimated": false,
+      "hasApiKey": true,
+      "statSource": "api_key",
+      "statsBreakdown": {
+        "strength": 26511,
+        "defense": 37554,
+        "speed": 25104,
+        "dexterity": 24555,
+        "total": 113724
+      }
     },
     {
       "id": "2540508",
@@ -49,7 +60,7 @@
       "needsFfScouterForFlights": false,
       "claimedBy": null,
       "needsBackup": null,
-      "estStats": "🔒 Requires FF Scouter",
+      "estStats": 294747,
       "intelScore": null,
       "isManual": false,
       "attacks": 0,
@@ -64,7 +75,18 @@
       "warHitsTaken": 0,
       "outsideHitsTaken": 0,
       "score": 0,
-      "timeline": null
+      "timeline": null,
+      "isConfirmed": true,
+      "isEstimated": false,
+      "hasApiKey": true,
+      "statSource": "api_key",
+      "statsBreakdown": {
+        "strength": 100285,
+        "defense": 19344,
+        "speed": 146064,
+        "dexterity": 29054,
+        "total": 294747
+      }
     },
     {
       "id": "2597068",
@@ -82,7 +104,7 @@
       "needsFfScouterForFlights": false,
       "claimedBy": null,
       "needsBackup": null,
-      "estStats": "🔒 Requires FF Scouter",
+      "estStats": 25289916,
       "intelScore": null,
       "isManual": false,
       "attacks": 0,
@@ -97,7 +119,18 @@
       "warHitsTaken": 0,
       "outsideHitsTaken": 0,
       "score": 0,
-      "timeline": null
+      "timeline": null,
+      "isConfirmed": true,
+      "isEstimated": false,
+      "hasApiKey": true,
+      "statSource": "api_key",
+      "statsBreakdown": {
+        "strength": 7028718,
+        "defense": 5212541,
+        "speed": 6013659,
+        "dexterity": 7034998,
+        "total": 25289916
+      }
     },
     {
       "id": "2908576",
@@ -130,7 +163,11 @@
       "warHitsTaken": 0,
       "outsideHitsTaken": 0,
       "score": 0,
-      "timeline": null
+      "timeline": null,
+      "isConfirmed": true,
+      "isEstimated": false,
+      "hasApiKey": true,
+      "statSource": "level_estimate"
     },
     {
       "id": "2972943",
@@ -163,7 +200,11 @@
       "warHitsTaken": 0,
       "outsideHitsTaken": 0,
       "score": 0,
-      "timeline": null
+      "timeline": null,
+      "isConfirmed": false,
+      "isEstimated": true,
+      "hasApiKey": false,
+      "statSource": "level_estimate"
     },
     {
       "id": "3490493",
@@ -181,7 +222,7 @@
       "needsFfScouterForFlights": false,
       "claimedBy": null,
       "needsBackup": null,
-      "estStats": "🔒 Requires FF Scouter",
+      "estStats": 25877834,
       "intelScore": null,
       "isManual": false,
       "attacks": 0,
@@ -196,7 +237,18 @@
       "warHitsTaken": 0,
       "outsideHitsTaken": 0,
       "score": 0,
-      "timeline": null
+      "timeline": null,
+      "isConfirmed": true,
+      "isEstimated": false,
+      "hasApiKey": true,
+      "statSource": "api_key",
+      "statsBreakdown": {
+        "strength": 10087344,
+        "defense": 1011683,
+        "speed": 5137029,
+        "dexterity": 9641778,
+        "total": 25877834
+      }
     },
     {
       "id": "3630198",
@@ -229,7 +281,11 @@
       "warHitsTaken": 0,
       "outsideHitsTaken": 0,
       "score": 0,
-      "timeline": null
+      "timeline": null,
+      "isConfirmed": false,
+      "isEstimated": true,
+      "hasApiKey": false,
+      "statSource": "level_estimate"
     },
     {
       "id": "3712805",
@@ -262,7 +318,11 @@
       "warHitsTaken": 0,
       "outsideHitsTaken": 0,
       "score": 0,
-      "timeline": null
+      "timeline": null,
+      "isConfirmed": true,
+      "isEstimated": false,
+      "hasApiKey": true,
+      "statSource": "level_estimate"
     },
     {
       "id": "3776908",
@@ -280,7 +340,7 @@
       "needsFfScouterForFlights": false,
       "claimedBy": null,
       "needsBackup": null,
-      "estStats": "🔒 Requires FF Scouter",
+      "estStats": 880150,
       "intelScore": null,
       "isManual": false,
       "attacks": 0,
@@ -295,7 +355,18 @@
       "warHitsTaken": 0,
       "outsideHitsTaken": 0,
       "score": 0,
-      "timeline": null
+      "timeline": null,
+      "isConfirmed": true,
+      "isEstimated": false,
+      "hasApiKey": true,
+      "statSource": "api_key",
+      "statsBreakdown": {
+        "strength": 175432,
+        "defense": 208125,
+        "speed": 201589,
+        "dexterity": 295004,
+        "total": 880150
+      }
     },
     {
       "id": "4074607",
@@ -313,7 +384,7 @@
       "needsFfScouterForFlights": false,
       "claimedBy": null,
       "needsBackup": null,
-      "estStats": "🔒 Requires FF Scouter",
+      "estStats": 225939,
       "intelScore": null,
       "isManual": false,
       "attacks": 0,
@@ -328,7 +399,18 @@
       "warHitsTaken": 0,
       "outsideHitsTaken": 0,
       "score": 0,
-      "timeline": null
+      "timeline": null,
+      "isConfirmed": true,
+      "isEstimated": false,
+      "hasApiKey": true,
+      "statSource": "api_key",
+      "statsBreakdown": {
+        "strength": 43996,
+        "defense": 68356,
+        "speed": 67113,
+        "dexterity": 46474,
+        "total": 225939
+      }
     },
     {
       "id": "4088688",
@@ -346,7 +428,7 @@
       "needsFfScouterForFlights": false,
       "claimedBy": null,
       "needsBackup": null,
-      "estStats": "🔒 Requires FF Scouter",
+      "estStats": 640498,
       "intelScore": null,
       "isManual": false,
       "attacks": 0,
@@ -361,7 +443,18 @@
       "warHitsTaken": 0,
       "outsideHitsTaken": 0,
       "score": 0,
-      "timeline": null
+      "timeline": null,
+      "isConfirmed": true,
+      "isEstimated": false,
+      "hasApiKey": true,
+      "statSource": "api_key",
+      "statsBreakdown": {
+        "strength": 167633,
+        "defense": 149332,
+        "speed": 173228,
+        "dexterity": 150305,
+        "total": 640498
+      }
     },
     {
       "id": "4208316",
@@ -379,7 +472,7 @@
       "needsFfScouterForFlights": false,
       "claimedBy": null,
       "needsBackup": null,
-      "estStats": "🔒 Requires FF Scouter",
+      "estStats": 661652,
       "intelScore": null,
       "isManual": false,
       "attacks": 0,
@@ -394,7 +487,18 @@
       "warHitsTaken": 0,
       "outsideHitsTaken": 0,
       "score": 0,
-      "timeline": null
+      "timeline": null,
+      "isConfirmed": true,
+      "isEstimated": false,
+      "hasApiKey": true,
+      "statSource": "api_key",
+      "statsBreakdown": {
+        "strength": 174246,
+        "defense": 154258,
+        "speed": 182747,
+        "dexterity": 150401,
+        "total": 661652
+      }
     },
     {
       "id": "4211617",
@@ -427,7 +531,11 @@
       "warHitsTaken": 0,
       "outsideHitsTaken": 0,
       "score": 0,
-      "timeline": null
+      "timeline": null,
+      "isConfirmed": false,
+      "isEstimated": true,
+      "hasApiKey": false,
+      "statSource": "level_estimate"
     },
     {
       "id": "4212278",
@@ -460,7 +568,11 @@
       "warHitsTaken": 0,
       "outsideHitsTaken": 0,
       "score": 0,
-      "timeline": null
+      "timeline": null,
+      "isConfirmed": true,
+      "isEstimated": false,
+      "hasApiKey": true,
+      "statSource": "level_estimate"
     },
     {
       "id": "4218227",
@@ -493,7 +605,11 @@
       "warHitsTaken": 0,
       "outsideHitsTaken": 0,
       "score": 0,
-      "timeline": null
+      "timeline": null,
+      "isConfirmed": true,
+      "isEstimated": false,
+      "hasApiKey": true,
+      "statSource": "level_estimate"
     },
     {
       "id": "4288192",
@@ -511,7 +627,7 @@
       "needsFfScouterForFlights": false,
       "claimedBy": null,
       "needsBackup": null,
-      "estStats": "🔒 Requires FF Scouter",
+      "estStats": 317469,
       "intelScore": null,
       "isManual": false,
       "attacks": 0,
@@ -526,7 +642,18 @@
       "warHitsTaken": 0,
       "outsideHitsTaken": 0,
       "score": 0,
-      "timeline": null
+      "timeline": null,
+      "isConfirmed": true,
+      "isEstimated": false,
+      "hasApiKey": true,
+      "statSource": "api_key",
+      "statsBreakdown": {
+        "strength": 180127,
+        "defense": 113701,
+        "speed": 19514,
+        "dexterity": 4127,
+        "total": 317469
+      }
     },
     {
       "id": "4324643",
@@ -544,7 +671,7 @@
       "needsFfScouterForFlights": false,
       "claimedBy": null,
       "needsBackup": null,
-      "estStats": "🔒 Requires FF Scouter",
+      "estStats": 178634,
       "intelScore": null,
       "isManual": false,
       "attacks": 0,
@@ -559,7 +686,18 @@
       "warHitsTaken": 0,
       "outsideHitsTaken": 0,
       "score": 0,
-      "timeline": null
+      "timeline": null,
+      "isConfirmed": true,
+      "isEstimated": false,
+      "hasApiKey": true,
+      "statSource": "api_key",
+      "statsBreakdown": {
+        "strength": 51765,
+        "defense": 27862,
+        "speed": 52067,
+        "dexterity": 46940,
+        "total": 178634
+      }
     },
     {
       "id": "4332864",
@@ -577,7 +715,7 @@
       "needsFfScouterForFlights": false,
       "claimedBy": null,
       "needsBackup": null,
-      "estStats": "🔒 Requires FF Scouter",
+      "estStats": 458899,
       "intelScore": null,
       "isManual": false,
       "attacks": 0,
@@ -592,7 +730,18 @@
       "warHitsTaken": 0,
       "outsideHitsTaken": 0,
       "score": 0,
-      "timeline": null
+      "timeline": null,
+      "isConfirmed": true,
+      "isEstimated": false,
+      "hasApiKey": true,
+      "statSource": "api_key",
+      "statsBreakdown": {
+        "strength": 128643,
+        "defense": 100189,
+        "speed": 129438,
+        "dexterity": 100629,
+        "total": 458899
+      }
     },
     {
       "id": "4336918",
@@ -610,7 +759,7 @@
       "needsFfScouterForFlights": false,
       "claimedBy": null,
       "needsBackup": null,
-      "estStats": "🔒 Requires FF Scouter",
+      "estStats": 294893,
       "intelScore": null,
       "isManual": false,
       "attacks": 0,
@@ -625,7 +774,18 @@
       "warHitsTaken": 0,
       "outsideHitsTaken": 0,
       "score": 0,
-      "timeline": null
+      "timeline": null,
+      "isConfirmed": true,
+      "isEstimated": false,
+      "hasApiKey": true,
+      "statSource": "api_key",
+      "statsBreakdown": {
+        "strength": 76183,
+        "defense": 40519,
+        "speed": 102229,
+        "dexterity": 75962,
+        "total": 294893
+      }
     },
     {
       "id": "4352227",
@@ -658,7 +818,11 @@
       "warHitsTaken": 0,
       "outsideHitsTaken": 0,
       "score": 0,
-      "timeline": null
+      "timeline": null,
+      "isConfirmed": false,
+      "isEstimated": true,
+      "hasApiKey": false,
+      "statSource": "level_estimate"
     },
     {
       "id": "4362036",
@@ -691,7 +855,11 @@
       "warHitsTaken": 0,
       "outsideHitsTaken": 0,
       "score": 0,
-      "timeline": null
+      "timeline": null,
+      "isConfirmed": false,
+      "isEstimated": true,
+      "hasApiKey": false,
+      "statSource": "level_estimate"
     },
     {
       "id": "4375258",
@@ -709,7 +877,7 @@
       "needsFfScouterForFlights": false,
       "claimedBy": null,
       "needsBackup": null,
-      "estStats": "🔒 Requires FF Scouter",
+      "estStats": 68603,
       "intelScore": null,
       "isManual": false,
       "attacks": 0,
@@ -724,7 +892,18 @@
       "warHitsTaken": 0,
       "outsideHitsTaken": 0,
       "score": 0,
-      "timeline": null
+      "timeline": null,
+      "isConfirmed": true,
+      "isEstimated": false,
+      "hasApiKey": true,
+      "statSource": "api_key",
+      "statsBreakdown": {
+        "strength": 22579,
+        "defense": 15304,
+        "speed": 16900,
+        "dexterity": 13820,
+        "total": 68603
+      }
     },
     {
       "id": "4389598",
@@ -757,7 +936,11 @@
       "warHitsTaken": 0,
       "outsideHitsTaken": 0,
       "score": 0,
-      "timeline": null
+      "timeline": null,
+      "isConfirmed": false,
+      "isEstimated": true,
+      "hasApiKey": false,
+      "statSource": "level_estimate"
     },
     {
       "id": "4390934",
@@ -790,7 +973,11 @@
       "warHitsTaken": 0,
       "outsideHitsTaken": 0,
       "score": 0,
-      "timeline": null
+      "timeline": null,
+      "isConfirmed": false,
+      "isEstimated": true,
+      "hasApiKey": false,
+      "statSource": "level_estimate"
     },
     {
       "id": "4432366",
@@ -808,7 +995,7 @@
       "needsFfScouterForFlights": false,
       "claimedBy": null,
       "needsBackup": null,
-      "estStats": "🔒 Requires FF Scouter",
+      "estStats": 33149,
       "intelScore": null,
       "isManual": false,
       "attacks": 0,
@@ -823,7 +1010,18 @@
       "warHitsTaken": 0,
       "outsideHitsTaken": 0,
       "score": 0,
-      "timeline": null
+      "timeline": null,
+      "isConfirmed": true,
+      "isEstimated": false,
+      "hasApiKey": true,
+      "statSource": "api_key",
+      "statsBreakdown": {
+        "strength": 7452,
+        "defense": 6540,
+        "speed": 9233,
+        "dexterity": 9924,
+        "total": 33149
+      }
     },
     {
       "id": "4460876",
@@ -841,7 +1039,7 @@
       "needsFfScouterForFlights": false,
       "claimedBy": null,
       "needsBackup": null,
-      "estStats": "🔒 Requires FF Scouter",
+      "estStats": 75988,
       "intelScore": null,
       "isManual": false,
       "attacks": 0,
@@ -856,7 +1054,18 @@
       "warHitsTaken": 0,
       "outsideHitsTaken": 0,
       "score": 0,
-      "timeline": null
+      "timeline": null,
+      "isConfirmed": true,
+      "isEstimated": false,
+      "hasApiKey": true,
+      "statSource": "api_key",
+      "statsBreakdown": {
+        "strength": 19480,
+        "defense": 19877,
+        "speed": 16573,
+        "dexterity": 20058,
+        "total": 75988
+      }
     },
     {
       "id": "4461236",
@@ -874,7 +1083,7 @@
       "needsFfScouterForFlights": false,
       "claimedBy": null,
       "needsBackup": null,
-      "estStats": "🔒 Requires FF Scouter",
+      "estStats": 35249,
       "intelScore": null,
       "isManual": false,
       "attacks": 0,
@@ -889,7 +1098,18 @@
       "warHitsTaken": 0,
       "outsideHitsTaken": 0,
       "score": 0,
-      "timeline": null
+      "timeline": null,
+      "isConfirmed": true,
+      "isEstimated": false,
+      "hasApiKey": true,
+      "statSource": "api_key",
+      "statsBreakdown": {
+        "strength": 8813,
+        "defense": 8800,
+        "speed": 8821,
+        "dexterity": 8815,
+        "total": 35249
+      }
     },
     {
       "id": "4478593",
@@ -922,7 +1142,11 @@
       "warHitsTaken": 0,
       "outsideHitsTaken": 0,
       "score": 0,
-      "timeline": null
+      "timeline": null,
+      "isConfirmed": false,
+      "isEstimated": true,
+      "hasApiKey": false,
+      "statSource": "level_estimate"
     },
     {
       "id": "4482207",
@@ -955,7 +1179,11 @@
       "warHitsTaken": 0,
       "outsideHitsTaken": 0,
       "score": 0,
-      "timeline": null
+      "timeline": null,
+      "isConfirmed": false,
+      "isEstimated": true,
+      "hasApiKey": false,
+      "statSource": "level_estimate"
     },
     {
       "id": "4484059",
@@ -988,7 +1216,11 @@
       "warHitsTaken": 0,
       "outsideHitsTaken": 0,
       "score": 0,
-      "timeline": null
+      "timeline": null,
+      "isConfirmed": false,
+      "isEstimated": true,
+      "hasApiKey": false,
+      "statSource": "level_estimate"
     },
     {
       "id": "4484660",
@@ -1021,7 +1253,11 @@
       "warHitsTaken": 0,
       "outsideHitsTaken": 0,
       "score": 0,
-      "timeline": null
+      "timeline": null,
+      "isConfirmed": true,
+      "isEstimated": false,
+      "hasApiKey": true,
+      "statSource": "level_estimate"
     },
     {
       "id": "4493711",
@@ -1054,7 +1290,11 @@
       "warHitsTaken": 0,
       "outsideHitsTaken": 0,
       "score": 0,
-      "timeline": null
+      "timeline": null,
+      "isConfirmed": true,
+      "isEstimated": false,
+      "hasApiKey": true,
+      "statSource": "level_estimate"
     },
     {
       "id": "4498137",
@@ -1072,7 +1312,7 @@
       "needsFfScouterForFlights": false,
       "claimedBy": null,
       "needsBackup": null,
-      "estStats": "🔒 Requires FF Scouter",
+      "estStats": 14932,
       "intelScore": null,
       "isManual": false,
       "attacks": 0,
@@ -1087,7 +1327,18 @@
       "warHitsTaken": 0,
       "outsideHitsTaken": 0,
       "score": 0,
-      "timeline": null
+      "timeline": null,
+      "isConfirmed": true,
+      "isEstimated": false,
+      "hasApiKey": true,
+      "statSource": "api_key",
+      "statsBreakdown": {
+        "strength": 3792,
+        "defense": 3515,
+        "speed": 3822,
+        "dexterity": 3803,
+        "total": 14932
+      }
     },
     {
       "id": "4502194",
@@ -1105,7 +1356,7 @@
       "needsFfScouterForFlights": false,
       "claimedBy": null,
       "needsBackup": null,
-      "estStats": "🔒 Requires FF Scouter",
+      "estStats": 33161,
       "intelScore": null,
       "isManual": false,
       "attacks": 0,
@@ -1120,7 +1371,18 @@
       "warHitsTaken": 0,
       "outsideHitsTaken": 0,
       "score": 0,
-      "timeline": null
+      "timeline": null,
+      "isConfirmed": true,
+      "isEstimated": false,
+      "hasApiKey": true,
+      "statSource": "api_key",
+      "statsBreakdown": {
+        "strength": 8392,
+        "defense": 8254,
+        "speed": 8319,
+        "dexterity": 8196,
+        "total": 33161
+      }
     }
   ],
   "enemy": [

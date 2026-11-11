@@ -9083,7 +9083,39 @@ app.get('/api/warboard', async (req, res) => {
         const parseMembers = (data, isEnemy = false) => {
             if (!data.members) return [];
             return Object.entries(data.members).map(([id, m]) => {
-                let est = (spyDatabase[id] && spyDatabase[id].total) ? spyDatabase[id].total : (fState.manualStats[id]?.stats !== undefined ? fState.manualStats[id].stats : (statsCache[id]?.stats !== undefined ? statsCache[id].stats : (isPremium ? "Scanning..." : "🔒 Requires FF Scouter")));
+                const resolved = resolvePlayerBattleStats(id, m.level || 0);
+                const hasApiKey = Boolean(
+                    resolved.hasApiKey ||
+                    (typeof userKeys !== 'undefined' && userKeys && typeof userKeys.hasLinkedKey === 'function' && (userKeys.hasLinkedKey(id) || userKeys.hasLinkedKey(`torn:${id}`)))
+                );
+                const bRecord = (typeof battleStatsHistory !== 'undefined' && battleStatsHistory) ? battleStatsHistory[String(id)] : null;
+                const hasHistory = Boolean(bRecord && ((bRecord.stats && Number(bRecord.stats.total || 0) > 0) || (bRecord.history && bRecord.history.length > 0 && Number(bRecord.history[0].total || 0) > 0)));
+
+                // A member's stats are CONFIRMED if we have verified stats or linked API key on file
+                const isConfirmed = Boolean(
+                    resolved.isConfirmed ||
+                    (!resolved.isEstimated && resolved.total > 0) ||
+                    hasHistory ||
+                    (hasApiKey && resolved.total > 0)
+                );
+                const isEstimated = !isConfirmed;
+
+                let rawEst = (spyDatabase[id] && spyDatabase[id].total) 
+                    ? spyDatabase[id].total 
+                    : (fState.manualStats[id]?.stats !== undefined 
+                        ? fState.manualStats[id].stats 
+                        : (statsCache[id]?.stats !== undefined ? statsCache[id].stats : (isPremium ? "Scanning..." : "🔒 Requires FF Scouter")));
+
+                // If confirmed, use the verified total instead of a raw estimate or scan string!
+                let finalStats = (isConfirmed && resolved.total > 0) 
+                    ? resolved.total 
+                    : (typeof rawEst === 'number' && rawEst > 0 
+                        ? rawEst 
+                        : (resolved.total > 0 ? resolved.total : rawEst));
+
+                let statSource = isConfirmed 
+                    ? (hasApiKey ? 'api_key' : (resolved.source || 'verified')) 
+                    : (typeof rawEst === 'number' ? 'scouted' : (resolved.source || 'level_estimate'));
                 
                 const isTraveling = m.status?.state === "Traveling" || m.status?.description?.includes("Traveling");
                 let finalUntil = m.status?.until; let finalLandingTime = null; let needsFfScouterForFlights = false;
@@ -9147,8 +9179,20 @@ app.get('/api/warboard', async (req, res) => {
                     claimedBy: isClaimValid ? claimObj.playerName : null, 
                     claimTime: isClaimValid ? claimObj.time : null,
                     needsBackup: isEnemy ? fState.backups[id]?.playerName || null : null, 
-                    estStats: est, 
-                    intelScore: isEnemy ? computeWarIntel({ id, state: m.status?.state, until: finalUntil, onlineStatus: m.last_action?.status || "Offline", estStats: typeof est === 'number' ? est : null }, statsCache) : null, 
+                    estStats: finalStats,
+                    isConfirmed,
+                    isEstimated,
+                    hasApiKey,
+                    statSource,
+                    statsBreakdown: (isConfirmed && (resolved.strength > 0 || resolved.defense > 0 || resolved.speed > 0 || resolved.dexterity > 0)) ? {
+                        strength: resolved.strength,
+                        speed: resolved.speed,
+                        defense: resolved.defense,
+                        dexterity: resolved.dexterity,
+                        total: resolved.total
+                    } : null,
+                    statsLastUpdated: resolved.timestamp || null,
+                    intelScore: isEnemy ? computeWarIntel({ id, state: m.status?.state, until: finalUntil, onlineStatus: m.last_action?.status || "Offline", estStats: typeof finalStats === 'number' ? finalStats : null }, statsCache) : null, 
                     isManual: !!fState.manualStats[id], 
                     attacks, 
                     warAttacks,
@@ -14272,7 +14316,7 @@ function formatStatNumber(num) {
 }
 
 // ── Unified Player Battle Stats Resolver ──
-// Priority: 1. Verified Live /bs Stats (Torn API) -> 2. Fresh FF Scouter Scout / Spy DB -> 3. Manual Override -> 4. Level Estimate
+// Priority: 1. Verified Live /bs Stats (Torn API / User Keys) -> 2. Fresh FF Scouter Scout / Spy DB -> 3. Manual Override -> 4. Level Estimate
 function resolvePlayerBattleStats(playerId, level = 0) {
     if (!playerId) {
         return {
@@ -14283,23 +14327,32 @@ function resolvePlayerBattleStats(playerId, level = 0) {
             dexterity: 0,
             timestamp: null,
             source: 'none',
-            isEstimated: true
+            isEstimated: true,
+            isConfirmed: false,
+            hasApiKey: false
         };
     }
     const id = String(playerId);
+    const hasKey = Boolean(typeof userKeys !== 'undefined' && userKeys && typeof userKeys.hasLinkedKey === 'function' && (userKeys.hasLinkedKey(id) || userKeys.hasLinkedKey('torn:' + id)));
 
     // 1. Highest Priority: Verified Battle Stats from /bs update or linked player API key
     const bRecord = (typeof battleStatsHistory !== 'undefined' && battleStatsHistory) ? battleStatsHistory[id] : null;
-    if (bRecord && bRecord.stats && bRecord.stats.total > 0) {
+    const curStats = (bRecord && bRecord.stats && Number(bRecord.stats.total || 0) > 0) 
+        ? bRecord.stats 
+        : (bRecord?.history && bRecord.history.length > 0 && Number(bRecord.history[0].total || 0) > 0 ? bRecord.history[0] : null);
+
+    if (curStats && Number(curStats.total || 0) > 0) {
         return {
-            total: bRecord.stats.total,
-            strength: bRecord.stats.strength || 0,
-            defense: bRecord.stats.defense || 0,
-            speed: bRecord.stats.speed || 0,
-            dexterity: bRecord.stats.dexterity || 0,
-            timestamp: bRecord.lastUpdated || Date.now(),
-            source: 'verified',
-            isEstimated: false
+            total: Number(curStats.total),
+            strength: Number(curStats.strength || 0),
+            defense: Number(curStats.defense || 0),
+            speed: Number(curStats.speed || 0),
+            dexterity: Number(curStats.dexterity || 0),
+            timestamp: bRecord.lastUpdated || (bRecord.history?.[0]?.timestamp) || Date.now(),
+            source: hasKey ? 'api_key' : 'verified',
+            isEstimated: false,
+            isConfirmed: true,
+            hasApiKey: hasKey
         };
     }
 
@@ -14352,6 +14405,8 @@ function resolvePlayerBattleStats(playerId, level = 0) {
     }
 
     if (bestTotal > 0) {
+        const isScoutedOnly = bestSource === 'scouted' && !strength && !defense && !speed && !dexterity;
+        const isConf = !isScoutedOnly || hasKey;
         return {
             total: bestTotal,
             strength,
@@ -14359,8 +14414,10 @@ function resolvePlayerBattleStats(playerId, level = 0) {
             speed,
             dexterity,
             timestamp: bestTimestamp,
-            source: bestSource,
-            isEstimated: bestSource === 'scouted' && !strength && !defense && !speed && !dexterity
+            source: hasKey ? 'api_key' : bestSource,
+            isEstimated: isScoutedOnly && !hasKey,
+            isConfirmed: isConf,
+            hasApiKey: hasKey
         };
     }
 
@@ -14374,7 +14431,9 @@ function resolvePlayerBattleStats(playerId, level = 0) {
         dexterity: 0,
         timestamp: null,
         source: 'level_estimate',
-        isEstimated: true
+        isEstimated: true,
+        isConfirmed: false,
+        hasApiKey: hasKey
     };
 }
 
@@ -28174,7 +28233,40 @@ async function refreshWarboardBackground() {
         const parseBgMembers = (data, isEnemy = false) => {
             if (!data.members) return [];
             return Object.entries(data.members).map(([id, m]) => {
-                let est = (spyDatabase[id] && spyDatabase[id].total) ? spyDatabase[id].total : (fState.manualStats[id]?.stats !== undefined ? fState.manualStats[id].stats : (statsCache[id]?.stats !== undefined ? statsCache[id].stats : (isPremium ? "Scanning..." : "🔒 Requires FF Scouter")));
+                const resolved = resolvePlayerBattleStats(id, m.level || 0);
+                const hasApiKey = Boolean(
+                    resolved.hasApiKey ||
+                    (typeof userKeys !== 'undefined' && userKeys && typeof userKeys.hasLinkedKey === 'function' && (userKeys.hasLinkedKey(id) || userKeys.hasLinkedKey(`torn:${id}`)))
+                );
+                const bRecord = (typeof battleStatsHistory !== 'undefined' && battleStatsHistory) ? battleStatsHistory[String(id)] : null;
+                const hasHistory = Boolean(bRecord && ((bRecord.stats && Number(bRecord.stats.total || 0) > 0) || (bRecord.history && bRecord.history.length > 0 && Number(bRecord.history[0].total || 0) > 0)));
+
+                // A member's stats are CONFIRMED if we have verified stats or linked API key on file
+                const isConfirmed = Boolean(
+                    resolved.isConfirmed ||
+                    (!resolved.isEstimated && resolved.total > 0) ||
+                    hasHistory ||
+                    (hasApiKey && resolved.total > 0)
+                );
+                const isEstimated = !isConfirmed;
+
+                let rawEst = (spyDatabase[id] && spyDatabase[id].total) 
+                    ? spyDatabase[id].total 
+                    : (fState.manualStats[id]?.stats !== undefined 
+                        ? fState.manualStats[id].stats 
+                        : (statsCache[id]?.stats !== undefined ? statsCache[id].stats : (isPremium ? "Scanning..." : "🔒 Requires FF Scouter")));
+
+                // If confirmed, use the verified total instead of a raw estimate or scan string!
+                let finalStats = (isConfirmed && resolved.total > 0) 
+                    ? resolved.total 
+                    : (typeof rawEst === 'number' && rawEst > 0 
+                        ? rawEst 
+                        : (resolved.total > 0 ? resolved.total : rawEst));
+
+                let statSource = isConfirmed 
+                    ? (hasApiKey ? 'api_key' : (resolved.source || 'verified')) 
+                    : (typeof rawEst === 'number' ? 'scouted' : (resolved.source || 'level_estimate'));
+
                 const isTraveling = m.status?.state === "Traveling" || m.status?.description?.includes("Traveling");
                 let finalUntil = m.status?.until; let finalLandingTime = null; let needsFfScouterForFlights = false;
                 if (isTraveling) { if (flightCache[id]?.landingTime) { finalLandingTime = flightCache[id].landingTime; finalUntil = finalLandingTime; } else { if (!isPremium) needsFfScouterForFlights = true; } }
@@ -28236,8 +28328,20 @@ async function refreshWarboardBackground() {
                     claimedBy: isClaimValid ? claimObj.playerName : null, 
                     claimTime: isClaimValid ? claimObj.time : null,
                     needsBackup: isEnemy ? fState.backups[id]?.playerName || null : null, 
-                    estStats: est, 
-                    intelScore: isEnemy ? computeWarIntel({ id, state: m.status?.state, until: finalUntil, onlineStatus: m.last_action?.status || "Offline", estStats: typeof est === 'number' ? est : null }, statsCache) : null, 
+                    estStats: finalStats,
+                    isConfirmed,
+                    isEstimated,
+                    hasApiKey,
+                    statSource,
+                    statsBreakdown: (isConfirmed && (resolved.strength > 0 || resolved.defense > 0 || resolved.speed > 0 || resolved.dexterity > 0)) ? {
+                        strength: resolved.strength,
+                        speed: resolved.speed,
+                        defense: resolved.defense,
+                        dexterity: resolved.dexterity,
+                        total: resolved.total
+                    } : null,
+                    statsLastUpdated: resolved.timestamp || null,
+                    intelScore: isEnemy ? computeWarIntel({ id, state: m.status?.state, until: finalUntil, onlineStatus: m.last_action?.status || "Offline", estStats: typeof finalStats === 'number' ? finalStats : null }, statsCache) : null, 
                     isManual: !!fState.manualStats[id], 
                     attacks, 
                     warAttacks,

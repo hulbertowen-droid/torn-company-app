@@ -18,6 +18,10 @@ const router = express.Router();
 const fs = require('fs');
 const path = require('path');
 const tornKnowledge = require('../torn-knowledge');
+let userKeys = null;
+try {
+    userKeys = require('../user-keys');
+} catch(e) {}
 
 // Reference to core data stores
 const DATA_DIR = path.join(__dirname, '..', 'data');
@@ -400,6 +404,10 @@ function buildMemberRecord(pId, bRec, info, callerId, isLeadership, customStart 
     const curDex = Number(curStats.dexterity || 0);
 
     const history = Array.isArray(bRec?.history) ? bRec.history : [];
+    const hasApiKey = Boolean(userKeys && typeof userKeys.hasLinkedKey === 'function' && (userKeys.hasLinkedKey(pId) || userKeys.hasLinkedKey('torn:' + pId)));
+    const hasHistory = Boolean(bRec && ((bRec.stats && Number(bRec.stats.total || 0) > 0) || (bRec.history && bRec.history.length > 0 && Number(bRec.history[0].total || 0) > 0)));
+    const isConfirmed = Boolean(hasApiKey || hasHistory);
+    const isEstimated = !isConfirmed;
 
     // Privacy tier resolution
     const privacy = privacyPrefs[String(pId)] || 'full';
@@ -624,7 +632,11 @@ function buildMemberRecord(pId, bRec, info, callerId, isLeadership, customStart 
             warningReasons
         },
         privacy,
-        verified: Boolean(curTotal > 0),
+        verified: Boolean(curTotal > 0 || hasApiKey),
+        isConfirmed,
+        isEstimated,
+        hasApiKey,
+        statSource: hasApiKey ? 'api_key' : (hasHistory ? 'discord_verified' : 'unrecorded'),
         historyCount: history.length,
         goal: goalProgress
     };

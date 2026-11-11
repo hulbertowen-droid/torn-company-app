@@ -1769,7 +1769,11 @@
                 defVal = g.defense > 0 ? `<span style="color:var(--text-primary); font-weight:600;"><span style="color:var(--stat-def); font-weight:700; margin-right:1px;">+</span>${fmt(g.defense)}</span>` : `<span style="color:var(--text-tertiary); opacity:0.6;">—</span>`;
                 dexVal = g.dexterity > 0 ? `<span style="color:var(--text-primary); font-weight:600;"><span style="color:var(--stat-dex); font-weight:700; margin-right:1px;">+</span>${fmt(g.dexterity)}</span>` : `<span style="color:var(--text-tertiary); opacity:0.6;">—</span>`;
             } else {
-                totalValDisplay = m.stats.masked ? `<span style="color:var(--text-tertiary);">🔒 Hidden</span>` : `<span style="color:var(--accent-amber); font-weight:800;">${fmt(m.stats.total)}</span>`;
+                const isConfirmed = Boolean(m.isConfirmed || m.hasApiKey || m.verified);
+                const statColor = isConfirmed ? 'var(--accent-emerald, #10b981)' : 'var(--text-secondary)';
+                const statPrefix = isConfirmed ? '' : '~';
+                const statSuffix = isConfirmed ? ` <span title="Confirmed via Torn API Key" style="font-size:0.7em; color:var(--accent-emerald);">✓</span>` : ` <span title="Estimated / Unverified" style="font-size:0.7em; color:var(--accent-amber);">(est)</span>`;
+                totalValDisplay = m.stats.masked ? `<span style="color:var(--text-tertiary);">🔒 Hidden</span>` : `<span style="color:${statColor}; font-weight:800;">${statPrefix}${fmt(m.stats.total)}</span>${statSuffix}`;
                 strVal = m.stats.masked ? '🔒' : `<span style="color:var(--text-primary);">${fmt(m.stats.strength)}</span>`;
                 spdVal = m.stats.masked ? '🔒' : `<span style="color:var(--text-primary);">${fmt(m.stats.speed)}</span>`;
                 defVal = m.stats.masked ? '🔒' : `<span style="color:var(--text-primary);">${fmt(m.stats.defense)}</span>`;
@@ -1796,6 +1800,9 @@
 
             const slackerTag = m.slacker.isSlacking ? `<span class="badge" style="background:rgba(239,68,68,0.15); color:var(--status-danger); font-size:0.68em; margin-left:4px;" title="${m.slacker.warningReasons.join('; ')}">⚠️ Slacking</span>` : '';
             const exemptTag = (m.exempt && m.exempt.isExempt) ? `<span class="badge" style="background:rgba(148,163,184,0.15); color:#94a3b8; border:1px solid rgba(148,163,184,0.3); font-size:0.68em; margin-left:4px;" title="Exempt: ${m.exempt.reason}">🛡️ ${m.exempt.reason}</span>` : '';
+            const verifiedBadge = (m.isConfirmed || m.hasApiKey || m.verified)
+                ? `<span class="badge" style="background:rgba(16,185,129,0.14); color:#6ee7b7; border:1px solid rgba(16,185,129,0.3); font-size:0.68em; margin-left:4px;" title="Confirmed via Torn API key / Discord bot sync">🟢 Confirmed</span>`
+                : `<span class="badge" style="background:rgba(245,158,11,0.12); color:#fbbf24; border:1px solid rgba(245,158,11,0.3); font-size:0.68em; margin-left:4px;" title="Estimated stats (No API key on file)">⚠️ Estimated</span>`;
 
             return `
                 <tr>
@@ -1804,6 +1811,7 @@
                             <a href="https://www.torn.com/profiles.php?XID=${m.playerId}" target="_blank" style="color:var(--text-primary); text-decoration:none;">${m.playerName}</a>
                             ${slackerTag}
                             ${exemptTag}
+                            ${verifiedBadge}
                         </div>
                         <div style="font-size:0.75em; color:var(--text-tertiary);">${m.role} • [${m.playerId}]</div>
                     </td>
