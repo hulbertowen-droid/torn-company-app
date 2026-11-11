@@ -17,6 +17,7 @@ const express = require('express');
 const router = express.Router();
 const fs = require('fs');
 const path = require('path');
+const tornKnowledge = require('../torn-knowledge');
 
 // Reference to core data stores
 const DATA_DIR = path.join(__dirname, '..', 'data');
@@ -106,62 +107,157 @@ function resolveRequester(req) {
     return { callerId, isLeadership, isOwner };
 }
 
-// Ingest live faction roster from warboard and dashboard cache
-function getUnifiedFactionRoster() {
-    const rosterMap = new Map();
+// Helper to resolve the active faction ID for the user
+function resolveFaction(req) {
+    const sess = req.userSession || {};
+    let facId = req.query?.factionId || req.query?.faction_id || req.headers?.['x-faction-id'] || sess.factionId;
+    if (!facId || String(facId) === '0' || String(facId) === 'null' || String(facId) === 'undefined') {
+        facId = (global.discordConfig && global.discordConfig.factionId) || '52355';
+    }
+    return String(facId).trim();
+}
 
-    // 1. From last_warboard.json friendly members
-    try {
-        if (fs.existsSync(WARBOARD_FILE)) {
-            const wb = JSON.parse(fs.readFileSync(WARBOARD_FILE, 'utf8'));
-            const friendly = Array.isArray(wb.friendly) ? wb.friendly : (wb.friendly?.members ? Object.values(wb.friendly.members) : []);
-            friendly.forEach(m => {
-                const id = Number(m.id || m.playerId);
-                if (id) {
-                    let ts = Number(m.lastActionTimestamp || 0);
-                    if (ts > 100000000000) ts = Math.floor(ts / 1000);
-                    rosterMap.set(id, {
-                        id,
-                        name: m.name || m.playerName || `Player [${id}]`,
-                        level: Number(m.level || 1),
-                        position: m.position || 'Member',
-                        days_in_faction: Number(m.daysInFaction || m.days_in_faction || 0),
-                        lastActionTimestamp: ts,
-                        onlineStatus: (m.onlineStatus || 'offline').toLowerCase()
-                    });
-                }
-            });
+// Helper to resolve Torn API key
+function resolveApiKey(req) {
+    let key = req.userTornKey || req.headers?.['x-api-key'] || req.query?.apiKey;
+    if (!key || key === 'null' || key.trim() === '') {
+        if (global.discordConfig && global.discordConfig.apiKey) {
+            key = global.discordConfig.apiKey;
+        } else if (global.ADMIN_API_KEY) {
+            key = global.ADMIN_API_KEY;
         }
-    } catch (e) {
-        console.warn('[GymTracker] Warboard roster read error:', e.message);
+    }
+    return key || null;
+}
+
+const ROSTER_CACHE_FILE = (fid) => path.join(DATA_DIR, `faction_roster_${fid}.json`);
+let inMemoryRosterCache = {}; // { [fid]: { timestamp: number, rosterMap: Map } }
+
+// Ingest live faction roster strictly scoped to targetFacId
+async function getUnifiedFactionRoster(targetFacId = '52355', userKey = null) {
+    const fid = String(targetFacId || (global.discordConfig && global.discordConfig.factionId) || '52355').trim();
+    const now = Date.now();
+
+    // 1. Check in-memory cache (TTL 10 minutes)
+    if (inMemoryRosterCache[fid] && (now - inMemoryRosterCache[fid].timestamp < 10 * 60 * 1000)) {
+        if (inMemoryRosterCache[fid].rosterMap && inMemoryRosterCache[fid].rosterMap.size > 0) {
+            return inMemoryRosterCache[fid].rosterMap;
+        }
     }
 
-    // 2. From dashboardDataCache
+    // 2. Check dashboardDataCache specifically for this target faction (live from /api/dashboard-data)
     if (typeof global.dashboardDataCache === 'object' && global.dashboardDataCache) {
         for (const [k, c] of Object.entries(global.dashboardDataCache)) {
-            if (c?.data?.members && typeof c.data.members === 'object') {
+            if ((k.startsWith(`${fid}_`) || (fid === '52355' && k.startsWith('default_'))) && c?.data?.members) {
+                const map = new Map();
                 for (const [mId, mInfo] of Object.entries(c.data.members)) {
                     const id = Number(mId);
                     if (id) {
                         let ts = Number(mInfo.last_action?.timestamp || 0);
                         if (ts > 100000000000) ts = Math.floor(ts / 1000);
-                        const existing = rosterMap.get(id);
-                        rosterMap.set(id, {
+                        map.set(id, {
                             id,
-                            name: mInfo.name || existing?.name || `Player [${id}]`,
-                            level: Number(mInfo.level || existing?.level || 1),
-                            position: mInfo.position || existing?.position || 'Member',
-                            days_in_faction: Number(mInfo.days_in_faction || existing?.days_in_faction || 0),
-                            lastActionTimestamp: ts || existing?.lastActionTimestamp || Math.floor(Date.now() / 1000),
-                            onlineStatus: (mInfo.last_action?.status || existing?.onlineStatus || 'offline').toLowerCase()
+                            name: mInfo.name || `Player [${id}]`,
+                            level: Number(mInfo.level || 1),
+                            position: mInfo.position || 'Member',
+                            days_in_faction: Number(mInfo.days_in_faction || 0),
+                            lastActionTimestamp: ts || Math.floor(Date.now() / 1000),
+                            onlineStatus: (mInfo.last_action?.status || 'offline').toLowerCase()
                         });
                     }
+                }
+                if (map.size > 0) {
+                    inMemoryRosterCache[fid] = { timestamp: now, rosterMap: map };
+                    return map;
                 }
             }
         }
     }
 
-    return rosterMap;
+    // 3. Fetch live verified roster from Torn API whenever an API key is available
+    const effectiveKey = userKey || (global.discordConfig && global.discordConfig.apiKey) || global.ADMIN_API_KEY || null;
+    if (effectiveKey) {
+        try {
+            const url = `https://api.torn.com/faction/${fid}?selections=basic&key=${effectiveKey}`;
+            const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+            const data = await res.json();
+            if (data && data.members && typeof data.members === 'object') {
+                const map = new Map();
+                for (const [mId, mInfo] of Object.entries(data.members)) {
+                    const id = Number(mId);
+                    if (id) {
+                        let ts = Number(mInfo.last_action?.timestamp || 0);
+                        if (ts > 100000000000) ts = Math.floor(ts / 1000);
+                        map.set(id, {
+                            id,
+                            name: mInfo.name || `Player [${id}]`,
+                            level: Number(mInfo.level || 1),
+                            position: mInfo.position || 'Member',
+                            days_in_faction: Number(mInfo.days_in_faction || 0),
+                            lastActionTimestamp: ts || Math.floor(Date.now() / 1000),
+                            onlineStatus: (mInfo.last_action?.status || 'offline').toLowerCase()
+                        });
+                    }
+                }
+                if (map.size > 0) {
+                    inMemoryRosterCache[fid] = { timestamp: now, rosterMap: map };
+                    try {
+                        const cachePath = ROSTER_CACHE_FILE(fid);
+                        const serialized = Array.from(map.values());
+                        fs.writeFileSync(cachePath, JSON.stringify({ timestamp: now, members: serialized }, null, 2), 'utf8');
+                    } catch(e) {}
+                    return map;
+                }
+            }
+        } catch(e) {
+            console.warn('[GymTracker] Live API roster fetch error:', e.message);
+        }
+    }
+
+    // 4. Check disk cache from previous successful live API fetch
+    try {
+        const cachePath = ROSTER_CACHE_FILE(fid);
+        if (fs.existsSync(cachePath)) {
+            const parsed = JSON.parse(fs.readFileSync(cachePath, 'utf8'));
+            if (parsed && Array.isArray(parsed.members) && parsed.members.length > 0) {
+                const map = new Map();
+                parsed.members.forEach(m => map.set(Number(m.id), m));
+                inMemoryRosterCache[fid] = { timestamp: parsed.timestamp || now, rosterMap: map };
+                return map;
+            }
+        }
+    } catch(e) {}
+
+    // 5. Last resort fallback (only if offline and no cache ever existed)
+    const fallbackMap = new Map();
+    if (fid === '52355') {
+        try {
+            if (fs.existsSync(WARBOARD_FILE)) {
+                const wb = JSON.parse(fs.readFileSync(WARBOARD_FILE, 'utf8'));
+                const friendly = Array.isArray(wb.friendly) ? wb.friendly : (wb.friendly?.members ? Object.values(wb.friendly.members) : []);
+                friendly.forEach(m => {
+                    const id = Number(m.id || m.playerId);
+                    if (id) {
+                        let ts = Number(m.lastActionTimestamp || 0);
+                        if (ts > 100000000000) ts = Math.floor(ts / 1000);
+                        fallbackMap.set(id, {
+                            id,
+                            name: m.name || m.playerName || `Player [${id}]`,
+                            level: Number(m.level || 1),
+                            position: m.position || 'Member',
+                            days_in_faction: Number(m.daysInFaction || m.days_in_faction || 0),
+                            lastActionTimestamp: ts,
+                            onlineStatus: (m.onlineStatus || 'offline').toLowerCase()
+                        });
+                    }
+                });
+            }
+        } catch (e) {
+            console.warn('[GymTracker] Warboard roster read error:', e.message);
+        }
+    }
+
+    return fallbackMap;
 }
 
 // Determine stat archetype
@@ -493,29 +589,23 @@ function getStatusString(status) {
 router.get('/dashboard', async (req, res) => {
     try {
         const { callerId, isLeadership } = resolveRequester(req);
+        const targetFacId = resolveFaction(req);
+        const userKey = resolveApiKey(req);
+
         let battleStats = {};
         if (fs.existsSync(BATTLESTATS_FILE)) {
             battleStats = JSON.parse(fs.readFileSync(BATTLESTATS_FILE, 'utf8'));
         }
 
-        const rosterMap = getUnifiedFactionRoster();
+        const rosterMap = await getUnifiedFactionRoster(targetFacId, userKey);
         const memberList = [];
 
-        // Build list for all members in rosterMap
+        // STRICT ENFORCEMENT: Only include verified members of this faction!
+        // Never append random outsiders from battlestats_history or Discord.
         for (const [id, rInfo] of rosterMap.entries()) {
             const bRec = battleStats[String(id)] || null;
             const m = buildMemberRecord(id, bRec, rInfo, callerId, isLeadership);
             memberList.push(m);
-        }
-
-        // Add any additional battlestats records not already in rosterMap
-        for (const [id, rec] of Object.entries(battleStats)) {
-            if (id.startsWith('discord_') || !rec || typeof rec !== 'object') continue;
-            const pId = Number(id);
-            if (!rosterMap.has(pId)) {
-                const m = buildMemberRecord(pId, rec, { name: rec.playerName, level: rec.level || 1 }, callerId, isLeadership);
-                memberList.push(m);
-            }
         }
 
         const totalTBS = memberList.reduce((acc, m) => acc + (typeof m.stats.total === 'number' ? m.stats.total : 0), 0);
@@ -564,10 +654,14 @@ router.get('/dashboard', async (req, res) => {
 
         const activeContests = competitions.filter(c => c.status === 'active');
 
+        // Dynamic Steadfast perks for this faction
+        const perks = await tornKnowledge.fetchFactionPerks(userKey, targetFacId);
+        const factionName = (targetFacId === '52355' || !targetFacId) ? "Spider-Verse" : (perks.factionName || "Faction");
+
         res.json({
             success: true,
-            factionId: 52355,
-            factionName: "Spider-Verse",
+            factionId: Number(targetFacId) || 52355,
+            factionName,
             lastUpdated: Date.now(),
             kpis: {
                 totalBattleStats: totalTBS,
@@ -585,10 +679,10 @@ router.get('/dashboard', async (req, res) => {
                 totalMembersCount: memberList.length
             },
             steadfast: {
-                strengthBonusPct: 15,
-                speedBonusPct: 15,
-                defenseBonusPct: 18,
-                dexterityBonusPct: 12
+                strengthBonusPct: Number(perks.strengthGymBonus || 0),
+                speedBonusPct: Number(perks.speedGymBonus || 0),
+                defenseBonusPct: Number(perks.defenseGymBonus || 0),
+                dexterityBonusPct: Number(perks.dexterityGymBonus || 0)
             },
             radarAverages,
             velocityChart: {
@@ -613,10 +707,13 @@ router.get('/dashboard', async (req, res) => {
 /**
  * GET /api/gym-tracker/roster
  * Full member grid with multi-window filters, level population, and relative timestamps.
+ * Strictly scoped to confirmed faction members.
  */
 router.get('/roster', async (req, res) => {
     try {
         const { callerId, isLeadership } = resolveRequester(req);
+        const targetFacId = resolveFaction(req);
+        const userKey = resolveApiKey(req);
         const timeframe = req.query.timeframe || '7d';
         const customStart = req.query.start ? Number(req.query.start) : null;
         const customEnd = req.query.end ? Number(req.query.end) : null;
@@ -626,22 +723,14 @@ router.get('/roster', async (req, res) => {
             battleStats = JSON.parse(fs.readFileSync(BATTLESTATS_FILE, 'utf8'));
         }
 
-        const rosterMap = getUnifiedFactionRoster();
+        const rosterMap = await getUnifiedFactionRoster(targetFacId, userKey);
         const members = [];
 
+        // STRICT ENFORCEMENT: Only confirmed members of this faction
         for (const [id, rInfo] of rosterMap.entries()) {
             const bRec = battleStats[String(id)] || null;
             const m = buildMemberRecord(id, bRec, rInfo, callerId, isLeadership, customStart, customEnd);
             members.push(m);
-        }
-
-        for (const [id, rec] of Object.entries(battleStats)) {
-            if (id.startsWith('discord_') || !rec || typeof rec !== 'object') continue;
-            const pId = Number(id);
-            if (!rosterMap.has(pId)) {
-                const m = buildMemberRecord(pId, rec, { name: rec.playerName, level: rec.level || 1 }, callerId, isLeadership, customStart, customEnd);
-                members.push(m);
-            }
         }
 
         // Sort by selected timeframe gain descending
@@ -680,6 +769,8 @@ router.get('/roster', async (req, res) => {
 router.get('/member/:playerId', async (req, res) => {
     try {
         const { callerId, isLeadership } = resolveRequester(req);
+        const targetFacId = resolveFaction(req);
+        const userKey = resolveApiKey(req);
         const pId = Number(req.params.playerId);
         if (!pId) return res.status(400).json({ success: false, error: "Invalid player ID" });
 
@@ -688,7 +779,7 @@ router.get('/member/:playerId', async (req, res) => {
             battleStats = JSON.parse(fs.readFileSync(BATTLESTATS_FILE, 'utf8'));
         }
 
-        const rosterMap = getUnifiedFactionRoster();
+        const rosterMap = await getUnifiedFactionRoster(targetFacId, userKey);
         const rInfo = rosterMap.get(pId) || {};
         const bRec = battleStats[String(pId)] || { playerName: rInfo.name || `Player [${pId}]`, history: [] };
 
@@ -779,14 +870,17 @@ router.post('/privacy', (req, res) => {
 /**
  * GET /api/gym-tracker/competitions
  */
-router.get('/competitions', (req, res) => {
+router.get('/competitions', async (req, res) => {
     try {
+        const targetFacId = resolveFaction(req);
+        const userKey = resolveApiKey(req);
+
         let battleStats = {};
         if (fs.existsSync(BATTLESTATS_FILE)) {
             battleStats = JSON.parse(fs.readFileSync(BATTLESTATS_FILE, 'utf8'));
         }
 
-        const rosterMap = getUnifiedFactionRoster();
+        const rosterMap = await getUnifiedFactionRoster(targetFacId, userKey);
         const enriched = competitions.map(c => {
             const leaderboard = [];
             for (const [id, rInfo] of rosterMap.entries()) {

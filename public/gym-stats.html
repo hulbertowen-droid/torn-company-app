@@ -40,18 +40,23 @@
 
     <style>
     :root {
-        --bg-base: #0B0F17;
-        --bg-surface: #131B2A;
-        --border-subtle: #1E293B;
-        --accent-amber: #F59E0B;
-        --accent-amber-light: #FBBF24;
-        --stat-str: #EF4444;
-        --stat-spd: #0EA5E9;
-        --stat-def: #10B981;
-        --stat-dex: #8B5CF6;
-        --status-active: #10B981;
-        --status-warning: #F59E0B;
-        --status-danger: #EF4444;
+        --bg-base: var(--bg-canvas, #07090e);
+        --bg-surface: var(--bg-surface, #0c1017);
+        --bg-elevated: var(--bg-elevated, #121824);
+        --border-subtle: var(--border-subtle, rgba(255, 255, 255, 0.08));
+        --border-default: var(--border-default, rgba(255, 255, 255, 0.14));
+        --accent-amber: #f59e0b;
+        --accent-amber-light: #fbbf24;
+        
+        /* Harmonious, accessible, non-clashing tactical stat colors */
+        --stat-str: #f87171; /* Soft Crimson / Red */
+        --stat-spd: #60a5fa; /* Soft Cobalt / Blue */
+        --stat-def: #34d399; /* Soft Emerald / Green */
+        --stat-dex: #c084fc; /* Soft Violet / Purple */
+        
+        --status-active: #10b981;
+        --status-warning: #f59e0b;
+        --status-danger: #ef4444;
     }
 
     body {
@@ -66,7 +71,7 @@
 
     /* Gym Tracker Hero & Ribbon */
     .gym-hero {
-        background: linear-gradient(135deg, rgba(19, 27, 42, 0.98) 0%, rgba(11, 15, 23, 0.98) 50%, rgba(20, 29, 47, 0.95) 100%);
+        background: linear-gradient(135deg, rgba(18, 24, 36, 0.98) 0%, rgba(12, 16, 23, 0.98) 50%, rgba(18, 24, 36, 0.95) 100%);
         border: 1px solid var(--border-subtle);
         border-radius: var(--radius-lg, 14px);
         padding: 22px 26px;
@@ -77,7 +82,7 @@
         gap: 20px;
         position: relative;
         overflow: hidden;
-        box-shadow: 0 4px 24px rgba(0, 0, 0, 0.45);
+        box-shadow: 0 4px 24px rgba(0, 0, 0, 0.35);
     }
     .gym-hero::before {
         content: '';
@@ -86,15 +91,15 @@
         right: -10%;
         width: 380px;
         height: 380px;
-        background: radial-gradient(circle, rgba(245, 158, 11, 0.08) 0%, transparent 70%);
+        background: radial-gradient(circle, rgba(245, 158, 11, 0.06) 0%, transparent 70%);
         pointer-events: none;
     }
 
-    /* 4-Stat Color Badges */
-    .stat-badge-str { background: rgba(239, 68, 68, 0.15); color: var(--stat-str); border: 1px solid rgba(239, 68, 68, 0.35); }
-    .stat-badge-spd { background: rgba(14, 165, 233, 0.15); color: var(--stat-spd); border: 1px solid rgba(14, 165, 233, 0.35); }
-    .stat-badge-def { background: rgba(16, 185, 129, 0.15); color: var(--stat-def); border: 1px solid rgba(16, 185, 129, 0.35); }
-    .stat-badge-dex { background: rgba(139, 92, 246, 0.15); color: var(--stat-dex); border: 1px solid rgba(139, 92, 246, 0.35); }
+    /* 4-Stat Harmonized Badges */
+    .stat-badge-str { background: rgba(239, 68, 68, 0.10); color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.28); }
+    .stat-badge-spd { background: rgba(59, 130, 246, 0.10); color: #93c5fd; border: 1px solid rgba(59, 130, 246, 0.28); }
+    .stat-badge-def { background: rgba(16, 185, 129, 0.10); color: #6ee7b7; border: 1px solid rgba(16, 185, 129, 0.28); }
+    .stat-badge-dex { background: rgba(168, 85, 247, 0.10); color: #d8b4fe; border: 1px solid rgba(168, 85, 247, 0.28); }
 
     /* Time Window Selector Pills */
     .stat-window-pill {
@@ -123,8 +128,8 @@
 
     /* Slacker Warning Banner */
     .slacker-strip {
-        background: rgba(239, 68, 68, 0.09);
-        border: 1px solid rgba(239, 68, 68, 0.35);
+        background: rgba(239, 68, 68, 0.06);
+        border: 1px solid rgba(239, 68, 68, 0.25);
         border-radius: 10px;
         padding: 12px 18px;
         margin-bottom: 20px;
@@ -133,12 +138,12 @@
         justify-content: space-between;
         gap: 14px;
         font-size: 0.84em;
-        box-shadow: 0 2px 12px rgba(239, 68, 68, 0.12);
+        box-shadow: 0 2px 12px rgba(239, 68, 68, 0.08);
     }
 
     /* Steadfast Perks Ribbon */
     .steadfast-strip {
-        background: rgba(19, 27, 42, 0.7);
+        background: var(--bg-surface);
         border: 1px solid var(--border-subtle);
         border-radius: 10px;
         padding: 10px 18px;
@@ -224,17 +229,33 @@
 
     /* Podium Styles */
     .podium-card {
-        background: rgba(19, 27, 42, 0.85);
+        background: var(--bg-surface);
         border: 1px solid var(--border-subtle);
         border-radius: 12px;
         padding: 18px;
         text-align: center;
         position: relative;
         overflow: hidden;
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
     }
-    .podium-gold { border-color: rgba(255, 215, 0, 0.5); box-shadow: 0 0 20px rgba(255, 215, 0, 0.18); }
-    .podium-silver { border-color: rgba(203, 213, 225, 0.5); box-shadow: 0 0 16px rgba(203, 213, 225, 0.12); }
-    .podium-bronze { border-color: rgba(217, 119, 6, 0.5); box-shadow: 0 0 16px rgba(217, 119, 6, 0.12); }
+    .podium-card:hover {
+        transform: translateY(-2px);
+    }
+    .podium-gold {
+        background: linear-gradient(180deg, rgba(245, 158, 11, 0.08) 0%, rgba(12, 16, 23, 0.98) 100%);
+        border-color: rgba(245, 158, 11, 0.35);
+        box-shadow: 0 4px 20px rgba(245, 158, 11, 0.08);
+    }
+    .podium-silver {
+        background: linear-gradient(180deg, rgba(148, 163, 184, 0.08) 0%, rgba(12, 16, 23, 0.98) 100%);
+        border-color: rgba(148, 163, 184, 0.3);
+        box-shadow: 0 4px 16px rgba(148, 163, 184, 0.05);
+    }
+    .podium-bronze {
+        background: linear-gradient(180deg, rgba(217, 119, 6, 0.08) 0%, rgba(12, 16, 23, 0.98) 100%);
+        border-color: rgba(217, 119, 6, 0.3);
+        box-shadow: 0 4px 16px rgba(217, 119, 6, 0.05);
+    }
 
     /* Custom Table High Density */
     .tracker-table th, .tracker-table td {
@@ -248,7 +269,7 @@
         .sticky-col {
             position: sticky;
             left: 0;
-            background: #131B2A !important;
+            background: var(--bg-surface) !important;
             z-index: 2;
             box-shadow: 2px 0 6px rgba(0, 0, 0, 0.4);
         }
@@ -401,10 +422,10 @@
                     <span style="font-size:0.8em; font-weight:700; color:var(--text-tertiary); text-transform:uppercase;">Steadfast Perks:</span>
                 </div>
                 <div style="display:flex; gap:10px; flex-wrap:wrap;">
-                    <span class="stat-badge-str badge" id="perk-str">💪 Strength: +15%</span>
-                    <span class="stat-badge-spd badge" id="perk-spd">⚡ Speed: +15%</span>
-                    <span class="stat-badge-def badge" id="perk-def">🛡️ Defense: +18%</span>
-                    <span class="stat-badge-dex badge" id="perk-dex">🎯 Dexterity: +12%</span>
+                    <span class="stat-badge-str badge" id="perk-str">💪 Strength: +7%</span>
+                    <span class="stat-badge-spd badge" id="perk-spd">⚡ Speed: +4%</span>
+                    <span class="stat-badge-def badge" id="perk-def">🛡️ Defense: +7%</span>
+                    <span class="stat-badge-dex badge" id="perk-dex">🎯 Dexterity: +3%</span>
                 </div>
                 <div style="display:flex; align-items:center; gap:10px;">
                     <button class="btn btn-xs btn-outline" onclick="openModifierCalculatorModal()" style="font-size:0.75em; padding:3px 8px; border-color:var(--accent-amber); color:var(--accent-amber);">
@@ -1248,17 +1269,22 @@
     function renderSpotlightGainers(roster) {
         const grid = document.getElementById('spotlight-gainers-grid');
         if (!grid) return;
-        const sorted = [...roster].sort((a, b) => (b.gains.gain7d.total || 0) - (a.gains.gain7d.total || 0)).slice(0, 3);
+        const sorted = [...roster].filter(m => (m.gains?.gain7d?.total || 0) > 0 || m.verified).sort((a, b) => (b.gains?.gain7d?.total || 0) - (a.gains?.gain7d?.total || 0)).slice(0, 3);
+        if (!sorted.length) {
+            grid.innerHTML = `<div style="grid-column:1/-1; text-align:center; padding:18px; color:var(--text-tertiary); font-size:0.85em;">No 7-day stat gains logged yet for active faction members.</div>`;
+            return;
+        }
         grid.innerHTML = sorted.map((m, idx) => {
             const medal = idx === 0 ? '🥇 #1 Gainer' : (idx === 1 ? '🥈 #2 Gainer' : '🥉 #3 Gainer');
+            const g = m.gains?.gain7d || { total: 0, pct: 0 };
             return `
                 <div class="podium-card ${idx === 0 ? 'podium-gold' : (idx === 1 ? 'podium-silver' : 'podium-bronze')}">
                     <div style="font-size:0.75em; font-weight:800; color:var(--accent-amber); margin-bottom:4px;">${medal}</div>
-                    <div style="font-weight:800; font-size:1.1em; color:#FFF;">
-                        <a href="https://www.torn.com/profiles.php?XID=${m.playerId}" target="_blank" style="color:#FFF; text-decoration:none;">${m.playerName}</a>
+                    <div style="font-weight:800; font-size:1.05em; color:var(--text-primary);">
+                        <a href="https://www.torn.com/profiles.php?XID=${m.playerId}" target="_blank" style="color:var(--text-primary); text-decoration:none;">${m.playerName}</a>
                     </div>
-                    <div class="font-mono" style="font-size:1.3em; font-weight:900; color:var(--status-active); margin:6px 0;">+${fmt(m.gains.gain7d.total)}</div>
-                    <div style="font-size:0.72em; color:var(--text-tertiary);">7-Day Growth (+${m.gains.gain7d.pct}%)</div>
+                    <div class="font-mono" style="font-size:1.25em; font-weight:800; color:var(--status-active); margin:6px 0;">+${fmt(g.total)}</div>
+                    <div style="font-size:0.72em; color:var(--text-secondary);">7-Day Growth (+${g.pct}%)</div>
                 </div>
             `;
         }).join('');
@@ -1365,17 +1391,22 @@
                 if (currentRosterTimeframe === '24h') g = m.gains.gain24h;
                 if (currentRosterTimeframe === '30d') g = m.gains.gain30d;
 
-                totalValDisplay = `<span style="color:var(--status-active); font-weight:800;">+${fmt(g.total)}</span> <span style="font-size:0.7em; background:rgba(16,185,129,0.12); padding:1px 4px; border-radius:3px; color:var(--status-active);">+${g.pct}%</span>`;
-                strVal = `<span style="color:var(--stat-str); font-weight:700;">+${fmt(g.strength)}</span>`;
-                spdVal = `<span style="color:var(--stat-spd); font-weight:700;">+${fmt(g.speed)}</span>`;
-                defVal = `<span style="color:var(--stat-def); font-weight:700;">+${fmt(g.defense)}</span>`;
-                dexVal = `<span style="color:var(--stat-dex); font-weight:700;">+${fmt(g.dexterity)}</span>`;
+                if (g.total > 0) {
+                    totalValDisplay = `<span style="color:var(--status-active); font-weight:800;">+${fmt(g.total)}</span> <span style="font-size:0.72em; background:rgba(16,185,129,0.12); border:1px solid rgba(16,185,129,0.25); padding:1px 5px; border-radius:4px; color:#6ee7b7; font-weight:600;">+${g.pct}%</span>`;
+                } else {
+                    totalValDisplay = `<span style="color:var(--text-tertiary);">0</span>`;
+                }
+
+                strVal = g.strength > 0 ? `<span style="color:var(--text-primary); font-weight:600;"><span style="color:var(--stat-str); font-weight:700; margin-right:1px;">+</span>${fmt(g.strength)}</span>` : `<span style="color:var(--text-tertiary); opacity:0.6;">—</span>`;
+                spdVal = g.speed > 0 ? `<span style="color:var(--text-primary); font-weight:600;"><span style="color:var(--stat-spd); font-weight:700; margin-right:1px;">+</span>${fmt(g.speed)}</span>` : `<span style="color:var(--text-tertiary); opacity:0.6;">—</span>`;
+                defVal = g.defense > 0 ? `<span style="color:var(--text-primary); font-weight:600;"><span style="color:var(--stat-def); font-weight:700; margin-right:1px;">+</span>${fmt(g.defense)}</span>` : `<span style="color:var(--text-tertiary); opacity:0.6;">—</span>`;
+                dexVal = g.dexterity > 0 ? `<span style="color:var(--text-primary); font-weight:600;"><span style="color:var(--stat-dex); font-weight:700; margin-right:1px;">+</span>${fmt(g.dexterity)}</span>` : `<span style="color:var(--text-tertiary); opacity:0.6;">—</span>`;
             } else {
                 totalValDisplay = m.stats.masked ? `<span style="color:var(--text-tertiary);">🔒 Hidden</span>` : `<span style="color:var(--accent-amber); font-weight:800;">${fmt(m.stats.total)}</span>`;
-                strVal = m.stats.masked ? '🔒' : fmt(m.stats.strength);
-                spdVal = m.stats.masked ? '🔒' : fmt(m.stats.speed);
-                defVal = m.stats.masked ? '🔒' : fmt(m.stats.defense);
-                dexVal = m.stats.masked ? '🔒' : fmt(m.stats.dexterity);
+                strVal = m.stats.masked ? '🔒' : `<span style="color:var(--text-primary);">${fmt(m.stats.strength)}</span>`;
+                spdVal = m.stats.masked ? '🔒' : `<span style="color:var(--text-primary);">${fmt(m.stats.speed)}</span>`;
+                defVal = m.stats.masked ? '🔒' : `<span style="color:var(--text-primary);">${fmt(m.stats.defense)}</span>`;
+                dexVal = m.stats.masked ? '🔒' : `<span style="color:var(--text-primary);">${fmt(m.stats.dexterity)}</span>`;
             }
 
             // Xanax 3/day pills indicator with yellow & green states
@@ -1643,11 +1674,14 @@
     function computeNetMultipliers() {
         const comp = Number(document.getElementById('calc-company')?.value || 0);
         const happy = Number(document.getElementById('calc-happy')?.value || 5025);
-        // Base steadfast: Str +15%, Spd +15%, Def +18%, Dex +12%
-        const strBonus = 15 + comp;
-        const spdBonus = 15 + comp;
-        const defBonus = 18 + comp;
-        const dexBonus = 12 + comp;
+        const baseStr = currentDashboard?.steadfast?.strengthBonusPct ?? 7;
+        const baseSpd = currentDashboard?.steadfast?.speedBonusPct ?? 4;
+        const baseDef = currentDashboard?.steadfast?.defenseBonusPct ?? 7;
+        const baseDex = currentDashboard?.steadfast?.dexterityBonusPct ?? 3;
+        const strBonus = baseStr + comp;
+        const spdBonus = baseSpd + comp;
+        const defBonus = baseDef + comp;
+        const dexBonus = baseDex + comp;
 
         document.getElementById('calc-res-str').textContent = `Strength: +${strBonus}%`;
         document.getElementById('calc-res-spd').textContent = `Speed: +${spdBonus}%`;

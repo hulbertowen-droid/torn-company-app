@@ -29,14 +29,16 @@ const FACTION_PERKS_CACHE_FILE = path.join(__dirname, 'data', 'faction_perks_cac
 
 // ── LIVE FACTION PERKS STORE (Pre-seeded with Spider-Verse verified upgrades) ──
 let liveFactionPerks = {
-    factionId: null,
-    factionName: "Faction",
-    tolerationHours: 15,          // Booster cooldown XV (+15 hours)
-    boosterLimitHours: 39,        // 24h base + 15h perk = 39 hours max!
+    factionId: 52355,
+    factionName: "Spider-Verse",
+    tolerationHours: 24,          // Booster cooldown XXIV (+24 hours)
+    boosterLimitHours: 48,        // 24h base + 24h perk = 48 hours max!
     voracityPercent: 50,          // Candy effect X (+50% happy)
     travelCapacityBonus: 8,       // Travel capacity VIII (+8 items)
-    defenseGymBonus: 5,           // Defense training V (+5%)
-    dexterityGymBonus: 5,         // Dexterity training V (+5%)
+    strengthGymBonus: 7,          // Strength training VII (+7% gym gains)
+    speedGymBonus: 4,             // Speed training IV (+4% gym gains)
+    defenseGymBonus: 7,           // Defense training VII (+7% gym gains)
+    dexterityGymBonus: 3,         // Dexterity training III (+3% gym gains)
     chainMax: 1000,               // Chaining VII (1000 chain)
     memberCapacity: 50,           // Capacity VII (50 members)
     lastUpdated: Date.now()
@@ -47,7 +49,7 @@ try {
     if (fs.existsSync(FACTION_PERKS_CACHE_FILE)) {
         const raw = fs.readFileSync(FACTION_PERKS_CACHE_FILE, 'utf8');
         const parsed = JSON.parse(raw);
-        if (parsed && parsed.tolerationHours !== undefined) {
+        if (parsed && (parsed.tolerationHours !== undefined || parsed.strengthGymBonus !== undefined)) {
             liveFactionPerks = { ...liveFactionPerks, ...parsed };
         }
     }
@@ -56,28 +58,36 @@ try {
 /**
  * Fetch and refresh live faction perks from Torn API (/faction/?selections=basic,upgrades).
  */
-async function fetchFactionPerks(apiKey) {
+async function fetchFactionPerks(apiKey, factionId = null) {
     if (!apiKey) return liveFactionPerks;
     const now = Date.now();
-    // Cache for 15 minutes
-    if (now - liveFactionPerks.lastUpdated < 15 * 60 * 1000 && liveFactionPerks.tolerationHours > 0) {
-        return liveFactionPerks;
+    // Cache for 15 minutes unless faction ID changed
+    if (now - liveFactionPerks.lastUpdated < 15 * 60 * 1000 && liveFactionPerks.strengthGymBonus !== undefined) {
+        if (!factionId || String(liveFactionPerks.factionId) === String(factionId)) {
+            return liveFactionPerks;
+        }
     }
 
     try {
-        const res = await fetch(`${TORN_BASE}/faction/?selections=basic,upgrades&key=${apiKey}`, { signal: AbortSignal.timeout(8000) });
+        const endpoint = factionId 
+            ? `${TORN_BASE}/faction/${factionId}?selections=basic,upgrades&key=${apiKey}`
+            : `${TORN_BASE}/faction/?selections=basic,upgrades&key=${apiKey}`;
+        const res = await fetch(endpoint, { signal: AbortSignal.timeout(8000) });
         const data = await res.json();
         if (data && data.upgrades) {
             let tolerationH = 0;
             let voracityP = 0;
             let travelBonus = 0;
+            let strBonus = 0;
+            let spdBonus = 0;
             let defBonus = 0;
             let dexBonus = 0;
 
             for (const u of Object.values(data.upgrades)) {
                 const ability = (u.ability || '').toLowerCase();
+                const name = (u.name || '').toLowerCase();
 
-                // Booster cooldown perk (e.g. "Adds 15 hours of maximum booster cooldown")
+                // Booster cooldown perk (e.g. "Adds 24 hours of maximum booster cooldown")
                 const boostMatch = ability.match(/adds?\s+(\d+)\s+hours?\s+of\s+maximum\s+booster\s+cooldown/i) ||
                                    ability.match(/(\d+)\s+hours?\s+(?:of\s+)?(?:maximum\s+)?booster\s+cooldown/i);
                 if (boostMatch) {
@@ -96,23 +106,47 @@ async function fetchFactionPerks(apiKey) {
                     travelBonus = Math.max(travelBonus, parseInt(travelMatch[1], 10));
                 }
 
-                // Gym gains (e.g. "Increases defense gym gains by 5%")
-                const defMatch = ability.match(/defense\s+gym\s+gains\s+by\s+(\d+)%/i);
-                if (defMatch) defBonus = Math.max(defBonus, parseInt(defMatch[1], 10));
+                // Steadfast gym gains bonuses
+                const strMatch = ability.match(/strength\s+gym\s+gains\s+by\s+(\d+)%/i) || name.match(/strength\s+training\s+([ivxlcdm]+|\d+)/i);
+                if (strMatch) {
+                    const pct = ability.match(/strength\s+gym\s+gains\s+by\s+(\d+)%/i);
+                    if (pct) strBonus = Math.max(strBonus, parseInt(pct[1], 10));
+                    else if (u.level) strBonus = Math.max(strBonus, Number(u.level));
+                }
 
-                const dexMatch = ability.match(/dexterity\s+gym\s+gains\s+by\s+(\d+)%/i);
-                if (dexMatch) dexBonus = Math.max(dexBonus, parseInt(dexMatch[1], 10));
+                const spdMatch = ability.match(/speed\s+gym\s+gains\s+by\s+(\d+)%/i) || name.match(/speed\s+training\s+([ivxlcdm]+|\d+)/i);
+                if (spdMatch) {
+                    const pct = ability.match(/speed\s+gym\s+gains\s+by\s+(\d+)%/i);
+                    if (pct) spdBonus = Math.max(spdBonus, parseInt(pct[1], 10));
+                    else if (u.level) spdBonus = Math.max(spdBonus, Number(u.level));
+                }
+
+                const defMatch = ability.match(/defense\s+gym\s+gains\s+by\s+(\d+)%/i) || name.match(/defense\s+training\s+([ivxlcdm]+|\d+)/i);
+                if (defMatch) {
+                    const pct = ability.match(/defense\s+gym\s+gains\s+by\s+(\d+)%/i);
+                    if (pct) defBonus = Math.max(defBonus, parseInt(pct[1], 10));
+                    else if (u.level) defBonus = Math.max(defBonus, Number(u.level));
+                }
+
+                const dexMatch = ability.match(/dexterity\s+gym\s+gains\s+by\s+(\d+)%/i) || name.match(/dexterity\s+training\s+([ivxlcdm]+|\d+)/i);
+                if (dexMatch) {
+                    const pct = ability.match(/dexterity\s+gym\s+gains\s+by\s+(\d+)%/i);
+                    if (pct) dexBonus = Math.max(dexBonus, parseInt(pct[1], 10));
+                    else if (u.level) dexBonus = Math.max(dexBonus, Number(u.level));
+                }
             }
 
             liveFactionPerks = {
-                factionId: data.ID || null,
+                factionId: data.ID || factionId || 52355,
                 factionName: data.name || "Faction",
-                tolerationHours: tolerationH || 15,
-                boosterLimitHours: 24 + (tolerationH || 15),
+                tolerationHours: tolerationH || 24,
+                boosterLimitHours: 24 + (tolerationH || 24),
                 voracityPercent: voracityP || 50,
                 travelCapacityBonus: travelBonus || 8,
-                defenseGymBonus: defBonus || 5,
-                dexterityGymBonus: dexBonus || 5,
+                strengthGymBonus: strBonus,
+                speedGymBonus: spdBonus,
+                defenseGymBonus: defBonus,
+                dexterityGymBonus: dexBonus,
                 chainMax: data.chain?.max || 1000,
                 memberCapacity: Object.keys(data.members || {}).length || 50,
                 lastUpdated: now
@@ -122,7 +156,7 @@ async function fetchFactionPerks(apiKey) {
                 const dir = path.dirname(FACTION_PERKS_CACHE_FILE);
                 if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
                 fs.writeFileSync(FACTION_PERKS_CACHE_FILE, JSON.stringify(liveFactionPerks, null, 2), 'utf8');
-                console.log(`[TornKnowledge] Faction perks refreshed: ${liveFactionPerks.factionName} (Booster CD +${liveFactionPerks.tolerationHours}h -> Max ${liveFactionPerks.boosterLimitHours}h, Candy +${liveFactionPerks.voracityPercent}%)`);
+                console.log(`[TornKnowledge] Faction perks refreshed: ${liveFactionPerks.factionName} (Booster CD +${liveFactionPerks.tolerationHours}h, Str +${liveFactionPerks.strengthGymBonus}%, Spd +${liveFactionPerks.speedGymBonus}%, Def +${liveFactionPerks.defenseGymBonus}%, Dex +${liveFactionPerks.dexterityGymBonus}%)`);
             } catch (e) {}
         }
     } catch (err) {
