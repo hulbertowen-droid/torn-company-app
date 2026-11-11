@@ -1077,6 +1077,62 @@ router.post('/competitions', (req, res) => {
 });
 
 /**
+ * POST /api/gym-tracker/competitions/:id/cancel
+ * Cancel an active competition (Leadership or Contest Creator).
+ */
+router.post('/competitions/:id/cancel', (req, res) => {
+    try {
+        const { callerId, isLeadership, isOwner } = resolveRequester(req);
+        const contestId = req.params.id;
+        const contest = competitions.find(c => c.id === contestId);
+
+        if (!contest) {
+            return res.status(404).json({ success: false, error: "Competition not found." });
+        }
+
+        const isCreator = callerId && (Number(contest.creatorId) === Number(callerId));
+        if (!isLeadership && !isOwner && !isCreator) {
+            return res.status(403).json({ success: false, error: "Only faction leadership or the contest creator can cancel this competition." });
+        }
+
+        competitions = competitions.filter(c => c.id !== contestId);
+        saveCompetitions();
+
+        res.json({ success: true, message: `Competition "${contest.title}" cancelled successfully.` });
+    } catch(err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * DELETE /api/gym-tracker/competitions/:id
+ * REST endpoint to cancel/delete a competition.
+ */
+router.delete('/competitions/:id', (req, res) => {
+    try {
+        const { callerId, isLeadership, isOwner } = resolveRequester(req);
+        const contestId = req.params.id;
+        const contest = competitions.find(c => c.id === contestId);
+
+        if (!contest) {
+            return res.status(404).json({ success: false, error: "Competition not found." });
+        }
+
+        const isCreator = callerId && (Number(contest.creatorId) === Number(callerId));
+        if (!isLeadership && !isOwner && !isCreator) {
+            return res.status(403).json({ success: false, error: "Only faction leadership or the contest creator can cancel this competition." });
+        }
+
+        competitions = competitions.filter(c => c.id !== contestId);
+        saveCompetitions();
+
+        res.json({ success: true, message: `Competition "${contest.title}" cancelled successfully.` });
+    } catch(err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
  * GET /api/gym-tracker/war-readiness
  * Enhanced Fair Fight Target Matcher with Stat Ratio Analysis & Defensive Warnings.
  */

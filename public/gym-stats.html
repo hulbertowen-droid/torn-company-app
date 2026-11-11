@@ -655,16 +655,27 @@
 
                 <!-- Active Competition Banner -->
                 <div class="card" style="padding:22px; background:linear-gradient(135deg, rgba(245,158,11,0.12) 0%, rgba(19,27,42,0.95) 100%); border:1px solid rgba(245,158,11,0.4); margin-bottom:24px; position:relative;" id="active-contest-banner">
-                    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
-                        <div>
-                            <span class="badge" style="background:var(--accent-amber); color:#000; font-weight:800; font-size:0.72em;">ACTIVE CONTEST</span>
+                    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
+                        <div style="flex:1; min-width:280px;">
+                            <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                                <span class="badge" style="background:var(--accent-amber); color:#000; font-weight:800; font-size:0.72em;">ACTIVE CONTEST</span>
+                                <div id="contest-select-wrap" style="display:none;">
+                                    <select id="contest-select-dropdown" class="sort-select" onchange="selectContest(this.value)" style="padding:2px 8px; font-size:0.75em; font-weight:700; background:rgba(0,0,0,0.5); border:1px solid rgba(245,158,11,0.4); color:#FFF; border-radius:4px;">
+                                    </select>
+                                </div>
+                            </div>
                             <h2 style="margin:8px 0 4px 0; font-size:1.4em; font-weight:900; color:#FFF;" id="contest-title">Faction Competition</h2>
                             <div style="font-size:0.82em; color:var(--text-secondary);" id="contest-desc">Faction-wide competition.</div>
                         </div>
-                        <div style="text-align:right;">
-                            <div style="font-size:0.72em; text-transform:uppercase; color:var(--text-tertiary); font-weight:700;">Prize Pool</div>
-                            <div class="font-mono" style="font-size:1.6em; font-weight:900; color:var(--accent-amber);" id="contest-prizepool">$0</div>
-                            <div style="font-size:0.75em; color:var(--status-active); font-weight:700;" id="contest-countdown">⏳ Calculating remaining time...</div>
+                        <div style="text-align:right; display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
+                            <div>
+                                <div style="font-size:0.72em; text-transform:uppercase; color:var(--text-tertiary); font-weight:700;">Prize Pool</div>
+                                <div class="font-mono" style="font-size:1.6em; font-weight:900; color:var(--accent-amber);" id="contest-prizepool">$0</div>
+                                <div style="font-size:0.75em; color:var(--status-active); font-weight:700;" id="contest-countdown">⏳ Calculating remaining time...</div>
+                            </div>
+                            <button class="btn btn-xs btn-outline" id="btn-cancel-contest" onclick="cancelActiveContest()" style="margin-top:4px; border-color:rgba(239,68,68,0.45); color:#ef4444; background:rgba(239,68,68,0.08); font-weight:700; display:inline-flex; align-items:center; gap:4px; padding:4px 10px; border-radius:6px; cursor:pointer;" title="Cancel this active faction competition">
+                                <span>🛑</span> Cancel Contest
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -1725,6 +1736,9 @@
     }
 
     // ─── Competitions Engine ───
+    let allCompetitions = [];
+    let activeContestId = null;
+
     async function loadCompetitions() {
         try {
             const res = await fetch('/api/gym-tracker/competitions');
@@ -1733,71 +1747,149 @@
             const activeBanner = document.getElementById('active-contest-banner');
             const podiumGrid = document.getElementById('contest-podium-grid');
             const standingsCard = document.getElementById('contest-standings-card');
+            const selectorWrap = document.getElementById('contest-select-wrap');
+            const selectorDropdown = document.getElementById('contest-select-dropdown');
 
-            if (data && data.success && Array.isArray(data.competitions) && data.competitions.length > 0) {
+            allCompetitions = (data && data.success && Array.isArray(data.competitions)) ? data.competitions : [];
+
+            if (allCompetitions.length > 0) {
                 if (emptyState) emptyState.style.display = 'none';
                 if (activeBanner) activeBanner.style.display = 'block';
                 if (podiumGrid) podiumGrid.style.display = 'grid';
                 if (standingsCard) standingsCard.style.display = 'block';
 
-                const active = data.competitions[0];
-                document.getElementById('contest-title').textContent = active.title;
-                document.getElementById('contest-desc').textContent = active.description;
-                document.getElementById('contest-prizepool').textContent = `$${(active.prizePool || 0).toLocaleString()}`;
-
-                // Live countdown
-                if (contestCountdownInterval) clearInterval(contestCountdownInterval);
-                const updateCountdown = () => {
-                    const diff = Math.max(0, active.endTime - Date.now());
-                    const days = Math.floor(diff / 86400000);
-                    const hours = Math.floor((diff % 86400000) / 3600000);
-                    const mins = Math.floor((diff % 3600000) / 60000);
-                    const secs = Math.floor((diff % 60000) / 1000);
-                    document.getElementById('contest-countdown').textContent = `⏳ ${days}d ${hours}h ${mins}m ${secs}s remaining`;
-                };
-                updateCountdown();
-                contestCountdownInterval = setInterval(updateCountdown, 1000);
-
-                if (podiumGrid && active.leaderboard) {
-                    const top3 = active.leaderboard.slice(0, 3);
-                    podiumGrid.innerHTML = top3.map((p, i) => `
-                        <div class="podium-card ${i === 0 ? 'podium-gold' : (i === 1 ? 'podium-silver' : 'podium-bronze')}">
-                            <div style="font-size:0.75em; font-weight:800; color:var(--accent-amber);">${p.rewardTier || `#${i+1}`}</div>
-                            <div style="font-weight:800; font-size:1.15em; color:#FFF; margin:4px 0;">${p.playerName}</div>
-                            <div class="font-mono" style="font-size:1.35em; font-weight:900; color:var(--status-active);">${p.scoreFormatted}</div>
-                            <div style="font-size:0.72em; color:var(--text-tertiary); margin-top:4px;">Projected Prize: $${(p.rewardAmount || 0).toLocaleString()}</div>
-                        </div>
+                // Display selector if multiple active contests exist
+                if (allCompetitions.length > 1 && selectorWrap && selectorDropdown) {
+                    selectorWrap.style.display = 'block';
+                    selectorDropdown.innerHTML = allCompetitions.map(c => `
+                        <option value="${c.id}" ${c.id === activeContestId ? 'selected' : ''}>${c.title}</option>
                     `).join('');
+                } else if (selectorWrap) {
+                    selectorWrap.style.display = 'none';
                 }
 
-                const tbody = document.getElementById('contest-leaderboard-tbody');
-                if (tbody && active.leaderboard) {
-                    tbody.innerHTML = active.leaderboard.map(p => `
-                        <tr>
-                            <td class="font-mono" style="font-weight:800; color:var(--accent-amber);">#${p.rank}</td>
-                            <td style="font-weight:700;"><a href="https://www.torn.com/profiles.php?XID=${p.playerId}" target="_blank" style="color:#FFF; text-decoration:none;">${p.playerName}</a></td>
-                            <td class="font-mono" style="color:var(--status-active); font-weight:800;">${p.scoreFormatted}</td>
-                            <td>
-                                <div style="display:flex; align-items:center; gap:8px;">
-                                    <div style="flex:1; height:6px; background:rgba(255,255,255,0.08); border-radius:3px; overflow:hidden;">
-                                        <div style="width:${p.progressPct}%; height:100%; background:var(--status-active);"></div>
-                                    </div>
-                                    <span style="font-size:0.72em; color:var(--text-tertiary);">${p.progressPct}%</span>
-                                </div>
-                            </td>
-                            <td>${p.rewardTier || '—'}</td>
-                        </tr>
-                    `).join('');
+                let active = allCompetitions.find(c => c.id === activeContestId);
+                if (!active) {
+                    active = allCompetitions[0];
+                    activeContestId = active.id;
                 }
+
+                renderActiveContest(active);
             } else {
+                activeContestId = null;
                 if (contestCountdownInterval) clearInterval(contestCountdownInterval);
                 if (emptyState) emptyState.style.display = 'block';
                 if (activeBanner) activeBanner.style.display = 'none';
                 if (podiumGrid) podiumGrid.style.display = 'none';
                 if (standingsCard) standingsCard.style.display = 'none';
+                if (selectorWrap) selectorWrap.style.display = 'none';
             }
         } catch(e) {
             console.error('Failed to load competitions:', e);
+        }
+    }
+
+    function selectContest(id) {
+        activeContestId = id;
+        const active = allCompetitions.find(c => c.id === id);
+        if (active) renderActiveContest(active);
+    }
+
+    function renderActiveContest(active) {
+        if (!active) return;
+        document.getElementById('contest-title').textContent = active.title;
+        document.getElementById('contest-desc').textContent = active.description;
+        document.getElementById('contest-prizepool').textContent = `$${(active.prizePool || 0).toLocaleString()}`;
+
+        // Live countdown
+        if (contestCountdownInterval) clearInterval(contestCountdownInterval);
+        const updateCountdown = () => {
+            const diff = Math.max(0, active.endTime - Date.now());
+            const days = Math.floor(diff / 86400000);
+            const hours = Math.floor((diff % 86400000) / 3600000);
+            const mins = Math.floor((diff % 3600000) / 60000);
+            const secs = Math.floor((diff % 60000) / 1000);
+            document.getElementById('contest-countdown').textContent = `⏳ ${days}d ${hours}h ${mins}m ${secs}s remaining`;
+        };
+        updateCountdown();
+        contestCountdownInterval = setInterval(updateCountdown, 1000);
+
+        const podiumGrid = document.getElementById('contest-podium-grid');
+        if (podiumGrid && active.leaderboard) {
+            const top3 = active.leaderboard.slice(0, 3);
+            podiumGrid.innerHTML = top3.map((p, i) => `
+                <div class="podium-card ${i === 0 ? 'podium-gold' : (i === 1 ? 'podium-silver' : 'podium-bronze')}">
+                    <div style="font-size:0.75em; font-weight:800; color:var(--accent-amber);">${p.rewardTier || `#${i+1}`}</div>
+                    <div style="font-weight:800; font-size:1.15em; color:#FFF; margin:4px 0;">${p.playerName}</div>
+                    <div class="font-mono" style="font-size:1.35em; font-weight:900; color:var(--status-active);">${p.scoreFormatted}</div>
+                    <div style="font-size:0.72em; color:var(--text-tertiary); margin-top:4px;">Projected Prize: $${(p.rewardAmount || 0).toLocaleString()}</div>
+                </div>
+            `).join('');
+        }
+
+        const tbody = document.getElementById('contest-leaderboard-tbody');
+        if (tbody && active.leaderboard) {
+            tbody.innerHTML = active.leaderboard.map(p => `
+                <tr>
+                    <td class="font-mono" style="font-weight:800; color:var(--accent-amber);">#${p.rank}</td>
+                    <td style="font-weight:700;"><a href="https://www.torn.com/profiles.php?XID=${p.playerId}" target="_blank" style="color:#FFF; text-decoration:none;">${p.playerName}</a></td>
+                    <td class="font-mono" style="color:var(--status-active); font-weight:800;">${p.scoreFormatted}</td>
+                    <td>
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <div style="flex:1; height:6px; background:rgba(255,255,255,0.08); border-radius:3px; overflow:hidden;">
+                                <div style="width:${p.progressPct}%; height:100%; background:var(--status-active);"></div>
+                            </div>
+                            <span style="font-size:0.72em; color:var(--text-tertiary);">${p.progressPct}%</span>
+                        </div>
+                    </td>
+                    <td>${p.rewardTier || '—'}</td>
+                </tr>
+            `).join('');
+        }
+    }
+
+    async function cancelActiveContest() {
+        if (!activeContestId) {
+            showToast('No active competition selected to cancel.', 'warn');
+            return;
+        }
+
+        const currentContest = allCompetitions.find(c => c.id === activeContestId);
+        const title = currentContest ? currentContest.title : 'this competition';
+
+        if (!confirm(`Are you sure you want to cancel the competition "${title}"?\n\nThis will immediately end the contest and remove it from the active faction tracker.`)) {
+            return;
+        }
+
+        const btn = document.getElementById('btn-cancel-contest');
+        if (btn) {
+            btn.disabled = true;
+            btn.textContent = 'Cancelling...';
+        }
+
+        try {
+            const myKey = typeof getApiKey === 'function' ? getApiKey() : '';
+            const res = await fetch(`/api/gym-tracker/competitions/${activeContestId}/cancel`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'x-api-key': myKey }
+            });
+            const data = await res.json();
+            if (data && data.success) {
+                showToast(`🛑 Competition "${title}" cancelled successfully.`, 'success');
+                activeContestId = null;
+                await loadCompetitions();
+                await loadDashboard();
+            } else {
+                showToast(data.error || 'Failed to cancel competition.', 'warn');
+            }
+        } catch(e) {
+            console.error('Failed to cancel competition:', e);
+            showToast('Network error while cancelling competition.', 'error');
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<span>🛑</span> Cancel Contest';
+            }
         }
     }
 
