@@ -463,6 +463,13 @@ async function loadConfigFromMongo() {
             }
             if (saved.warFlightArchive) {
                 warFlightArchive = { ...(warFlightArchive || {}), ...(saved.warFlightArchive || {}) };
+                for (const mId of Object.keys(warFlightArchive)) {
+                    if (Array.isArray(warFlightArchive[mId])) {
+                        warFlightArchive[mId] = warFlightArchive[mId].filter(s => isValidFlightDestination(s?.dest));
+                    } else {
+                        delete warFlightArchive[mId];
+                    }
+                }
                 console.log(`[Mongo] Restored ${Object.keys(warFlightArchive).length} flight archive records from MongoDB Atlas.`);
             }
             if (saved.warAuditArchive) {
@@ -3300,13 +3307,33 @@ ocMemory = loadOcMemory();
 
 // Persistent Real-Time War Flight Archive
 const WAR_FLIGHT_ARCHIVE_FILE = path.join(__dirname, 'data', 'war_flight_archive.json');
+function isValidFlightDestination(dest) {
+    if (!dest) return true;
+    const lower = String(dest).toLowerCase();
+    if (/\b(hospital|jail|federal)\b|^okay$|^fallen$/i.test(lower)) return false;
+    return true;
+}
 function loadWarFlightArchive() {
     try {
         if (!fs.existsSync(path.dirname(WAR_FLIGHT_ARCHIVE_FILE))) {
             fs.mkdirSync(path.dirname(WAR_FLIGHT_ARCHIVE_FILE), { recursive: true });
         }
         if (fs.existsSync(WAR_FLIGHT_ARCHIVE_FILE)) {
-            warFlightArchive = JSON.parse(fs.readFileSync(WAR_FLIGHT_ARCHIVE_FILE, 'utf8'));
+            const parsed = JSON.parse(fs.readFileSync(WAR_FLIGHT_ARCHIVE_FILE, 'utf8'));
+            let cleanedCount = 0;
+            for (const mId of Object.keys(parsed || {})) {
+                if (!Array.isArray(parsed[mId])) { delete parsed[mId]; cleanedCount++; continue; }
+                const filtered = parsed[mId].filter(s => isValidFlightDestination(s?.dest));
+                if (filtered.length !== parsed[mId].length) {
+                    cleanedCount += (parsed[mId].length - filtered.length);
+                    parsed[mId] = filtered;
+                }
+            }
+            warFlightArchive = parsed;
+            if (cleanedCount > 0) {
+                console.log(`[War Flight Archive] Sanitized ${cleanedCount} non-flight (hospital/jail) archive entries.`);
+                fs.writeFileSync(WAR_FLIGHT_ARCHIVE_FILE, JSON.stringify(warFlightArchive), 'utf8');
+            }
         }
     } catch (e) {}
 }
@@ -3676,7 +3703,14 @@ setInterval(async () => {
             for (const [mId, m] of Object.entries(facData.members)) {
                 const state = (m.status?.state || "").trim();
                 const desc = (m.status?.description || "").trim();
-                const isFlying = state === "Traveling" || state === "Abroad" || desc.toLowerCase().includes("traveling") || desc.toLowerCase().includes("in ");
+                const lowerDesc = desc.toLowerCase();
+                const isHospitalOrJail = state === "Hospital" || state === "Jail" || state === "Federal" ||
+                    lowerDesc.includes("hospital") || lowerDesc.includes("jail") || lowerDesc.includes("federal");
+                const isFlying = !isHospitalOrJail && (
+                    state === "Traveling" || state === "Abroad" ||
+                    lowerDesc.includes("traveling to") || lowerDesc.includes("returning to torn") ||
+                    /^in\s+(mexico|cayman|canada|hawaii|united kingdom|uk|argentina|switzerland|japan|china|uae|south africa)/i.test(desc)
+                );
                 if (isFlying) {
                     if (!warFlightArchive[mId]) warFlightArchive[mId] = [];
                     const list = warFlightArchive[mId];
@@ -4219,47 +4253,87 @@ app.get('/api/faction/stat-gains', async (req, res) => {
 
         const cutoff = windowMs > 0 ? now - windowMs : 0;
 
-        // 1. Gather all faction members
+        // 1. Gather ONLY current faction members strictly scoped to factionId (no cross-faction leaks)
         const memberRoster = new Map();
+        const ingestRosterMember = (rawId, mInfo) => {
+            const pId = Number(rawId);
+            if (!pId || !mInfo || typeof mInfo !== 'object') return;
+            const cur = memberRoster.get(pId) || {};
+            memberRoster.set(pId, {
+                id: pId,
+                name: mInfo.name || mInfo.playerName || cur.name || `Player [${pId}]`,
+                level: Number(mInfo.level || cur.level || 1),
+                position: mInfo.position || cur.position || 'Member',
+                days_in_faction: Number(mInfo.days_in_faction ?? mInfo.daysInFaction ?? cur.days_in_faction ?? 0),
+                last_action: mInfo.last_action || cur.last_action || null,
+                status: mInfo.status || cur.status || null
+            });
+        };
 
-        // Check dashboardDataCache
+        // 1a. Live cached dashboard data matching target factionId
         for (const [k, c] of Object.entries(dashboardDataCache)) {
+            const cacheMatchesFac = k.startsWith(`${factionId}_`) || (factionId === '52355' && k.startsWith('default_'));
+            const payloadFacId = c?.data?.faction?.ID ? String(c.data.faction.ID) : null;
+            if (!cacheMatchesFac && payloadFacId !== String(factionId)) continue;
+            if (payloadFacId && payloadFacId !== String(factionId)) continue;
             if (c?.data?.members && typeof c.data.members === 'object') {
                 for (const [mId, mInfo] of Object.entries(c.data.members)) {
-                    if (!memberRoster.has(Number(mId))) {
-                        memberRoster.set(Number(mId), {
-                            id: Number(mId),
-                            name: mInfo.name || `Player [${mId}]`,
-                            level: Number(mInfo.level || 1),
-                            days_in_faction: Number(mInfo.days_in_faction || 0),
-                            last_action: mInfo.last_action || null
-                        });
-                    }
+                    ingestRosterMember(mId, mInfo);
                 }
             }
         }
 
-        // Add all members in battlestats_history
-        if (typeof battleStatsHistory !== 'undefined' && battleStatsHistory) {
-            for (const [id, rec] of Object.entries(battleStatsHistory)) {
-                if (id.startsWith('discord_') || !rec || typeof rec !== 'object') continue;
-                const pId = Number(id);
-                if (!memberRoster.has(pId)) {
-                    memberRoster.set(pId, {
-                        id: pId,
-                        name: rec.playerName || `Player [${pId}]`,
-                        level: Number(rec.level || 1),
-                        days_in_faction: 0,
-                        last_action: null
-                    });
-                } else {
-                    const existing = memberRoster.get(pId);
-                    if (rec.playerName && (!existing.name || existing.name.startsWith('Player ['))) {
-                        existing.name = rec.playerName;
-                    }
+        // 1b. Persisted faction roster cache on disk (same cache shared with gym-tracker)
+        if (memberRoster.size === 0) {
+            try {
+                const diskRosterPath = path.join(__dirname, 'data', `faction_roster_${factionId}.json`);
+                if (fs.existsSync(diskRosterPath)) {
+                    const diskParsed = JSON.parse(fs.readFileSync(diskRosterPath, 'utf8'));
+                    const list = Array.isArray(diskParsed?.members) ? diskParsed.members : [];
+                    list.forEach(m => ingestRosterMember(m.id || m.playerId, m));
                 }
+            } catch (e) {}
+        }
+
+        // 1c. Live Torn API lookup if roster is still empty
+        if (memberRoster.size === 0) {
+            const facKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey || getFactionDiscordConfig(factionId)?.apiKey || discordConfig.apiKey || ADMIN_API_KEY;
+            if (facKey) {
+                try {
+                    const fRes = await fetch(`https://api.torn.com/faction/${factionId}?selections=basic&key=${facKey}`, { signal: AbortSignal.timeout(7000) });
+                    const fData = await fRes.json();
+                    if (fData && !fData.error && fData.members) {
+                        for (const [mId, mInfo] of Object.entries(fData.members)) {
+                            ingestRosterMember(mId, mInfo);
+                        }
+                    }
+                } catch (e) {}
             }
         }
+
+        // 1d. Legacy fallback strictly for home faction 52355 if Torn API unreachable
+        if (memberRoster.size === 0 && String(factionId) === '52355') {
+            try {
+                const wbPath = path.join(__dirname, 'data', 'last_warboard.json');
+                if (fs.existsSync(wbPath)) {
+                    const wb = JSON.parse(fs.readFileSync(wbPath, 'utf8'));
+                    (wb.friendlyMembers || []).forEach(m => ingestRosterMember(m.id, m));
+                }
+            } catch (e) {}
+        }
+
+        // Load privacy prefs & caller permissions
+        let gymPrivacyPrefs = {};
+        try {
+            const privFile = path.join(__dirname, 'data', 'gym_privacy_prefs.json');
+            if (fs.existsSync(privFile)) {
+                gymPrivacyPrefs = JSON.parse(fs.readFileSync(privFile, 'utf8')) || {};
+            }
+        } catch (e) {}
+        const reqSess = req.userSession || {};
+        const reqCallerId = Number(reqSess.playerId || req.headers['x-player-id'] || 0);
+        const reqRole = (reqSess.role || '').toLowerCase();
+        const reqIsLeadership = Boolean(reqSess.isSpiderVerse || reqSess.isOwner || reqCallerId === 3776908 || reqRole.includes('leader') || reqRole.includes('co-leader') || reqRole.includes('officer'));
 
         // 2. Compute gains for each member
         const membersResult = [];
@@ -4267,14 +4341,22 @@ app.get('/api/faction/stat-gains', async (req, res) => {
         let totalFactionGains = 0;
         let totalXanaxTaken = 0;
         let totalRefillsUsed = 0;
+        let trackedCount = 0;
+        let confirmedCount = 0;
+        let estimatedCount = 0;
 
         for (const [pId, info] of memberRoster.entries()) {
             const bRec = (typeof battleStatsHistory !== 'undefined' && battleStatsHistory) ? battleStatsHistory[String(pId)] : null;
             const spyRec = (typeof spyDatabase !== 'undefined' && spyDatabase) ? spyDatabase[String(pId)] : null;
+            if (bRec?.playerName && (!info.name || info.name.startsWith('Player ['))) {
+                info.name = bRec.playerName;
+            }
 
+            const hasApiKey = Boolean(typeof userKeys !== 'undefined' && userKeys && typeof userKeys.hasLinkedKey === 'function' && (userKeys.hasLinkedKey(pId) || userKeys.hasLinkedKey(`torn:${pId}`)));
             let curStats = { strength: 0, defense: 0, speed: 0, dexterity: 0, total: 0 };
             let curTs = now;
             let isVerified = false;
+            let hasHistoryStats = false;
             let hist = [];
 
             if (bRec) {
@@ -4288,7 +4370,8 @@ app.get('/api/faction/stat-gains', async (req, res) => {
                     };
                     curTs = bRec.lastUpdated || now;
                     isVerified = true;
-                } else if (Array.isArray(bRec.history) && bRec.history.length > 0) {
+                    hasHistoryStats = true;
+                } else if (Array.isArray(bRec.history) && bRec.history.length > 0 && Number(bRec.history[0]?.total || 0) > 0) {
                     const latest = bRec.history[0];
                     curStats = {
                         strength: Number(latest.strength || 0),
@@ -4299,11 +4382,13 @@ app.get('/api/faction/stat-gains', async (req, res) => {
                     };
                     curTs = latest.timestamp || now;
                     isVerified = true;
+                    hasHistoryStats = true;
                 }
                 if (Array.isArray(bRec.history)) {
                     hist = [...bRec.history].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
                 }
-            } else if (spyRec && Number(spyRec.total || 0) > 0) {
+            }
+            if (curStats.total === 0 && spyRec && Number(spyRec.total || 0) > 0) {
                 curStats = {
                     strength: Number(spyRec.strength || 0),
                     defense: Number(spyRec.defense || 0),
@@ -4319,13 +4404,18 @@ app.get('/api/faction/stat-gains', async (req, res) => {
                 curStats.total = curStats.strength + curStats.defense + curStats.speed + curStats.dexterity;
             }
 
+            const isConfirmed = Boolean(hasApiKey || hasHistoryStats);
+            const isEstimated = !isConfirmed;
+            const privacy = gymPrivacyPrefs[String(pId)] || 'full';
+            const canViewStats = reqIsLeadership || reqCallerId === pId || privacy === 'full';
+            const canViewGains = reqIsLeadership || reqCallerId === pId || privacy !== 'leadership_only';
+
             // Find baseline stats for requested window
             let baseStats = { ...curStats };
             let baseTs = curTs;
 
             if (hist.length > 1) {
                 if (cutoff === 0) {
-                    // All time -> oldest snapshot
                     const oldest = hist[hist.length - 1];
                     if (Number(oldest.total || 0) > 0) {
                         baseStats = {
@@ -4338,7 +4428,6 @@ app.get('/api/faction/stat-gains', async (req, res) => {
                         baseTs = oldest.timestamp || baseTs;
                     }
                 } else {
-                    // Window -> snapshot closest to cutoff
                     let match = hist.find(h => (h.timestamp || 0) <= cutoff && Number(h.total || 0) > 0);
                     if (!match) match = hist[hist.length - 1];
                     if (match && Number(match.total || 0) > 0) {
@@ -4375,7 +4464,6 @@ app.get('/api/faction/stat-gains', async (req, res) => {
                 else if (maxVal === curStats.dexterity) specialty = 'Dexterity';
             }
 
-            // Stat balance percentages
             const balance = {
                 strengthPct: curStats.total > 0 ? Number(((curStats.strength / curStats.total) * 100).toFixed(1)) : 25,
                 defensePct: curStats.total > 0 ? Number(((curStats.defense / curStats.total) * 100).toFixed(1)) : 25,
@@ -4383,47 +4471,73 @@ app.get('/api/faction/stat-gains', async (req, res) => {
                 dexterityPct: curStats.total > 0 ? Number(((curStats.dexterity / curStats.total) * 100).toFixed(1)) : 25
             };
 
-            // Drug/Gym momentum from personal stats or userKeys if present
             const xanax = Number(bRec?.personalStats?.xantaken || bRec?.stats?.xanax || 0);
             const refills = Number(bRec?.personalStats?.refills || bRec?.stats?.refills || 0);
 
-            if (curStats.total > 0) totalFactionStats += curStats.total;
+            if (curStats.total > 0) {
+                totalFactionStats += curStats.total;
+                trackedCount++;
+            }
+            if (isConfirmed) confirmedCount++; else estimatedCount++;
             if (gainTotal > 0) totalFactionGains += gainTotal;
             totalXanaxTaken += xanax;
             totalRefillsUsed += refills;
+
+            const exposedStats = canViewStats
+                ? { ...curStats, masked: false }
+                : { strength: 0, defense: 0, speed: 0, dexterity: 0, total: 0, masked: true };
+            const exposedBase = canViewStats
+                ? { ...baseStats, masked: false }
+                : { strength: 0, defense: 0, speed: 0, dexterity: 0, total: 0, masked: true };
+            const exposedGains = canViewGains
+                ? { strength: gainStr, defense: gainDef, speed: gainSpd, dexterity: gainDex, total: gainTotal, pct: gainPct }
+                : { strength: 0, defense: 0, speed: 0, dexterity: 0, total: 0, pct: 0, masked: true };
 
             membersResult.push({
                 playerId: pId,
                 playerName: info.name,
                 level: info.level,
+                position: info.position || 'Member',
                 daysInFaction: info.days_in_faction,
-                stats: curStats,
-                baselineStats: baseStats,
-                gains: {
-                    strength: gainStr,
-                    defense: gainDef,
-                    speed: gainSpd,
-                    dexterity: gainDex,
-                    total: gainTotal,
-                    pct: gainPct
-                },
-                balance,
-                dailyAvg,
+                status: info.status || null,
+                last_action: info.last_action || null,
+                stats: exposedStats,
+                baselineStats: exposedBase,
+                gains: exposedGains,
+                balance: canViewStats ? balance : { strengthPct: 25, defensePct: 25, speedPct: 25, dexterityPct: 25 },
+                dailyAvg: canViewGains ? dailyAvg : 0,
                 daysTracked,
-                specialty,
+                specialty: canViewStats ? specialty : 'Private',
                 momentum: { xanax, refills },
-                verified: isVerified,
+                privacy,
+                masked: !canViewStats,
+                hasApiKey,
+                isConfirmed,
+                isEstimated,
+                statSource: hasApiKey ? 'api_key' : (hasHistoryStats ? 'discord_verified' : (curStats.total > 0 ? 'spy_estimate' : 'unrecorded')),
+                verified: isConfirmed,
                 historyCount: hist.length,
-                lastUpdated: curTs
+                lastUpdated: curTs,
+                _rawGainTotal: gainTotal,
+                _rawTotal: curStats.total
             });
         }
 
         // Sort descending by gain total, then by current total
         membersResult.sort((a, b) => (b.gains.total - a.gains.total) || (b.stats.total - a.stats.total));
 
-        const verifiedList = membersResult.filter(m => m.verified && m.stats.total > 0);
-        const topGainer = verifiedList.length > 0 ? verifiedList[0] : (membersResult[0] || null);
-        const slackersCount = verifiedList.filter(m => m.gains.total < 1000).length;
+        const trackedMembers = membersResult.filter(m => m._rawTotal > 0 || m.isConfirmed);
+        const confirmedWithStats = membersResult.filter(m => m.isConfirmed && m._rawTotal > 0);
+        const topPool = confirmedWithStats.length > 0 ? confirmedWithStats : trackedMembers;
+        const topGainer = topPool.length > 0 ? topPool[0] : (membersResult[0] || null);
+        const slackersCount = trackedMembers.filter(m => {
+            const st = m.status?.state || '';
+            if (st === 'Federal') return false;
+            return m._rawGainTotal < 1000;
+        }).length;
+
+        // Clean internal sort fields before returning
+        membersResult.forEach(m => { delete m._rawGainTotal; delete m._rawTotal; });
 
         res.json({
             success: true,
@@ -4443,7 +4557,10 @@ app.get('/api/faction/stat-gains', async (req, res) => {
                 totalXanaxTaken,
                 totalRefillsUsed,
                 slackersCount,
-                verifiedCount: verifiedList.length,
+                trackedCount,
+                confirmedCount,
+                estimatedCount,
+                verifiedCount: confirmedCount,
                 totalMembers: membersResult.length
             },
             members: membersResult
@@ -4572,14 +4689,107 @@ setInterval(async () => {
 // Single player stats timeline and projection endpoint
 app.get('/api/faction/player-stats/:playerId', async (req, res) => {
     try {
-        const playerId = String(req.params.playerId);
+        const playerId = String(req.params.playerId).trim();
+        const pIdNum = Number(playerId);
         const bRec = (typeof battleStatsHistory !== 'undefined' && battleStatsHistory) ? battleStatsHistory[playerId] : null;
-        if (!bRec) {
-            return res.status(404).json({ success: false, error: 'No battle stats history found for this player.' });
+        const spyRec = (typeof spyDatabase !== 'undefined' && spyDatabase) ? spyDatabase[playerId] : null;
+
+        let memberKey = null;
+        let hasApiKey = false;
+        if (typeof userKeys !== 'undefined' && userKeys) {
+            hasApiKey = Boolean(typeof userKeys.hasLinkedKey === 'function' && (userKeys.hasLinkedKey(pIdNum) || userKeys.hasLinkedKey(`torn:${playerId}`)));
+            if (typeof userKeys.getDecryptedKey === 'function') {
+                memberKey = userKeys.getDecryptedKey(`torn:${playerId}`) || userKeys.getDecryptedKey(playerId);
+            }
+            if (!memberKey && typeof userKeys.resolveUserApiKeyByTornId === 'function') {
+                const resolved = userKeys.resolveUserApiKeyByTornId(playerId);
+                memberKey = resolved?.key || (typeof resolved === 'string' ? resolved : null);
+            }
         }
 
-        const hist = Array.isArray(bRec.history) ? [...bRec.history].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)) : [];
-        const curStats = bRec.stats || (hist.length > 0 ? hist[0] : { total: 0 });
+        // Resolve player name from battleStatsHistory, dashboardDataCache, or fallback
+        let fallbackName = bRec?.playerName || spyRec?.name || `Player [${playerId}]`;
+        if (fallbackName.startsWith('Player [')) {
+            for (const c of Object.values(dashboardDataCache || {})) {
+                const mInfo = c?.data?.members?.[playerId];
+                if (mInfo?.name) { fallbackName = mInfo.name; break; }
+            }
+        }
+
+        let hist = Array.isArray(bRec?.history) ? [...bRec.history].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)) : [];
+        let curStats = (bRec?.stats && Number(bRec.stats.total || 0) > 0)
+            ? {
+                strength: Number(bRec.stats.strength || 0),
+                defense: Number(bRec.stats.defense || 0),
+                speed: Number(bRec.stats.speed || 0),
+                dexterity: Number(bRec.stats.dexterity || 0),
+                total: Number(bRec.stats.total || 0)
+            }
+            : (hist.length > 0 && Number(hist[0]?.total || 0) > 0 ? {
+                strength: Number(hist[0].strength || 0),
+                defense: Number(hist[0].defense || 0),
+                speed: Number(hist[0].speed || 0),
+                dexterity: Number(hist[0].dexterity || 0),
+                total: Number(hist[0].total || 0)
+            } : null);
+
+        let lastUpdated = bRec?.lastUpdated || hist[0]?.timestamp || Date.now();
+        let hasVerifiedStats = Boolean(curStats && curStats.total > 0);
+
+        // Live fetch on-demand if member has a linked API key but no snapshot yet
+        if (!hasVerifiedStats && memberKey && typeof userKeys?.fetchUserLiveStats === 'function') {
+            try {
+                const live = await userKeys.fetchUserLiveStats(memberKey, 'battlestats,personalstats');
+                if (live && !live.error && Number(live.totalStats || live.total || 0) > 0) {
+                    curStats = {
+                        strength: Number(live.strength || 0),
+                        defense: Number(live.defense || 0),
+                        speed: Number(live.speed || 0),
+                        dexterity: Number(live.dexterity || 0),
+                        total: Number(live.totalStats || live.total || 0)
+                    };
+                    if (live.name) fallbackName = live.name;
+                    hasVerifiedStats = true;
+                    lastUpdated = Date.now();
+                }
+            } catch (e) {}
+        }
+
+        let statSource = 'unrecorded';
+        if (hasApiKey) statSource = 'api_key';
+        else if (hasVerifiedStats) statSource = 'discord_verified';
+        else if (spyRec && Number(spyRec.total || 0) > 0) {
+            curStats = {
+                strength: Number(spyRec.strength || 0),
+                defense: Number(spyRec.defense || 0),
+                speed: Number(spyRec.speed || 0),
+                dexterity: Number(spyRec.dexterity || 0),
+                total: Number(spyRec.total || 0)
+            };
+            lastUpdated = spyRec.timestamp || lastUpdated;
+            statSource = 'spy_estimate';
+        } else if (!curStats) {
+            curStats = { strength: 0, defense: 0, speed: 0, dexterity: 0, total: 0 };
+        }
+
+        const isConfirmed = Boolean(hasApiKey || hasVerifiedStats);
+        const isEstimated = !isConfirmed;
+
+        // Enforce privacy tier
+        let privacy = 'full';
+        try {
+            const privFile = path.join(__dirname, 'data', 'gym_privacy_prefs.json');
+            if (fs.existsSync(privFile)) {
+                const privMap = JSON.parse(fs.readFileSync(privFile, 'utf8')) || {};
+                privacy = privMap[playerId] || 'full';
+            }
+        } catch (e) {}
+        const reqSess = req.userSession || {};
+        const reqCallerId = Number(reqSess.playerId || req.headers['x-player-id'] || 0);
+        const reqRole = (reqSess.role || '').toLowerCase();
+        const reqIsLeadership = Boolean(reqSess.isSpiderVerse || reqSess.isOwner || reqCallerId === 3776908 || reqRole.includes('leader') || reqRole.includes('co-leader') || reqRole.includes('officer'));
+        const canViewStats = reqIsLeadership || (reqCallerId === pIdNum) || privacy === 'full';
+        const masked = !canViewStats;
 
         // Calculate 30-day and 90-day projections based on training velocity
         let dailyVelocity = 0;
@@ -4596,16 +4806,31 @@ app.get('/api/faction/player-stats/:playerId', async (req, res) => {
         const projected30d = (curStats.total || 0) + gain30d;
         const projected90d = (curStats.total || 0) + gain90d;
 
+        const safeStats = masked ? { strength: 0, defense: 0, speed: 0, dexterity: 0, total: 0, masked: true } : curStats;
+        const safeHist = masked ? [] : hist;
+
         res.json({
             success: true,
             player: {
-                playerId: Number(playerId),
-                playerName: bRec.playerName || `Player [${playerId}]`,
-                discordUserId: bRec.discordUserId || null,
-                lastUpdated: bRec.lastUpdated || (hist[0]?.timestamp || Date.now()),
-                stats: curStats,
-                history: hist,
-                velocity: {
+                playerId: pIdNum,
+                playerName: fallbackName,
+                discordUserId: bRec?.discordUserId || null,
+                lastUpdated,
+                stats: safeStats,
+                history: safeHist,
+                privacy,
+                masked,
+                hasApiKey,
+                isConfirmed,
+                isEstimated,
+                statSource,
+                velocity: masked ? {
+                    dailyGain: 0,
+                    projected30d: 0,
+                    projected90d: 0,
+                    gain30d: 0,
+                    gain90d: 0
+                } : {
                     dailyGain: dailyVelocity,
                     projected30d,
                     projected90d,
@@ -6477,20 +6702,30 @@ app.get('/api/war-list', async (req, res) => {
 });
 
 app.get('/api/war-flight-audit', async (req, res) => {
-    const userKey = req.headers['x-api-key'] || req.query.apiKey;
+    let userKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey;
     const ffKey = (req.headers['x-ff-key'] || req.query.ffKey) || getGlobalFFKey() || discordConfig.ffKey;
     const reqWarId = req.query.warId;
 
-    if (!userKey || userKey === "null" || userKey.trim() === "") return res.status(401).json({ error: "Missing Torn API Key" });
+    const reqFacHint = (req.query.factionId || req.headers['x-faction-id']) || (req.userSession && req.userSession.factionId) || '';
+    const facCfgKey = reqFacHint ? getFactionDiscordConfig(reqFacHint)?.apiKey : null;
+    if (!userKey || userKey === "null" || String(userKey).trim() === "") {
+        if (req.userSession || req.headers['x-session-token']) {
+            userKey = facCfgKey || discordConfig.apiKey || '';
+        }
+    }
+
+    if (!userKey || userKey === "null" || String(userKey).trim() === "") return res.status(401).json({ error: "Missing Torn API Key" });
 
     try {
         // 1. Fetch faction info & ranked wars
         const userInfo = await getUserFactionInfo(userKey);
         let targetFacId = (req.query.factionId || req.headers['x-faction-id'])
+            || (req.userSession && req.userSession.factionId)
             || userInfo?.facId
             || discordConfig.factionId
             || dynamicFactionId
             || "";
+        const resolvedFacCfgKey = (targetFacId ? getFactionDiscordConfig(targetFacId)?.apiKey : null) || facCfgKey || discordConfig.apiKey;
         const auditFacUrl = targetFacId
             ? `https://api.torn.com/faction/${targetFacId}?selections=basic,rankedwars&key=${userKey}`
             : `https://api.torn.com/faction/?selections=basic,rankedwars&key=${userKey}`;
@@ -6498,6 +6733,14 @@ app.get('/api/war-flight-audit', async (req, res) => {
         let facData = await facRes.json();
         if (facData.error && facData.error.code === 6) {
             facRes = await fetch(`https://api.torn.com/faction/?selections=basic,rankedwars&key=${userKey}`, { signal: AbortSignal.timeout(8000) });
+            facData = await facRes.json();
+        }
+        if (facData.error && resolvedFacCfgKey && userKey !== resolvedFacCfgKey) {
+            userKey = resolvedFacCfgKey;
+            const retryUrl = targetFacId
+                ? `https://api.torn.com/faction/${targetFacId}?selections=basic,rankedwars&key=${userKey}`
+                : `https://api.torn.com/faction/?selections=basic,rankedwars&key=${userKey}`;
+            facRes = await fetch(retryUrl, { signal: AbortSignal.timeout(8000) });
             facData = await facRes.json();
         }
         if (facData.error) return res.status(400).json({ error: facData.error.error });
@@ -6549,7 +6792,7 @@ app.get('/api/war-flight-audit', async (req, res) => {
         }
 
         // Check cache (fast return if already audited with latest logic version)
-        const AUDIT_VERSION = 5;
+        const AUDIT_VERSION = 6;
         const cacheKey = `${targetWarId}_${ffKey ? ffKey.substring(0, 6) : 'none'}`;
         if (!isOngoing && !req.query.force && warAuditArchive[targetWarId] && warAuditArchive[targetWarId].v === AUDIT_VERSION) {
             return res.json(warAuditArchive[targetWarId]);
@@ -6557,6 +6800,8 @@ app.get('/api/war-flight-audit', async (req, res) => {
         if (warAuditCache[cacheKey] && !req.query.force && warAuditCache[cacheKey].v === AUDIT_VERSION && (Date.now() - warAuditCache[cacheKey].timestamp) < (isOngoing ? 30000 : 3600000)) {
             return res.json(warAuditCache[cacheKey].data);
         }
+
+        let attacksKey = userKey;
 
         // 3. Initialize memberStats with ALL current members
         const memberStats = {};
@@ -6628,11 +6873,19 @@ app.get('/api/war-flight-audit', async (req, res) => {
 
         while (fromTs < warEnd && pages < MAX_ATK_PAGES) {
             try {
-                const atkRes = await fetch(
-                    `https://api.torn.com/faction/?selections=attacks&from=${fromTs}&to=${warEnd}&key=${userKey}`,
+                let atkRes = await fetch(
+                    `https://api.torn.com/faction/?selections=attacks&from=${fromTs}&to=${warEnd}&key=${attacksKey}`,
                     { signal: AbortSignal.timeout(8000) }
                 );
-                const atkData = await atkRes.json();
+                let atkData = await atkRes.json();
+                if (atkData.error && resolvedFacCfgKey && attacksKey !== resolvedFacCfgKey) {
+                    attacksKey = resolvedFacCfgKey;
+                    atkRes = await fetch(
+                        `https://api.torn.com/faction/?selections=attacks&from=${fromTs}&to=${warEnd}&key=${attacksKey}`,
+                        { signal: AbortSignal.timeout(8000) }
+                    );
+                    atkData = await atkRes.json();
+                }
                 const atks = Object.values(atkData.attacks || {});
                 if (!atks.length) break;
                 pages++;
@@ -6720,6 +6973,7 @@ app.get('/api/war-flight-audit', async (req, res) => {
         for (const mId of Object.keys(memberStats)) {
             const archiveList = warFlightArchive[mId] || [];
             for (const session of archiveList) {
+                if (!session || !isValidFlightDestination(session.dest)) continue;
                 const sStart = Number(session.start) || 0;
                 const sEnd = Math.max(Number(session.end) || 0, Number(session.until) || 0);
                 if (sStart && sEnd) {
@@ -6920,7 +7174,7 @@ app.get('/api/war-flight-audit', async (req, res) => {
 
         for (const m of processedMembers) {
             totalAirtimeSec += m.flightSec;
-            if (m.timesHit <= 10 && (m.airHours >= 15 || m.grade === 'S')) ghostCount++;
+            if (m.timesHit <= 4 && (m.airHours >= 10 || m.flightPct >= 25 || m.grade === 'S')) ghostCount++;
             totalFarmedHits += m.timesHit;
             totalWarHitsTaken += (m.warHitsTaken || 0);
             totalOutsideHitsTaken += (m.outsideHitsTaken || 0);
@@ -7325,19 +7579,24 @@ app.get('/api/dashboard-data', async (req, res) => {
 
         let loans = [];
         let armoryError = false;
+        let isLimitedArmoryAccess = false;
         let armoryData = armoryResp ? await armoryResp.json().catch(() => ({ error: true })) : { error: true };
 
-        // Fallback to server faction key if user key lacks permissions (code 7) or errored
-        if (armoryData.error && discordConfig.apiKey && userKey !== discordConfig.apiKey) {
+        // Fallback to server/faction key if user key lacks permissions (code 7) or errored
+        const factionApiKeyFallback = (targetFacId ? getFactionDiscordConfig(targetFacId)?.apiKey : null) || discordConfig.apiKey;
+        if (armoryData.error && factionApiKeyFallback && userKey !== factionApiKeyFallback) {
             try {
-                const fallbackResp = await fetch(`https://api.torn.com/faction/?selections=armor,weapons,temporary,medical,drugs,boosters,donations,armorynews&from=${thirtyDaysAgo}&key=${discordConfig.apiKey}`).catch(e => null);
+                const fallbackResp = await fetch(`https://api.torn.com/faction/?selections=armor,weapons,temporary,medical,drugs,boosters,donations,armorynews&from=${thirtyDaysAgo}&key=${factionApiKeyFallback}`).catch(e => null);
                 if (fallbackResp) armoryData = await fallbackResp.json().catch(() => ({ error: true }));
             } catch(e) {}
         }
         if (armoryData.error) {
             try {
                 const fallbackResp = await fetch(`https://api.torn.com/faction/?selections=armor,weapons,temporary&key=${userKey}`).catch(e => null);
-                if (fallbackResp) armoryData = await fallbackResp.json().catch(() => ({ error: true }));
+                if (fallbackResp) {
+                    armoryData = await fallbackResp.json().catch(() => ({ error: true }));
+                    if (!armoryData.error) isLimitedArmoryAccess = true;
+                }
             } catch(e) {}
         }
 
@@ -7364,6 +7623,7 @@ app.get('/api/dashboard-data', async (req, res) => {
         }
 
         const armoryObj = {
+            limitedAccess: isLimitedArmoryAccess,
             medical: [],
             drugs: [],
             boosters: [],
@@ -7511,55 +7771,60 @@ app.get('/api/dashboard-data', async (req, res) => {
             extractLoans(armoryObj.weapons, "Weapon");
             extractLoans(armoryObj.temporary, "Temporary");
 
-            // Evaluate low stock items against standard reserve minimums
-            const stockCheck = [
-                { match: 'Xanax', type: 'drug', min: 50, icon: '💊' },
-                { match: 'Small First Aid Kit', type: 'medical', min: 40, icon: '🩹' },
-                { match: 'First Aid Kit', type: 'medical', min: 60, icon: '📦' },
-                { match: 'Morphine', type: 'medical', min: 40, icon: '💉' },
-                { match: 'Blood Bag', type: 'medical', min: 100, isTotalBlood: true, icon: '🩸' },
-                { match: 'Can of', type: 'booster', min: 30, isTotalCans: true, icon: '🥫' }
-            ];
-
-            let bloodTotal = 0;
-            let canTotal = 0;
-            armoryObj.medical.forEach(m => {
-                if (m.name.toLowerCase().includes('blood bag')) bloodTotal += m.quantity;
-            });
-            armoryObj.boosters.forEach(b => {
-                if (b.name.toLowerCase().startsWith('can of')) canTotal += b.quantity;
-            });
-
-            stockCheck.forEach(rule => {
-                let current = 0;
-                if (rule.isTotalBlood) {
-                    current = bloodTotal;
-                } else if (rule.isTotalCans) {
-                    current = canTotal;
-                } else if (rule.type === 'drug') {
-                    const item = armoryObj.drugs.find(d => d.name.toLowerCase() === rule.match.toLowerCase());
-                    current = item ? item.quantity : 0;
-                } else if (rule.type === 'medical') {
-                    const item = armoryObj.medical.find(m => m.name.toLowerCase() === rule.match.toLowerCase());
-                    current = item ? item.quantity : 0;
-                }
-
-                if (current < rule.min) {
-                    armoryObj.lowStockItems.push({
-                        name: rule.isTotalBlood ? 'Blood Bags' : (rule.isTotalCans ? 'Energy Cans' : rule.match),
-                        current: current,
-                        min: rule.min,
-                        icon: rule.icon,
-                        severity: current === 0 ? 'critical' : 'warning'
-                    });
-                }
-            });
-
-            if (armoryObj.lowStockItems.length === 0) {
-                armoryObj.armoryHealth = "100% Stocked • Optimal";
+            if (isLimitedArmoryAccess) {
+                armoryObj.lowStockItems = [];
+                armoryObj.armoryHealth = "Restricted Key • Gear & Loans Only";
             } else {
-                const pct = Math.max(20, Math.min(99, 100 - armoryObj.lowStockItems.length * 8));
-                armoryObj.armoryHealth = `${pct}% Stocked • ${armoryObj.lowStockItems.length} Low`;
+                // Evaluate low stock items against standard reserve minimums
+                const stockCheck = [
+                    { match: 'Xanax', type: 'drug', min: 50, icon: '💊' },
+                    { match: 'Small First Aid Kit', type: 'medical', min: 40, icon: '🩹' },
+                    { match: 'First Aid Kit', type: 'medical', min: 60, icon: '📦' },
+                    { match: 'Morphine', type: 'medical', min: 40, icon: '💉' },
+                    { match: 'Blood Bag', type: 'medical', min: 100, isTotalBlood: true, icon: '🩸' },
+                    { match: 'Can of', type: 'booster', min: 30, isTotalCans: true, icon: '🥫' }
+                ];
+
+                let bloodTotal = 0;
+                let canTotal = 0;
+                armoryObj.medical.forEach(m => {
+                    if (m.name.toLowerCase().includes('blood bag')) bloodTotal += m.quantity;
+                });
+                armoryObj.boosters.forEach(b => {
+                    if (b.name.toLowerCase().startsWith('can of')) canTotal += b.quantity;
+                });
+
+                stockCheck.forEach(rule => {
+                    let current = 0;
+                    if (rule.isTotalBlood) {
+                        current = bloodTotal;
+                    } else if (rule.isTotalCans) {
+                        current = canTotal;
+                    } else if (rule.type === 'drug') {
+                        const item = armoryObj.drugs.find(d => d.name.toLowerCase() === rule.match.toLowerCase());
+                        current = item ? item.quantity : 0;
+                    } else if (rule.type === 'medical') {
+                        const item = armoryObj.medical.find(m => m.name.toLowerCase() === rule.match.toLowerCase());
+                        current = item ? item.quantity : 0;
+                    }
+
+                    if (current < rule.min) {
+                        armoryObj.lowStockItems.push({
+                            name: rule.isTotalBlood ? 'Blood Bags' : (rule.isTotalCans ? 'Energy Cans' : rule.match),
+                            current: current,
+                            min: rule.min,
+                            icon: rule.icon,
+                            severity: current === 0 ? 'critical' : 'warning'
+                        });
+                    }
+                });
+
+                if (armoryObj.lowStockItems.length === 0) {
+                    armoryObj.armoryHealth = "100% Stocked • Optimal";
+                } else {
+                    const pct = Math.max(20, Math.min(99, 100 - armoryObj.lowStockItems.length * 8));
+                    armoryObj.armoryHealth = `${pct}% Stocked • ${armoryObj.lowStockItems.length} Low`;
+                }
             }
 
             // Track item usage & deposits: who deposited & who used what, by time, item, and member
@@ -7606,24 +7871,33 @@ app.get('/api/dashboard-data', async (req, res) => {
 
         // Calculate war & chain medical burn rate
         if (!armoryError && armoryObj) {
-            const totalMeds = armoryObj.totalMedicalItems || 0;
-            if (activeWar) {
-                const nowSec = Math.floor(Date.now() / 1000);
-                const warHours = Math.max(0.5, (nowSec - (activeWar.start || nowSec)) / 3600);
-                const enemyHitsEst = Math.max(5, (activeWar.enemyScore || 0) * 0.4);
-                const hourlyBurn = Math.max(12, Math.round(enemyHitsEst / warHours));
-                const hoursRemaining = Math.max(1, Math.round(totalMeds / hourlyBurn));
+            if (isLimitedArmoryAccess) {
                 armoryObj.burnRate = {
-                    hourlyMedicalBurn: hourlyBurn,
-                    hoursRemaining: hoursRemaining,
-                    warActive: true
+                    hourlyMedicalBurn: 0,
+                    hoursRemaining: null,
+                    warActive: Boolean(activeWar),
+                    limitedAccess: true
                 };
             } else {
-                armoryObj.burnRate = {
-                    hourlyMedicalBurn: 2,
-                    hoursRemaining: Math.round(totalMeds / 2),
-                    warActive: false
-                };
+                const totalMeds = armoryObj.totalMedicalItems || 0;
+                if (activeWar) {
+                    const nowSec = Math.floor(Date.now() / 1000);
+                    const warHours = Math.max(0.5, (nowSec - (activeWar.start || nowSec)) / 3600);
+                    const enemyHitsEst = Math.max(5, (activeWar.enemyScore || 0) * 0.4);
+                    const hourlyBurn = Math.max(12, Math.round(enemyHitsEst / warHours));
+                    const hoursRemaining = Math.max(1, Math.round(totalMeds / hourlyBurn));
+                    armoryObj.burnRate = {
+                        hourlyMedicalBurn: hourlyBurn,
+                        hoursRemaining: hoursRemaining,
+                        warActive: true
+                    };
+                } else {
+                    armoryObj.burnRate = {
+                        hourlyMedicalBurn: 2,
+                        hoursRemaining: Math.round(totalMeds / 2),
+                        warActive: false
+                    };
+                }
             }
         }
 
