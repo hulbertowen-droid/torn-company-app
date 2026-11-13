@@ -134,30 +134,6 @@
     }
 
     /* Modular Navigation Tabs */
-    .stat-window-pill {
-        background: transparent;
-        border: 1px solid transparent;
-        color: #94a3b8;
-        padding: 4px 10px;
-        border-radius: 6px;
-        font-size: 0.78em;
-        font-weight: 600;
-        cursor: pointer;
-        transition: all 0.15s ease;
-        user-select: none;
-    }
-    .stat-window-pill:hover {
-        color: #f1f5f9;
-        background: rgba(255, 255, 255, 0.05);
-    }
-    .stat-window-pill.active {
-        background: rgba(59, 130, 246, 0.2);
-        border: 1px solid #3b82f6;
-        color: #60a5fa;
-        font-weight: 700;
-        box-shadow: 0 0 10px rgba(59, 130, 246, 0.25);
-    }
-
     .ops-nav-tabs {
         display: flex;
         gap: 8px;
@@ -204,6 +180,8 @@
         border-radius: var(--radius-full);
         font-size: 0.72em;
         font-weight: 800;
+        white-space: nowrap;
+        flex-shrink: 0;
     }
     .tab-badge.green {
         background: rgba(16, 185, 129, 0.18);
@@ -1315,12 +1293,14 @@
     /* Toast Notification System */
     .toast-container {
         position: fixed;
-        bottom: 24px;
-        right: 24px;
+        top: 64px;
+        bottom: auto;
+        right: 20px;
         z-index: 10001;
         display: flex;
         flex-direction: column;
         gap: 8px;
+        max-width: calc(100vw - 24px);
         pointer-events: none;
     }
     .toast-msg {
@@ -1499,134 +1479,298 @@
         white-space: nowrap;
     }
 
-    /* ── Flight & War Sentinel Command Surfaces ── */
-    .sentinel-hero {
-        background: linear-gradient(135deg, rgba(13, 25, 39, 0.96) 0%, rgba(15, 23, 36, 0.96) 55%, rgba(16, 36, 44, 0.94) 100%);
-        border: 1px solid rgba(6, 182, 212, 0.28);
-        border-radius: var(--radius-lg);
-        padding: 18px 22px;
-        margin-bottom: 18px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        flex-wrap: wrap;
-        gap: 14px;
+    /* ══════════════════════════════════════════════════════════
+       FLIGHT & WAR SENTINEL (sn-*) — refined layout
+       One section visible at a time, page-level vertical scroll,
+       smooth horizontal table scroll with sticky Member column.
+       ══════════════════════════════════════════════════════════ */
+    #main-content.ops-compact-header #faction-hero,
+    #main-content.ops-compact-header #kpi-row {
+        display: none;
     }
-    .sentinel-hero-title {
+
+    .sn-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        flex-wrap: wrap;
+        margin-bottom: 14px;
+    }
+    .sn-header-main { min-width: 0; }
+    .sn-title {
         margin: 0;
         font-size: 1.32em;
         font-weight: 900;
         color: var(--text-primary);
+        letter-spacing: -0.2px;
+    }
+    .sn-subtitle {
+        margin: 3px 0 0;
+        font-size: 0.83em;
+        color: var(--text-secondary);
+    }
+    .sn-header-actions,
+    .sn-head-actions,
+    .sn-toolbar-right {
         display: flex;
         align-items: center;
+        gap: 8px;
         flex-wrap: wrap;
-        gap: 10px;
     }
-    .sentinel-hero-sub {
-        font-size: 0.82em;
+    .sn-updated {
+        font-size: 0.76em;
+        color: var(--text-tertiary);
+        white-space: nowrap;
+    }
+
+    /* Dark-glass buttons & form controls */
+    .sn-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 7px 13px;
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--border-default);
+        background: var(--bg-elevated);
+        color: var(--text-primary);
+        font-size: 0.8em;
+        font-weight: 700;
+        font-family: inherit;
+        cursor: pointer;
+        text-decoration: none;
+        white-space: nowrap;
+        transition: border-color var(--transition-fast), color var(--transition-fast), opacity var(--transition-fast);
+    }
+    .sn-btn:hover { background: var(--bg-hover); border-color: var(--border-strong); }
+    .sn-btn:disabled { opacity: 0.6; cursor: wait; }
+    .sn-btn-primary {
+        background: var(--accent-cyan-dim);
+        border-color: var(--accent-cyan-border);
+        color: var(--accent-cyan);
+    }
+    .sn-btn-primary:hover { background: var(--accent-cyan-glow); border-color: var(--accent-cyan); }
+    .sn-btn-amber {
+        background: var(--accent-amber-dim);
+        border-color: var(--accent-amber-border);
+        color: var(--accent-amber);
+    }
+    .sn-btn-amber:hover { background: var(--accent-amber-glow); border-color: var(--accent-amber); }
+    .sn-btn.spinning { opacity: 0.7; }
+
+    .sn-input,
+    .sn-select {
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-default);
+        color: var(--text-primary);
+        border-radius: var(--radius-sm);
+        padding: 7px 11px;
+        font-size: 0.8em;
+        font-family: inherit;
+        width: auto;
+        max-width: 100%;
+        min-width: 0;
+        outline: none;
+        transition: border-color var(--transition-fast);
+    }
+    .sn-input { width: 185px; }
+    .sn-select { cursor: pointer; }
+    .sn-select-wide { min-width: 240px; width: auto; max-width: 100%; }
+    .sn-input:focus,
+    .sn-select:focus { border-color: var(--accent-cyan); }
+    .sn-select option { background: var(--bg-surface); color: var(--text-primary); }
+
+    /* Live status strip */
+    .sn-status-strip {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+        margin-bottom: 14px;
+    }
+    .sn-stat {
+        --tone: var(--accent-cyan);
+        --tone-dim: var(--accent-cyan-dim);
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 14px;
+        background: var(--bg-surface);
+        border: 1px solid var(--border-default);
+        border-left: 3px solid var(--tone);
+        border-radius: var(--radius-md);
+        cursor: pointer;
+        text-align: left;
+        font-family: inherit;
+        color: inherit;
+        transition: border-color var(--transition-fast), background var(--transition-fast), box-shadow var(--transition-fast);
+    }
+    .sn-stat:hover,
+    .sn-stat.active {
+        background: var(--bg-elevated);
+        border-color: var(--tone);
+    }
+    .sn-stat.active {
+        box-shadow: 0 0 0 1px var(--tone-dim), 0 6px 18px rgba(0, 0, 0, 0.25);
+    }
+    .sn-stat-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 9px;
+        display: grid;
+        place-items: center;
+        background: var(--tone-dim);
+        font-size: 1.05em;
+        flex-shrink: 0;
+    }
+    .sn-stat-body { display: flex; flex-direction: column; min-width: 0; }
+    .sn-stat-val {
+        font-family: var(--font-mono);
+        font-size: 1.45em;
+        font-weight: 900;
+        line-height: 1.1;
+        color: var(--tone);
+    }
+    .sn-stat-lbl {
+        font-size: 0.7em;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: var(--text-tertiary);
+    }
+    .sn-tone-cyan { --tone: var(--accent-cyan); --tone-dim: var(--accent-cyan-dim); }
+    .sn-tone-cobalt { --tone: var(--accent-cobalt); --tone-dim: var(--accent-cobalt-dim); }
+    .sn-tone-emerald { --tone: var(--accent-emerald); --tone-dim: var(--accent-emerald-dim); }
+    .sn-tone-crimson { --tone: var(--accent-crimson); --tone-dim: var(--accent-crimson-dim); }
+
+    /* Section nav */
+    .sn-subnav {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 6px;
+        padding: 5px;
+        margin-bottom: 14px;
+        background: var(--bg-surface);
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-md);
+    }
+    .sn-subnav-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 9px 10px;
+        border: 1px solid transparent;
+        border-radius: 7px;
+        background: transparent;
         color: var(--text-secondary);
-        margin-top: 4px;
+        font-family: inherit;
+        font-size: 0.84em;
+        font-weight: 700;
+        cursor: pointer;
+        min-width: 0;
+        transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
+    }
+    .sn-subnav-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+    .sn-subnav-btn.active {
+        background: var(--accent-cyan-dim);
+        border-color: var(--accent-cyan-border);
+        color: var(--text-primary);
+    }
+    .sn-subnav-lbl { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .sn-count {
+        font-family: var(--font-mono);
+        font-size: 0.82em;
+        font-weight: 800;
+        padding: 1px 7px;
+        border-radius: var(--radius-full);
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-default);
+        color: var(--text-secondary);
+    }
+    .sn-subnav-btn.active .sn-count { color: var(--accent-cyan); border-color: var(--accent-cyan-border); }
+
+    /* Sections & panels */
+    .sn-section { display: none; }
+    .sn-section.active { display: block; animation: snFade 0.18s ease; }
+    @keyframes snFade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+    .sn-panel {
+        background: var(--bg-surface);
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-lg);
+        padding: 18px 20px;
+        margin-bottom: 18px;
+    }
+    .sn-panel-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-bottom: 14px;
+    }
+    .sn-panel-title {
+        margin: 0;
+        font-size: 1em;
+        font-weight: 800;
+        color: var(--text-primary);
+    }
+    .sn-panel-sub {
+        margin: 3px 0 0;
+        font-size: 0.78em;
+        color: var(--text-tertiary);
         max-width: 720px;
     }
 
-    .sentinel-kpi-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-        gap: 10px;
-        margin-bottom: 16px;
-    }
-    .sentinel-kpi-tile {
-        background: var(--bg-elevated);
-        border: 1px solid var(--border-default);
-        border-radius: var(--radius-md);
-        padding: 12px 14px;
-        text-align: center;
-        transition: border-color 0.15s ease;
-    }
-    .sentinel-kpi-tile:hover { border-color: var(--border-strong); }
-    .sentinel-kpi-lbl {
-        font-size: 0.7em;
-        color: var(--text-tertiary);
-        text-transform: uppercase;
-        font-weight: 800;
-        letter-spacing: 0.5px;
-    }
-    .sentinel-kpi-val {
-        font-size: 1.55em;
-        font-weight: 900;
-        font-family: var(--font-mono);
-        margin-top: 3px;
-        line-height: 1.15;
-    }
-    .sentinel-kpi-sub {
-        font-size: 0.72em;
-        color: var(--text-tertiary);
-        margin-top: 3px;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-
-    .sentinel-radar-panel {
-        background: var(--bg-surface);
-        border: 1px solid rgba(6, 182, 212, 0.25);
-        border-radius: var(--radius-lg);
-        margin-bottom: 18px;
-        overflow: hidden;
-    }
-    .radar-metrics-row {
-        display: grid;
-        grid-template-columns: repeat(4, 1fr);
-        gap: 10px;
-        margin-bottom: 12px;
-    }
-    @media (max-width: 820px) {
-        .radar-metrics-row { grid-template-columns: repeat(2, 1fr); }
-    }
-    .radar-metric-box {
-        background: var(--bg-elevated);
-        border: 1px solid var(--border-subtle);
-        border-radius: var(--radius-sm);
-        padding: 10px 12px;
+    .sn-toolbar {
         display: flex;
         align-items: center;
         justify-content: space-between;
         gap: 10px;
-    }
-    .radar-dest-chips {
-        display: flex;
         flex-wrap: wrap;
-        gap: 6px;
         margin-bottom: 12px;
     }
-    .radar-dest-chip {
+
+    /* Segmented filter control */
+    .sn-seg {
+        display: inline-flex;
+        flex-wrap: wrap;
+        gap: 3px;
+        padding: 3px;
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-sm);
+    }
+    .sn-seg button {
         display: inline-flex;
         align-items: center;
-        gap: 5px;
-        padding: 4px 10px;
-        border-radius: var(--radius-full);
-        font-size: 0.75em;
+        gap: 6px;
+        border: 1px solid transparent;
+        background: transparent;
+        color: var(--text-secondary);
+        padding: 5px 10px;
+        border-radius: 5px;
+        font-family: inherit;
+        font-size: 0.76em;
         font-weight: 700;
-        background: rgba(6, 182, 212, 0.12);
-        color: var(--accent-cyan);
-        border: 1px solid rgba(6, 182, 212, 0.3);
+        cursor: pointer;
+        white-space: nowrap;
     }
-
-    .sentinel-toolbar-bar {
-        background: var(--bg-elevated);
-        border: 1px solid var(--border-default);
-        border-radius: var(--radius-md);
-        padding: 10px 14px;
-        margin-bottom: 14px;
-        display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
-        align-items: center;
-        justify-content: space-between;
+    .sn-seg button:hover { color: var(--text-primary); background: var(--bg-hover); }
+    .sn-seg button.active {
+        background: var(--accent-cyan-dim);
+        border-color: var(--accent-cyan-border);
+        color: var(--accent-cyan);
+    }
+    .sn-seg-count {
+        font-family: var(--font-mono);
+        font-size: 0.9em;
+        opacity: 0.85;
     }
 
     .stat-window-segmented {
         display: inline-flex;
+        flex-wrap: wrap;
         align-items: center;
         gap: 3px;
         padding: 3px;
@@ -1638,26 +1782,361 @@
         background: transparent;
         border: 1px solid transparent;
         color: var(--text-secondary);
-        padding: 4px 9px;
+        padding: 5px 10px;
         border-radius: 5px;
         font-size: 0.76em;
         font-weight: 700;
+        font-family: inherit;
         cursor: pointer;
     }
-    .stat-window-pill:hover {
-        color: var(--text-primary);
-        background: var(--bg-hover);
-    }
+    .stat-window-pill:hover { color: var(--text-primary); background: var(--bg-hover); }
     .stat-window-pill.active {
-        background: rgba(59, 130, 246, 0.18);
+        background: var(--accent-cobalt-dim);
         border-color: var(--accent-cobalt);
         color: var(--accent-cobalt);
         box-shadow: none;
     }
 
-    #stat-gains-table th,
-    #stat-gains-table td {
-        padding: 9px 10px;
+    /* Destination chips */
+    .sn-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-bottom: 12px;
+    }
+    .sn-chips:empty { display: none; }
+    .sn-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 10px;
+        border-radius: var(--radius-full);
+        border: 1px solid var(--border-default);
+        background: var(--bg-elevated);
+        color: var(--text-secondary);
+        font-family: inherit;
+        font-size: 0.74em;
+        font-weight: 700;
+        cursor: pointer;
+    }
+    .sn-chip:hover { border-color: var(--accent-cyan-border); color: var(--text-primary); }
+    .sn-chip.active { background: var(--accent-cyan-dim); border-color: var(--accent-cyan); color: var(--accent-cyan); }
+    .sn-chip strong { font-family: var(--font-mono); color: var(--text-primary); }
+    .sn-chip.active strong { color: var(--accent-cyan); }
+
+    /* Badges */
+    .sn-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 8px;
+        border-radius: var(--radius-full);
+        font-size: 0.72em;
+        font-weight: 800;
+        white-space: nowrap;
+        border: 1px solid var(--border-default);
+        background: var(--bg-elevated);
+        color: var(--text-secondary);
+        line-height: 1.5;
+    }
+    .sn-badge-muted { color: var(--text-tertiary); }
+    .sn-badge-cyan { background: var(--accent-cyan-dim); border-color: var(--accent-cyan-border); color: var(--accent-cyan); }
+    .sn-badge-cobalt { background: var(--accent-cobalt-dim); border-color: var(--accent-cobalt-border); color: var(--accent-cobalt); }
+    .sn-badge-emerald { background: var(--accent-emerald-dim); border-color: var(--accent-emerald-border); color: var(--accent-emerald); }
+    .sn-badge-amber { background: var(--accent-amber-dim); border-color: var(--accent-amber-border); color: var(--accent-amber); }
+    .sn-badge-crimson { background: var(--accent-crimson-dim); border-color: var(--accent-crimson-border); color: var(--accent-crimson); }
+    .sn-badge-purple { background: var(--accent-purple-dim); border-color: rgba(139, 92, 246, 0.35); color: var(--accent-purple); }
+
+    /* KPI tiles */
+    .sn-kpis {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 10px;
+        margin-bottom: 14px;
+    }
+    .sn-kpis-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .sn-kpi {
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-md);
+        padding: 11px 13px;
+        min-width: 0;
+    }
+    .sn-kpi-lbl {
+        font-size: 0.68em;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: var(--text-tertiary);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .sn-kpi-val {
+        font-family: var(--font-mono);
+        font-size: 1.35em;
+        font-weight: 900;
+        line-height: 1.2;
+        margin-top: 3px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .sn-kpi-val a { color: inherit; text-decoration: none; }
+    .sn-kpi-val a:hover { text-decoration: underline; }
+    .sn-kpi-val-text { font-family: var(--font-sans); font-size: 1.15em; }
+    .sn-kpi-sub {
+        font-size: 0.72em;
+        color: var(--text-tertiary);
+        margin-top: 2px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    /* Tone helpers */
+    .sn-c-cyan { color: var(--accent-cyan) !important; }
+    .sn-c-cobalt { color: var(--accent-cobalt) !important; }
+    .sn-c-emerald { color: var(--accent-emerald) !important; }
+    .sn-c-amber { color: var(--accent-amber) !important; }
+    .sn-c-crimson { color: var(--accent-crimson) !important; }
+    .sn-c-purple { color: var(--accent-purple) !important; }
+    .sn-c-dim { color: var(--text-tertiary) !important; }
+    .sn-muted-sm { font-size: 0.76em; color: var(--text-tertiary); }
+
+    /* War banner */
+    .sn-war-banner {
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-md);
+        padding: 11px 14px;
+        margin-bottom: 14px;
+    }
+    .sn-war-banner-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px 14px;
+        flex-wrap: wrap;
+        margin-bottom: 9px;
+    }
+    .sn-war-summary { font-size: 0.86em; color: var(--text-primary); font-weight: 600; }
+    .sn-scorebar {
+        height: 6px;
+        border-radius: var(--radius-full);
+        background: var(--accent-crimson-dim);
+        border: 1px solid var(--border-subtle);
+        overflow: hidden;
+    }
+    .sn-scorebar-us {
+        display: block;
+        height: 100%;
+        background: linear-gradient(90deg, var(--accent-emerald), var(--accent-cyan));
+        border-radius: var(--radius-full);
+        transition: width 0.4s ease;
+    }
+
+    /* Tables: page scrolls vertically, wrapper scrolls horizontally cleanly */
+    .sn-table-wrap {
+        width: 100%;
+        overflow-x: auto;
+        overflow-y: hidden;
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-md);
+        -webkit-overflow-scrolling: touch;
+        touch-action: auto;
+        scrollbar-width: thin;
+        scrollbar-color: var(--border-strong) transparent;
+    }
+    .sn-table-wrap::-webkit-scrollbar { height: 9px; }
+    .sn-table-wrap::-webkit-scrollbar-track { background: transparent; }
+    .sn-table-wrap::-webkit-scrollbar-thumb {
+        background: var(--border-strong);
+        border-radius: 9px;
+        border: 2px solid transparent;
+        background-clip: padding-box;
+    }
+    .sn-table {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+        font-size: 0.82em;
+        text-align: left;
+    }
+    .sn-table th {
+        padding: 10px 12px;
+        font-size: 0.72em;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.55px;
+        color: var(--text-tertiary);
+        background: var(--bg-elevated);
+        border-bottom: 1px solid var(--border-default);
+        white-space: nowrap;
+        user-select: none;
+    }
+    .sn-table td {
+        padding: 10px 12px;
+        border-bottom: 1px solid var(--border-subtle);
+        color: var(--text-primary);
+        vertical-align: middle;
+        background: var(--bg-surface);
+    }
+    .sn-table tbody tr:last-child td { border-bottom: none; }
+    .sn-table tbody tr:hover td { background: var(--bg-elevated); }
+    .sn-table .sn-num-col { text-align: right; }
+    .sn-table .sn-center-col { text-align: center; }
+    .sn-table th:first-child,
+    .sn-table td:first-child {
+        position: sticky;
+        left: 0;
+        z-index: 1;
+        box-shadow: inset -1px 0 0 var(--border-subtle);
+    }
+    .sn-table th:first-child { z-index: 2; }
+    .sn-sortable { cursor: pointer; }
+    .sn-sortable:hover { color: var(--text-primary); }
+    .sn-sort-ind { color: var(--accent-cyan); }
+    .sn-table-radar { min-width: 760px; }
+    .sn-table-war { min-width: 860px; }
+    .sn-table-loadouts { min-width: 820px; }
+    .sn-table-gains { min-width: 960px; }
+
+    .sn-empty {
+        text-align: center !important;
+        padding: 26px 14px !important;
+        color: var(--text-tertiary) !important;
+        position: static !important;
+        box-shadow: none !important;
+    }
+    .sn-empty.sn-error { color: var(--accent-crimson) !important; }
+    .sn-empty.sn-loading { color: var(--accent-cyan) !important; }
+
+    .sn-member a {
+        color: var(--text-primary);
+        font-weight: 700;
+        text-decoration: none;
+    }
+    .sn-member a:hover { color: var(--accent-cyan); }
+    .sn-member-line { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .sn-sub {
+        font-size: 0.8em;
+        color: var(--text-tertiary);
+        margin-top: 2px;
+        white-space: nowrap;
+    }
+    .sn-num {
+        font-family: var(--font-mono);
+        font-weight: 700;
+        white-space: nowrap;
+    }
+    .sn-dot {
+        display: inline-block;
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--text-tertiary);
+        margin-right: 4px;
+        vertical-align: middle;
+    }
+    .sn-dot.on { background: var(--accent-emerald); box-shadow: 0 0 6px var(--accent-emerald-glow); }
+    .sn-dot.idle { background: var(--accent-amber); }
+
+    .sn-bar {
+        width: 84px;
+        height: 4px;
+        border-radius: 2px;
+        background: var(--bg-hover);
+        overflow: hidden;
+        margin-top: 4px;
+    }
+    .sn-bar > span { display: block; height: 100%; background: var(--accent-cyan); border-radius: 2px; }
+    .sn-balance {
+        display: flex;
+        width: 96px;
+        height: 5px;
+        border-radius: 3px;
+        overflow: hidden;
+        background: var(--bg-hover);
+        margin-top: 4px;
+    }
+    .sn-grade {
+        display: inline-grid;
+        place-items: center;
+        min-width: 24px;
+        height: 22px;
+        padding: 0 6px;
+        border-radius: 6px;
+        font-weight: 900;
+        font-size: 0.9em;
+        border: 1px solid;
+    }
+    .sn-items { font-size: 0.92em; line-height: 1.45; }
+
+    .sn-table-foot {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        flex-wrap: wrap;
+        padding-top: 10px;
+        font-size: 0.76em;
+        color: var(--text-tertiary);
+    }
+    .sn-table-foot:empty { display: none; }
+    .sn-link-btn {
+        background: none;
+        border: none;
+        color: var(--accent-cyan);
+        font-family: inherit;
+        font-size: 1em;
+        font-weight: 700;
+        cursor: pointer;
+        padding: 2px 0;
+    }
+    .sn-link-btn:hover { text-decoration: underline; }
+    .sn-row-btn {
+        padding: 4px 10px;
+        font-size: 0.86em;
+    }
+
+    body.light-mode #pane-sentinel {
+        --accent-cyan: #0891b2;
+        --accent-emerald: #059669;
+        --accent-amber: #b45309;
+    }
+    body.light-mode .sn-stat,
+    body.light-mode .sn-panel,
+    body.light-mode .sn-subnav { box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06); }
+
+    @media (max-width: 1180px) {
+        .sn-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    }
+    @media (max-width: 900px) {
+        .sn-status-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .sn-kpis,
+        .sn-kpis-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 640px) {
+        .sn-subnav { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .sn-panel { padding: 14px 12px; border-radius: var(--radius-md); }
+        .sn-header-actions { width: 100%; }
+        .sn-header-actions .sn-updated { width: 100%; }
+        .sn-toolbar > * { width: 100%; }
+        .sn-toolbar-right,
+        .sn-head-actions { width: 100%; }
+        .sn-input,
+        .sn-select,
+        .sn-select-wide { width: 100%; min-width: 0; flex: 1 1 auto; }
+        .sn-head-actions .sn-btn { flex: 0 0 auto; }
+        .sn-seg,
+        .stat-window-segmented { display: flex; }
+        .sn-seg button,
+        .stat-window-pill { flex: 1 1 auto; justify-content: center; }
+        .sn-stat { padding: 10px 11px; gap: 9px; }
+        .sn-stat-icon { width: 30px; height: 30px; }
+        .sn-stat-val { font-size: 1.25em; }
+        .sn-kpi-val { font-size: 1.15em; }
     }
 
     .gym-hero-card {
@@ -1728,10 +2207,6 @@
     body.light-mode .hero-stat .val {
         color: #0f172a;
     }
-    body.light-mode .sentinel-hero {
-        background: linear-gradient(135deg, #f0f9ff 0%, #ecfeff 100%);
-        border-color: #bae6fd;
-    }
     body.light-mode .gym-hero-card {
         background: linear-gradient(135deg, #f8fafc 0%, #eef2ff 100%);
         border-color: #cbd5e1;
@@ -1790,21 +2265,32 @@
         }
         .hero-stat .val { font-size: 1.4em; }
         .ops-nav-tabs {
-            -webkit-overflow-scrolling: touch;
-            scrollbar-width: none;
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 6px;
+            border-bottom: none;
+            padding-bottom: 2px;
+            overflow: visible;
         }
         .ops-tab-btn {
-            padding: 10px 14px;
-            font-size: 0.84em;
-            white-space: nowrap;
-            flex-shrink: 0;
+            justify-content: center;
+            text-align: center;
+            padding: 9px 10px;
+            font-size: 0.78em;
+            white-space: normal;
+            line-height: 1.25;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border-default);
+        }
+        .ops-tab-btn.active {
+            border-color: var(--accent-cobalt);
+            border-bottom-width: 2px;
         }
         select.sort-select,
         input.sort-select {
             max-width: 100%;
             min-width: 0;
         }
-        .sentinel-hero,
         .gym-hero-card {
             padding: 14px 16px;
         }
@@ -2712,386 +3198,382 @@
         <!-- TAB 3: FLIGHT & WAR SENTINEL              -->
         <!-- ========================================== -->
         <div class="tab-pane" id="pane-sentinel">
-            <!-- SENTINEL COMMAND HERO -->
-            <div class="sentinel-hero">
-                <div>
-                    <h2 class="sentinel-hero-title">
-                        <span>✈️ Flight &amp; War Sentinel</span>
-                        <span style="font-size:0.56em; background:rgba(6,182,212,0.14); color:var(--accent-cyan); border:1px solid rgba(6,182,212,0.35); padding:3px 10px; border-radius:999px; font-weight:800;">Airspace • War Audit • Stat Gains • Loadouts</span>
-                    </h2>
-                    <div class="sentinel-hero-sub">
-                        Monitor live faction travel &amp; overseas return ETAs, audit war flight evasion vs. Torn City farming, track confirmed member stat gains, and inspect war gear readiness.
-                    </div>
+            <!-- ═══ SENTINEL HEADER ═══ -->
+            <section class="sn-header">
+                <div class="sn-header-main">
+                    <h2 class="sn-title">✈️ Flight &amp; War Sentinel</h2>
+                    <p class="sn-subtitle">Who's flying, who got farmed in war, who's carrying faction gear, and who's training.</p>
                 </div>
-                <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-                    <a href="/gym-stats.html#sentinel" class="btn btn-sm btn-outline" style="text-decoration:none; font-weight:700;">
-                        <span>🌍</span> Sentinel Standalone →
-                    </a>
-                    <button class="refresh-btn" onclick="refreshSentinelAll()" id="btn-refresh-sentinel-all">↻ Sync Sentinel Telemetry</button>
+                <div class="sn-header-actions">
+                    <span class="sn-updated" id="radar-updated-label">Waiting for faction feed…</span>
+                    <a href="/gym-stats.html#sentinel" class="sn-btn" title="Open the standalone Sentinel view">Standalone ↗</a>
+                    <button type="button" class="sn-btn sn-btn-primary" onclick="refreshSentinelAll()" id="btn-refresh-sentinel-all">↻ Sync All</button>
                 </div>
-            </div>
+            </section>
 
-            <!-- 1. LIVE AIRSPACE & OVERSEAS RADAR CARD -->
-            <div class="sentinel-radar-panel span-full" id="sentinel-airspace-radar">
-                <div class="card-header" style="flex-wrap:wrap; gap:10px;">
-                    <div>
-                        <div class="card-title" style="color:var(--accent-cyan); display:flex; align-items:center; gap:8px;">
-                            <span>📡 Live Airspace &amp; Overseas Radar</span>
-                            <span id="radar-status-pill" class="badge-confirmed" style="font-size:0.72em;">Live Telemetry</span>
+            <!-- ═══ LIVE STATUS STRIP (click to jump to matching airspace view) ═══ -->
+            <section class="sn-status-strip" id="sn-status-strip" aria-label="Live faction member status">
+                <button type="button" class="sn-stat sn-tone-cyan" data-group="flying" onclick="toggleSentinelStatusCard('flying')" title="Show members in flight">
+                    <span class="sn-stat-icon">✈️</span>
+                    <span class="sn-stat-body">
+                        <span class="sn-stat-val" id="radar-kpi-air">0</span>
+                        <span class="sn-stat-lbl">In Flight</span>
+                    </span>
+                </button>
+                <button type="button" class="sn-stat sn-tone-cobalt" data-group="abroad" onclick="toggleSentinelStatusCard('abroad')" title="Show members landed overseas">
+                    <span class="sn-stat-icon">🌍</span>
+                    <span class="sn-stat-body">
+                        <span class="sn-stat-val" id="radar-kpi-abroad">0</span>
+                        <span class="sn-stat-lbl">Abroad</span>
+                    </span>
+                </button>
+                <button type="button" class="sn-stat sn-tone-emerald" data-group="city" onclick="toggleSentinelStatusCard('city')" title="Show members in Torn City">
+                    <span class="sn-stat-icon">🛡️</span>
+                    <span class="sn-stat-body">
+                        <span class="sn-stat-val" id="radar-kpi-city">0</span>
+                        <span class="sn-stat-lbl">In Torn</span>
+                    </span>
+                </button>
+                <button type="button" class="sn-stat sn-tone-crimson" data-group="hosp" onclick="toggleSentinelStatusCard('hosp')" title="Show members in hospital or jail">
+                    <span class="sn-stat-icon">🏥</span>
+                    <span class="sn-stat-body">
+                        <span class="sn-stat-val" id="radar-kpi-hosp">0</span>
+                        <span class="sn-stat-lbl">Hosp / Jail</span>
+                    </span>
+                </button>
+            </section>
+
+            <!-- ═══ SECTION NAV ═══ -->
+            <nav class="sn-subnav" id="sn-subnav" role="tablist" aria-label="Sentinel sections">
+                <button type="button" class="sn-subnav-btn active" data-sn="airspace" role="tab" aria-selected="true" onclick="openSentinelSection('airspace')">
+                    <span class="sn-subnav-icon">📡</span><span class="sn-subnav-lbl">Airspace</span><span class="sn-count" id="sn-count-airspace">0</span>
+                </button>
+                <button type="button" class="sn-subnav-btn" data-sn="war" role="tab" aria-selected="false" onclick="openSentinelSection('war')">
+                    <span class="sn-subnav-icon">⚔️</span><span class="sn-subnav-lbl">War Audit</span><span class="sn-count" id="sn-count-war">—</span>
+                </button>
+                <button type="button" class="sn-subnav-btn" data-sn="loadouts" role="tab" aria-selected="false" onclick="openSentinelSection('loadouts')">
+                    <span class="sn-subnav-icon">🪖</span><span class="sn-subnav-lbl">Loadouts</span><span class="sn-count" id="sn-count-loadouts">—</span>
+                </button>
+                <button type="button" class="sn-subnav-btn" data-sn="gains" role="tab" aria-selected="false" onclick="openSentinelSection('gains')">
+                    <span class="sn-subnav-icon">🏋️</span><span class="sn-subnav-lbl">Stat Gains</span><span class="sn-count" id="sn-count-gains">—</span>
+                </button>
+            </nav>
+
+            <!-- ═══ 1. AIRSPACE ═══ -->
+            <section class="sn-section active" id="sn-sec-airspace" data-sn-section="airspace">
+                <div class="sn-panel">
+                    <div class="sn-panel-head">
+                        <div>
+                            <h3 class="sn-panel-title">📡 Live Airspace</h3>
+                            <p class="sn-panel-sub">Real-time location of every member. Flight lengths are estimated from destination and aircraft type when live landing ETAs are masked.</p>
                         </div>
-                        <div style="font-size:0.78em; color:var(--text-tertiary); margin-top:2px;">
-                            Instant situational awareness of members currently in flight, abroad overseas, defending Torn City, or recovering in hospital.
-                        </div>
+                        <span id="radar-status-pill" class="sn-badge sn-badge-muted">Scanning…</span>
                     </div>
-                    <div style="font-size:0.76em; color:var(--text-tertiary);" id="radar-updated-label">Synced from faction status feed</div>
-                </div>
-                <div class="card-body" style="padding:14px 18px;">
-                    <div class="radar-metrics-row">
-                        <div class="radar-metric-box">
-                            <div>
-                                <div class="sentinel-kpi-lbl">✈️ In Flight</div>
-                                <div class="font-mono" style="font-size:1.35em; font-weight:900; color:var(--accent-cyan);" id="radar-kpi-air">0</div>
-                            </div>
-                            <span style="font-size:0.74em; color:var(--text-tertiary);">En route</span>
+
+                    <div class="sn-toolbar">
+                        <div class="sn-seg" id="radar-filter-seg" role="group" aria-label="Airspace filter">
+                            <button type="button" class="active" data-f="away" onclick="setRadarFilter('away')">All Away</button>
+                            <button type="button" data-f="flying" onclick="setRadarFilter('flying')">In Flight</button>
+                            <button type="button" data-f="abroad" onclick="setRadarFilter('abroad')">Abroad</button>
+                            <button type="button" data-f="hosp" onclick="setRadarFilter('hosp')">Hosp / Jail</button>
+                            <button type="button" data-f="city" onclick="setRadarFilter('city')">In Torn</button>
                         </div>
-                        <div class="radar-metric-box">
-                            <div>
-                                <div class="sentinel-kpi-lbl">🌍 Abroad</div>
-                                <div class="font-mono" style="font-size:1.35em; font-weight:900; color:var(--accent-cobalt);" id="radar-kpi-abroad">0</div>
-                            </div>
-                            <span style="font-size:0.74em; color:var(--text-tertiary);">Overseas</span>
-                        </div>
-                        <div class="radar-metric-box">
-                            <div>
-                                <div class="sentinel-kpi-lbl">🛡️ On Ground</div>
-                                <div class="font-mono" style="font-size:1.35em; font-weight:900; color:var(--accent-emerald);" id="radar-kpi-city">0</div>
-                            </div>
-                            <span style="font-size:0.74em; color:var(--text-tertiary);">Torn City Okay</span>
-                        </div>
-                        <div class="radar-metric-box">
-                            <div>
-                                <div class="sentinel-kpi-lbl">🏥 Hosp / Jail</div>
-                                <div class="font-mono" style="font-size:1.35em; font-weight:900; color:var(--accent-crimson);" id="radar-kpi-hosp">0</div>
-                            </div>
-                            <span style="font-size:0.74em; color:var(--text-tertiary);">Unavailable</span>
-                        </div>
+                        <input type="search" id="radar-search" class="sn-input" aria-label="Search airspace member" placeholder="Search member…" oninput="renderRadarTableDebounced()">
                     </div>
 
-                    <div class="radar-dest-chips" id="radar-dest-chips"></div>
+                    <div class="sn-chips" id="radar-dest-chips"></div>
 
-                    <div class="scrollable" style="max-height:240px; overflow-x:auto; border:1px solid var(--border-default); border-radius:8px;">
-                        <table class="armory-table" id="radar-airspace-table">
+                    <div class="sn-table-wrap">
+                        <table class="sn-table sn-table-radar" id="radar-airspace-table">
                             <thead>
                                 <tr>
                                     <th>Member</th>
-                                    <th>Airspace Status</th>
-                                    <th>Destination / Flight Leg</th>
-                                    <th>Landing / Return ETA</th>
-                                    <th>Combat Readiness</th>
+                                    <th>Status</th>
+                                    <th>Where</th>
+                                    <th>Timing</th>
+                                    <th>Faction Gear</th>
                                 </tr>
                             </thead>
                             <tbody id="radar-airspace-tbody">
-                                <tr><td colspan="5" style="text-align:center; padding:18px; color:var(--text-tertiary);">Scanning live faction airspace...</td></tr>
+                                <tr><td colspan="5" class="sn-empty">Scanning live faction airspace…</td></tr>
                             </tbody>
                         </table>
                     </div>
                 </div>
-            </div>
+            </section>
 
-            <!-- 2. FLIGHT & WAR SENTINEL AUDIT CARD -->
-            <div class="card span-full" id="war-sentinel-card" style="margin-bottom:18px; border: 1px solid rgba(0,206,201,0.25);">
-                <div class="card-header" style="flex-wrap:wrap; gap:12px;">
-                    <div>
-                        <div class="card-title" style="color:var(--accent-cyan); display:flex; align-items:center; gap:8px;">
-                            <span>⚔️ Ranked War Flight &amp; Defense Audit</span>
-                            <span style="font-size:0.68em; background:rgba(6,182,212,0.12); color:var(--accent-cyan); border:1px solid rgba(6,182,212,0.3); padding:2px 8px; border-radius:12px; font-weight:700;">FF Scouter &amp; Attack Audit</span>
+            <!-- ═══ 2. WAR AUDIT ═══ -->
+            <section class="sn-section" id="sn-sec-war" data-sn-section="war">
+                <div class="sn-panel" id="war-sentinel-card">
+                    <div class="sn-panel-head">
+                        <div>
+                            <h3 class="sn-panel-title">⚔️ Ranked War Flight &amp; Defense Audit</h3>
+                            <p class="sn-panel-sub">Who flew to dodge hits, who sat in Torn and got farmed, and who carried the score.</p>
                         </div>
-                        <div style="font-size:0.78em; color:var(--text-tertiary); margin-top:2px;">Scan past or active wars to see which members consistently flew and who sat in Torn City and got farmed.</div>
-                    </div>
-                    <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
-                        <div style="display:flex; align-items:center; gap:6px;">
-                            <span style="font-size:0.75em; color:var(--text-tertiary); text-transform:uppercase; font-weight:700;">Select War:</span>
-                            <select id="sentinel-war-select" aria-label="Select War" class="sort-select" onchange="runWarFlightAudit()" style="min-width:220px;">
-                                <option value="">Loading wars...</option>
+                        <div class="sn-head-actions">
+                            <select id="sentinel-war-select" aria-label="Select war" class="sn-select sn-select-wide" onchange="runWarFlightAudit()">
+                                <option value="">Loading wars…</option>
                             </select>
-                        </div>
-                        <button class="refresh-btn" onclick="runWarFlightAudit(true)" id="btn-refresh-audit">↻ Re-Scan</button>
-                    </div>
-                </div>
-
-                <!-- War Info & Scouter Status Ribbon -->
-                <div id="sentinel-status-ribbon" style="background:var(--bg-elevated); padding:10px 18px; border-top:1px solid var(--border-default); border-bottom:1px solid var(--border-default); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; font-size:0.82em;">
-                    <div id="sentinel-war-summary" style="color:var(--text-primary); font-weight:600;">
-                        Select a war to analyze flight uptime and defensive performance.
-                    </div>
-                    <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-                        <div id="sentinel-ff-badge" style="font-size:0.82em; color:var(--text-secondary);">
-                            ⚡ Scouter Status: Checking...
-                        </div>
-                    </div>
-                </div>
-
-                <div class="card-body" style="padding:16px 18px;">
-                    <!-- 5 HIGH IMPACT KPI CARDS -->
-                    <div class="sentinel-kpi-grid">
-                        <div class="sentinel-kpi-tile">
-                            <div class="sentinel-kpi-lbl">✈️ Faction Airtime</div>
-                            <div class="sentinel-kpi-val" style="color:var(--accent-cyan);" id="kpi-audit-airtime">—</div>
-                            <div class="sentinel-kpi-sub" id="kpi-audit-airtime-sub">Total verified flight</div>
-                        </div>
-                        <div class="sentinel-kpi-tile">
-                            <div class="sentinel-kpi-lbl">⚔️ Hits Made (Us)</div>
-                            <div class="sentinel-kpi-val" style="color:var(--accent-cobalt);" id="kpi-audit-hits">—</div>
-                            <div class="sentinel-kpi-sub" style="color:var(--accent-emerald);" id="kpi-audit-earned">+0 pts earned</div>
-                        </div>
-                        <div class="sentinel-kpi-tile">
-                            <div class="sentinel-kpi-lbl">🚨 Hits Taken (Enemy)</div>
-                            <div class="sentinel-kpi-val" style="color:var(--accent-crimson);" id="kpi-audit-farmed">—</div>
-                            <div class="sentinel-kpi-sub" style="color:var(--accent-amber);" id="kpi-audit-leaked">-0 pts conceded</div>
-                        </div>
-                        <div class="sentinel-kpi-tile">
-                            <div class="sentinel-kpi-lbl">🛡️ Ghost Aviators</div>
-                            <div class="sentinel-kpi-val" style="color:var(--accent-emerald);" id="kpi-audit-ghosts">—</div>
-                            <div class="sentinel-kpi-sub">&le; 4 hits &bull; 10h+ / S-rank</div>
-                        </div>
-                        <div class="sentinel-kpi-tile">
-                            <div class="sentinel-kpi-lbl">⚖️ Net War Score</div>
-                            <div class="sentinel-kpi-val" style="color:var(--accent-emerald);" id="kpi-audit-net">—</div>
-                            <div class="sentinel-kpi-sub" id="kpi-audit-actions">0 combat events</div>
+                            <button type="button" class="sn-btn" onclick="runWarFlightAudit(true)" id="btn-refresh-audit">↻ Re-scan</button>
                         </div>
                     </div>
 
-                    <!-- Controls & Filter Tabs -->
-                    <div class="sentinel-toolbar-bar">
-                        <div style="display:flex; gap:6px; flex-wrap:wrap;" id="sentinel-filter-tabs">
-                            <button class="filter-chip active" onclick="setSentinelFilter('all', this)">All Members (<span id="cnt-audit-all">0</span>)</button>
-                            <button class="filter-chip" onclick="setSentinelFilter('air', this)">✈️ Top Airtime (<span id="cnt-audit-air">0</span>)</button>
-                            <button class="filter-chip" onclick="setSentinelFilter('ghost', this)">👻 Ghost Aviators (<span id="cnt-audit-ghost">0</span>)</button>
-                            <button class="filter-chip" onclick="setSentinelFilter('pos', this)">⚔️ Positive Net (<span id="cnt-audit-pos">0</span>)</button>
-                            <button class="filter-chip" onclick="setSentinelFilter('farmed', this)">🚨 Most Hit (<span id="cnt-audit-farmed">0</span>)</button>
-                            <button class="filter-chip" onclick="setSentinelFilter('zero', this)">💤 0 Hits Made (<span id="cnt-audit-zero">0</span>)</button>
+                    <div class="sn-war-banner" id="sentinel-status-ribbon">
+                        <div class="sn-war-banner-top">
+                            <div id="sentinel-war-summary" class="sn-war-summary">Select a war to analyze flight uptime and defensive performance.</div>
+                            <div id="sentinel-ff-badge" class="sn-muted-sm"></div>
                         </div>
-                        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-                            <input type="text" id="sentinel-search" aria-label="Search member" placeholder="🔍 Search member..." oninput="renderSentinelTableDebounced()" class="sort-select" style="min-width:165px;">
-                            <select id="sentinel-sort" aria-label="Sort members" onchange="renderSentinelTable()" class="sort-select">
-                                <option value="mostAir">✈️ Highest Airtime</option>
-                                <option value="netScore">⚖️ Highest Net Impact (+Score)</option>
-                                <option value="hitsMade">⚔️ Most War Hits Made</option>
-                                <option value="leastFarmed">🛡️ Safest (Least Times Hit)</option>
-                                <option value="mostFarmed">🚨 Most Times Hit (Farmed)</option>
-                                <option value="leaked">🩸 Most Respect Leaked</option>
-                                <option value="trips">🛫 Most Flight Trips</option>
-                                <option value="grade">🏅 Best Grade (S &rarr; A &rarr; B)</option>
-                                <option value="name">🔤 Member Name</option>
+                        <div class="sn-scorebar" id="sn-war-scorebar" aria-hidden="true">
+                            <span class="sn-scorebar-us" style="width:50%;"></span>
+                        </div>
+                    </div>
+
+                    <div class="sn-kpis">
+                        <div class="sn-kpi">
+                            <div class="sn-kpi-lbl">✈️ Faction Airtime</div>
+                            <div class="sn-kpi-val sn-c-cyan" id="kpi-audit-airtime">—</div>
+                            <div class="sn-kpi-sub" id="kpi-audit-airtime-sub">Verified flight time</div>
+                        </div>
+                        <div class="sn-kpi">
+                            <div class="sn-kpi-lbl">⚔️ Hits Made</div>
+                            <div class="sn-kpi-val sn-c-cobalt" id="kpi-audit-hits">—</div>
+                            <div class="sn-kpi-sub sn-c-emerald" id="kpi-audit-earned">+0 respect earned</div>
+                        </div>
+                        <div class="sn-kpi">
+                            <div class="sn-kpi-lbl">🚨 Hits Taken</div>
+                            <div class="sn-kpi-val sn-c-crimson" id="kpi-audit-farmed">—</div>
+                            <div class="sn-kpi-sub" id="kpi-audit-leaked">-0 respect conceded</div>
+                        </div>
+                        <div class="sn-kpi">
+                            <div class="sn-kpi-lbl">👻 Ghost Aviators</div>
+                            <div class="sn-kpi-val sn-c-emerald" id="kpi-audit-ghosts">—</div>
+                            <div class="sn-kpi-sub" title="Hit 4 times or fewer while flying 10h+, 25%+ of the war, or graded S">≤ 4 hits taken while flying</div>
+                        </div>
+                        <div class="sn-kpi">
+                            <div class="sn-kpi-lbl">⚖️ Net War Score</div>
+                            <div class="sn-kpi-val sn-c-emerald" id="kpi-audit-net">—</div>
+                            <div class="sn-kpi-sub" id="kpi-audit-actions">0 combat actions</div>
+                        </div>
+                    </div>
+
+                    <div class="sn-toolbar">
+                        <div class="sn-seg" id="sentinel-filter-tabs" role="group" aria-label="War audit filter">
+                            <button type="button" class="active" data-f="all" onclick="setSentinelFilter('all', this)">All <span class="sn-seg-count" id="cnt-audit-all">0</span></button>
+                            <button type="button" data-f="air" onclick="setSentinelFilter('air', this)">Flew <span class="sn-seg-count" id="cnt-audit-air">0</span></button>
+                            <button type="button" data-f="ghost" onclick="setSentinelFilter('ghost', this)">Ghosts <span class="sn-seg-count" id="cnt-audit-ghost">0</span></button>
+                            <button type="button" data-f="pos" onclick="setSentinelFilter('pos', this)">Net Positive <span class="sn-seg-count" id="cnt-audit-pos">0</span></button>
+                            <button type="button" data-f="farmed" onclick="setSentinelFilter('farmed', this)">Got Hit <span class="sn-seg-count" id="cnt-audit-farmed">0</span></button>
+                            <button type="button" data-f="zero" onclick="setSentinelFilter('zero', this)">0 Hits Made <span class="sn-seg-count" id="cnt-audit-zero">0</span></button>
+                        </div>
+                        <div class="sn-toolbar-right">
+                            <select id="sentinel-sort" class="sn-select" aria-label="Sort war audit members" onchange="onSentinelSortChange(this.value)">
+                                <option value="mostAir">Sort: Airtime ↓</option>
+                                <option value="netScore">Sort: Net Impact ↓</option>
+                                <option value="hitsMade">Sort: Hits Made ↓</option>
+                                <option value="leastFarmed">Sort: Safest First</option>
+                                <option value="mostFarmed">Sort: Most Hit ↓</option>
+                                <option value="leaked">Sort: Resp. Lost ↓</option>
+                                <option value="trips">Sort: Trips ↓</option>
+                                <option value="grade">Sort: Best Grade</option>
+                                <option value="name">Sort: Name A → Z</option>
                             </select>
+                            <input type="search" id="sentinel-search" class="sn-input" aria-label="Search war audit member" placeholder="Search member…" oninput="renderSentinelTableDebounced()">
                         </div>
                     </div>
 
-                    <!-- Table Container -->
-                    <div class="scrollable" style="max-height:420px; overflow-x:auto; border:1px solid var(--border-default); border-radius:8px;">
-                        <table style="width:100%; border-collapse:collapse; text-align:left; font-size:0.82em;" id="sentinel-table">
-                            <thead style="background:var(--bg-elevated); position:sticky; top:0; z-index:2; border-bottom:1px solid var(--border-default);">
-                                <tr style="color:var(--text-tertiary); font-size:0.9em; text-transform:uppercase; letter-spacing:0.5px; user-select:none;">
-                                    <th style="padding:10px 14px; cursor:pointer;" onclick="toggleSort('name')" title="Sort by Name">Member <span id="th-sort-name"></span></th>
-                                    <th style="padding:10px 10px; cursor:pointer;" onclick="toggleSort('grade')" title="Sort by Grade">Grade <span id="th-sort-grade"></span></th>
-                                    <th style="padding:10px 10px; cursor:pointer;" onclick="toggleSort('mostAir')" title="Sort by Airtime">War Airtime <span id="th-sort-mostAir">▼</span></th>
-                                    <th style="padding:10px 10px; cursor:pointer;" onclick="toggleSort('trips')" title="Sort by Trips">Trips <span id="th-sort-trips"></span></th>
-                                    <th style="padding:10px 10px; cursor:pointer;" onclick="toggleSort('mostFarmed')" title="Enemy War Hits Taken (+ Outside Hits)">Times Hit <span id="th-sort-mostFarmed"></span></th>
-                                    <th style="padding:10px 10px; cursor:pointer;" onclick="toggleSort('leaked')" title="Sort by Respect Leaked">Respect Leaked <span id="th-sort-leaked"></span></th>
-                                    <th style="padding:10px 10px; cursor:pointer;" onclick="toggleSort('hitsMade')" title="Sort by Hits Made">Hits Made <span id="th-sort-hitsMade"></span></th>
-                                    <th style="padding:10px 14px; cursor:pointer;" onclick="toggleSort('netScore')" title="Sort by Net Impact">Net Impact <span id="th-sort-netScore"></span></th>
+                    <div class="sn-table-wrap">
+                        <table class="sn-table sn-table-war" id="sentinel-table">
+                            <thead>
+                                <tr>
+                                    <th class="sn-sortable" onclick="toggleSort('name')" title="Sort by name">Member<span class="sn-sort-ind" id="th-sort-name"></span></th>
+                                    <th class="sn-sortable" onclick="toggleSort('grade')" title="Sort by grade">Grade<span class="sn-sort-ind" id="th-sort-grade"></span></th>
+                                    <th class="sn-sortable" onclick="toggleSort('mostAir')" title="Sort by airtime">War Airtime<span class="sn-sort-ind" id="th-sort-mostAir"> ▼</span></th>
+                                    <th class="sn-sortable sn-num-col" onclick="toggleSort('trips')" title="Sort by flight trips">Trips<span class="sn-sort-ind" id="th-sort-trips"></span></th>
+                                    <th class="sn-sortable sn-num-col" onclick="toggleSort('mostFarmed')" title="Total times hit (war + outside)">Times Hit<span class="sn-sort-ind" id="th-sort-mostFarmed"></span></th>
+                                    <th class="sn-sortable sn-num-col" onclick="toggleSort('leaked')" title="Respect conceded to the enemy">Resp. Lost<span class="sn-sort-ind" id="th-sort-leaked"></span></th>
+                                    <th class="sn-sortable sn-num-col" onclick="toggleSort('hitsMade')" title="War hits made">Hits Made<span class="sn-sort-ind" id="th-sort-hitsMade"></span></th>
+                                    <th class="sn-sortable sn-num-col" onclick="toggleSort('netScore')" title="Respect earned minus respect lost">Net<span class="sn-sort-ind" id="th-sort-netScore"></span></th>
                                 </tr>
                             </thead>
                             <tbody id="sentinel-tbody">
-                                <tr><td colspan="8" style="text-align:center; padding:24px; color:var(--text-tertiary);">Loading war flight &amp; defense records...</td></tr>
+                                <tr><td colspan="8" class="sn-empty">Loading war flight &amp; defense records…</td></tr>
                             </tbody>
                         </table>
                     </div>
+                    <div class="sn-table-foot" id="sentinel-table-foot"></div>
                 </div>
-            </div>
+            </section>
 
-            <!-- 3. FACTION PLAYER STAT GAINS & GYM PROGRESSION TRACKER CARD -->
-            <div class="card span-full" id="card-stat-gains-tracker" style="margin-bottom:18px;">
-                <div class="card-header" style="flex-wrap:wrap; gap:12px; justify-content:space-between; align-items:center;">
-                    <div>
-                        <div class="card-title" style="color:var(--accent-cyan); display:flex; align-items:center; flex-wrap:wrap; gap:8px;">
-                            <span>🏋️ Faction Battle Stat Gains &amp; Progression</span>
-                            <span id="stat-gains-source-summary" class="badge-unrecorded">Loading roster...</span>
+            <!-- ═══ 3. LOADOUTS ═══ -->
+            <section class="sn-section" id="sn-sec-loadouts" data-sn-section="loadouts">
+                <div class="sn-panel">
+                    <div class="sn-panel-head">
+                        <div>
+                            <h3 class="sn-panel-title">🪖 Combat Loadouts</h3>
+                            <p class="sn-panel-sub">Faction armory weapons &amp; armor on loan, matched against the selected war's hitters.</p>
                         </div>
-                        <div style="font-size:0.78em; color:var(--text-tertiary); margin-top:2px;">
-                            Faction-scoped stats (Str, Def, Spd, Dex, TBS), training deltas, API-key verification status, and growth velocity.
-                        </div>
+                        <span class="sn-badge sn-badge-muted" id="cf-war-context">No war loaded</span>
                     </div>
-                    <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-                        <div class="stat-window-segmented" id="stat-window-segmented" role="group" aria-label="Timeframe">
-                            <button type="button" class="stat-window-pill" data-win="24h" onclick="setStatGainsWindow('24h')">24H</button>
-                            <button type="button" class="stat-window-pill" data-win="3d" onclick="setStatGainsWindow('3d')">3D</button>
-                            <button type="button" class="stat-window-pill active" data-win="7d" onclick="setStatGainsWindow('7d')">7D</button>
-                            <button type="button" class="stat-window-pill" data-win="14d" onclick="setStatGainsWindow('14d')">14D</button>
-                            <button type="button" class="stat-window-pill" data-win="30d" onclick="setStatGainsWindow('30d')">30D</button>
-                            <button type="button" class="stat-window-pill" data-win="all" onclick="setStatGainsWindow('all')">ALL</button>
-                        </div>
-                        <select id="stat-window-select" aria-label="Stat gains window" onchange="setStatGainsWindow(this.value)" style="display:none;">
-                            <option value="24h">24h</option>
-                            <option value="3d">3d</option>
-                            <option value="7d" selected>7d</option>
-                            <option value="14d">14d</option>
-                            <option value="30d">30d</option>
-                            <option value="all">all</option>
-                        </select>
-                        <button class="btn btn-sm btn-outline btn-outline-amber" id="btn-stat-snapshot" onclick="triggerStatSnapshot()" style="display:inline-flex; align-items:center; gap:5px;" title="Snapshot current stats for connected faction members">
-                            <span>📸</span> Snapshot Now
-                        </button>
-                        <button class="refresh-btn" onclick="loadFactionStatGains(true)" id="btn-refresh-stat-gains">↻ Refresh</button>
-                        <a href="/gym-stats.html" class="btn btn-sm btn-primary" style="text-decoration:none; font-weight:700;">
-                            Full Gym App →
-                        </a>
-                    </div>
-                </div>
 
-                <div class="card-body" style="padding:16px 18px;">
-                    <!-- 5 KPI METRIC CARDS STRIP -->
-                    <div class="sentinel-kpi-grid">
-                        <div class="sentinel-kpi-tile">
-                            <div class="sentinel-kpi-lbl">📈 Total Faction Gains</div>
-                            <div class="sentinel-kpi-val" style="color:var(--accent-emerald);" id="stat-kpi-total-gains">+0</div>
-                            <div class="sentinel-kpi-sub" id="stat-kpi-total-gains-sub">In selected window</div>
+                    <div class="sn-kpis sn-kpis-3">
+                        <div class="sn-kpi">
+                            <div class="sn-kpi-lbl">🪖 Gear On Loan</div>
+                            <div class="sn-kpi-val sn-c-cobalt" id="cf-gear-deployed">—</div>
+                            <div class="sn-kpi-sub" id="cf-gear-deployed-sub">Loaned armory items</div>
                         </div>
-                        <div class="sentinel-kpi-tile">
-                            <div class="sentinel-kpi-lbl">🥇 Top Stat Gainer</div>
-                            <div class="sentinel-kpi-val" style="color:var(--accent-amber); font-size:1.3em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" id="stat-kpi-top-gainer">—</div>
-                            <div class="sentinel-kpi-sub" style="color:var(--accent-emerald);" id="stat-kpi-top-gainer-sub">+0 gained</div>
+                        <div class="sn-kpi">
+                            <div class="sn-kpi-lbl">⚡ Hitter Coverage</div>
+                            <div class="sn-kpi-val sn-c-emerald" id="cf-coverage-pct">—</div>
+                            <div class="sn-kpi-sub" id="cf-coverage-sub">War hitters carrying armory gear</div>
                         </div>
-                        <div class="sentinel-kpi-tile">
-                            <div class="sentinel-kpi-lbl">💊 Drug &amp; Gym Momentum</div>
-                            <div class="sentinel-kpi-val" style="color:var(--accent-purple);" id="stat-kpi-momentum">0 / 0</div>
-                            <div class="sentinel-kpi-sub" id="stat-kpi-momentum-sub">Xanax &amp; Refills Used</div>
-                        </div>
-                        <div class="sentinel-kpi-tile">
-                            <div class="sentinel-kpi-lbl">⚡ Combat Power (Total)</div>
-                            <div class="sentinel-kpi-val" style="color:var(--accent-cyan);" id="stat-kpi-total-power">0</div>
-                            <div class="sentinel-kpi-sub" id="stat-kpi-total-power-sub">Faction Roster Total</div>
-                        </div>
-                        <div class="sentinel-kpi-tile">
-                            <div class="sentinel-kpi-lbl">😴 Stat Slackers (&lt;1K)</div>
-                            <div class="sentinel-kpi-val" style="color:var(--accent-crimson);" id="stat-kpi-slackers">0</div>
-                            <div class="sentinel-kpi-sub" id="stat-kpi-slackers-sub">Needs training push</div>
+                        <div class="sn-kpi">
+                            <div class="sn-kpi-lbl">🛡️ Readiness</div>
+                            <div class="sn-kpi-val sn-c-cyan" id="cf-readiness-index">—</div>
+                            <div class="sn-kpi-sub" id="cf-readiness-sub">Based on hitter gear coverage</div>
                         </div>
                     </div>
 
-                    <!-- MULTI-FILTER CONTROLS BAR -->
-                    <div class="sentinel-toolbar-bar">
-                        <!-- Filter Chips -->
-                        <div style="display:flex; flex-wrap:wrap; gap:6px; align-items:center;" id="stat-filter-chips">
-                            <span style="font-size:0.74em; color:var(--text-tertiary); font-weight:700; text-transform:uppercase;">Filter:</span>
-                            <button class="filter-pill active" onclick="setStatGainsFilter('all', this)">All Members</button>
-                            <button class="filter-pill" onclick="setStatGainsFilter('top', this)">🔥 Top (&gt;10K)</button>
-                            <button class="filter-pill" onclick="setStatGainsFilter('str', this)">💪 Str</button>
-                            <button class="filter-pill" onclick="setStatGainsFilter('def', this)">🛡️ Def</button>
-                            <button class="filter-pill" onclick="setStatGainsFilter('spd', this)">⚡ Spd</button>
-                            <button class="filter-pill" onclick="setStatGainsFilter('dex', this)">🎯 Dex</button>
-                            <button class="filter-pill" onclick="setStatGainsFilter('slackers', this)">😴 Slackers</button>
-                            <button class="filter-pill" onclick="setStatGainsFilter('verified', this)">✓ Confirmed Key</button>
-                            <button class="filter-pill" onclick="setStatGainsFilter('estimated', this)">~ Estimated</button>
+                    <div class="sn-toolbar">
+                        <div class="sn-seg" id="cf-filter-chips" role="group" aria-label="Loadout filter">
+                            <button type="button" class="active" data-f="all" onclick="setCfLoadoutFilter('all', this)">All</button>
+                            <button type="button" data-f="equipped" onclick="setCfLoadoutFilter('equipped', this)">Has Gear</button>
+                            <button type="button" data-f="hitters" onclick="setCfLoadoutFilter('hitters', this)">War Hitters</button>
+                            <button type="button" data-f="unequipped" onclick="setCfLoadoutFilter('unequipped', this)">Hitters w/o Gear</button>
                         </div>
-
-                        <!-- Live Search & Sort Dropdown -->
-                        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-left:auto;">
-                            <input type="text" id="stat-gains-search" aria-label="Search stat gains player" placeholder="🔍 Search player or ID..." class="sort-select" style="min-width:170px;" oninput="onStatGainsSearch(this.value)">
-                            <select id="stat-gains-sort-select" aria-label="Sort stat gains" class="sort-select" onchange="onStatGainsSortChange(this.value)">
-                                <option value="gainTotal_desc">Gain: High → Low</option>
-                                <option value="gainTotal_asc">Gain: Low → High</option>
-                                <option value="totalStats_desc">Total Stats: High → Low</option>
-                                <option value="gainStr_desc">Strength Gain: High → Low</option>
-                                <option value="gainDef_desc">Defense Gain: High → Low</option>
-                                <option value="gainSpd_desc">Speed Gain: High → Low</option>
-                                <option value="gainDex_desc">Dexterity Gain: High → Low</option>
-                                <option value="xanax_desc">Xanax Used: High → Low</option>
-                                <option value="name_asc">Player Name: A → Z</option>
-                            </select>
-                        </div>
+                        <input type="search" id="cf-search" class="sn-input" aria-label="Search combatant or item" placeholder="Search member or item…" oninput="renderCrossFactionLoadoutsDebounced()">
                     </div>
 
-                    <!-- MASTER STAT GAINS TABLE (Compact widths fit 1440px without horizontal clipping) -->
-                    <div class="scrollable" style="max-height:540px; overflow-x:auto; border:1px solid var(--border-default); border-radius:8px;">
-                        <table class="armory-table" id="stat-gains-table">
+                    <div class="sn-table-wrap">
+                        <table class="sn-table sn-table-loadouts">
                             <thead>
                                 <tr>
-                                    <th class="sortable-th" onclick="sortStatGains('name')" style="min-width:155px;">Member <span id="sort-ind-sg-name">↕</span></th>
-                                    <th class="sortable-th" onclick="sortStatGains('totalStats')" style="min-width:94px;">Total Stats <span id="sort-ind-sg-totalStats">↕</span></th>
-                                    <th class="sortable-th" onclick="sortStatGains('gainTotal')" style="min-width:102px;">Gain (Δ) <span id="sort-ind-sg-gainTotal">↓</span></th>
-                                    <th class="sortable-th" onclick="sortStatGains('gainStr')" style="min-width:74px;">Str <span id="sort-ind-sg-gainStr">↕</span></th>
-                                    <th class="sortable-th" onclick="sortStatGains('gainDef')" style="min-width:74px;">Def <span id="sort-ind-sg-gainDef">↕</span></th>
-                                    <th class="sortable-th" onclick="sortStatGains('gainSpd')" style="min-width:74px;">Spd <span id="sort-ind-sg-gainSpd">↕</span></th>
-                                    <th class="sortable-th" onclick="sortStatGains('gainDex')" style="min-width:74px;">Dex <span id="sort-ind-sg-gainDex">↕</span></th>
-                                    <th class="sortable-th" onclick="sortStatGains('xanax')" style="min-width:78px;">Momentum <span id="sort-ind-sg-xanax">↕</span></th>
-                                    <th style="min-width:106px;">Balance</th>
-                                    <th style="text-align:center; min-width:68px;">Timeline</th>
-                                </tr>
-                            </thead>
-                            <tbody id="stat-gains-tbody">
-                                <tr><td colspan="10" style="text-align:center; padding:28px; color:var(--text-tertiary);">Loading faction battle stats and progression tracking...</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-
-            <!-- 4. CROSS-FACTION ARMORY & COMBAT LOADOUTS INTELLIGENCE -->
-            <div class="card span-full" style="margin-bottom:18px;">
-                <div class="card-header" style="flex-wrap:wrap; gap:10px;">
-                    <div>
-                        <div class="card-title">🛡️ Cross-Faction Armory &amp; Combat Loadouts</div>
-                        <div style="font-size:0.8em;color:var(--text-tertiary);">Track loaned faction weapons &amp; defensive armor coverage against active war hitters</div>
-                    </div>
-                    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-                        <input type="text" id="cf-search" aria-label="Search combatant" placeholder="🔍 Search combatant or item..." class="sort-select" style="min-width:215px;" oninput="renderCrossFactionLoadouts()">
-                    </div>
-                </div>
-                <div class="card-body" style="padding:18px;">
-                    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:14px; margin-bottom:14px;">
-                        <div style="background:var(--bg-elevated); border:1px solid var(--border-subtle); border-radius:8px; padding:14px;">
-                            <div style="font-size:0.74em; color:var(--text-tertiary); text-transform:uppercase; font-weight:800;">🪖 Faction Gear in Combat</div>
-                            <div style="font-size:1.6em; font-weight:900; color:var(--accent-cobalt); margin-top:2px;" id="cf-gear-deployed">—</div>
-                            <div style="font-size:0.74em; color:var(--text-secondary);" id="cf-gear-deployed-sub">Loaned items held by combatants</div>
-                        </div>
-                        <div style="background:var(--bg-elevated); border:1px solid var(--border-subtle); border-radius:8px; padding:14px;">
-                            <div style="font-size:0.74em; color:var(--text-tertiary); text-transform:uppercase; font-weight:800;">⚡ Equipment Coverage</div>
-                            <div style="font-size:1.6em; font-weight:900; color:var(--accent-emerald); margin-top:2px;" id="cf-coverage-pct">—%</div>
-                            <div style="font-size:0.74em; color:var(--text-secondary);" id="cf-coverage-sub">War hitters carrying armory gear</div>
-                        </div>
-                        <div style="background:var(--bg-elevated); border:1px solid var(--border-subtle); border-radius:8px; padding:14px;">
-                            <div style="font-size:0.74em; color:var(--text-tertiary); text-transform:uppercase; font-weight:800;">🛡️ Combat Readiness</div>
-                            <div style="font-size:1.6em; font-weight:900; color:var(--accent-cyan); margin-top:2px;" id="cf-readiness-index">—</div>
-                            <div style="font-size:0.74em; color:var(--text-secondary);" id="cf-readiness-sub">Defensive armor &amp; weapon coverage</div>
-                        </div>
-                    </div>
-
-                    <div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px;" id="cf-filter-chips">
-                        <button class="filter-chip active" onclick="setCfLoadoutFilter('all', this)">All Roster</button>
-                        <button class="filter-chip" onclick="setCfLoadoutFilter('equipped', this)">🪖 Carrying Armory Gear</button>
-                        <button class="filter-chip" onclick="setCfLoadoutFilter('hitters', this)">⚔️ Active War Hitters</button>
-                        <button class="filter-chip" onclick="setCfLoadoutFilter('unequipped', this)">⚠️ Hitters Without Gear</button>
-                    </div>
-
-                    <div class="scrollable" style="max-height:320px; overflow-x:auto; border:1px solid var(--border-default); border-radius:8px;">
-                        <table class="armory-table">
-                            <thead>
-                                <tr>
-                                    <th>Combatant</th>
-                                    <th>Combat Role</th>
-                                    <th>Weapon Loadout Status</th>
-                                    <th>Defensive Armor Assigned</th>
-                                    <th>War Hits &amp; Respect</th>
+                                    <th>Member</th>
+                                    <th>Role</th>
+                                    <th>Weapons</th>
+                                    <th>Armor &amp; Other</th>
+                                    <th class="sn-num-col">War Hits</th>
                                 </tr>
                             </thead>
                             <tbody id="cf-loadouts-tbody">
-                                <tr><td colspan="5" style="text-align:center; padding:20px; color:var(--text-tertiary);">Load a war above to audit cross-faction loadouts...</td></tr>
+                                <tr><td colspan="5" class="sn-empty">Load a war in War Audit to match loadouts against hitters…</td></tr>
                             </tbody>
                         </table>
                     </div>
+                    <div class="sn-table-foot" id="cf-table-foot"></div>
                 </div>
-            </div>
+            </section>
+
+            <!-- ═══ 4. STAT GAINS ═══ -->
+            <section class="sn-section" id="sn-sec-gains" data-sn-section="gains">
+                <div class="sn-panel" id="card-stat-gains-tracker">
+                    <div class="sn-panel-head">
+                        <div>
+                            <h3 class="sn-panel-title">🏋️ Battle Stat Gains</h3>
+                            <p class="sn-panel-sub">Training deltas per member. <span class="sn-c-emerald">Confirmed</span> = member's own API key via the Discord bot; <span class="sn-c-amber">Estimated</span> = spy / FF Scouter.</p>
+                        </div>
+                        <span id="stat-gains-source-summary" class="sn-badge sn-badge-muted">Loading roster…</span>
+                    </div>
+
+                    <div class="sn-toolbar">
+                        <div class="stat-window-segmented" id="stat-window-segmented" role="group" aria-label="Timeframe">
+                            <button type="button" class="stat-window-pill" data-win="24h" onclick="setStatGainsWindow('24h', this)">24H</button>
+                            <button type="button" class="stat-window-pill" data-win="3d" onclick="setStatGainsWindow('3d', this)">3D</button>
+                            <button type="button" class="stat-window-pill active" data-win="7d" onclick="setStatGainsWindow('7d', this)">7D</button>
+                            <button type="button" class="stat-window-pill" data-win="14d" onclick="setStatGainsWindow('14d', this)">14D</button>
+                            <button type="button" class="stat-window-pill" data-win="30d" onclick="setStatGainsWindow('30d', this)">30D</button>
+                            <button type="button" class="stat-window-pill" data-win="all" onclick="setStatGainsWindow('all', this)">ALL</button>
+                        </div>
+                        <div class="sn-head-actions">
+                            <button type="button" class="sn-btn sn-btn-amber" id="btn-stat-snapshot" onclick="triggerStatSnapshot()" title="Snapshot current stats for members with connected API keys"><span>📸</span> Snapshot Now</button>
+                            <button type="button" class="sn-btn" onclick="loadFactionStatGains(true)" id="btn-refresh-stat-gains">↻ Refresh</button>
+                            <a href="/gym-stats.html" class="sn-btn">Full Gym App ↗</a>
+                        </div>
+                    </div>
+
+                    <div class="sn-kpis">
+                        <div class="sn-kpi">
+                            <div class="sn-kpi-lbl">📈 Faction Gains</div>
+                            <div class="sn-kpi-val sn-c-emerald" id="stat-kpi-total-gains">+0</div>
+                            <div class="sn-kpi-sub" id="stat-kpi-total-gains-sub">In selected window</div>
+                        </div>
+                        <div class="sn-kpi">
+                            <div class="sn-kpi-lbl">🥇 Top Gainer</div>
+                            <div class="sn-kpi-val sn-kpi-val-text sn-c-amber" id="stat-kpi-top-gainer">—</div>
+                            <div class="sn-kpi-sub sn-c-emerald" id="stat-kpi-top-gainer-sub">+0 gained</div>
+                        </div>
+                        <div class="sn-kpi">
+                            <div class="sn-kpi-lbl">💊 Xanax / ⚡ Refills</div>
+                            <div class="sn-kpi-val sn-c-purple" id="stat-kpi-momentum">0 / 0</div>
+                            <div class="sn-kpi-sub" id="stat-kpi-momentum-sub">Used in window</div>
+                        </div>
+                        <div class="sn-kpi">
+                            <div class="sn-kpi-lbl">⚡ Combined Stats</div>
+                            <div class="sn-kpi-val sn-c-cyan" id="stat-kpi-total-power">0</div>
+                            <div class="sn-kpi-sub" id="stat-kpi-total-power-sub">Faction roster total</div>
+                        </div>
+                        <div class="sn-kpi">
+                            <div class="sn-kpi-lbl">😴 Slackers</div>
+                            <div class="sn-kpi-val sn-c-crimson" id="stat-kpi-slackers">0</div>
+                            <div class="sn-kpi-sub" id="stat-kpi-slackers-sub">Under 1K gained</div>
+                        </div>
+                    </div>
+
+                    <div class="sn-toolbar">
+                        <div class="sn-seg" id="stat-filter-chips" role="group" aria-label="Stat gains filter">
+                            <button type="button" class="active" data-f="all" onclick="setStatGainsFilter('all', this)">All</button>
+                            <button type="button" data-f="top" onclick="setStatGainsFilter('top', this)">Top (&gt;10K)</button>
+                            <button type="button" data-f="slackers" onclick="setStatGainsFilter('slackers', this)">Slackers</button>
+                            <button type="button" data-f="verified" onclick="setStatGainsFilter('verified', this)">Confirmed</button>
+                            <button type="button" data-f="estimated" onclick="setStatGainsFilter('estimated', this)">Estimated</button>
+                        </div>
+                        <div class="sn-toolbar-right">
+                            <select id="stat-gains-spec-select" class="sn-select" aria-label="Filter by build" onchange="setStatGainsSpec(this.value)">
+                                <option value="">Any build</option>
+                                <option value="Strength">💪 Strength</option>
+                                <option value="Defense">🛡️ Defense</option>
+                                <option value="Speed">⚡ Speed</option>
+                                <option value="Dexterity">🎯 Dexterity</option>
+                                <option value="Balanced">⚖️ Balanced</option>
+                            </select>
+                            <select id="stat-gains-sort-select" class="sn-select" aria-label="Sort stat gains" onchange="onStatGainsSortChange(this.value)">
+                                <option value="gainTotal_desc">Sort: Gain ↓</option>
+                                <option value="gainTotal_asc">Sort: Gain ↑</option>
+                                <option value="totalStats_desc">Sort: Total Stats ↓</option>
+                                <option value="gainStr_desc">Sort: Strength ↓</option>
+                                <option value="gainDef_desc">Sort: Defense ↓</option>
+                                <option value="gainSpd_desc">Sort: Speed ↓</option>
+                                <option value="gainDex_desc">Sort: Dexterity ↓</option>
+                                <option value="xanax_desc">Sort: Xanax ↓</option>
+                                <option value="name_asc">Sort: Name A → Z</option>
+                            </select>
+                            <input type="search" id="stat-gains-search" class="sn-input" aria-label="Search stat gains player" placeholder="Search player or ID…" oninput="onStatGainsSearch(this.value)">
+                        </div>
+                    </div>
+
+                    <div class="sn-table-wrap">
+                        <table class="sn-table sn-table-gains" id="stat-gains-table">
+                            <thead>
+                                <tr>
+                                    <th class="sn-sortable" onclick="sortStatGains('name')">Member<span class="sn-sort-ind" id="sort-ind-sg-name"></span></th>
+                                    <th class="sn-sortable sn-num-col" onclick="sortStatGains('totalStats')">Total<span class="sn-sort-ind" id="sort-ind-sg-totalStats"></span></th>
+                                    <th class="sn-sortable sn-num-col" onclick="sortStatGains('gainTotal')">Gain<span class="sn-sort-ind" id="sort-ind-sg-gainTotal"> ↓</span></th>
+                                    <th class="sn-sortable sn-num-col" onclick="sortStatGains('gainStr')">Str<span class="sn-sort-ind" id="sort-ind-sg-gainStr"></span></th>
+                                    <th class="sn-sortable sn-num-col" onclick="sortStatGains('gainDef')">Def<span class="sn-sort-ind" id="sort-ind-sg-gainDef"></span></th>
+                                    <th class="sn-sortable sn-num-col" onclick="sortStatGains('gainSpd')">Spd<span class="sn-sort-ind" id="sort-ind-sg-gainSpd"></span></th>
+                                    <th class="sn-sortable sn-num-col" onclick="sortStatGains('gainDex')">Dex<span class="sn-sort-ind" id="sort-ind-sg-gainDex"></span></th>
+                                    <th class="sn-sortable sn-num-col" onclick="sortStatGains('xanax')">Xan / Ref<span class="sn-sort-ind" id="sort-ind-sg-xanax"></span></th>
+                                    <th>Build</th>
+                                    <th class="sn-center-col">History</th>
+                                </tr>
+                            </thead>
+                            <tbody id="stat-gains-tbody">
+                                <tr><td colspan="10" class="sn-empty">Loading faction battle stats…</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="sn-table-foot" id="stat-gains-table-foot"></div>
+                </div>
+            </section>
         </div>
 
         <!-- ========================================== -->
@@ -3250,7 +3732,7 @@
         </div>
 
     <!-- PLAYER STAT PROGRESSION & FORECAST MODAL -->
-    <div id="stat-player-modal" class="modal-backdrop" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.78); backdrop-filter:blur(4px); z-index:9999; justify-content:center; align-items:center; padding:16px;">
+    <div id="stat-player-modal" class="modal-backdrop" onclick="if (event.target === this) closeStatPlayerModal()" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.78); backdrop-filter:blur(4px); z-index:9999; justify-content:center; align-items:center; padding:16px;">
         <div class="sp-modal-panel">
             <!-- Modal Header -->
             <div class="sp-modal-hdr">
@@ -3269,7 +3751,7 @@
             </div>
 
             <!-- Modal Body Scrollable -->
-            <div style="padding:18px 20px; overflow-y:auto; flex:1; display:flex; flex-direction:column; gap:16px;">
+            <div style="padding:18px 20px; overflow-y:auto; flex:1; min-height:0; display:flex; flex-direction:column; gap:16px;">
                 <!-- 4 STAT TILES -->
                 <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:10px;">
                     <div style="background:rgba(239,68,68,0.08); border:1px solid rgba(239,68,68,0.25); border-radius:8px; padding:10px; text-align:center;">
@@ -3446,6 +3928,17 @@ function switchOpsTab(tabId) {
     if (navArmory) navArmory.classList.toggle('active', tabId === 'armory');
     if (navSentinel) navSentinel.classList.toggle('active', tabId === 'sentinel');
     if (navGym) navGym.classList.toggle('active', tabId === 'gym');
+
+    const mc = document.getElementById('main-content');
+    if (mc) {
+        const wasCompact = mc.classList.contains('ops-compact-header');
+        const nextCompact = (tabId === 'sentinel');
+        mc.classList.toggle('ops-compact-header', nextCompact);
+        if (wasCompact !== nextCompact) {
+            mc.scrollTop = 0;
+            if (window.scrollY > 0) window.scrollTo(0, 0);
+        }
+    }
 
     if (tabId === 'sentinel') {
         if (typeof renderLiveAirspaceRadar === 'function' && dashData?.dash) {
@@ -3691,7 +4184,8 @@ function renderKPIs(d) {
             kpiArmoryHealth.innerText = 'Gear & Loans';
             kpiArmoryHealth.style.color = 'var(--accent-amber)';
         } else {
-            kpiArmoryHealth.innerText = armory.armoryHealth || (lowCount === 0 ? "100% Stocked" : `${lowCount} Low`);
+            const rawHealth = String(armory.armoryHealth || '').split('•')[0].trim();
+            kpiArmoryHealth.innerText = rawHealth || (lowCount === 0 ? "100% Stocked" : `${lowCount} Low`);
             kpiArmoryHealth.style.color = lowCount === 0 ? 'var(--accent-cyan)' : 'var(--accent-amber)';
         }
     }
@@ -4697,7 +5191,7 @@ function renderItemUsageTracker() {
 
     filteredEvents.forEach(e => {
         const pId = e.id;
-        const pName = e.name;
+        const pName = e.name || dashData?.dash?.members?.[pId]?.name || `ID ${pId}`;
         const qty = e.quantity || 1;
         const nameLower = (e.itemName || '').toLowerCase();
 
@@ -5587,161 +6081,347 @@ let activeSentinelFilter = 'all';
 let activeCfLoadoutFilter = 'all';
 let sentinelInitialized = false;
 
+// ── Sentinel section navigation ──
+const SN_SECTIONS = ['airspace', 'war', 'loadouts', 'gains'];
+const SN_ROW_LIMIT = 25;
+const snShowAll = { war: false, loadouts: false, gains: false };
+let activeSentinelSection = (() => {
+    try {
+        const saved = localStorage.getItem('sn_active_section');
+        return SN_SECTIONS.includes(saved) ? saved : 'airspace';
+    } catch (e) { return 'airspace'; }
+})();
+
+function syncSentinelStatusCards() {
+    document.querySelectorAll('#sn-status-strip .sn-stat').forEach(card => {
+        const on = activeSentinelSection === 'airspace' && card.dataset.group === radarFilter;
+        card.classList.toggle('active', on);
+        card.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+}
+
+function toggleSentinelStatusCard(group) {
+    const nextFilter = (activeSentinelSection === 'airspace' && radarFilter === group) ? 'away' : group;
+    openSentinelSection('airspace', nextFilter);
+}
+
+function openSentinelSection(section, radarFilterNext) {
+    if (!SN_SECTIONS.includes(section)) section = 'airspace';
+    activeSentinelSection = section;
+    try { localStorage.setItem('sn_active_section', section); } catch (e) {}
+    document.querySelectorAll('#sn-subnav .sn-subnav-btn').forEach(btn => {
+        const on = btn.dataset.sn === section;
+        btn.classList.toggle('active', on);
+        btn.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+    document.querySelectorAll('#pane-sentinel .sn-section').forEach(sec => {
+        sec.classList.toggle('active', sec.dataset.snSection === section);
+    });
+    if (section === 'airspace' && radarFilterNext) setRadarFilter(radarFilterNext);
+    else syncSentinelStatusCards();
+    if (section === 'loadouts') renderCrossFactionLoadouts();
+    if (radarFilterNext) {
+        const subnav = document.getElementById('sn-subnav');
+        if (subnav && subnav.getBoundingClientRect().top < 0) subnav.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    }
+}
+
+function snSetCount(id, value) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = value;
+}
+
+function snMemberCell(id, name, subHtml, extraHtml = '') {
+    return `<div class="sn-member">
+        <div class="sn-member-line"><a href="https://www.torn.com/profiles.php?XID=${encodeURIComponent(id)}" target="_blank" rel="noopener noreferrer">${escapeHtml(name || 'Member')}</a>${extraHtml}</div>
+        <div class="sn-sub">${subHtml}</div>
+    </div>`;
+}
+
+function snRenderFoot(footId, key, shown, total, noun) {
+    const foot = document.getElementById(footId);
+    if (!foot) return;
+    if (total <= SN_ROW_LIMIT) {
+        foot.innerHTML = total > 0 ? `<span>${fmtNum(total)} ${noun}</span>` : '';
+        return;
+    }
+    foot.innerHTML = `<span>Showing ${fmtNum(shown)} of ${fmtNum(total)} ${noun}</span>
+        <button type="button" class="sn-link-btn" onclick="snToggleShowAll('${key}')">${snShowAll[key] ? 'Show top ' + SN_ROW_LIMIT + ' ▴' : 'Show all ' + fmtNum(total) + ' ▾'}</button>`;
+}
+
+function snToggleShowAll(key) {
+    snShowAll[key] = !snShowAll[key];
+    if (key === 'war') renderSentinelTable();
+    else if (key === 'loadouts') renderCrossFactionLoadouts();
+    else if (key === 'gains') renderStatGainsTracker();
+}
+
+function snSetSegActive(containerId, btn, key) {
+    document.querySelectorAll(`#${containerId} button`).forEach(b => {
+        b.classList.toggle('active', btn ? b === btn : b.dataset.f === key);
+    });
+}
+
+// ── Live airspace ──
+let radarFilter = 'away';
+let radarDestFilter = '';
+let lastRadarDash = null;
+let radarTickTimer = null;
+
+// Standard one-way flight minutes from Torn (airliner); aircraft speed multipliers below.
+const SN_FLIGHT_MINUTES = {
+    'mexico': 26, 'cayman islands': 35, 'canada': 41, 'hawaii': 134, 'united kingdom': 159,
+    'argentina': 167, 'switzerland': 175, 'japan': 225, 'china': 242, 'uae': 271,
+    'united arab emirates': 271, 'south africa': 297
+};
+
+function estimateFlightMinutes(dest, planeType) {
+    const base = SN_FLIGHT_MINUTES[String(dest || '').trim().toLowerCase()];
+    if (!base) return 0;
+    const p = String(planeType || '').toLowerCase();
+    let mult = 1;
+    let label = 'Airliner';
+    if (p.includes('light')) { mult = 0.7; label = 'Airstrip'; }
+    else if (p.includes('private')) { mult = 0.5; label = 'Private'; }
+    else if (p.includes('business')) { mult = 0.3; label = 'Business'; }
+    return { minutes: Math.round(base * mult), label };
+}
+
+function fmtMinutes(min) {
+    const h = Math.floor(min / 60), m = min % 60;
+    return h > 0 ? `${h}h ${String(m).padStart(2, '0')}m` : `${m}m`;
+}
+
 function isCleanAirspaceDest(dest) {
     if (!dest) return false;
     const s = String(dest).trim();
-    if (!s || /hospital|jail|federal|fallen|torn city|okay|none|unknown/i.test(s)) return false;
+    if (!s || /hospital|jail|federal|fallen|torn city|okay|none|unknown|in transit|returning to torn/i.test(s)) return false;
     return true;
 }
 
-function renderLiveAirspaceRadar(dashObj) {
-    const tbody = document.getElementById('radar-airspace-tbody');
-    const chipsEl = document.getElementById('radar-dest-chips');
-    const statusPill = document.getElementById('radar-status-pill');
-    const updatedEl = document.getElementById('radar-updated-label');
-    if (!tbody) return;
+function parseFlightDestination(raw) {
+    const s = String(raw || '').trim();
+    if (!s) return '';
+    const m = s.match(/Returning to Torn from\s+(.+)/i) || s.match(/Traveling from\s+(.+?)\s+to Torn$/i)
+        || s.match(/Traveling (?:from Torn )?to\s+(.+)/i) || s.match(/^In\s+(?:the\s+)?(.+)/i);
+    const dest = (m ? m[1] : s).replace(/\s*\(.*$/, '').trim();
+    return isCleanAirspaceDest(dest) ? dest : '';
+}
 
+function classifyRadarMembers(dashObj) {
     const membersMap = dashObj?.members || {};
-    const entries = Object.entries(membersMap);
-    const loans = dashObj?.loans || [];
-    const loanCountByMember = {};
-    loans.forEach(l => {
-        const bid = String(l.borrowerId || l.loaned_to || '');
-        if (bid) loanCountByMember[bid] = (loanCountByMember[bid] || 0) + 1;
-    });
-
-    if (entries.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:18px; color:var(--text-tertiary);">Connect API key or sign in to scan live faction airspace.</td></tr>`;
-        return;
-    }
-
-    const airRows = [];
-    const abroadRows = [];
-    const hospList = [];
-    const cityList = [];
-    const destCounts = {};
-
-    entries.forEach(([id, m]) => {
+    const rows = [];
+    Object.entries(membersMap).forEach(([id, m]) => {
         const st = m.status || {};
         const state = String(st.state || 'Okay');
         const desc = String(st.description || '');
         const until = Number(st.until || 0);
+        const base = { id, m, desc, until, plane: st.plane_image_type || '' };
 
-        // Classify Hospital / Jail / Federal FIRST so they never leak into flight counters
+        // Hospital / Jail / Federal first so they never leak into flight counters
         if (state === 'Hospital' || state === 'Jail' || state === 'Federal' || /^(In (hospital|federal|jail)|In the (hospital|jail))/i.test(desc)) {
-            hospList.push({ id, m, state, desc, until });
+            const abroadHosp = desc.match(/In an? (.+?) hospital/i);
+            rows.push({ ...base, kind: state === 'Jail' ? 'Jail' : (state === 'Federal' ? 'Federal' : 'Hospital'), dest: abroadHosp ? abroadHosp[1] : 'Torn City', group: 'hosp' });
             return;
         }
-
         if (state === 'Traveling' || /traveling|returning/i.test(desc)) {
-            const retMatch = desc.match(/Returning to Torn from\s+(.+)/i) || desc.match(/Traveling from\s+(.+?)\s+to Torn$/i);
-            const outMatch = !retMatch && desc.match(/Traveling (?:from Torn )?to\s+(.+)/i);
-            const isReturning = Boolean(retMatch);
-            let dest = (retMatch ? retMatch[1] : (outMatch ? outMatch[1] : desc)).replace(/\s*\(.*$/, '').trim();
-            if (!isCleanAirspaceDest(dest)) dest = isReturning ? 'Returning to Torn' : 'In Transit';
-            if (isCleanAirspaceDest(dest)) destCounts[dest] = (destCounts[dest] || 0) + 1;
-            airRows.push({ id, m, kind: isReturning ? 'Returning' : 'Traveling', dest, desc, until });
+            const isReturning = /Returning to Torn from|to Torn$/i.test(desc);
+            const dest = parseFlightDestination(desc) || (isReturning ? 'Returning to Torn' : 'In Transit');
+            rows.push({ ...base, kind: isReturning ? 'Returning' : 'Outbound', dest, group: 'flying' });
             return;
         }
-
         if (state === 'Abroad' || (/^In\s+/i.test(desc) && !/torn|hospital|jail|federal/i.test(desc))) {
-            let dest = desc.replace(/^In\s+/i, '').replace(/\s*\(.*$/, '').trim() || 'Overseas';
-            if (isCleanAirspaceDest(dest)) destCounts[dest] = (destCounts[dest] || 0) + 1;
-            abroadRows.push({ id, m, kind: 'Abroad', dest, desc, until });
+            const dest = desc.replace(/^In\s+/i, '').replace(/\s*\(.*$/, '').trim() || 'Overseas';
+            rows.push({ ...base, kind: 'Abroad', dest, group: 'abroad' });
             return;
         }
+        rows.push({ ...base, kind: 'Okay', dest: 'Torn City', group: 'city' });
+    });
+    return rows;
+}
 
-        cityList.push({ id, m, state, desc, until });
+function renderLiveAirspaceRadar(dashObj) {
+    if (dashObj) lastRadarDash = dashObj;
+    const dash = lastRadarDash;
+    const tbody = document.getElementById('radar-airspace-tbody');
+    if (!tbody) return;
+
+    const rows = dash ? classifyRadarMembers(dash) : [];
+    const counts = { flying: 0, abroad: 0, city: 0, hosp: 0 };
+    rows.forEach(r => { counts[r.group]++; });
+
+    snSetCount('radar-kpi-air', fmtNum(counts.flying));
+    snSetCount('radar-kpi-abroad', fmtNum(counts.abroad));
+    snSetCount('radar-kpi-city', fmtNum(counts.city));
+    snSetCount('radar-kpi-hosp', fmtNum(counts.hosp));
+    snSetCount('sn-count-airspace', fmtNum(counts.flying + counts.abroad));
+
+    const statusPill = document.getElementById('radar-status-pill');
+    if (statusPill) {
+        if (!rows.length) {
+            statusPill.className = 'sn-badge sn-badge-muted';
+            statusPill.textContent = 'No roster data';
+        } else if (counts.flying + counts.abroad > 0) {
+            statusPill.className = 'sn-badge sn-badge-cyan';
+            statusPill.textContent = `${counts.flying} flying • ${counts.abroad} abroad`;
+        } else {
+            statusPill.className = 'sn-badge sn-badge-emerald';
+            statusPill.textContent = `All grounded • ${counts.city} in Torn`;
+        }
+    }
+    const updatedEl = document.getElementById('radar-updated-label');
+    if (updatedEl && rows.length) {
+        updatedEl.textContent = `${rows.length} members scanned • ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    }
+
+    if (!rows.length) {
+        const chipsEl = document.getElementById('radar-dest-chips');
+        if (chipsEl) chipsEl.innerHTML = '';
+        tbody.innerHTML = `<tr><td colspan="5" class="sn-empty">Connect your API key or sign in to scan live faction airspace.</td></tr>`;
+        return;
+    }
+    renderRadarTable(rows);
+    ensureRadarTicker();
+}
+
+function setRadarFilter(filter) {
+    radarFilter = filter || 'away';
+    radarDestFilter = '';
+    snSetSegActive('radar-filter-seg', null, radarFilter);
+    syncSentinelStatusCards();
+    renderRadarTable();
+}
+
+function setRadarDestFilter(dest) {
+    radarDestFilter = radarDestFilter === dest ? '' : dest;
+    renderRadarTable();
+}
+
+function renderRadarTable(precomputedRows) {
+    const tbody = document.getElementById('radar-airspace-tbody');
+    const chipsEl = document.getElementById('radar-dest-chips');
+    if (!tbody || !lastRadarDash) return;
+    const rows = precomputedRows || classifyRadarMembers(lastRadarDash);
+
+    const loanCountByMember = {};
+    (lastRadarDash.loans || []).forEach(l => {
+        const bid = String(l.borrowerId || l.loaned_to || '');
+        if (bid) loanCountByMember[bid] = (loanCountByMember[bid] || 0) + 1;
     });
 
-    const elAir = document.getElementById('radar-kpi-air');
-    const elAbroad = document.getElementById('radar-kpi-abroad');
-    const elCity = document.getElementById('radar-kpi-city');
-    const elHosp = document.getElementById('radar-kpi-hosp');
-    if (elAir) elAir.textContent = fmtNum(airRows.length);
-    if (elAbroad) elAbroad.textContent = fmtNum(abroadRows.length);
-    if (elCity) elCity.textContent = fmtNum(cityList.length);
-    if (elHosp) elHosp.textContent = fmtNum(hospList.length);
-
-    const airborneTotal = airRows.length + abroadRows.length;
-    if (statusPill) {
-        if (airborneTotal > 0) {
-            statusPill.className = 'badge-confirmed';
-            statusPill.textContent = `${airRows.length} Flying • ${abroadRows.length} Abroad`;
-        } else {
-            statusPill.className = 'badge-unrecorded';
-            statusPill.textContent = `All Grounded (${cityList.length} Ready)`;
-        }
-    }
-    if (updatedEl) {
-        updatedEl.textContent = `Scanned ${entries.length} roster members • ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-    }
+    const inGroup = r => radarFilter === 'away' ? (r.group === 'flying' || r.group === 'abroad') : r.group === radarFilter;
+    const groupRows = rows.filter(inGroup);
 
     if (chipsEl) {
-        const sortedDests = Object.entries(destCounts).sort((a, b) => b[1] - a[1]);
-        if (sortedDests.length > 0) {
-            chipsEl.innerHTML = sortedDests.map(([country, count]) =>
-                `<span class="badge-confirmed" style="background:rgba(6,182,212,0.12); color:var(--accent-cyan); border-color:rgba(6,182,212,0.3); font-size:0.76em;">🌍 ${escapeHtml(country)} <strong>(${count})</strong></span>`
-            ).join('');
-        } else {
-            chipsEl.innerHTML = `<span class="badge-unrecorded">✈️ Clear skies — zero members airborne or overseas</span>`;
+        const destCounts = {};
+        if (radarFilter === 'away' || radarFilter === 'flying' || radarFilter === 'abroad') {
+            groupRows.forEach(r => { if (isCleanAirspaceDest(r.dest)) destCounts[r.dest] = (destCounts[r.dest] || 0) + 1; });
         }
+        const sorted = Object.entries(destCounts).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+        if (radarDestFilter && !destCounts[radarDestFilter]) radarDestFilter = '';
+        chipsEl.innerHTML = sorted.map(([country, count]) =>
+            `<button type="button" class="sn-chip${radarDestFilter === country ? ' active' : ''}" data-dest="${escapeHtml(country)}" onclick="setRadarDestFilter(this.dataset.dest)">🌍 ${escapeHtml(country)} <strong>${count}</strong></button>`
+        ).join('');
     }
 
-    const nowSec = Math.floor(Date.now() / 1000);
-    airRows.sort((a, b) => (a.until || 9999999999) - (b.until || 9999999999));
-    abroadRows.sort((a, b) => a.dest.localeCompare(b.dest) || (a.m.name || '').localeCompare(b.m.name || ''));
-    const combined = [...airRows, ...abroadRows];
+    const query = (document.getElementById('radar-search')?.value || '').toLowerCase().trim();
+    const list = groupRows.filter(r => {
+        if (radarDestFilter && r.dest !== radarDestFilter) return false;
+        if (query && !(r.m.name || '').toLowerCase().includes(query) && !String(r.id).includes(query)) return false;
+        return true;
+    });
 
-    if (combined.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:18px; color:var(--text-tertiary);">✈️ Clear airspace — ${cityList.length} members in Torn City, ${hospList.length} in hospital/jail.</td></tr>`;
+    const onlineRank = s => (s === 'Online' ? 0 : (s === 'Idle' ? 1 : 2));
+    const kindRank = { Outbound: 0, Returning: 1, Abroad: 2, Hospital: 3, Jail: 4, Federal: 5, Okay: 6 };
+    list.sort((a, b) => {
+        if (a.group === 'hosp' && b.group === 'hosp') return (a.until || 9e12) - (b.until || 9e12);
+        if (a.group === 'city' && b.group === 'city') {
+            return onlineRank(a.m.last_action?.status) - onlineRank(b.m.last_action?.status) || (a.m.name || '').localeCompare(b.m.name || '');
+        }
+        return (kindRank[a.kind] ?? 9) - (kindRank[b.kind] ?? 9) || a.dest.localeCompare(b.dest) || (a.m.name || '').localeCompare(b.m.name || '');
+    });
+
+    if (!list.length) {
+        const emptyMsg = {
+            away: '✈️ Clear skies — nobody is flying or overseas right now.',
+            flying: '✈️ Nobody is in the air right now.',
+            abroad: '🌍 Nobody has landed overseas right now.',
+            hosp: '🏥 Nobody is in hospital or jail.',
+            city: 'No members are currently in Torn City.'
+        }[radarFilter] || 'No members match this view.';
+        tbody.innerHTML = `<tr><td colspan="5" class="sn-empty">${query || radarDestFilter ? 'No members match this search.' : emptyMsg}</td></tr>`;
         return;
     }
 
-    tbody.innerHTML = combined.map(row => {
-        const m = row.m;
+    const nowSec = Math.floor(Date.now() / 1000);
+    tbody.innerHTML = list.map(r => {
+        const m = r.m;
         const onlineSt = m.last_action?.status || 'Offline';
-        const onlineDot = onlineSt === 'Online' ? '🟢' : (onlineSt === 'Idle' ? '🟡' : '⚫');
-        const badgeHtml = row.kind === 'Traveling'
-            ? `<span class="badge-confirmed" style="background:rgba(6,182,212,0.14); color:var(--accent-cyan); border-color:rgba(6,182,212,0.32);">✈️ Outbound</span>`
-            : (row.kind === 'Returning'
-                ? `<span class="badge-confirmed" style="background:rgba(59,130,246,0.14); color:var(--accent-cobalt); border-color:rgba(59,130,246,0.32);">🛬 Returning</span>`
-                : `<span class="badge-confirmed">🌍 Abroad</span>`);
+        const dotCls = onlineSt === 'Online' ? 'on' : (onlineSt === 'Idle' ? 'idle' : '');
+        const sub = `<span class="sn-dot ${dotCls}"></span>${escapeHtml(onlineSt)} • Lv ${m.level || '—'}${m.last_action?.relative && onlineSt !== 'Online' ? ' • ' + escapeHtml(m.last_action.relative) : ''}`;
 
-        let etaStr = row.kind === 'Abroad'
-            ? `<span style="color:var(--text-secondary);">Landed Overseas</span>`
-            : `<span style="color:var(--text-secondary);">In Transit</span>`;
-        if (row.until && row.until > nowSec) {
-            etaStr = `<strong style="color:var(--accent-cyan);">${fmtDuration(row.until - nowSec)}</strong> <span style="font-size:0.85em; color:var(--text-tertiary);">(${new Date(row.until * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})</span>`;
+        const badge = {
+            Outbound: '<span class="sn-badge sn-badge-cyan">✈️ Outbound</span>',
+            Returning: '<span class="sn-badge sn-badge-cobalt">🛬 Returning</span>',
+            Abroad: '<span class="sn-badge sn-badge-purple">🌍 Abroad</span>',
+            Hospital: '<span class="sn-badge sn-badge-crimson">🏥 Hospital</span>',
+            Jail: '<span class="sn-badge sn-badge-amber">🔒 Jail</span>',
+            Federal: '<span class="sn-badge sn-badge-crimson">⛓️ Federal</span>',
+            Okay: '<span class="sn-badge sn-badge-emerald">🛡️ In Torn</span>'
+        }[r.kind] || '';
+
+        let where = escapeHtml(r.dest);
+        if (r.kind === 'Outbound') where = `→ <strong>${escapeHtml(r.dest)}</strong>`;
+        else if (r.kind === 'Returning') where = `← from <strong>${escapeHtml(r.dest)}</strong>`;
+        else if (r.kind === 'Abroad') where = `📍 <strong>${escapeHtml(r.dest)}</strong>`;
+        else if (r.group === 'hosp') where = `<span>${escapeHtml(r.dest)}</span><div class="sn-sub" style="white-space:normal;">${escapeHtml(m.status?.details || r.desc || '')}</div>`;
+
+        let timing = '<span class="sn-c-dim">—</span>';
+        if (r.until && r.until > nowSec) {
+            const lbl = r.group === 'hosp' ? 'out in' : 'lands in';
+            timing = `<span class="sn-sub" style="margin:0;">${lbl}</span> <span class="sn-num sn-c-cyan">${fmtDuration(r.until - nowSec)}</span>`;
+        } else if (r.group === 'flying') {
+            const est = estimateFlightMinutes(r.dest, r.plane);
+            timing = est
+                ? `<span class="sn-num">≈ ${fmtMinutes(est.minutes)}</span><div class="sn-sub">${est.label} flight length</div>`
+                : '<span class="sn-c-dim">In transit</span>';
+        } else if (r.group === 'abroad') {
+            const est = estimateFlightMinutes(r.dest, r.plane);
+            timing = est ? `<span class="sn-c-dim">Landed</span><div class="sn-sub">≈ ${fmtMinutes(est.minutes)} flight home</div>` : '<span class="sn-c-dim">Landed</span>';
+        } else if (r.group === 'city') {
+            timing = `<span class="sn-c-dim">${escapeHtml(m.last_action?.relative || 'Available')}</span>`;
         }
 
-        const loanedCnt = loanCountByMember[String(row.id)] || 0;
-        const gearNote = loanedCnt > 0
-            ? `<span style="color:var(--accent-amber); font-weight:700;">🪖 ${loanedCnt} Armory Gear</span>`
-            : `<span style="color:var(--text-tertiary);">Personal Gear</span>`;
-
-        const legLabel = row.kind === 'Returning'
-            ? `← Returning from <strong>${escapeHtml(row.dest)}</strong>`
-            : (row.kind === 'Traveling' ? `→ En route to <strong>${escapeHtml(row.dest)}</strong>` : `📍 In <strong>${escapeHtml(row.dest)}</strong>`);
+        const loanedCnt = loanCountByMember[String(r.id)] || 0;
+        const gear = loanedCnt > 0
+            ? `<span class="sn-c-amber" style="font-weight:700;">🪖 ${loanedCnt} item${loanedCnt === 1 ? '' : 's'}</span>`
+            : '<span class="sn-c-dim">None</span>';
 
         return `<tr>
-            <td>
-                <div style="font-weight:700;"><a href="https://www.torn.com/profiles.php?XID=${encodeURIComponent(row.id)}" target="_blank" rel="noopener noreferrer" style="color:var(--text-primary); text-decoration:none;">${escapeHtml(m.name || 'Member')}</a></div>
-                <div style="font-size:0.74em; color:var(--text-tertiary);">${onlineDot} ${escapeHtml(onlineSt)} • [${escapeHtml(row.id)}] • Lv ${m.level || '—'}</div>
-            </td>
-            <td>${badgeHtml}</td>
-            <td style="color:var(--text-primary);">${legLabel}</td>
-            <td class="font-mono" style="font-size:0.84em;">${etaStr}</td>
-            <td style="font-size:0.8em;">${gearNote}</td>
+            <td>${snMemberCell(r.id, m.name, sub)}</td>
+            <td>${badge}</td>
+            <td>${where}</td>
+            <td>${timing}</td>
+            <td>${gear}</td>
         </tr>`;
     }).join('');
+}
+const renderRadarTableDebounced = debounce(() => renderRadarTable(), 200);
+
+function ensureRadarTicker() {
+    if (radarTickTimer) return;
+    radarTickTimer = setInterval(() => {
+        const pane = document.getElementById('pane-sentinel');
+        if (!pane || !pane.classList.contains('active') || activeSentinelSection !== 'airspace' || document.hidden) return;
+        renderRadarTable();
+    }, 30000);
 }
 
 async function refreshSentinelAll() {
     const btn = document.getElementById('btn-refresh-sentinel-all');
     if (btn) {
         btn.disabled = true;
-        btn.textContent = '↻ Syncing...';
+        btn.textContent = '↻ Syncing…';
     }
     try {
         await Promise.allSettled([
@@ -5749,16 +6429,17 @@ async function refreshSentinelAll() {
             runWarFlightAudit(true),
             loadFactionStatGains(true)
         ]);
-        showToast('Sentinel radar, war audit & stat gains synced', 'success');
+        showToast('Sentinel airspace, war audit & stat gains synced', 'success');
     } finally {
         if (btn) {
             btn.disabled = false;
-            btn.textContent = '↻ Sync Sentinel Telemetry';
+            btn.textContent = '↻ Sync All';
         }
     }
 }
 
 async function initSentinel() {
+    openSentinelSection(activeSentinelSection);
     if (dashData?.dash) renderLiveAirspaceRadar(dashData.dash);
     if (sentinelInitialized) return;
     const select = document.getElementById('sentinel-war-select');
@@ -5776,17 +6457,18 @@ async function initSentinel() {
             select.innerHTML = data.wars.map(w => {
                 const dateStr = w.start ? new Date(w.start * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
                 const isWon = (dashData?.dash?.faction?.ID && w.winner === dashData.dash.faction.ID) || (w.ourScore > w.theirScore);
-                const tag = w.isOngoing ? '💥 ACTIVE' : (isWon ? '🏆 WON' : '💀 LOST');
-                return `<option value="${escapeHtml(String(w.id))}">[${tag}] vs ${escapeHtml(w.enemy || 'Unknown')} (${dateStr})</option>`;
+                const tag = w.isOngoing ? '💥 Active' : (isWon ? '🏆 Won' : '💀 Lost');
+                return `<option value="${escapeHtml(String(w.id))}">${tag} — vs ${escapeHtml(w.enemy || 'Unknown')}${dateStr ? ' (' + dateStr + ')' : ''}</option>`;
             }).join('');
             sentinelInitialized = true;
             runWarFlightAudit();
         } else {
             select.innerHTML = `<option value="">No recorded ranked wars found</option>`;
             const tbody = document.getElementById('sentinel-tbody');
-            if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:24px; color:var(--text-tertiary);">No ranked wars found yet for this faction.</td></tr>`;
+            if (tbody) tbody.innerHTML = `<tr><td colspan="8" class="sn-empty">No ranked wars found yet for this faction.</td></tr>`;
+            renderCrossFactionLoadouts();
         }
-    } catch(e) {
+    } catch (e) {
         select.innerHTML = `<option value="">Failed to load wars</option>`;
     }
 }
@@ -5794,6 +6476,11 @@ async function initSentinel() {
 function isSentinelGhostAviator(m) {
     const timesHit = m.timesHit ?? m.timesFarmed ?? 0;
     return timesHit <= 4 && ((m.airHours || 0) >= 10 || (m.flightPct || 0) >= 25 || m.grade === 'S');
+}
+
+function fmtPts(n) {
+    const v = Number(n || 0);
+    return Math.abs(v) >= 1000 ? fmtNum(Math.round(v * 10) / 10) : String(Math.round(v * 10) / 10);
 }
 
 async function runWarFlightAudit(force = false) {
@@ -5805,12 +6492,12 @@ async function runWarFlightAudit(force = false) {
     const hasAuth = !!(myKey || localStorage.getItem('sv_session_token'));
 
     if (!hasAuth) {
-        if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:20px; color:var(--accent-crimson);">Authentication required. Sign in or connect your Torn API key in Settings.</td></tr>`;
+        if (tbody) tbody.innerHTML = `<tr><td colspan="8" class="sn-empty sn-error">Sign in or connect your Torn API key in Settings to audit wars.</td></tr>`;
         return;
     }
 
-    if (refreshBtn) refreshBtn.classList.add('spinning');
-    if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:24px; color:var(--accent-cyan);">⚡ Auditing attack records &amp; flight logs for selected war...</td></tr>`;
+    if (refreshBtn) { refreshBtn.classList.add('spinning'); refreshBtn.disabled = true; }
+    if (tbody) tbody.innerHTML = `<tr><td colspan="8" class="sn-empty sn-loading">⚡ Auditing attack records &amp; flight logs…</td></tr>`;
 
     try {
         const params = new URLSearchParams();
@@ -5822,35 +6509,37 @@ async function runWarFlightAudit(force = false) {
         const data = await res.json();
 
         if (!data.success) {
-            if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:20px; color:var(--accent-crimson);">⚠️ Audit failed: ${escapeHtml(data.error || 'Unknown error')}</td></tr>`;
+            if (tbody) tbody.innerHTML = `<tr><td colspan="8" class="sn-empty sn-error">⚠️ Audit failed: ${escapeHtml(data.error || 'Unknown error')}</td></tr>`;
             return;
         }
 
         sentinelData = data;
+        snShowAll.war = false;
 
-        // Render Status Ribbon
         const warSummary = document.getElementById('sentinel-war-summary');
-        if (warSummary && data.war) {
+        const scorebar = document.querySelector('#sn-war-scorebar .sn-scorebar-us');
+        if (data.war) {
+            const ours = Number(data.war.ourScore || 0);
+            const theirs = Number(data.war.theirScore || 0);
             const outcome = data.war.isOngoing
-                ? '<span style="color:var(--accent-amber); font-weight:700;">💥 Ongoing War</span>'
-                : (data.war.ourScore > data.war.theirScore
-                    ? '<span style="color:var(--accent-emerald); font-weight:700;">🏆 Victory</span>'
-                    : '<span style="color:var(--accent-crimson); font-weight:700;">Defeat</span>');
-            warSummary.innerHTML = `<strong>vs ${escapeHtml(data.war.enemyName || 'Enemy')}</strong> • ${outcome} • Score: <strong>${fmtNum(data.war.ourScore)}</strong> to ${fmtNum(data.war.theirScore)} • Duration: <strong>${data.war.durationHours || 0}h</strong>`;
+                ? '<span class="sn-badge sn-badge-amber">💥 Ongoing</span>'
+                : (ours > theirs ? '<span class="sn-badge sn-badge-emerald">🏆 Victory</span>' : '<span class="sn-badge sn-badge-crimson">Defeat</span>');
+            if (warSummary) {
+                warSummary.innerHTML = `${outcome} <strong style="margin-left:6px;">vs ${escapeHtml(data.war.enemyName || 'Enemy')}</strong>
+                    <span class="sn-num" style="margin-left:10px;"><span class="sn-c-emerald">${fmtNum(ours)}</span> – <span class="sn-c-crimson">${fmtNum(theirs)}</span></span>
+                    <span class="sn-muted-sm" style="margin-left:10px;">${data.war.durationHours || 0}h war</span>`;
+            }
+            if (scorebar) scorebar.style.width = `${(ours + theirs) > 0 ? Math.round((ours / (ours + theirs)) * 100) : 50}%`;
         }
 
         const ffBadge = document.getElementById('sentinel-ff-badge');
         if (ffBadge) {
-            if (data.ffScouter?.premium) {
-                ffBadge.innerHTML = `<span style="color:var(--accent-emerald); font-weight:700;">✨ FF Scouter Premium: Active</span> (${data.kpis.totalAirHours || 0}h matched flight time)`;
-            } else if ((data.kpis?.totalAirHours || 0) > 0) {
-                ffBadge.innerHTML = `<span style="color:var(--accent-cyan); font-weight:700;">🛡️ Combat Sentinel: Active</span> <span style="color:var(--text-tertiary);">(${data.kpis.totalAirHours}h flight time across ${data.members.length} members)</span>`;
-            } else {
-                ffBadge.innerHTML = `<span style="color:var(--accent-cyan); font-weight:700;">🛡️ Combat Defense Sentinel: Active</span> <span style="color:var(--text-tertiary);">(${data.members.length} members audited)</span>`;
-            }
+            const membersCount = (data.members || []).length;
+            ffBadge.innerHTML = data.ffScouter?.premium
+                ? `<span class="sn-c-emerald" style="font-weight:700;">✨ FF Scouter Premium</span> • ${membersCount} members audited`
+                : `${membersCount} members audited • ${data.kpis?.totalAirHours || 0}h total airtime`;
         }
 
-        // Render Sentinel KPIs
         const k = data.kpis || {};
         const hitsMade = k.totalHitsMade || 0;
         const farmedHits = k.totalFarmedHits || 0;
@@ -5865,67 +6554,84 @@ async function runWarFlightAudit(force = false) {
         const farmedCount = all.filter(m => (m.timesHit || m.timesFarmed || 0) > 0).length;
         const zeroCount = all.filter(m => (m.hitsMade || 0) === 0).length;
 
-        document.getElementById('kpi-audit-airtime').textContent = `${k.totalAirHours || 0}h`;
-        document.getElementById('kpi-audit-airtime-sub').textContent = `${all.length} members tracked`;
-        document.getElementById('kpi-audit-hits').textContent = `${fmtNum(hitsMade)}`;
-        document.getElementById('kpi-audit-earned').textContent = `+${earned} pts earned`;
-        document.getElementById('kpi-audit-farmed').textContent = `${fmtNum(farmedHits)}`;
-        document.getElementById('kpi-audit-leaked').textContent = `-${leaked} pts conceded`;
-        document.getElementById('kpi-audit-ghosts').textContent = `${ghostCount}`;
-        document.getElementById('kpi-audit-net').textContent = `${netScore > 0 ? '+' : ''}${netScore} pts`;
-        document.getElementById('kpi-audit-actions').textContent = `${fmtNum(hitsMade + farmedHits)} combat actions`;
+        snSetCount('kpi-audit-airtime', `${k.totalAirHours || 0}h`);
+        snSetCount('kpi-audit-airtime-sub', `${airCount} of ${all.length} members flew`);
+        snSetCount('kpi-audit-hits', fmtNum(hitsMade));
+        snSetCount('kpi-audit-earned', `+${fmtPts(earned)} respect earned`);
+        snSetCount('kpi-audit-farmed', fmtNum(farmedHits));
+        const leakedEl = document.getElementById('kpi-audit-leaked');
+        if (leakedEl) {
+            const split = (k.totalWarHitsTaken !== undefined && k.totalOutsideHitsTaken !== undefined)
+                ? ` (${fmtNum(k.totalWarHitsTaken)} war / ${fmtNum(k.totalOutsideHitsTaken)} out)`
+                : '';
+            leakedEl.textContent = `-${fmtPts(leaked)} resp${split}`;
+            leakedEl.title = `-${fmtPts(leaked)} respect conceded${split}`;
+        }
+        snSetCount('kpi-audit-ghosts', `${ghostCount}`);
+        const netEl = document.getElementById('kpi-audit-net');
+        if (netEl) {
+            netEl.textContent = `${netScore > 0 ? '+' : ''}${fmtPts(netScore)}`;
+            netEl.className = `sn-kpi-val ${netScore >= 0 ? 'sn-c-emerald' : 'sn-c-crimson'}`;
+        }
+        snSetCount('kpi-audit-actions', `${fmtNum(hitsMade + farmedHits)} combat actions`);
 
-        document.getElementById('cnt-audit-all').textContent = all.length;
-        document.getElementById('cnt-audit-air').textContent = airCount;
-        document.getElementById('cnt-audit-ghost').textContent = ghostCount;
-        document.getElementById('cnt-audit-pos').textContent = posCount;
-        document.getElementById('cnt-audit-farmed').textContent = farmedCount;
-        document.getElementById('cnt-audit-zero').textContent = zeroCount;
+        snSetCount('cnt-audit-all', all.length);
+        snSetCount('cnt-audit-air', airCount);
+        snSetCount('cnt-audit-ghost', ghostCount);
+        snSetCount('cnt-audit-pos', posCount);
+        snSetCount('cnt-audit-farmed', farmedCount);
+        snSetCount('cnt-audit-zero', zeroCount);
+        snSetCount('sn-count-war', all.length);
 
+        updateSortHeaderIndicators();
         renderSentinelTable();
         renderCrossFactionLoadouts(data);
-    } catch(e) {
-        if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:20px; color:var(--accent-crimson);">⚠️ Request error: ${escapeHtml(e.message)}</td></tr>`;
+    } catch (e) {
+        if (tbody) tbody.innerHTML = `<tr><td colspan="8" class="sn-empty sn-error">⚠️ Request error: ${escapeHtml(e.message)}</td></tr>`;
     } finally {
-        if (refreshBtn) refreshBtn.classList.remove('spinning');
+        if (refreshBtn) { refreshBtn.classList.remove('spinning'); refreshBtn.disabled = false; }
     }
 }
 
 let sentinelSortKey = 'mostAir';
 let sentinelSortAsc = false;
 
+function onSentinelSortChange(val) {
+    sentinelSortKey = val || 'mostAir';
+    sentinelSortAsc = (sentinelSortKey === 'name');
+    updateSortHeaderIndicators();
+    renderSentinelTable();
+}
+
 function toggleSort(colKey) {
     if (sentinelSortKey === colKey) {
         sentinelSortAsc = !sentinelSortAsc;
     } else {
         sentinelSortKey = colKey;
-        sentinelSortAsc = (colKey === 'name' || colKey === 'leastFarmed');
+        sentinelSortAsc = (colKey === 'name');
     }
     const sel = document.getElementById('sentinel-sort');
-    if (sel) sel.value = sentinelSortKey;
+    if (sel) {
+        if (colKey === 'mostFarmed' && sentinelSortAsc) sel.value = 'leastFarmed';
+        else sel.value = colKey;
+    }
     updateSortHeaderIndicators();
     renderSentinelTable();
 }
 
 function updateSortHeaderIndicators() {
-    const headers = ['name', 'grade', 'mostAir', 'trips', 'mostFarmed', 'leaked', 'hitsMade', 'netScore'];
-    headers.forEach(h => {
+    const activeCol = sentinelSortKey === 'leastFarmed' ? 'mostFarmed' : sentinelSortKey;
+    const isAsc = sentinelSortKey === 'leastFarmed' ? true : sentinelSortAsc;
+    ['name', 'grade', 'mostAir', 'trips', 'mostFarmed', 'leaked', 'hitsMade', 'netScore'].forEach(h => {
         const span = document.getElementById(`th-sort-${h}`);
-        if (span) {
-            if (sentinelSortKey === h) {
-                span.textContent = sentinelSortAsc ? ' ▲' : ' ▼';
-                span.style.color = 'var(--accent-cyan)';
-            } else {
-                span.textContent = '';
-            }
-        }
+        if (span) span.textContent = activeCol === h ? (isAsc ? ' ▲' : ' ▼') : '';
     });
 }
 
 function setSentinelFilter(filter, btn) {
     activeSentinelFilter = filter;
-    document.querySelectorAll('#sentinel-filter-tabs .filter-chip').forEach(b => b.classList.remove('active'));
-    if (btn) btn.classList.add('active');
+    snShowAll.war = false;
+    snSetSegActive('sentinel-filter-tabs', btn, filter);
     renderSentinelTable();
 }
 
@@ -5934,16 +6640,9 @@ function renderSentinelTable() {
     if (!tbody || !sentinelData) return;
 
     const query = (document.getElementById('sentinel-search')?.value || '').toLowerCase().trim();
-    const sortSelect = document.getElementById('sentinel-sort')?.value;
-    if (sortSelect && sortSelect !== sentinelSortKey) {
-        sentinelSortKey = sortSelect;
-        sentinelSortAsc = (sortSelect === 'name' || sortSelect === 'leastFarmed');
-        updateSortHeaderIndicators();
-    }
-
     const list = (sentinelData.members || []).filter(m => {
         const timesHit = m.timesHit || m.timesFarmed || 0;
-        if (activeSentinelFilter === 'air' && (m.airHours <= 0 && m.flightTrips <= 0)) return false;
+        if (activeSentinelFilter === 'air' && ((m.airHours || 0) <= 0 && (m.flightTrips || 0) <= 0)) return false;
         if (activeSentinelFilter === 'ghost' && !isSentinelGhostAviator(m)) return false;
         if (activeSentinelFilter === 'pos' && (m.netScore || 0) <= 0) return false;
         if (activeSentinelFilter === 'farmed' && timesHit === 0) return false;
@@ -5957,10 +6656,9 @@ function renderSentinelTable() {
         const aHit = a.timesHit || a.timesFarmed || 0;
         const bHit = b.timesHit || b.timesFarmed || 0;
         let diff = 0;
-
         switch (sentinelSortKey) {
             case 'mostAir': diff = (b.flightSec || 0) - (a.flightSec || 0); break;
-            case 'leastFarmed': diff = aHit - bHit; if (diff === 0) diff = (b.flightSec || 0) - (a.flightSec || 0); break;
+            case 'leastFarmed': return (aHit - bHit) || ((b.flightSec || 0) - (a.flightSec || 0));
             case 'mostFarmed': diff = bHit - aHit; break;
             case 'hitsMade': diff = (b.hitsMade || 0) - (a.hitsMade || 0); break;
             case 'netScore': diff = (b.netScore || 0) - (a.netScore || 0); break;
@@ -5974,71 +6672,55 @@ function renderSentinelTable() {
     });
 
     if (list.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:24px; color:var(--text-tertiary);">No members match this filter.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="8" class="sn-empty">No members match this filter.</td></tr>`;
+        snRenderFoot('sentinel-table-foot', 'war', 0, 0, 'members');
         return;
     }
 
-    tbody.innerHTML = list.map(m => {
+    const shown = snShowAll.war ? list : list.slice(0, SN_ROW_LIMIT);
+    tbody.innerHTML = shown.map(m => {
         const timesHit = m.timesHit || m.timesFarmed || 0;
-        const outsideTaken = m.outsideTimesHit || 0;
-        const farmedBadge = timesHit === 0
-            ? `<span style="color:var(--accent-emerald); font-weight:700;">🛡️ 0 (Untouchable)</span>`
-            : `<span style="color:var(--accent-crimson); font-weight:700; background:rgba(239,68,68,0.12); padding:2px 6px; border-radius:4px;">⚠️ ${timesHit}x hit</span>`;
-        const outsideNote = outsideTaken > 0
-            ? `<div style="font-size:0.71em; color:var(--text-tertiary); margin-top:2px;">+${outsideTaken} outside</div>`
-            : '';
+        const warTaken = m.warHitsTaken;
+        const outTaken = m.outsideHitsTaken ?? m.outsideTimesHit;
+        const hitCls = timesHit === 0 ? 'sn-c-emerald' : (timesHit <= 5 ? 'sn-c-amber' : 'sn-c-crimson');
+        const hitSub = (warTaken !== undefined || outTaken !== undefined) && timesHit > 0
+            ? `<div class="sn-sub">${fmtNum(warTaken || 0)} war • ${fmtNum(outTaken || 0)} out</div>`
+            : (timesHit === 0 ? '<div class="sn-sub">untouched</div>' : '');
 
-        const netStr = m.netScore > 0 ? `+${m.netScore}` : `${m.netScore}`;
-        const netColor = m.netScore > 0 ? 'var(--accent-emerald)' : (m.netScore < 0 ? 'var(--accent-crimson)' : 'var(--text-tertiary)');
+        const net = Number(m.netScore || 0);
+        const netCls = net > 0 ? 'sn-c-emerald' : (net < 0 ? 'sn-c-crimson' : 'sn-c-dim');
+        const leakedVal = Number(m.respectLeaked || 0);
 
-        const validDests = Array.isArray(m.destinations)
-            ? m.destinations.filter(d => isCleanAirspaceDest(d)).slice(0, 3)
-            : [];
-        const destSub = validDests.length > 0
-            ? `<div style="font-size:0.69em; color:var(--text-secondary); margin-top:2px;">${validDests.map(d => escapeHtml(d)).join(', ')}</div>`
-            : '';
+        const rawDests = Array.isArray(m.flightDestinations) ? m.flightDestinations : (Array.isArray(m.destinations) ? m.destinations : []);
+        const dests = [...new Set(rawDests.map(parseFlightDestination).filter(Boolean))].slice(0, 3);
+        const destSub = dests.length ? `<div class="sn-sub" title="${escapeHtml(dests.join(', '))}">${dests.map(d => escapeHtml(d)).join(', ')}</div>` : '';
 
-        const hitsSub = (m.outsideHits || 0) > 0
-            ? `<div style="font-size:0.7em; color:var(--text-tertiary);">+${m.outsideHits} out</div>`
-            : '';
+        const gradeClr = /^#[0-9a-f]{3,8}$/i.test(m.gradeColor || '') ? m.gradeColor : 'var(--text-tertiary)';
+        const gradeBox = `<span class="sn-grade" style="color:${gradeClr}; border-color:${gradeClr}55; background:${/^#/.test(gradeClr) ? gradeClr + '1f' : 'transparent'};">${escapeHtml(m.grade || '—')}</span>`;
 
-        const gradeClr = m.gradeColor || 'var(--text-tertiary)';
-        return `<tr style="border-bottom:1px solid var(--border-subtle); transition:0.15s;">
-            <td style="padding:10px 14px;">
-                <div style="font-weight:700;"><a href="https://www.torn.com/profiles.php?XID=${encodeURIComponent(m.id)}" target="_blank" rel="noopener noreferrer" style="color:var(--text-primary); text-decoration:none;">${escapeHtml(m.name || 'Unknown')}</a></div>
-                <div style="font-size:0.75em; color:var(--text-tertiary);">[${escapeHtml(m.id)}] • Lv ${m.level || '—'}</div>
-            </td>
-            <td style="padding:10px 10px;">
-                <span style="background:${gradeClr}20; color:${gradeClr}; border:1px solid ${gradeClr}40; padding:2px 8px; border-radius:6px; font-weight:800; font-size:0.85em;">
-                    ${escapeHtml(m.grade || '—')}
-                </span>
-                <div style="font-size:0.72em; color:var(--text-tertiary); margin-top:2px;">${escapeHtml(m.gradeLabel || '')}</div>
-            </td>
-            <td style="padding:10px 10px;">
-                <div style="font-weight:700; color:${m.airHours > 0 ? 'var(--accent-cyan)' : 'var(--text-tertiary)'};">${escapeHtml(m.airtimeFormatted || '0h 0m')}</div>
-                <div style="width:70px; background:var(--bg-elevated); border:1px solid var(--border-subtle); height:4px; border-radius:2px; margin-top:4px; overflow:hidden;">
-                    <div style="width:${Math.min(100, m.flightPct || 0)}%; background:var(--accent-cyan); height:100%;"></div>
-                </div>
-                <div style="font-size:0.7em; color:var(--text-tertiary);">${m.flightPct || 0}% of war</div>
+        return `<tr>
+            <td>${snMemberCell(m.id, m.name || 'Unknown', `Lv ${m.level || '—'} • [${escapeHtml(m.id)}]`)}</td>
+            <td><div style="display:flex; align-items:center; gap:8px;">${gradeBox}<span class="sn-sub" style="margin:0;">${escapeHtml(m.gradeLabel || '')}</span></div></td>
+            <td>
+                <div class="sn-num ${(m.airHours || 0) > 0 ? 'sn-c-cyan' : 'sn-c-dim'}">${escapeHtml(m.airtimeFormatted || '0h 0m')} <span class="sn-sub" style="display:inline; font-family:var(--font-sans);">${m.flightPct || 0}%</span></div>
+                <div class="sn-bar"><span style="width:${Math.min(100, Math.max(0, m.flightPct || 0))}%;"></span></div>
                 ${destSub}
             </td>
-            <td style="padding:10px 10px; font-weight:700;">${m.flightTrips || 0}</td>
-            <td style="padding:10px 10px;">${farmedBadge}${outsideNote}</td>
-            <td style="padding:10px 10px; font-weight:700; color:${m.respectLeaked > 0 ? 'var(--accent-crimson)' : 'var(--text-tertiary)'};">-${m.respectLeaked || 0} pts</td>
-            <td style="padding:10px 10px;">
-                <div style="font-weight:700; color:var(--accent-cobalt);">${m.hitsMade || 0}</div>
-                ${hitsSub}
-            </td>
-            <td style="padding:10px 14px; font-weight:800; color:${netColor};">${netStr} pts</td>
+            <td class="sn-num-col"><span class="sn-num">${m.flightTrips || 0}</span></td>
+            <td class="sn-num-col"><span class="sn-num ${hitCls}">${timesHit}</span>${hitSub}</td>
+            <td class="sn-num-col"><span class="sn-num ${leakedVal > 0 ? 'sn-c-crimson' : 'sn-c-dim'}">${leakedVal > 0 ? '-' : ''}${fmtPts(leakedVal)}</span></td>
+            <td class="sn-num-col"><span class="sn-num sn-c-cobalt">${m.hitsMade || 0}</span>${m.respectEarned ? `<div class="sn-sub">+${fmtPts(m.respectEarned)} resp</div>` : ''}</td>
+            <td class="sn-num-col"><span class="sn-num ${netCls}" style="font-weight:900;">${net > 0 ? '+' : ''}${fmtPts(net)}</span></td>
         </tr>`;
     }).join('');
+    snRenderFoot('sentinel-table-foot', 'war', shown.length, list.length, 'members');
 }
 const renderSentinelTableDebounced = debounce(renderSentinelTable, 200);
 
 function setCfLoadoutFilter(filterKey, btn) {
     activeCfLoadoutFilter = filterKey;
-    document.querySelectorAll('#cf-filter-chips .filter-chip').forEach(b => b.classList.remove('active'));
-    if (btn) btn.classList.add('active');
+    snShowAll.loadouts = false;
+    snSetSegActive('cf-filter-chips', btn, filterKey);
     renderCrossFactionLoadouts();
 }
 
@@ -6053,10 +6735,10 @@ function summarizeLoadoutItems(items) {
         .join(', ');
 }
 
-// ── Render Cross-Faction Armory & Combat Loadouts ──
+// ── Combat loadouts (armory loans × war hitters) ──
 function renderCrossFactionLoadouts(data) {
     if (data) sentinelData = data;
-    const members = (data || sentinelData)?.members || [];
+    const members = sentinelData?.members || [];
     const loans = dashData?.dash?.loans || [];
     const usageByMember = dashData?.dash?.armory?.usageStats?.byMember || [];
     const usageMap = {};
@@ -6073,42 +6755,44 @@ function renderCrossFactionLoadouts(data) {
     const activeCombatants = members.filter(m => (m.hitsMade || 0) > 0);
     const combatantsWithLoans = activeCombatants.filter(m => (loansByMember[String(m.id)] || []).length > 0);
     const coveragePct = activeCombatants.length > 0 ? Math.round((combatantsWithLoans.length / activeCombatants.length) * 100) : 0;
-
-    const cfGearDeployed = document.getElementById('cf-gear-deployed');
-    const cfGearSub = document.getElementById('cf-gear-deployed-sub');
-    const cfCoveragePct = document.getElementById('cf-coverage-pct');
-    const cfCoverageSub = document.getElementById('cf-coverage-sub');
-    const cfReadiness = document.getElementById('cf-readiness-index');
-    const cfReadinessSub = document.getElementById('cf-readiness-sub');
-    const cfTbody = document.getElementById('cf-loadouts-tbody');
-
     const totalLoanHolders = Object.keys(loansByMember).length;
-    if (cfGearDeployed) cfGearDeployed.textContent = `${loans.length} pieces`;
-    if (cfGearSub) cfGearSub.textContent = `Held by ${totalLoanHolders} roster members`;
-    if (cfCoveragePct) cfCoveragePct.textContent = `${coveragePct}%`;
-    if (cfCoverageSub) cfCoverageSub.textContent = `${combatantsWithLoans.length} of ${activeCombatants.length} hitters armed`;
-    if (cfReadiness) cfReadiness.textContent = coveragePct >= 70 ? 'High' : (coveragePct >= 40 ? 'Moderate' : (loans.length > 0 ? 'Partial' : 'Low'));
-    if (cfReadinessSub) cfReadinessSub.textContent = activeCombatants.length > 0 ? 'War hitter armory gear coverage' : 'Tracking active armory loans';
 
+    snSetCount('cf-gear-deployed', `${fmtNum(loans.length)}`);
+    snSetCount('cf-gear-deployed-sub', `Items held by ${totalLoanHolders} member${totalLoanHolders === 1 ? '' : 's'}`);
+    snSetCount('cf-coverage-pct', activeCombatants.length ? `${coveragePct}%` : '—');
+    snSetCount('cf-coverage-sub', activeCombatants.length ? `${combatantsWithLoans.length} of ${activeCombatants.length} hitters armed` : 'Load a war to measure coverage');
+    const readinessEl = document.getElementById('cf-readiness-index');
+    if (readinessEl) {
+        const label = !activeCombatants.length ? '—' : (coveragePct >= 70 ? 'High' : (coveragePct >= 40 ? 'Moderate' : 'Low'));
+        readinessEl.textContent = label;
+        readinessEl.className = `sn-kpi-val ${label === 'High' ? 'sn-c-emerald' : (label === 'Moderate' ? 'sn-c-amber' : (label === 'Low' ? 'sn-c-crimson' : 'sn-c-cyan'))}`;
+    }
+    snSetCount('cf-readiness-sub', activeCombatants.length ? '70%+ high • 40%+ moderate' : 'Based on hitter gear coverage');
+    snSetCount('sn-count-loadouts', fmtNum(loans.length));
+
+    const ctx = document.getElementById('cf-war-context');
+    if (ctx) {
+        if (sentinelData?.war) {
+            ctx.className = 'sn-badge sn-badge-cyan';
+            ctx.textContent = `War: vs ${sentinelData.war.enemyName || 'Enemy'}`;
+        } else {
+            ctx.className = 'sn-badge sn-badge-muted';
+            ctx.textContent = 'No war loaded — showing loans only';
+        }
+    }
+
+    const cfTbody = document.getElementById('cf-loadouts-tbody');
     if (!cfTbody) return;
 
     const searchQ = (document.getElementById('cf-search')?.value || '').toLowerCase().trim();
 
-    // Combine audited war roster with any loan holder missing from war roster
     const seenIds = new Set(members.map(m => String(m.id)));
     const combinedRoster = [...members];
     loans.forEach(l => {
         const bid = String(l.borrowerId || l.loaned_to || '');
         if (bid && !seenIds.has(bid)) {
             seenIds.add(bid);
-            combinedRoster.push({
-                id: bid,
-                name: l.borrower || l.loaned_to_name || `Member ${bid}`,
-                grade: '—',
-                hitsMade: 0,
-                timesHit: 0,
-                airHours: 0
-            });
+            combinedRoster.push({ id: bid, name: l.borrowerName || l.borrower || l.loaned_to_name || `Member ${bid}`, grade: '—', hitsMade: 0, timesHit: 0, airHours: 0, notInWar: true });
         }
     });
 
@@ -6130,65 +6814,71 @@ function renderCrossFactionLoadouts(data) {
     filtered.sort((a, b) => {
         const aScore = ((loansByMember[String(a.id)]?.length || 0) > 0 ? 1000 : 0) + (a.hitsMade || 0) * 5;
         const bScore = ((loansByMember[String(b.id)]?.length || 0) > 0 ? 1000 : 0) + (b.hitsMade || 0) * 5;
-        return bScore - aScore;
+        return bScore - aScore || (a.name || '').localeCompare(b.name || '');
     });
 
     if (!filtered.length) {
-        cfTbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:20px; color:var(--text-tertiary);">No combatants or loaned gear match this filter.</td></tr>`;
+        const msg = !combinedRoster.length
+            ? 'No armory loans or war roster loaded yet.'
+            : 'No members or loaned gear match this filter.';
+        cfTbody.innerHTML = `<tr><td colspan="5" class="sn-empty">${msg}</td></tr>`;
+        snRenderFoot('cf-table-foot', 'loadouts', 0, 0, 'members');
         return;
     }
 
-    cfTbody.innerHTML = filtered.slice(0, 50).map(m => {
+    const shown = snShowAll.loadouts ? filtered : filtered.slice(0, SN_ROW_LIMIT);
+    const hasWarMembers = members.length > 0;
+    cfTbody.innerHTML = shown.map(m => {
         const memberLoans = loansByMember[String(m.id)] || [];
-        const weaponLoans = memberLoans.filter(l => /weapon|primary|secondary|melee/i.test(l.type || l.itemCategory || ''));
-        const armorLoans = memberLoans.filter(l => /armor/i.test(l.type || l.itemCategory || ''));
+        const weaponLoans = memberLoans.filter(l => /weapon|primary|secondary|melee/i.test(`${l.type || ''} ${l.itemCategory || ''}`));
+        const armorLoans = memberLoans.filter(l => !weaponLoans.includes(l) && /armor|defensive/i.test(`${l.type || ''} ${l.itemCategory || ''}`));
         const otherLoans = memberLoans.filter(l => !weaponLoans.includes(l) && !armorLoans.includes(l));
 
-        const weaponStatus = weaponLoans.length > 0
-            ? `<span style="color:var(--accent-amber); font-weight:700;">🔫 ${summarizeLoadoutItems(weaponLoans)}</span>`
-            : `<span style="color:var(--text-tertiary);">Personal Weapons</span>`;
+        const weaponHtml = weaponLoans.length
+            ? `<span class="sn-items sn-c-amber">🔫 ${summarizeLoadoutItems(weaponLoans)}</span>`
+            : '<span class="sn-c-dim">—</span>';
+        const armorParts = [];
+        if (armorLoans.length) armorParts.push(`<span class="sn-c-cyan">🛡️ ${summarizeLoadoutItems(armorLoans)}</span>`);
+        if (otherLoans.length) armorParts.push(`<span class="sn-c-purple">🎒 ${summarizeLoadoutItems(otherLoans)}</span>`);
+        const armorHtml = armorParts.length ? `<span class="sn-items">${armorParts.join('<br>')}</span>` : '<span class="sn-c-dim">—</span>';
 
-        const armorItems = armorLoans.length > 0 ? summarizeLoadoutItems(armorLoans) : '';
-        const otherItems = otherLoans.length > 0 ? summarizeLoadoutItems(otherLoans) : '';
-        const armorStatus = armorItems
-            ? `<span style="color:var(--accent-cyan); font-weight:700;">🛡️ ${armorItems}${otherItems ? ` + ${otherItems}` : ''}</span>`
-            : (otherItems ? `<span style="color:var(--accent-cyan); font-weight:700;">🎒 ${otherItems}</span>` : `<span style="color:var(--text-tertiary);">Standard Gear</span>`);
-
-        let roleBadge = `<span class="badge-unrecorded" style="white-space:nowrap;">Standby</span>`;
-        if ((m.hitsMade || 0) >= 15) roleBadge = `<span class="badge-loan active" style="white-space:nowrap;">⚔️ Lead Hitter</span>`;
-        else if ((m.hitsMade || 0) > 0) roleBadge = `<span class="badge-confirmed" style="white-space:nowrap;">⚔️ War Hitter</span>`;
-        else if ((m.airHours || 0) >= 10 || m.grade === 'S') roleBadge = `<span class="badge-confirmed" style="white-space:nowrap; background:rgba(6,182,212,0.12); color:var(--accent-cyan); border-color:rgba(6,182,212,0.3);">✈️ Air Support</span>`;
-        else if (memberLoans.length > 0) roleBadge = `<span class="badge-estimated" style="white-space:nowrap;">🪖 Armed Reserve</span>`;
+        let role = '<span class="sn-badge sn-badge-muted">Standby</span>';
+        if ((m.hitsMade || 0) >= 15) role = '<span class="sn-badge sn-badge-crimson">⚔️ Lead Hitter</span>';
+        else if ((m.hitsMade || 0) > 0) role = '<span class="sn-badge sn-badge-cobalt">⚔️ Hitter</span>';
+        else if ((m.airHours || 0) >= 10 || m.grade === 'S') role = '<span class="sn-badge sn-badge-cyan">✈️ Flyer</span>';
+        else if (m.notInWar && hasWarMembers) role = '<span class="sn-badge sn-badge-muted">Not in war</span>';
+        else if (memberLoans.length > 0) role = '<span class="sn-badge sn-badge-amber">🪖 Armed Reserve</span>';
 
         const uData = usageMap[String(m.id)];
-        const usageSnippet = uData ? `<span style="font-size:0.75em; color:var(--accent-emerald);"> (${uData.totalUsed} armory items)</span>` : '';
+        const subParts = [`[${escapeHtml(m.id)}]`];
+        if (m.grade && m.grade !== '—') subParts.push(`Grade ${escapeHtml(m.grade)}`);
+        if (memberLoans.length) subParts.push(`${memberLoans.length} item${memberLoans.length === 1 ? '' : 's'}`);
+        if (uData?.totalUsed) subParts.push(`${fmtNum(uData.totalUsed)} used`);
 
         return `<tr>
-            <td style="font-weight:700;">
-                <a href="https://www.torn.com/profiles.php?XID=${encodeURIComponent(m.id)}" target="_blank" rel="noopener noreferrer" style="color:var(--text-primary); text-decoration:none;">${escapeHtml(m.name || 'Member')}</a>
-                <div style="font-size:0.75em; color:var(--text-tertiary);">[${escapeHtml(m.id)}] • Grade ${escapeHtml(m.grade || '—')}</div>
-            </td>
-            <td>${roleBadge}</td>
-            <td>${weaponStatus}</td>
-            <td>${armorStatus}</td>
-            <td><strong>${m.hitsMade || 0}</strong> hits &bull; <strong>${m.timesHit || 0}</strong> def${usageSnippet}</td>
+            <td>${snMemberCell(m.id, m.name, subParts.join(' • '))}</td>
+            <td>${role}</td>
+            <td>${weaponHtml}</td>
+            <td>${armorHtml}</td>
+            <td class="sn-num-col"><span class="sn-num sn-c-cobalt">${m.hitsMade || 0}</span><div class="sn-sub">${m.timesHit || 0} taken</div></td>
         </tr>`;
     }).join('');
+    snRenderFoot('cf-table-foot', 'loadouts', shown.length, filtered.length, 'members');
 }
+const renderCrossFactionLoadoutsDebounced = debounce(() => renderCrossFactionLoadouts(), 200);
 
 // ─── FACTION PLAYER STAT GAINS & PROGRESSION TRACKER ───
 let currentStatGainsData = null;
 let statGainsWindow = '7d';
 let statGainsFilter = 'all';
+let statGainsSpec = '';
 let statGainsSortCol = 'gainTotal';
 let statGainsSortAsc = false;
 let statGainsSearchQuery = '';
 
 function setStatGainsWindow(windowStr, btn) {
     statGainsWindow = windowStr;
-    const sel = document.getElementById('stat-window-select');
-    if (sel && sel.value !== windowStr) sel.value = windowStr;
-    document.querySelectorAll('#stat-window-segmented .stat-window-pill, .stat-window-pill').forEach(b => {
+    document.querySelectorAll('.stat-window-pill').forEach(b => {
         const isMatch = btn ? (b === btn) : (b.dataset.win === windowStr);
         b.classList.toggle('active', isMatch);
     });
@@ -6199,7 +6889,7 @@ async function loadFactionStatGains(force = false) {
     const tbody = document.getElementById('stat-gains-tbody');
     const refreshBtn = document.getElementById('btn-refresh-stat-gains');
     if (!currentStatGainsData && tbody) {
-        tbody.innerHTML = `<tr><td colspan="10" style="text-align:center; padding:28px; color:var(--text-tertiary);"><span class="loading-spinner"></span> Loading faction player battle stats and gym progression...</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="10" class="sn-empty sn-loading"><span class="loading-spinner"></span> Loading faction battle stats…</td></tr>`;
     }
     if (refreshBtn) refreshBtn.classList.add('spinning');
 
@@ -6210,12 +6900,12 @@ async function loadFactionStatGains(force = false) {
         if (data && data.success) {
             currentStatGainsData = data;
             renderStatGainsTracker();
-        } else {
-            if (tbody) tbody.innerHTML = `<tr><td colspan="10" style="text-align:center; padding:24px; color:var(--accent-crimson);">Failed to load stat gains: ${escapeHtml(data?.error || 'Unknown error')}</td></tr>`;
+        } else if (tbody) {
+            tbody.innerHTML = `<tr><td colspan="10" class="sn-empty sn-error">Failed to load stat gains: ${escapeHtml(data?.error || 'Unknown error')}</td></tr>`;
         }
-    } catch(err) {
+    } catch (err) {
         console.error('Error loading faction stat gains:', err);
-        if (tbody) tbody.innerHTML = `<tr><td colspan="10" style="text-align:center; padding:24px; color:var(--accent-crimson);">Network error loading stat gains.</td></tr>`;
+        if (tbody) tbody.innerHTML = `<tr><td colspan="10" class="sn-empty sn-error">Network error loading stat gains.</td></tr>`;
     } finally {
         if (refreshBtn) refreshBtn.classList.remove('spinning');
     }
@@ -6228,15 +6918,12 @@ async function triggerStatSnapshot() {
     ].filter(Boolean);
     btns.forEach(b => {
         b.disabled = true;
-        b.innerHTML = `<span>⏳</span> Capturing...`;
+        b.innerHTML = `<span>⏳</span> Capturing…`;
     });
     try {
         const headers = { 'Content-Type': 'application/json' };
         if (myKey) headers['x-api-key'] = myKey;
-        const res = await fetch('/api/faction/stat-gains/snapshot', {
-            method: 'POST',
-            headers
-        });
+        const res = await fetch('/api/faction/stat-gains/snapshot', { method: 'POST', headers });
         const data = await res.json();
         if (data && data.success) {
             showToast(`📸 Snapshot recorded! Updated ${data.updatedCount || 0} connected members.`, 'success');
@@ -6247,7 +6934,7 @@ async function triggerStatSnapshot() {
         } else {
             showToast(`Snapshot notice: ${data?.error || 'No updates'}`, 'warn');
         }
-    } catch(e) {
+    } catch (e) {
         showToast('Failed to trigger stat snapshot.', 'error');
     } finally {
         btns.forEach(b => {
@@ -6259,8 +6946,14 @@ async function triggerStatSnapshot() {
 
 function setStatGainsFilter(filterKey, btn) {
     statGainsFilter = filterKey;
-    document.querySelectorAll('#stat-filter-chips .filter-pill').forEach(b => b.classList.remove('active'));
-    if (btn) btn.classList.add('active');
+    snShowAll.gains = false;
+    snSetSegActive('stat-filter-chips', btn, filterKey);
+    renderStatGainsTracker();
+}
+
+function setStatGainsSpec(spec) {
+    statGainsSpec = spec || '';
+    snShowAll.gains = false;
     renderStatGainsTracker();
 }
 
@@ -6270,8 +6963,8 @@ function onStatGainsSearch(query) {
 }
 
 function onStatGainsSortChange(sortVal) {
-    const parts = sortVal.split('_');
-    statGainsSortCol = parts[0];
+    const parts = String(sortVal || '').split('_');
+    statGainsSortCol = parts[0] || 'gainTotal';
     statGainsSortAsc = (parts[1] === 'asc');
     renderStatGainsTracker();
 }
@@ -6283,9 +6976,20 @@ function sortStatGains(col) {
         statGainsSortCol = col;
         statGainsSortAsc = (col === 'name');
     }
-    const select = document.getElementById('stat-gains-sort-select');
-    if (select) select.value = `${col}_${statGainsSortAsc ? 'asc' : 'desc'}`;
+    const sel = document.getElementById('stat-gains-sort-select');
+    if (sel) {
+        const targetVal = `${col}_${statGainsSortAsc ? 'asc' : 'desc'}`;
+        if ([...sel.options].some(o => o.value === targetVal)) sel.value = targetVal;
+    }
     renderStatGainsTracker();
+}
+
+function snGainCell(statVal, gainVal, masked) {
+    const g = Number(gainVal || 0);
+    const gainHtml = g
+        ? `<div class="sn-sub sn-num ${g > 0 ? 'sn-c-emerald' : 'sn-c-crimson'}" style="font-weight:600;">${g > 0 ? '+' : ''}${fmtNum(g)}</div>`
+        : '<div class="sn-sub">—</div>';
+    return `<span class="sn-num">${masked ? '—' : fmtNum(statVal || 0)}</span>${gainHtml}`;
 }
 
 function renderStatGainsTracker() {
@@ -6296,52 +7000,41 @@ function renderStatGainsTracker() {
     const estimatedTotal = kpis.estimatedCount ?? Math.max(0, members.length - confirmedTotal);
     const summaryEl = document.getElementById('stat-gains-source-summary');
     if (summaryEl) {
-        summaryEl.className = confirmedTotal > 0 ? 'badge-confirmed' : 'badge-estimated';
-        summaryEl.textContent = `${members.length} Members • ${confirmedTotal} Confirmed API • ${estimatedTotal} Estimated`;
+        summaryEl.className = `sn-badge ${confirmedTotal > 0 ? 'sn-badge-emerald' : 'sn-badge-amber'}`;
+        summaryEl.textContent = `${members.length} members • ${confirmedTotal} confirmed • ${estimatedTotal} estimated`;
     }
+    snSetCount('sn-count-gains', fmtNum(members.length));
 
-    // 1. Update 5 KPI metric tiles
     const totalGainsEl = document.getElementById('stat-kpi-total-gains');
-    const totalGainsSub = document.getElementById('stat-kpi-total-gains-sub');
     if (totalGainsEl) totalGainsEl.textContent = `+${fmtNum(kpis.totalFactionGains || 0)}`;
-    if (totalGainsSub) totalGainsSub.textContent = `Across ${kpis.trackedCount ?? members.length} tracked members (${statGainsWindow})`;
+    snSetCount('stat-kpi-total-gains-sub', `${kpis.trackedCount ?? members.length} members • ${String(statGainsWindow).toUpperCase()}`);
 
     const topGainerEl = document.getElementById('stat-kpi-top-gainer');
     const topGainerSub = document.getElementById('stat-kpi-top-gainer-sub');
     if (topGainerEl) {
         if (kpis.topGainer) {
-            topGainerEl.innerHTML = `<a href="https://www.torn.com/profiles.php?XID=${encodeURIComponent(kpis.topGainer.id)}" target="_blank" rel="noopener noreferrer" style="color:var(--accent-amber); text-decoration:none;">${escapeHtml(kpis.topGainer.name)}</a>`;
+            topGainerEl.innerHTML = `<a href="https://www.torn.com/profiles.php?XID=${encodeURIComponent(kpis.topGainer.id)}" target="_blank" rel="noopener noreferrer">${escapeHtml(kpis.topGainer.name)}</a>`;
+            topGainerEl.title = kpis.topGainer.name || '';
             if (topGainerSub) topGainerSub.textContent = `+${fmtNum(kpis.topGainer.gain)} (+${kpis.topGainer.pct || 0}%)`;
         } else {
             topGainerEl.textContent = '—';
-            if (topGainerSub) topGainerSub.textContent = '+0 gained';
+            if (topGainerSub) topGainerSub.textContent = 'No gains recorded yet';
         }
     }
 
-    const momentumEl = document.getElementById('stat-kpi-momentum');
-    if (momentumEl) momentumEl.textContent = `${fmtNum(kpis.totalXanaxTaken || 0)} 💊 • ${fmtNum(kpis.totalRefillsUsed || 0)} ⚡`;
+    snSetCount('stat-kpi-momentum', `${fmtNum(kpis.totalXanaxTaken || 0)} / ${fmtNum(kpis.totalRefillsUsed || 0)}`);
+    snSetCount('stat-kpi-total-power', fmtNum(kpis.totalFactionCombatPower || 0));
+    snSetCount('stat-kpi-total-power-sub', `${confirmedTotal} confirmed • ${estimatedTotal} estimated`);
+    snSetCount('stat-kpi-slackers', fmtNum(kpis.slackersCount || 0));
 
-    const totalPowerEl = document.getElementById('stat-kpi-total-power');
-    const totalPowerSub = document.getElementById('stat-kpi-total-power-sub');
-    if (totalPowerEl) totalPowerEl.textContent = fmtNum(kpis.totalFactionCombatPower || 0);
-    if (totalPowerSub) totalPowerSub.textContent = `${confirmedTotal} confirmed • ${estimatedTotal} estimated`;
-
-    const slackersEl = document.getElementById('stat-kpi-slackers');
-    if (slackersEl) slackersEl.textContent = fmtNum(kpis.slackersCount || 0);
-
-    // 2. Filter member list
     const list = members.filter(m => {
         const isConf = Boolean(m.isConfirmed || m.verified);
         const totalG = m.gains?.total || 0;
         if (statGainsFilter === 'top' && totalG < 10000) return false;
-        if (statGainsFilter === 'str' && m.specialty !== 'Strength') return false;
-        if (statGainsFilter === 'def' && m.specialty !== 'Defense') return false;
-        if (statGainsFilter === 'spd' && m.specialty !== 'Speed') return false;
-        if (statGainsFilter === 'dex' && m.specialty !== 'Dexterity') return false;
         if (statGainsFilter === 'slackers' && totalG >= 1000) return false;
         if (statGainsFilter === 'verified' && !isConf) return false;
         if (statGainsFilter === 'estimated' && isConf) return false;
-
+        if (statGainsSpec && (m.specialty || 'Balanced') !== statGainsSpec) return false;
         if (statGainsSearchQuery) {
             const nameMatch = (m.playerName || '').toLowerCase().includes(statGainsSearchQuery);
             const idMatch = String(m.playerId).includes(statGainsSearchQuery);
@@ -6350,13 +7043,11 @@ function renderStatGainsTracker() {
         return true;
     });
 
-    // 3. Sort list
     list.sort((a, b) => {
         let va, vb;
         switch (statGainsSortCol) {
             case 'name': return statGainsSortAsc ? (a.playerName || '').localeCompare(b.playerName || '') : (b.playerName || '').localeCompare(a.playerName || '');
             case 'totalStats': va = a.stats?.total || 0; vb = b.stats?.total || 0; break;
-            case 'gainTotal': va = a.gains?.total || 0; vb = b.gains?.total || 0; break;
             case 'gainStr': va = a.gains?.strength || 0; vb = b.gains?.strength || 0; break;
             case 'gainDef': va = a.gains?.defense || 0; vb = b.gains?.defense || 0; break;
             case 'gainSpd': va = a.gains?.speed || 0; vb = b.gains?.speed || 0; break;
@@ -6367,127 +7058,61 @@ function renderStatGainsTracker() {
         return statGainsSortAsc ? (va - vb) : (vb - va);
     });
 
-    // Update sort header indicators
-    const sortCols = ['name', 'totalStats', 'gainTotal', 'gainStr', 'gainDef', 'gainSpd', 'gainDex', 'xanax'];
-    sortCols.forEach(c => {
+    ['name', 'totalStats', 'gainTotal', 'gainStr', 'gainDef', 'gainSpd', 'gainDex', 'xanax'].forEach(c => {
         const ind = document.getElementById(`sort-ind-sg-${c}`);
-        if (ind) {
-            if (statGainsSortCol === c) {
-                ind.textContent = statGainsSortAsc ? '↑' : '↓';
-                ind.style.color = 'var(--accent-cyan)';
-            } else {
-                ind.textContent = '↕';
-                ind.style.color = 'var(--text-tertiary)';
-            }
-        }
+        if (ind) ind.textContent = statGainsSortCol === c ? (statGainsSortAsc ? ' ↑' : ' ↓') : '';
     });
 
-    // 4. Render Table
     const tbody = document.getElementById('stat-gains-tbody');
-    if (!tbody) return;
+    if (tbody) {
+        if (!list.length) {
+            tbody.innerHTML = `<tr><td colspan="10" class="sn-empty">No faction members match current filters.</td></tr>`;
+            snRenderFoot('stat-gains-table-foot', 'gains', 0, 0, 'members');
+        } else {
+            const shown = snShowAll.gains ? list : list.slice(0, SN_ROW_LIMIT);
+            const specMap = { Strength: '💪 Strength', Defense: '🛡️ Defense', Speed: '⚡ Speed', Dexterity: '🎯 Dexterity', Balanced: '⚖️ Balanced' };
+            tbody.innerHTML = shown.map(m => {
+                const isConf = Boolean(m.isConfirmed || m.verified);
+                const isMasked = Boolean(m.masked || m.stats?.masked || m.privacy === 'none');
+                const stats = m.stats || {};
+                const gains = m.gains || {};
+                const sourceTag = isConf
+                    ? `<span class="sn-badge sn-badge-emerald" title="Confirmed via the member's own API key">✓ ${m.hasApiKey ? 'API Key' : 'Confirmed'}</span>`
+                    : ((stats.total || 0) > 0
+                        ? '<span class="sn-badge sn-badge-amber" title="Estimated via spy / FF Scouter">~ Est</span>'
+                        : '<span class="sn-badge sn-badge-muted">No data</span>');
 
-    if (!list.length) {
-        tbody.innerHTML = `<tr><td colspan="10" style="text-align:center; padding:28px; color:var(--text-tertiary);">No faction members match current filters.</td></tr>`;
-        return;
-    }
+                const g = Number(gains.total || 0);
+                const gainHtml = g > 0
+                    ? `<span class="sn-num sn-c-emerald" style="font-weight:800;">+${fmtNum(g)}</span><div class="sn-sub">+${gains.pct || 0}% • ~${fmtNum(m.dailyAvg || 0)}/day</div>`
+                    : (g < 0
+                        ? `<span class="sn-num sn-c-crimson" style="font-weight:800;">-${fmtNum(Math.abs(g))}</span><div class="sn-sub">${gains.pct || 0}%</div>`
+                        : '<span class="sn-num sn-c-dim">0</span><div class="sn-sub">no change</div>');
 
-    tbody.innerHTML = list.map(m => {
-        const isConf = Boolean(m.isConfirmed || m.verified);
-        const isMasked = Boolean(m.masked || m.stats?.masked || m.privacy === 'none');
-        const verifiedTag = isConf
-            ? `<span class="badge-confirmed" style="font-size:0.68em; padding:1px 5px;" title="Confirmed via Personal API Key">${m.hasApiKey ? '✓ API Key' : '✓ Confirmed'}</span>`
-            : ((m.stats?.total || 0) > 0
-                ? `<span class="badge-estimated" style="font-size:0.68em; padding:1px 5px;" title="Estimated via FF Scouter / Spy">~ Est</span>`
-                : `<span class="badge-unrecorded" style="font-size:0.68em; padding:1px 5px;">No Data</span>`);
+                const bal = m.balance || { strengthPct: 25, defensePct: 25, speedPct: 25, dexterityPct: 25 };
+                const balanceBar = `<div class="sn-balance" title="Str ${bal.strengthPct}% • Def ${bal.defensePct}% • Spd ${bal.speedPct}% • Dex ${bal.dexterityPct}%">
+                    <span style="width:${bal.strengthPct}%; background:var(--accent-crimson);"></span>
+                    <span style="width:${bal.defensePct}%; background:var(--accent-cobalt);"></span>
+                    <span style="width:${bal.speedPct}%; background:var(--accent-amber);"></span>
+                    <span style="width:${bal.dexterityPct}%; background:var(--accent-purple);"></span>
+                </div>`;
 
-        const gains = m.gains || { total: 0, pct: 0, strength: 0, defense: 0, speed: 0, dexterity: 0 };
-        let gainBadge = `<span style="color:var(--text-tertiary); font-weight:700;">0</span>`;
-        if (gains.total > 0) {
-            gainBadge = `<span style="font-family:var(--font-mono); font-weight:800; color:var(--accent-emerald); font-size:1.02em;">+${fmtNum(gains.total)}</span>
-                         <span style="font-size:0.72em; background:rgba(16,185,129,0.12); color:var(--accent-emerald); border-radius:3px; padding:1px 4px; margin-left:3px; font-weight:700;">+${gains.pct || 0}%</span>`;
-        } else if (gains.total < 0) {
-            gainBadge = `<span style="font-family:var(--font-mono); font-weight:800; color:var(--accent-crimson); font-size:1.02em;">-${fmtNum(Math.abs(gains.total))}</span>`;
+                return `<tr>
+                    <td>${snMemberCell(m.playerId, m.playerName, `Lv ${m.level || 1} • [${escapeHtml(m.playerId)}]${m.daysInFaction ? ` • ${m.daysInFaction}d` : ''}`, sourceTag)}</td>
+                    <td class="sn-num-col"><span class="sn-num ${isMasked ? 'sn-c-dim' : 'sn-c-cyan'}" style="font-weight:800;">${isMasked ? '🔒 Private' : fmtNum(stats.total || 0)}</span><div class="sn-sub">${isMasked ? 'masked' : (isConf ? 'confirmed' : 'estimated')}</div></td>
+                    <td class="sn-num-col">${gainHtml}</td>
+                    <td class="sn-num-col">${snGainCell(stats.strength, gains.strength, isMasked)}</td>
+                    <td class="sn-num-col">${snGainCell(stats.defense, gains.defense, isMasked)}</td>
+                    <td class="sn-num-col">${snGainCell(stats.speed, gains.speed, isMasked)}</td>
+                    <td class="sn-num-col">${snGainCell(stats.dexterity, gains.dexterity, isMasked)}</td>
+                    <td class="sn-num-col"><span class="sn-num sn-c-purple">${fmtNum(m.momentum?.xanax || 0)}</span><div class="sn-sub sn-num">${fmtNum(m.momentum?.refills || 0)} ref</div></td>
+                    <td><div class="sn-sub" style="margin:0; color:var(--text-secondary); font-weight:600;">${specMap[m.specialty] || escapeHtml(m.specialty || '⚖️ Balanced')}</div>${balanceBar}</td>
+                    <td class="sn-center-col"><button type="button" class="sn-btn sn-row-btn" data-pid="${escapeHtml(String(m.playerId))}" onclick="openPlayerStatModal(this.dataset.pid)" title="View progression history &amp; forecast">📊 Log</button></td>
+                </tr>`;
+            }).join('');
+            snRenderFoot('stat-gains-table-foot', 'gains', shown.length, list.length, 'members');
         }
-
-        const strGainChip = gains.strength ? `<div style="font-size:0.7em; color:${gains.strength > 0 ? 'var(--accent-emerald)' : 'var(--accent-crimson)'}; font-family:var(--font-mono);">${gains.strength > 0 ? '+' : ''}${fmtNum(gains.strength)}</div>` : '';
-        const defGainChip = gains.defense ? `<div style="font-size:0.7em; color:${gains.defense > 0 ? 'var(--accent-emerald)' : 'var(--accent-crimson)'}; font-family:var(--font-mono);">${gains.defense > 0 ? '+' : ''}${fmtNum(gains.defense)}</div>` : '';
-        const spdGainChip = gains.speed ? `<div style="font-size:0.7em; color:${gains.speed > 0 ? 'var(--accent-emerald)' : 'var(--accent-crimson)'}; font-family:var(--font-mono);">${gains.speed > 0 ? '+' : ''}${fmtNum(gains.speed)}</div>` : '';
-        const dexGainChip = gains.dexterity ? `<div style="font-size:0.7em; color:${gains.dexterity > 0 ? 'var(--accent-emerald)' : 'var(--accent-crimson)'}; font-family:var(--font-mono);">${gains.dexterity > 0 ? '+' : ''}${fmtNum(gains.dexterity)}</div>` : '';
-
-        const specMap = {
-            'Strength': '💪 Strength',
-            'Defense': '🛡️ Defense',
-            'Speed': '⚡ Speed',
-            'Dexterity': '🎯 Dexterity',
-            'Balanced': '⚖️ Balanced'
-        };
-        const specLabel = specMap[m.specialty] || (m.specialty || 'Balanced');
-
-        const b = m.balance || { strengthPct: 25, defensePct: 25, speedPct: 25, dexterityPct: 25 };
-        const balanceBar = `
-            <div style="display:flex; height:5px; border-radius:3px; overflow:hidden; background:var(--bg-elevated); border:1px solid var(--border-subtle); margin-top:4px;" title="Str ${b.strengthPct}% | Def ${b.defensePct}% | Spd ${b.speedPct}% | Dex ${b.dexterityPct}%">
-                <div style="width:${b.strengthPct}%; background:var(--accent-crimson, #ef4444);"></div>
-                <div style="width:${b.defensePct}%; background:var(--accent-cobalt, #3b82f6);"></div>
-                <div style="width:${b.speedPct}%; background:var(--accent-amber, #f59e0b);"></div>
-                <div style="width:${b.dexterityPct}%; background:var(--accent-purple, #a855f7);"></div>
-            </div>`;
-
-        const stats = m.stats || {};
-        const tbsText = isMasked ? '🔒 Private' : fmtNum(stats.total || 0);
-        const sText = isMasked ? '—' : fmtNum(stats.strength || 0);
-        const dText = isMasked ? '—' : fmtNum(stats.defense || 0);
-        const spText = isMasked ? '—' : fmtNum(stats.speed || 0);
-        const dxText = isMasked ? '—' : fmtNum(stats.dexterity || 0);
-
-        return `<tr>
-            <td style="vertical-align:top;">
-                <div style="font-weight:700; display:flex; align-items:center; flex-wrap:wrap; gap:5px;">
-                    <a href="https://www.torn.com/profiles.php?XID=${encodeURIComponent(m.playerId)}" target="_blank" rel="noopener noreferrer" style="color:var(--text-primary); text-decoration:none;">${escapeHtml(m.playerName)}</a>
-                    ${verifiedTag}
-                </div>
-                <div style="font-size:0.74em; color:var(--text-tertiary); margin-top:2px;">
-                    [${escapeHtml(m.playerId)}] • Lv ${m.level || 1}${m.daysInFaction ? ` • ${m.daysInFaction}d` : ''}
-                </div>
-            </td>
-            <td style="vertical-align:top;">
-                <div style="font-family:var(--font-mono); font-weight:800; color:${isMasked ? 'var(--text-tertiary)' : 'var(--accent-cyan)'}; font-size:1em;">${tbsText}</div>
-                <div style="font-size:0.7em; color:var(--text-tertiary);">${isMasked ? 'Masked' : (isConf ? 'Confirmed' : 'Estimated')}</div>
-            </td>
-            <td style="vertical-align:top;">
-                <div>${gainBadge}</div>
-                <div style="font-size:0.7em; color:var(--text-tertiary); margin-top:2px;">~${fmtNum(m.dailyAvg || 0)}/day</div>
-            </td>
-            <td style="vertical-align:top;">
-                <div style="font-family:var(--font-mono); font-weight:700; color:var(--text-primary); font-size:0.94em;">${sText}</div>
-                ${strGainChip}
-            </td>
-            <td style="vertical-align:top;">
-                <div style="font-family:var(--font-mono); font-weight:700; color:var(--text-primary); font-size:0.94em;">${dText}</div>
-                ${defGainChip}
-            </td>
-            <td style="vertical-align:top;">
-                <div style="font-family:var(--font-mono); font-weight:700; color:var(--text-primary); font-size:0.94em;">${spText}</div>
-                ${spdGainChip}
-            </td>
-            <td style="vertical-align:top;">
-                <div style="font-family:var(--font-mono); font-weight:700; color:var(--text-primary); font-size:0.94em;">${dxText}</div>
-                ${dexGainChip}
-            </td>
-            <td style="vertical-align:top;">
-                <div style="font-family:var(--font-mono); font-size:0.84em; color:var(--accent-purple); font-weight:700;">💊 ${fmtNum(m.momentum?.xanax || 0)}</div>
-                <div style="font-family:var(--font-mono); font-size:0.72em; color:var(--accent-amber);">⚡ ${fmtNum(m.momentum?.refills || 0)} ref</div>
-            </td>
-            <td style="vertical-align:top;">
-                <div style="font-size:0.74em; font-weight:600; color:var(--text-secondary);">${specLabel}</div>
-                ${balanceBar}
-            </td>
-            <td style="vertical-align:top; text-align:center;">
-                <button class="btn btn-sm btn-outline" onclick="openPlayerStatModal('${escapeHtml(String(m.playerId))}')" style="padding:3px 9px; font-size:0.74em; display:inline-flex; align-items:center; gap:4px;" title="View individual progression history &amp; forecast">
-                    <span>📊</span> Log
-                </button>
-            </td>
-        </tr>`;
-    }).join('');
+    }
 
     if (!window.gymTabRoster) {
         renderGymTabTable(members);

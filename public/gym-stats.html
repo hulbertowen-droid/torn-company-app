@@ -77,8 +77,14 @@
         overflow: visible;
     }
 
-    .roster-table-container, .scrollable {
+    .roster-table-container {
         overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .scrollable {
+        overflow-x: auto;
+        overflow-y: auto;
         -webkit-overflow-scrolling: touch;
     }
 
@@ -1124,15 +1130,15 @@
     <!-- ══════════════════════════════════════════════════════════════ -->
     <!-- PRIVACY TIERS MODAL (WIRED & FUNCTIONAL) -->
     <!-- ══════════════════════════════════════════════════════════════ -->
-    <div id="privacy-tiers-modal" class="modal-backdrop" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:10001; justify-content:center; align-items:center; padding:16px;">
-        <div style="background:var(--bg-surface); border:1px solid var(--border-subtle); border-radius:14px; width:100%; max-width:520px; overflow:hidden; box-shadow:0 12px 48px rgba(0,0,0,0.7);">
-            <div style="padding:18px 22px; border-bottom:1px solid var(--border-subtle); display:flex; justify-content:space-between; align-items:center;">
-                <h3 style="margin:0; font-size:1.15em; font-weight:900; color:#FFF; display:flex; align-items:center; gap:8px;">
+    <div id="privacy-tiers-modal" class="modal-backdrop" onclick="if (event.target === this) closePrivacySettingsModal()" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:10001; justify-content:center; align-items:center; padding:16px;">
+        <div style="background:var(--bg-surface); border:1px solid var(--border-subtle); border-radius:14px; width:100%; max-width:520px; max-height:90vh; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 12px 48px rgba(0,0,0,0.7);">
+            <div style="padding:18px 22px; border-bottom:1px solid var(--border-subtle); display:flex; justify-content:space-between; align-items:center; flex-shrink:0;">
+                <h3 style="margin:0; font-size:1.15em; font-weight:900; color:var(--text-primary); display:flex; align-items:center; gap:8px;">
                     <span>🔒 Battle Stat Privacy Tiers</span>
                 </h3>
                 <button onclick="closePrivacySettingsModal()" style="background:transparent; border:none; color:var(--text-tertiary); font-size:1.4em; cursor:pointer;">✕</button>
             </div>
-            <div style="padding:22px; display:flex; flex-direction:column; gap:14px;">
+            <div style="padding:22px; display:flex; flex-direction:column; gap:14px; overflow-y:auto; flex:1; min-height:0;">
                 <div style="font-size:0.82em; color:var(--text-secondary); line-height:1.4;">
                     Configure how your battle stats, gym train history, and personal stats are displayed to faction mates on the gym tracker.
                 </div>
@@ -1140,7 +1146,7 @@
                 <div class="privacy-tier-card selected" id="tier-card-full" onclick="selectPrivacyTier('full')">
                     <input type="radio" name="privacyTier" value="full" id="radio-full" checked style="margin-top:3px;">
                     <div>
-                        <strong style="color:#FFF; font-size:0.9em;">🌐 Full Visibility (Default)</strong>
+                        <strong style="color:var(--text-primary); font-size:0.9em;">🌐 Full Visibility (Default)</strong>
                         <div style="font-size:0.75em; color:var(--text-secondary); margin-top:2px;">
                             Share full battle stats (Str, Spd, Def, Dex, TBS) with all verified faction members. Best for war organization.
                         </div>
@@ -1150,7 +1156,7 @@
                 <div class="privacy-tier-card" id="tier-card-gains_only" onclick="selectPrivacyTier('gains_only')">
                     <input type="radio" name="privacyTier" value="gains_only" id="radio-gains_only" style="margin-top:3px;">
                     <div>
-                        <strong style="color:#FFF; font-size:0.9em;">📈 Gains Only (Obfuscated)</strong>
+                        <strong style="color:var(--text-primary); font-size:0.9em;">📈 Gains Only (Obfuscated)</strong>
                         <div style="font-size:0.75em; color:var(--text-secondary); margin-top:2px;">
                             Mask absolute battle stats (shown as <code>🔒 Hidden</code>). Only daily/weekly net gains (+Δ) and energy spent are displayed.
                         </div>
@@ -1160,14 +1166,14 @@
                 <div class="privacy-tier-card" id="tier-card-leadership_only" onclick="selectPrivacyTier('leadership_only')">
                     <input type="radio" name="privacyTier" value="leadership_only" id="radio-leadership_only" style="margin-top:3px;">
                     <div>
-                        <strong style="color:#FFF; font-size:0.9em;">🛡️ Leadership Only (Strict)</strong>
+                        <strong style="color:var(--text-primary); font-size:0.9em;">🛡️ Leadership Only (Strict)</strong>
                         <div style="font-size:0.75em; color:var(--text-secondary); margin-top:2px;">
                             Full stats are visible exclusively to Faction Leader &amp; Co-Leaders. Regular members see masked asterisks.
                         </div>
                     </div>
                 </div>
             </div>
-            <div style="padding:14px 22px; border-top:1px solid var(--border-subtle); display:flex; justify-content:flex-end; gap:10px; background:rgba(0,0,0,0.15);">
+            <div style="padding:14px 22px; border-top:1px solid var(--border-subtle); display:flex; justify-content:flex-end; gap:10px; background:rgba(0,0,0,0.15); flex-shrink:0;">
                 <button class="btn btn-sm btn-outline" onclick="closePrivacySettingsModal()">Cancel</button>
                 <button class="btn btn-sm btn-primary" onclick="saveSelectedPrivacyTier()" style="background:var(--accent-amber); border-color:var(--accent-amber); color:#000; font-weight:700;">Save Preference</button>
             </div>
@@ -1177,15 +1183,15 @@
     <!-- ══════════════════════════════════════════════════════════════ -->
     <!-- PERK & MULTIPLIER CALCULATOR MODAL -->
     <!-- ══════════════════════════════════════════════════════════════ -->
-    <div id="multiplier-calc-modal" class="modal-backdrop" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:10001; justify-content:center; align-items:center; padding:16px;">
-        <div style="background:var(--bg-surface); border:1px solid var(--border-subtle); border-radius:14px; width:100%; max-width:520px; overflow:hidden; box-shadow:0 12px 48px rgba(0,0,0,0.7);">
-            <div style="padding:18px 22px; border-bottom:1px solid var(--border-subtle); display:flex; justify-content:space-between; align-items:center;">
-                <h3 style="margin:0; font-size:1.15em; font-weight:900; color:#FFF; display:flex; align-items:center; gap:8px;">
+    <div id="multiplier-calc-modal" class="modal-backdrop" onclick="if (event.target === this) closeModifierCalculatorModal()" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:10001; justify-content:center; align-items:center; padding:16px;">
+        <div style="background:var(--bg-surface); border:1px solid var(--border-subtle); border-radius:14px; width:100%; max-width:520px; max-height:90vh; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 12px 48px rgba(0,0,0,0.7);">
+            <div style="padding:18px 22px; border-bottom:1px solid var(--border-subtle); display:flex; justify-content:space-between; align-items:center; flex-shrink:0;">
+                <h3 style="margin:0; font-size:1.15em; font-weight:900; color:var(--text-primary); display:flex; align-items:center; gap:8px;">
                     <span>🧮 Net Perk &amp; Gym Multiplier Calculator</span>
                 </h3>
                 <button onclick="closeModifierCalculatorModal()" style="background:transparent; border:none; color:var(--text-tertiary); font-size:1.4em; cursor:pointer;">✕</button>
             </div>
-            <div style="padding:22px; display:flex; flex-direction:column; gap:14px;">
+            <div style="padding:22px; display:flex; flex-direction:column; gap:14px; overflow-y:auto; flex:1; min-height:0;">
                 <div style="font-size:0.82em; color:var(--text-secondary);">
                     Calculate the compound multiplier applied to every gym train based on Faction Steadfast, Company Specials, Property Happy, and Education perks.
                 </div>
@@ -1221,7 +1227,7 @@
                     </div>
                 </div>
             </div>
-            <div style="padding:14px 22px; border-top:1px solid var(--border-subtle); display:flex; justify-content:flex-end; background:rgba(0,0,0,0.15);">
+            <div style="padding:14px 22px; border-top:1px solid var(--border-subtle); display:flex; justify-content:flex-end; background:rgba(0,0,0,0.15); flex-shrink:0;">
                 <button class="btn btn-sm btn-outline" onclick="closeModifierCalculatorModal()">Close</button>
             </div>
         </div>
@@ -1230,13 +1236,13 @@
     <!-- ══════════════════════════════════════════════════════════════ -->
     <!-- NEW CONTEST MODAL -->
     <!-- ══════════════════════════════════════════════════════════════ -->
-    <div id="new-contest-modal" class="modal-backdrop" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:10001; justify-content:center; align-items:center; padding:16px;">
-        <div style="background:var(--bg-surface); border:1px solid var(--border-subtle); border-radius:14px; width:100%; max-width:540px; overflow:hidden; box-shadow:0 12px 48px rgba(0,0,0,0.7);">
-            <div style="padding:16px 20px; border-bottom:1px solid var(--border-subtle); display:flex; justify-content:space-between; align-items:center;">
-                <h3 style="margin:0; font-size:1.15em; font-weight:900; color:#FFF;">🏆 Launch Faction Competition</h3>
+    <div id="new-contest-modal" class="modal-backdrop" onclick="if (event.target === this) closeNewContestModal()" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:10001; justify-content:center; align-items:center; padding:16px;">
+        <div style="background:var(--bg-surface); border:1px solid var(--border-subtle); border-radius:14px; width:100%; max-width:540px; max-height:90vh; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 12px 48px rgba(0,0,0,0.7);">
+            <div style="padding:16px 20px; border-bottom:1px solid var(--border-subtle); display:flex; justify-content:space-between; align-items:center; flex-shrink:0;">
+                <h3 style="margin:0; font-size:1.15em; font-weight:900; color:var(--text-primary);">🏆 Launch Faction Competition</h3>
                 <button onclick="closeNewContestModal()" style="background:transparent; border:none; color:var(--text-tertiary); font-size:1.4em; cursor:pointer;">✕</button>
             </div>
-            <div style="padding:20px; display:flex; flex-direction:column; gap:14px;">
+            <div style="padding:20px; display:flex; flex-direction:column; gap:14px; overflow-y:auto; flex:1; min-height:0;">
                 <div>
                     <label style="font-size:0.78em; font-weight:700; color:var(--text-tertiary); text-transform:uppercase;">Competition Title</label>
                     <input type="text" id="contest-input-title" placeholder="e.g. 7-Day Pre-War Strength Blitz" class="sort-select" style="width:100%; padding:8px 12px; margin-top:4px;">
@@ -1274,7 +1280,7 @@
                     <textarea id="contest-input-desc" rows="2" class="sort-select" style="width:100%; padding:8px 12px; margin-top:4px;" placeholder="Faction Bank distribution: 50% 1st, 30% 2nd, 20% 3rd"></textarea>
                 </div>
             </div>
-            <div style="padding:14px 20px; border-top:1px solid var(--border-subtle); display:flex; justify-content:flex-end; gap:10px; background:rgba(0,0,0,0.1);">
+            <div style="padding:14px 20px; border-top:1px solid var(--border-subtle); display:flex; justify-content:flex-end; gap:10px; background:rgba(0,0,0,0.1); flex-shrink:0;">
                 <button class="btn btn-sm btn-outline" onclick="closeNewContestModal()">Cancel</button>
                 <button class="btn btn-sm btn-primary" onclick="submitNewContest()" style="background:var(--accent-amber); border-color:var(--accent-amber); color:#000; font-weight:700;">Launch Contest</button>
             </div>

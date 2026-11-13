@@ -104,7 +104,7 @@ body.light-mode {
     --border-strong: rgba(0, 0, 0, 0.20);
     --text-primary: #0f172a;
     --text-secondary: #475569;
-    --text-tertiary: #94a3b8;
+    --text-tertiary: #64748b;
     --text-main: var(--text-primary);
     --text-dim: var(--text-secondary);
 }
@@ -136,18 +136,24 @@ body {
 
 /* Scrollbars */
 ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+    width: 8px;
+    height: 8px;
 }
 ::-webkit-scrollbar-track {
     background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.20);
     border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.22);
+    background: rgba(255, 255, 255, 0.34);
+}
+body.light-mode ::-webkit-scrollbar-thumb {
+    background: rgba(15, 23, 42, 0.22);
+}
+body.light-mode ::-webkit-scrollbar-thumb:hover {
+    background: rgba(15, 23, 42, 0.36);
 }
 
 /* Tabular Numerics Utility */
@@ -760,6 +766,7 @@ body {
     flex: 1;
     overflow-y: auto;
     overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
     padding: 24px 28px 48px;
     position: relative;
     box-sizing: border-box;
@@ -955,8 +962,21 @@ body {
     padding: 0;
 }
 
+.scrollable {
+    overflow-y: auto;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.22) transparent;
+}
+
+body.light-mode .scrollable {
+    scrollbar-color: rgba(15, 23, 42, 0.24) transparent;
+}
+
 .card-body.scrollable {
     overflow-y: auto;
+    overflow-x: auto;
     padding: 0;
     max-height: 480px;
 }
@@ -1636,12 +1656,13 @@ input:checked + .slider:before { transform: translateX(22px); }
    ========================================================================== */
 #toast-container {
     position: fixed;
-    top: 20px;
+    top: 64px;
     right: 20px;
     z-index: 10000;
     display: flex;
     flex-direction: column;
     gap: 10px;
+    max-width: calc(100vw - 24px);
     pointer-events: none;
 }
 
@@ -1832,6 +1853,33 @@ input:checked + .slider:before { transform: translateX(22px); }
 
     .topbar-crumb {
         display: none !important;
+    }
+
+    .topbar-right {
+        gap: 5px !important;
+        min-width: 0;
+        max-width: 100%;
+    }
+
+    .tct-clock-chip {
+        padding: 3px 6px !important;
+        font-size: 0.72em !important;
+        gap: 3px !important;
+    }
+
+    .tct-clock-chip .tct-label {
+        display: none !important;
+    }
+
+    .telemetry-chip {
+        padding: 3px 7px !important;
+        font-size: 0.68em !important;
+        gap: 4px !important;
+    }
+
+    .topbar-right .btn-sm {
+        padding: 3px 6px !important;
+        font-size: 0.74em !important;
     }
 
     .page-title {
@@ -2035,6 +2083,29 @@ html {
         left: auto;
         width: 380px;
     }
+}
+
+body.light-mode .pwa-install-banner {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(241, 245, 249, 0.98));
+    border-color: rgba(217, 119, 6, 0.45);
+    box-shadow: 0 10px 30px rgba(15, 23, 42, 0.14), 0 0 16px rgba(245, 158, 11, 0.12);
+}
+
+body.light-mode .pwa-banner-icon {
+    border-color: rgba(15, 23, 42, 0.12);
+    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.12);
+}
+
+body.light-mode .mobile-bottom-nav {
+    background: rgba(255, 255, 255, 0.95);
+    border-top-color: rgba(15, 23, 42, 0.10);
+    box-shadow: 0 -4px 20px rgba(15, 23, 42, 0.08);
+}
+
+body.light-mode .mobile-sheet-content {
+    background: #ffffff;
+    border-top-color: rgba(15, 23, 42, 0.12);
+    box-shadow: 0 -10px 32px rgba(15, 23, 42, 0.16);
 }
 
 .pwa-banner-content {

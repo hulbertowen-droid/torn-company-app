@@ -296,14 +296,14 @@
                 padding: 3px 6px !important;
                 margin: 0 !important;
                 gap: 5px !important;
-                max-width: 125px !important;
+                max-width: 112px !important;
                 background: rgba(0, 206, 201, 0.06) !important;
             }
             .sv-badge-fac {
                 display: none !important;
             }
             .sv-badge-user-info {
-                max-width: 75px !important;
+                max-width: 60px !important;
             }
             .sv-badge-name {
                 font-size: 0.72rem !important;
