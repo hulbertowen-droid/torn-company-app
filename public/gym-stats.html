@@ -492,7 +492,7 @@
             <a href="/oc.html" class="nav-link"><span class="nav-icon">💼</span> <span class="nav-text">OC Manager</span></a>
 
             <div class="nav-section-title">Tactical Desk</div>
-            <a href="/dashboard.html#sentinel" class="nav-link"><span class="nav-icon">✈️</span> <span class="nav-text">Flight &amp; War Sentinel</span></a>
+            <a href="/dashboard.html#sentinel" class="nav-link"><span class="nav-icon">✈️</span> <span class="nav-text">Airspace &amp; War Intel</span></a>
             <a href="/travel.html" class="nav-link"><span class="nav-icon">✈️</span> <span class="nav-text">Travel Profit Desk</span></a>
             <a href="/bazaar.html" class="nav-link"><span class="nav-icon">🛒</span> <span class="nav-text">Market &amp; Bazaar</span></a>
             <a href="/company.html" class="nav-link"><span class="nav-icon">🏢</span> <span class="nav-text">Company Hub</span></a>
@@ -657,7 +657,7 @@
                     <span>⚔️</span> War Room &amp; Fair Fight
                 </button>
                 <button class="ops-tab-btn" id="tab-sentinel" onclick="switchTrackerView('sentinel')">
-                    <span>✈️</span> Flight &amp; War Sentinel
+                    <span>✈️</span> Airspace &amp; War Intel
                 </button>
             </div>
 
@@ -951,7 +951,7 @@
             </div>
 
             <!-- ══════════════════════════════════════════════════════════ -->
-            <!-- VIEW 5: FLIGHT & WAR SENTINEL INTEGRATION                -->
+            <!-- VIEW 5: AIRSPACE & WAR INTEL INTEGRATION                  -->
             <!-- ══════════════════════════════════════════════════════════ -->
             <div class="tracker-tab-pane" id="pane-sentinel">
                 <div class="card" style="padding:22px; background:var(--bg-surface); border:1px solid rgba(0,206,201,0.25); border-radius:12px; margin-bottom:20px;">
@@ -959,7 +959,7 @@
                         <div>
                             <div style="display:flex; align-items:center; gap:8px;">
                                 <h2 style="margin:0; font-size:1.35em; font-weight:900; color:var(--teal, #00cec9); display:flex; align-items:center; gap:8px;">
-                                    <span>✈️ Flight &amp; War Sentinel Command</span>
+                                    <span>✈️ Airspace &amp; War Intel Command</span>
                                 </h2>
                                 <span class="badge" style="background:rgba(0,206,201,0.12); color:var(--teal, #00cec9); border:1px solid rgba(0,206,201,0.3); font-weight:700;">Airtime &amp; Gym Velocity</span>
                             </div>
@@ -1370,7 +1370,7 @@
         }
     }
 
-    // ─── Flight & War Sentinel Integration Loader ───
+    // ─── Airspace & War Intel Integration Loader ───
     async function loadSentinelFlightData(force = false) {
         const tbody = document.getElementById('sentinel-travel-tbody');
         if (!tbody) return;

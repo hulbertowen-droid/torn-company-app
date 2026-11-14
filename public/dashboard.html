@@ -1480,7 +1480,7 @@
     }
 
     /* ══════════════════════════════════════════════════════════
-       FLIGHT & WAR SENTINEL (sn-*) — refined layout
+       AIRSPACE & WAR INTEL (sn-*) — refined layout
        One section visible at a time, page-level vertical scroll,
        smooth horizontal table scroll with sticky Member column.
        ══════════════════════════════════════════════════════════ */
@@ -1645,7 +1645,7 @@
     /* Section nav */
     .sn-subnav {
         display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
+        grid-template-columns: repeat(3, minmax(0, 1fr));
         gap: 6px;
         padding: 5px;
         margin-bottom: 14px;
@@ -1766,35 +1766,6 @@
         font-family: var(--font-mono);
         font-size: 0.9em;
         opacity: 0.85;
-    }
-
-    .stat-window-segmented {
-        display: inline-flex;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: 3px;
-        padding: 3px;
-        background: var(--bg-elevated);
-        border: 1px solid var(--border-default);
-        border-radius: var(--radius-sm);
-    }
-    .stat-window-pill {
-        background: transparent;
-        border: 1px solid transparent;
-        color: var(--text-secondary);
-        padding: 5px 10px;
-        border-radius: 5px;
-        font-size: 0.76em;
-        font-weight: 700;
-        font-family: inherit;
-        cursor: pointer;
-    }
-    .stat-window-pill:hover { color: var(--text-primary); background: var(--bg-hover); }
-    .stat-window-pill.active {
-        background: var(--accent-cobalt-dim);
-        border-color: var(--accent-cobalt);
-        color: var(--accent-cobalt);
-        box-shadow: none;
     }
 
     /* Destination chips */
@@ -2000,7 +1971,6 @@
     .sn-table-radar { min-width: 760px; }
     .sn-table-war { min-width: 860px; }
     .sn-table-loadouts { min-width: 820px; }
-    .sn-table-gains { min-width: 960px; }
 
     .sn-empty {
         text-align: center !important;
@@ -2051,15 +2021,6 @@
         margin-top: 4px;
     }
     .sn-bar > span { display: block; height: 100%; background: var(--accent-cyan); border-radius: 2px; }
-    .sn-balance {
-        display: flex;
-        width: 96px;
-        height: 5px;
-        border-radius: 3px;
-        overflow: hidden;
-        background: var(--bg-hover);
-        margin-top: 4px;
-    }
     .sn-grade {
         display: inline-grid;
         place-items: center;
@@ -2118,7 +2079,9 @@
         .sn-kpis-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
     @media (max-width: 640px) {
-        .sn-subnav { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .sn-subnav { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
+        .sn-subnav-btn { padding: 8px 4px; gap: 4px; font-size: 0.76em; }
+        .sn-subnav .sn-count { padding: 1px 5px; font-size: 0.76em; }
         .sn-panel { padding: 14px 12px; border-radius: var(--radius-md); }
         .sn-header-actions { width: 100%; }
         .sn-header-actions .sn-updated { width: 100%; }
@@ -2129,10 +2092,8 @@
         .sn-select,
         .sn-select-wide { width: 100%; min-width: 0; flex: 1 1 auto; }
         .sn-head-actions .sn-btn { flex: 0 0 auto; }
-        .sn-seg,
-        .stat-window-segmented { display: flex; }
-        .sn-seg button,
-        .stat-window-pill { flex: 1 1 auto; justify-content: center; }
+        .sn-seg { display: flex; }
+        .sn-seg button { flex: 1 1 auto; justify-content: center; }
         .sn-stat { padding: 10px 11px; gap: 9px; }
         .sn-stat-icon { width: 30px; height: 30px; }
         .sn-stat-val { font-size: 1.25em; }
@@ -2326,7 +2287,7 @@
             <div class="nav-section-title">Tactical Desk</div>
             <a href="#sentinel" onclick="switchOpsTab('sentinel')" class="nav-link" id="nav-link-sentinel">
                 <span class="nav-icon">✈️</span> 
-                <span class="nav-text">Flight &amp; War Sentinel</span>
+                <span class="nav-text">Airspace &amp; War Intel</span>
             </a>
             <a href="/travel.html" class="nav-link"><span class="nav-icon">✈️</span> <span class="nav-text">Travel Profit Desk</span></a>
             <a href="/bazaar.html" class="nav-link"><span class="nav-icon">🛒</span> <span class="nav-text">Market &amp; Bazaar</span></a>
@@ -2465,7 +2426,7 @@
                 <span class="tab-badge" id="tab-armory-badge" style="display:none;">0 Low</span>
             </button>
             <button class="ops-tab-btn" id="tab-btn-sentinel" onclick="switchOpsTab('sentinel')">
-                <span>✈️</span> Flight &amp; War Sentinel
+                <span>✈️</span> Airspace &amp; War Intel
             </button>
             <button class="ops-tab-btn" id="tab-btn-gym" onclick="switchOpsTab('gym')">
                 <span>🏋️</span> Gym &amp; Stat Tracker
@@ -3195,18 +3156,18 @@
         </div>
 
         <!-- ========================================== -->
-        <!-- TAB 3: FLIGHT & WAR SENTINEL              -->
+        <!-- TAB 3: AIRSPACE & WAR INTEL                -->
         <!-- ========================================== -->
         <div class="tab-pane" id="pane-sentinel">
-            <!-- ═══ SENTINEL HEADER ═══ -->
+            <!-- ═══ HEADER ═══ -->
             <section class="sn-header">
                 <div class="sn-header-main">
-                    <h2 class="sn-title">✈️ Flight &amp; War Sentinel</h2>
-                    <p class="sn-subtitle">Who's flying, who got farmed in war, who's carrying faction gear, and who's training.</p>
+                    <h2 class="sn-title">✈️ Airspace &amp; War Intel</h2>
+                    <p class="sn-subtitle">Who's flying, who got farmed in war, and who's carrying faction gear.</p>
                 </div>
                 <div class="sn-header-actions">
                     <span class="sn-updated" id="radar-updated-label">Waiting for faction feed…</span>
-                    <a href="/gym-stats.html#sentinel" class="sn-btn" title="Open the standalone Sentinel view">Standalone ↗</a>
+                    <a href="/gym-stats.html#sentinel" class="sn-btn" title="Open the standalone Airspace &amp; War Intel view">Standalone ↗</a>
                     <button type="button" class="sn-btn sn-btn-primary" onclick="refreshSentinelAll()" id="btn-refresh-sentinel-all">↻ Sync All</button>
                 </div>
             </section>
@@ -3244,7 +3205,7 @@
             </section>
 
             <!-- ═══ SECTION NAV ═══ -->
-            <nav class="sn-subnav" id="sn-subnav" role="tablist" aria-label="Sentinel sections">
+            <nav class="sn-subnav" id="sn-subnav" role="tablist" aria-label="Airspace and War Intel sections">
                 <button type="button" class="sn-subnav-btn active" data-sn="airspace" role="tab" aria-selected="true" onclick="openSentinelSection('airspace')">
                     <span class="sn-subnav-icon">📡</span><span class="sn-subnav-lbl">Airspace</span><span class="sn-count" id="sn-count-airspace">0</span>
                 </button>
@@ -3253,9 +3214,6 @@
                 </button>
                 <button type="button" class="sn-subnav-btn" data-sn="loadouts" role="tab" aria-selected="false" onclick="openSentinelSection('loadouts')">
                     <span class="sn-subnav-icon">🪖</span><span class="sn-subnav-lbl">Loadouts</span><span class="sn-count" id="sn-count-loadouts">—</span>
-                </button>
-                <button type="button" class="sn-subnav-btn" data-sn="gains" role="tab" aria-selected="false" onclick="openSentinelSection('gains')">
-                    <span class="sn-subnav-icon">🏋️</span><span class="sn-subnav-lbl">Stat Gains</span><span class="sn-count" id="sn-count-gains">—</span>
                 </button>
             </nav>
 
@@ -3463,117 +3421,6 @@
                 </div>
             </section>
 
-            <!-- ═══ 4. STAT GAINS ═══ -->
-            <section class="sn-section" id="sn-sec-gains" data-sn-section="gains">
-                <div class="sn-panel" id="card-stat-gains-tracker">
-                    <div class="sn-panel-head">
-                        <div>
-                            <h3 class="sn-panel-title">🏋️ Battle Stat Gains</h3>
-                            <p class="sn-panel-sub">Training deltas per member. <span class="sn-c-emerald">Confirmed</span> = member's own API key via the Discord bot; <span class="sn-c-amber">Estimated</span> = spy / FF Scouter.</p>
-                        </div>
-                        <span id="stat-gains-source-summary" class="sn-badge sn-badge-muted">Loading roster…</span>
-                    </div>
-
-                    <div class="sn-toolbar">
-                        <div class="stat-window-segmented" id="stat-window-segmented" role="group" aria-label="Timeframe">
-                            <button type="button" class="stat-window-pill" data-win="24h" onclick="setStatGainsWindow('24h', this)">24H</button>
-                            <button type="button" class="stat-window-pill" data-win="3d" onclick="setStatGainsWindow('3d', this)">3D</button>
-                            <button type="button" class="stat-window-pill active" data-win="7d" onclick="setStatGainsWindow('7d', this)">7D</button>
-                            <button type="button" class="stat-window-pill" data-win="14d" onclick="setStatGainsWindow('14d', this)">14D</button>
-                            <button type="button" class="stat-window-pill" data-win="30d" onclick="setStatGainsWindow('30d', this)">30D</button>
-                            <button type="button" class="stat-window-pill" data-win="all" onclick="setStatGainsWindow('all', this)">ALL</button>
-                        </div>
-                        <div class="sn-head-actions">
-                            <button type="button" class="sn-btn sn-btn-amber" id="btn-stat-snapshot" onclick="triggerStatSnapshot()" title="Snapshot current stats for members with connected API keys"><span>📸</span> Snapshot Now</button>
-                            <button type="button" class="sn-btn" onclick="loadFactionStatGains(true)" id="btn-refresh-stat-gains">↻ Refresh</button>
-                            <a href="/gym-stats.html" class="sn-btn">Full Gym App ↗</a>
-                        </div>
-                    </div>
-
-                    <div class="sn-kpis">
-                        <div class="sn-kpi">
-                            <div class="sn-kpi-lbl">📈 Faction Gains</div>
-                            <div class="sn-kpi-val sn-c-emerald" id="stat-kpi-total-gains">+0</div>
-                            <div class="sn-kpi-sub" id="stat-kpi-total-gains-sub">In selected window</div>
-                        </div>
-                        <div class="sn-kpi">
-                            <div class="sn-kpi-lbl">🥇 Top Gainer</div>
-                            <div class="sn-kpi-val sn-kpi-val-text sn-c-amber" id="stat-kpi-top-gainer">—</div>
-                            <div class="sn-kpi-sub sn-c-emerald" id="stat-kpi-top-gainer-sub">+0 gained</div>
-                        </div>
-                        <div class="sn-kpi">
-                            <div class="sn-kpi-lbl">💊 Xanax / ⚡ Refills</div>
-                            <div class="sn-kpi-val sn-c-purple" id="stat-kpi-momentum">0 / 0</div>
-                            <div class="sn-kpi-sub" id="stat-kpi-momentum-sub">Used in window</div>
-                        </div>
-                        <div class="sn-kpi">
-                            <div class="sn-kpi-lbl">⚡ Combined Stats</div>
-                            <div class="sn-kpi-val sn-c-cyan" id="stat-kpi-total-power">0</div>
-                            <div class="sn-kpi-sub" id="stat-kpi-total-power-sub">Faction roster total</div>
-                        </div>
-                        <div class="sn-kpi">
-                            <div class="sn-kpi-lbl">😴 Slackers</div>
-                            <div class="sn-kpi-val sn-c-crimson" id="stat-kpi-slackers">0</div>
-                            <div class="sn-kpi-sub" id="stat-kpi-slackers-sub">Under 1K gained</div>
-                        </div>
-                    </div>
-
-                    <div class="sn-toolbar">
-                        <div class="sn-seg" id="stat-filter-chips" role="group" aria-label="Stat gains filter">
-                            <button type="button" class="active" data-f="all" onclick="setStatGainsFilter('all', this)">All</button>
-                            <button type="button" data-f="top" onclick="setStatGainsFilter('top', this)">Top (&gt;10K)</button>
-                            <button type="button" data-f="slackers" onclick="setStatGainsFilter('slackers', this)">Slackers</button>
-                            <button type="button" data-f="verified" onclick="setStatGainsFilter('verified', this)">Confirmed</button>
-                            <button type="button" data-f="estimated" onclick="setStatGainsFilter('estimated', this)">Estimated</button>
-                        </div>
-                        <div class="sn-toolbar-right">
-                            <select id="stat-gains-spec-select" class="sn-select" aria-label="Filter by build" onchange="setStatGainsSpec(this.value)">
-                                <option value="">Any build</option>
-                                <option value="Strength">💪 Strength</option>
-                                <option value="Defense">🛡️ Defense</option>
-                                <option value="Speed">⚡ Speed</option>
-                                <option value="Dexterity">🎯 Dexterity</option>
-                                <option value="Balanced">⚖️ Balanced</option>
-                            </select>
-                            <select id="stat-gains-sort-select" class="sn-select" aria-label="Sort stat gains" onchange="onStatGainsSortChange(this.value)">
-                                <option value="gainTotal_desc">Sort: Gain ↓</option>
-                                <option value="gainTotal_asc">Sort: Gain ↑</option>
-                                <option value="totalStats_desc">Sort: Total Stats ↓</option>
-                                <option value="gainStr_desc">Sort: Strength ↓</option>
-                                <option value="gainDef_desc">Sort: Defense ↓</option>
-                                <option value="gainSpd_desc">Sort: Speed ↓</option>
-                                <option value="gainDex_desc">Sort: Dexterity ↓</option>
-                                <option value="xanax_desc">Sort: Xanax ↓</option>
-                                <option value="name_asc">Sort: Name A → Z</option>
-                            </select>
-                            <input type="search" id="stat-gains-search" class="sn-input" aria-label="Search stat gains player" placeholder="Search player or ID…" oninput="onStatGainsSearch(this.value)">
-                        </div>
-                    </div>
-
-                    <div class="sn-table-wrap">
-                        <table class="sn-table sn-table-gains" id="stat-gains-table">
-                            <thead>
-                                <tr>
-                                    <th class="sn-sortable" onclick="sortStatGains('name')">Member<span class="sn-sort-ind" id="sort-ind-sg-name"></span></th>
-                                    <th class="sn-sortable sn-num-col" onclick="sortStatGains('totalStats')">Total<span class="sn-sort-ind" id="sort-ind-sg-totalStats"></span></th>
-                                    <th class="sn-sortable sn-num-col" onclick="sortStatGains('gainTotal')">Gain<span class="sn-sort-ind" id="sort-ind-sg-gainTotal"> ↓</span></th>
-                                    <th class="sn-sortable sn-num-col" onclick="sortStatGains('gainStr')">Str<span class="sn-sort-ind" id="sort-ind-sg-gainStr"></span></th>
-                                    <th class="sn-sortable sn-num-col" onclick="sortStatGains('gainDef')">Def<span class="sn-sort-ind" id="sort-ind-sg-gainDef"></span></th>
-                                    <th class="sn-sortable sn-num-col" onclick="sortStatGains('gainSpd')">Spd<span class="sn-sort-ind" id="sort-ind-sg-gainSpd"></span></th>
-                                    <th class="sn-sortable sn-num-col" onclick="sortStatGains('gainDex')">Dex<span class="sn-sort-ind" id="sort-ind-sg-gainDex"></span></th>
-                                    <th class="sn-sortable sn-num-col" onclick="sortStatGains('xanax')">Xan / Ref<span class="sn-sort-ind" id="sort-ind-sg-xanax"></span></th>
-                                    <th>Build</th>
-                                    <th class="sn-center-col">History</th>
-                                </tr>
-                            </thead>
-                            <tbody id="stat-gains-tbody">
-                                <tr><td colspan="10" class="sn-empty">Loading faction battle stats…</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-                    <div class="sn-table-foot" id="stat-gains-table-foot"></div>
-                </div>
-            </section>
         </div>
 
         <!-- ========================================== -->
@@ -3915,7 +3762,7 @@ function switchOpsTab(tabId) {
     const crumbMap = {
         'overview': 'OVERVIEW',
         'armory': 'ARMORY & LOGISTICS',
-        'sentinel': 'FLIGHT & WAR SENTINEL',
+        'sentinel': 'AIRSPACE & WAR INTEL',
         'gym': 'GYM & BATTLE STAT TRACKER'
     };
     const crumbEl = document.getElementById('crumb-active-sub');
@@ -3945,7 +3792,6 @@ function switchOpsTab(tabId) {
             renderLiveAirspaceRadar(dashData.dash);
         }
         initSentinel();
-        if (typeof loadFactionStatGains === 'function') loadFactionStatGains();
     }
     if (tabId === 'armory') {
         if (typeof initTrackerDates === 'function') initTrackerDates();
@@ -4088,9 +3934,6 @@ function renderAll(d, wars) {
     renderArmory(d);
     if (typeof renderLiveAirspaceRadar === 'function') {
         renderLiveAirspaceRadar(d);
-    }
-    if (activeOpsTab === 'sentinel' && typeof loadFactionStatGains === 'function') {
-        loadFactionStatGains();
     }
 }
 
@@ -4328,7 +4171,7 @@ function renderRespect(d) {
     if (!sorted.length || sorted[0].score === 0) {
         el.innerHTML = `<div class="empty-state" style="padding:18px;">
             Faction is currently at peace.<br>
-            <span style="font-size:0.85em;color:var(--text-tertiary);margin-top:4px;display:inline-block;">See <a href="/payout.html" style="color:var(--accent-cobalt);font-weight:700;">Payouts</a> or <a href="#sentinel" onclick="switchOpsTab('sentinel')" style="color:var(--teal, #00cec9);font-weight:700;">Flight &amp; War Sentinel</a> for past war respect contributions.</span>
+            <span style="font-size:0.85em;color:var(--text-tertiary);margin-top:4px;display:inline-block;">See <a href="/payout.html" style="color:var(--accent-cobalt);font-weight:700;">Payouts</a> or <a href="#sentinel" onclick="switchOpsTab('sentinel')" style="color:var(--teal, #00cec9);font-weight:700;">Airspace &amp; War Intel</a> for past war respect contributions.</span>
         </div>`;
         return;
     }
@@ -6075,16 +5918,16 @@ async function saveArmoryThresholds() {
     if (dashData) renderArmory(dashData.dash);
 }
 
-// ─── TAB 3: FLIGHT & WAR SENTINEL ENGINE ───
+// ─── TAB 3: AIRSPACE & WAR INTEL ENGINE ───
 let sentinelData = null;
 let activeSentinelFilter = 'all';
 let activeCfLoadoutFilter = 'all';
 let sentinelInitialized = false;
 
-// ── Sentinel section navigation ──
-const SN_SECTIONS = ['airspace', 'war', 'loadouts', 'gains'];
+// ── Airspace & War Intel section navigation ──
+const SN_SECTIONS = ['airspace', 'war', 'loadouts'];
 const SN_ROW_LIMIT = 25;
-const snShowAll = { war: false, loadouts: false, gains: false };
+const snShowAll = { war: false, loadouts: false };
 let activeSentinelSection = (() => {
     try {
         const saved = localStorage.getItem('sn_active_section');
@@ -6153,7 +5996,6 @@ function snToggleShowAll(key) {
     snShowAll[key] = !snShowAll[key];
     if (key === 'war') renderSentinelTable();
     else if (key === 'loadouts') renderCrossFactionLoadouts();
-    else if (key === 'gains') renderStatGainsTracker();
 }
 
 function snSetSegActive(containerId, btn, key) {
@@ -6426,10 +6268,9 @@ async function refreshSentinelAll() {
     try {
         await Promise.allSettled([
             typeof loadAll === 'function' ? loadAll() : Promise.resolve(),
-            runWarFlightAudit(true),
-            loadFactionStatGains(true)
+            runWarFlightAudit(true)
         ]);
-        showToast('Sentinel airspace, war audit & stat gains synced', 'success');
+        showToast('Airspace, war audit & loadouts synced', 'success');
     } finally {
         if (btn) {
             btn.disabled = false;
@@ -6867,53 +6708,27 @@ function renderCrossFactionLoadouts(data) {
 }
 const renderCrossFactionLoadoutsDebounced = debounce(() => renderCrossFactionLoadouts(), 200);
 
-// ─── FACTION PLAYER STAT GAINS & PROGRESSION TRACKER ───
+// ─── FACTION PLAYER STAT GAINS & PROGRESSION LOADER (for Gym & Stat Tracker) ───
 let currentStatGainsData = null;
-let statGainsWindow = '7d';
-let statGainsFilter = 'all';
-let statGainsSpec = '';
-let statGainsSortCol = 'gainTotal';
-let statGainsSortAsc = false;
-let statGainsSearchQuery = '';
-
-function setStatGainsWindow(windowStr, btn) {
-    statGainsWindow = windowStr;
-    document.querySelectorAll('.stat-window-pill').forEach(b => {
-        const isMatch = btn ? (b === btn) : (b.dataset.win === windowStr);
-        b.classList.toggle('active', isMatch);
-    });
-    loadFactionStatGains(true);
-}
 
 async function loadFactionStatGains(force = false) {
-    const tbody = document.getElementById('stat-gains-tbody');
-    const refreshBtn = document.getElementById('btn-refresh-stat-gains');
-    if (!currentStatGainsData && tbody) {
-        tbody.innerHTML = `<tr><td colspan="10" class="sn-empty sn-loading"><span class="loading-spinner"></span> Loading faction battle stats…</td></tr>`;
-    }
-    if (refreshBtn) refreshBtn.classList.add('spinning');
-
     try {
         const headers = myKey ? { 'x-api-key': myKey } : {};
-        const res = await fetch(`/api/faction/stat-gains?window=${encodeURIComponent(statGainsWindow)}${force ? '&force=true' : ''}`, { headers });
+        const res = await fetch(`/api/faction/stat-gains?window=7d${force ? '&force=true' : ''}`, { headers });
         const data = await res.json();
         if (data && data.success) {
             currentStatGainsData = data;
-            renderStatGainsTracker();
-        } else if (tbody) {
-            tbody.innerHTML = `<tr><td colspan="10" class="sn-empty sn-error">Failed to load stat gains: ${escapeHtml(data?.error || 'Unknown error')}</td></tr>`;
+            if (!window.gymTabRoster) {
+                renderGymTabTable(data.members || []);
+            }
         }
     } catch (err) {
         console.error('Error loading faction stat gains:', err);
-        if (tbody) tbody.innerHTML = `<tr><td colspan="10" class="sn-empty sn-error">Network error loading stat gains.</td></tr>`;
-    } finally {
-        if (refreshBtn) refreshBtn.classList.remove('spinning');
     }
 }
 
 async function triggerStatSnapshot() {
     const btns = [
-        document.getElementById('btn-stat-snapshot'),
         document.getElementById('btn-gym-tab-snapshot')
     ].filter(Boolean);
     btns.forEach(b => {
@@ -6941,181 +6756,6 @@ async function triggerStatSnapshot() {
             b.disabled = false;
             b.innerHTML = `<span>📸</span> Snapshot Now`;
         });
-    }
-}
-
-function setStatGainsFilter(filterKey, btn) {
-    statGainsFilter = filterKey;
-    snShowAll.gains = false;
-    snSetSegActive('stat-filter-chips', btn, filterKey);
-    renderStatGainsTracker();
-}
-
-function setStatGainsSpec(spec) {
-    statGainsSpec = spec || '';
-    snShowAll.gains = false;
-    renderStatGainsTracker();
-}
-
-function onStatGainsSearch(query) {
-    statGainsSearchQuery = (query || '').toLowerCase().trim();
-    renderStatGainsTracker();
-}
-
-function onStatGainsSortChange(sortVal) {
-    const parts = String(sortVal || '').split('_');
-    statGainsSortCol = parts[0] || 'gainTotal';
-    statGainsSortAsc = (parts[1] === 'asc');
-    renderStatGainsTracker();
-}
-
-function sortStatGains(col) {
-    if (statGainsSortCol === col) {
-        statGainsSortAsc = !statGainsSortAsc;
-    } else {
-        statGainsSortCol = col;
-        statGainsSortAsc = (col === 'name');
-    }
-    const sel = document.getElementById('stat-gains-sort-select');
-    if (sel) {
-        const targetVal = `${col}_${statGainsSortAsc ? 'asc' : 'desc'}`;
-        if ([...sel.options].some(o => o.value === targetVal)) sel.value = targetVal;
-    }
-    renderStatGainsTracker();
-}
-
-function snGainCell(statVal, gainVal, masked) {
-    const g = Number(gainVal || 0);
-    const gainHtml = g
-        ? `<div class="sn-sub sn-num ${g > 0 ? 'sn-c-emerald' : 'sn-c-crimson'}" style="font-weight:600;">${g > 0 ? '+' : ''}${fmtNum(g)}</div>`
-        : '<div class="sn-sub">—</div>';
-    return `<span class="sn-num">${masked ? '—' : fmtNum(statVal || 0)}</span>${gainHtml}`;
-}
-
-function renderStatGainsTracker() {
-    if (!currentStatGainsData || !currentStatGainsData.members) return;
-    const { kpis = {}, members = [] } = currentStatGainsData;
-
-    const confirmedTotal = kpis.confirmedCount ?? kpis.verifiedCount ?? members.filter(m => m.isConfirmed || m.verified).length;
-    const estimatedTotal = kpis.estimatedCount ?? Math.max(0, members.length - confirmedTotal);
-    const summaryEl = document.getElementById('stat-gains-source-summary');
-    if (summaryEl) {
-        summaryEl.className = `sn-badge ${confirmedTotal > 0 ? 'sn-badge-emerald' : 'sn-badge-amber'}`;
-        summaryEl.textContent = `${members.length} members • ${confirmedTotal} confirmed • ${estimatedTotal} estimated`;
-    }
-    snSetCount('sn-count-gains', fmtNum(members.length));
-
-    const totalGainsEl = document.getElementById('stat-kpi-total-gains');
-    if (totalGainsEl) totalGainsEl.textContent = `+${fmtNum(kpis.totalFactionGains || 0)}`;
-    snSetCount('stat-kpi-total-gains-sub', `${kpis.trackedCount ?? members.length} members • ${String(statGainsWindow).toUpperCase()}`);
-
-    const topGainerEl = document.getElementById('stat-kpi-top-gainer');
-    const topGainerSub = document.getElementById('stat-kpi-top-gainer-sub');
-    if (topGainerEl) {
-        if (kpis.topGainer) {
-            topGainerEl.innerHTML = `<a href="https://www.torn.com/profiles.php?XID=${encodeURIComponent(kpis.topGainer.id)}" target="_blank" rel="noopener noreferrer">${escapeHtml(kpis.topGainer.name)}</a>`;
-            topGainerEl.title = kpis.topGainer.name || '';
-            if (topGainerSub) topGainerSub.textContent = `+${fmtNum(kpis.topGainer.gain)} (+${kpis.topGainer.pct || 0}%)`;
-        } else {
-            topGainerEl.textContent = '—';
-            if (topGainerSub) topGainerSub.textContent = 'No gains recorded yet';
-        }
-    }
-
-    snSetCount('stat-kpi-momentum', `${fmtNum(kpis.totalXanaxTaken || 0)} / ${fmtNum(kpis.totalRefillsUsed || 0)}`);
-    snSetCount('stat-kpi-total-power', fmtNum(kpis.totalFactionCombatPower || 0));
-    snSetCount('stat-kpi-total-power-sub', `${confirmedTotal} confirmed • ${estimatedTotal} estimated`);
-    snSetCount('stat-kpi-slackers', fmtNum(kpis.slackersCount || 0));
-
-    const list = members.filter(m => {
-        const isConf = Boolean(m.isConfirmed || m.verified);
-        const totalG = m.gains?.total || 0;
-        if (statGainsFilter === 'top' && totalG < 10000) return false;
-        if (statGainsFilter === 'slackers' && totalG >= 1000) return false;
-        if (statGainsFilter === 'verified' && !isConf) return false;
-        if (statGainsFilter === 'estimated' && isConf) return false;
-        if (statGainsSpec && (m.specialty || 'Balanced') !== statGainsSpec) return false;
-        if (statGainsSearchQuery) {
-            const nameMatch = (m.playerName || '').toLowerCase().includes(statGainsSearchQuery);
-            const idMatch = String(m.playerId).includes(statGainsSearchQuery);
-            if (!nameMatch && !idMatch) return false;
-        }
-        return true;
-    });
-
-    list.sort((a, b) => {
-        let va, vb;
-        switch (statGainsSortCol) {
-            case 'name': return statGainsSortAsc ? (a.playerName || '').localeCompare(b.playerName || '') : (b.playerName || '').localeCompare(a.playerName || '');
-            case 'totalStats': va = a.stats?.total || 0; vb = b.stats?.total || 0; break;
-            case 'gainStr': va = a.gains?.strength || 0; vb = b.gains?.strength || 0; break;
-            case 'gainDef': va = a.gains?.defense || 0; vb = b.gains?.defense || 0; break;
-            case 'gainSpd': va = a.gains?.speed || 0; vb = b.gains?.speed || 0; break;
-            case 'gainDex': va = a.gains?.dexterity || 0; vb = b.gains?.dexterity || 0; break;
-            case 'xanax': va = a.momentum?.xanax || 0; vb = b.momentum?.xanax || 0; break;
-            default: va = a.gains?.total || 0; vb = b.gains?.total || 0; break;
-        }
-        return statGainsSortAsc ? (va - vb) : (vb - va);
-    });
-
-    ['name', 'totalStats', 'gainTotal', 'gainStr', 'gainDef', 'gainSpd', 'gainDex', 'xanax'].forEach(c => {
-        const ind = document.getElementById(`sort-ind-sg-${c}`);
-        if (ind) ind.textContent = statGainsSortCol === c ? (statGainsSortAsc ? ' ↑' : ' ↓') : '';
-    });
-
-    const tbody = document.getElementById('stat-gains-tbody');
-    if (tbody) {
-        if (!list.length) {
-            tbody.innerHTML = `<tr><td colspan="10" class="sn-empty">No faction members match current filters.</td></tr>`;
-            snRenderFoot('stat-gains-table-foot', 'gains', 0, 0, 'members');
-        } else {
-            const shown = snShowAll.gains ? list : list.slice(0, SN_ROW_LIMIT);
-            const specMap = { Strength: '💪 Strength', Defense: '🛡️ Defense', Speed: '⚡ Speed', Dexterity: '🎯 Dexterity', Balanced: '⚖️ Balanced' };
-            tbody.innerHTML = shown.map(m => {
-                const isConf = Boolean(m.isConfirmed || m.verified);
-                const isMasked = Boolean(m.masked || m.stats?.masked || m.privacy === 'none');
-                const stats = m.stats || {};
-                const gains = m.gains || {};
-                const sourceTag = isConf
-                    ? `<span class="sn-badge sn-badge-emerald" title="Confirmed via the member's own API key">✓ ${m.hasApiKey ? 'API Key' : 'Confirmed'}</span>`
-                    : ((stats.total || 0) > 0
-                        ? '<span class="sn-badge sn-badge-amber" title="Estimated via spy / FF Scouter">~ Est</span>'
-                        : '<span class="sn-badge sn-badge-muted">No data</span>');
-
-                const g = Number(gains.total || 0);
-                const gainHtml = g > 0
-                    ? `<span class="sn-num sn-c-emerald" style="font-weight:800;">+${fmtNum(g)}</span><div class="sn-sub">+${gains.pct || 0}% • ~${fmtNum(m.dailyAvg || 0)}/day</div>`
-                    : (g < 0
-                        ? `<span class="sn-num sn-c-crimson" style="font-weight:800;">-${fmtNum(Math.abs(g))}</span><div class="sn-sub">${gains.pct || 0}%</div>`
-                        : '<span class="sn-num sn-c-dim">0</span><div class="sn-sub">no change</div>');
-
-                const bal = m.balance || { strengthPct: 25, defensePct: 25, speedPct: 25, dexterityPct: 25 };
-                const balanceBar = `<div class="sn-balance" title="Str ${bal.strengthPct}% • Def ${bal.defensePct}% • Spd ${bal.speedPct}% • Dex ${bal.dexterityPct}%">
-                    <span style="width:${bal.strengthPct}%; background:var(--accent-crimson);"></span>
-                    <span style="width:${bal.defensePct}%; background:var(--accent-cobalt);"></span>
-                    <span style="width:${bal.speedPct}%; background:var(--accent-amber);"></span>
-                    <span style="width:${bal.dexterityPct}%; background:var(--accent-purple);"></span>
-                </div>`;
-
-                return `<tr>
-                    <td>${snMemberCell(m.playerId, m.playerName, `Lv ${m.level || 1} • [${escapeHtml(m.playerId)}]${m.daysInFaction ? ` • ${m.daysInFaction}d` : ''}`, sourceTag)}</td>
-                    <td class="sn-num-col"><span class="sn-num ${isMasked ? 'sn-c-dim' : 'sn-c-cyan'}" style="font-weight:800;">${isMasked ? '🔒 Private' : fmtNum(stats.total || 0)}</span><div class="sn-sub">${isMasked ? 'masked' : (isConf ? 'confirmed' : 'estimated')}</div></td>
-                    <td class="sn-num-col">${gainHtml}</td>
-                    <td class="sn-num-col">${snGainCell(stats.strength, gains.strength, isMasked)}</td>
-                    <td class="sn-num-col">${snGainCell(stats.defense, gains.defense, isMasked)}</td>
-                    <td class="sn-num-col">${snGainCell(stats.speed, gains.speed, isMasked)}</td>
-                    <td class="sn-num-col">${snGainCell(stats.dexterity, gains.dexterity, isMasked)}</td>
-                    <td class="sn-num-col"><span class="sn-num sn-c-purple">${fmtNum(m.momentum?.xanax || 0)}</span><div class="sn-sub sn-num">${fmtNum(m.momentum?.refills || 0)} ref</div></td>
-                    <td><div class="sn-sub" style="margin:0; color:var(--text-secondary); font-weight:600;">${specMap[m.specialty] || escapeHtml(m.specialty || '⚖️ Balanced')}</div>${balanceBar}</td>
-                    <td class="sn-center-col"><button type="button" class="sn-btn sn-row-btn" data-pid="${escapeHtml(String(m.playerId))}" onclick="openPlayerStatModal(this.dataset.pid)" title="View progression history &amp; forecast">📊 Log</button></td>
-                </tr>`;
-            }).join('');
-            snRenderFoot('stat-gains-table-foot', 'gains', shown.length, list.length, 'members');
-        }
-    }
-
-    if (!window.gymTabRoster) {
-        renderGymTabTable(members);
     }
 }
 
@@ -7472,7 +7112,7 @@ function runAnalysis(mode) {
 
         if (mode === 'live') {
             if (!war) {
-                el.innerHTML = `<b>🟢 No Active War</b><br><br>Your faction is currently at peace. Recommended actions:<br>• <b>Build your chain</b> for multiplier respect bonuses.<br>• <b>Maintain armory reserves</b> (ensure Xanax &ge; 50, FAKs &ge; 60).<br>• <b>Monitor Flight &amp; War Sentinel</b> to practice overseas travel safety.`;
+                el.innerHTML = `<b>🟢 No Active War</b><br><br>Your faction is currently at peace. Recommended actions:<br>• <b>Build your chain</b> for multiplier respect bonuses.<br>• <b>Maintain armory reserves</b> (ensure Xanax &ge; 50, FAKs &ge; 60).<br>• <b>Monitor Airspace &amp; War Intel</b> to practice overseas travel safety.`;
                 return;
             }
             const myScore = war.myScore || 0;
@@ -7507,7 +7147,7 @@ ${winning ? `• <span style="color:var(--accent-emerald)">Maintain pressure</sp
 <b>Date:</b> ${date}<br><br>
 To see complete member attack audits, airtime ratings, and payouts:<br><br>
 → <a href="/payout.html" style="color:var(--accent-cobalt);font-weight:700;">Open the Payout Calculator →</a><br>
-→ <a href="#sentinel" onclick="switchOpsTab('sentinel')" style="color:var(--teal, #00cec9);font-weight:700;">Open Flight &amp; War Sentinel →</a>`;
+→ <a href="#sentinel" onclick="switchOpsTab('sentinel')" style="color:var(--teal, #00cec9);font-weight:700;">Open Airspace &amp; War Intel →</a>`;
         } else if (mode === 'members') {
             const memberEntries = Object.entries(d.members || {});
             const total = memberEntries.length;
