@@ -3435,10 +3435,17 @@
                             <h2 class="gym-hero-title">
                                 <span>🏋️ Faction Gym &amp; Battle Stat Command</span>
                             </h2>
-                            <span class="badge" style="background:rgba(245,158,11,0.15); color:var(--accent-amber); border:1px solid rgba(245,158,11,0.35); font-weight:700;">Torn v1 &amp; v2 Engine</span>
+                            <span class="badge" style="background:rgba(59,130,246,0.14); color:var(--accent-cobalt); border:1px solid rgba(59,130,246,0.32); font-weight:700;">Regular Summary</span>
                         </div>
                         <div style="font-size:0.82em; color:var(--text-secondary); margin-top:4px; max-width:680px;">
-                            Live battle stat velocity, Steadfast perks, Xanax compliance, Confirmed API vs. Estimated attribution, and faction slacker detection.
+                            Exact Xanax intake since 00:00 TCT, drug cooldown inactive hours, Confirmed API vs. Estimated attribution, Steadfast perks, and slacker detection.
+                        </div>
+                        <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-top:10px;">
+                            <span style="font-size:0.72em; color:var(--text-tertiary); font-weight:700; text-transform:uppercase; letter-spacing:0.6px;">Full Desk Views:</span>
+                            <a href="/gym-stats.html#overview" class="btn btn-xs btn-outline" style="text-decoration:none; font-weight:700;">📊 Velocity Overview</a>
+                            <a href="/gym-stats.html#roster" class="btn btn-xs btn-outline" style="text-decoration:none; font-weight:700;">👥 Roster &amp; Cooldowns</a>
+                            <a href="/gym-stats.html#contests" class="btn btn-xs btn-outline" style="text-decoration:none; font-weight:700;">🏆 Contests</a>
+                            <a href="/gym-stats.html#war" class="btn btn-xs btn-outline" style="text-decoration:none; font-weight:700;">⚔️ War &amp; Fair Fight</a>
                         </div>
                     </div>
                     <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
@@ -3519,11 +3526,11 @@
                 </div>
                 <div class="card" style="padding:16px; background:var(--bg-surface); border:1px solid var(--border-default);">
                     <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <span style="font-size:0.72em; text-transform:uppercase; font-weight:700; color:var(--text-tertiary);">Average Xanax / Day</span>
+                        <span style="font-size:0.72em; text-transform:uppercase; font-weight:700; color:var(--text-tertiary);">Exact Xanax (00:00 TCT)</span>
                         <span>💊</span>
                     </div>
                     <div class="font-mono" style="font-size:1.65em; font-weight:900; color:var(--accent-purple); margin-top:4px;" id="tab-gym-kpi-xanax">—</div>
-                    <div style="font-size:0.72em; color:var(--text-tertiary); margin-top:2px;">Target: 2 to 3 pills daily</div>
+                    <div style="font-size:0.72em; color:var(--text-tertiary); margin-top:2px;" id="tab-gym-kpi-xanax-sub">Since 00:00 TCT • Exact total &amp; Drug CD</div>
                 </div>
             </div>
 
@@ -3551,6 +3558,7 @@
                     <button class="filter-chip active" onclick="setGymTabFilter('all', this)">All Roster</button>
                     <button class="filter-chip" onclick="setGymTabFilter('active', this)">🏃 Active Trainers</button>
                     <button class="filter-chip" onclick="setGymTabFilter('slackers', this)">😴 Slackers</button>
+                    <button class="filter-chip" onclick="setGymTabFilter('cd_idle', this)">💊 Off Drug CD</button>
                     <button class="filter-chip" onclick="setGymTabFilter('confirmed', this)">✓ Confirmed Key</button>
                     <button class="filter-chip" onclick="setGymTabFilter('estimated', this)">~ Estimated</button>
                 </div>
@@ -3566,12 +3574,13 @@
                                 <th>Defense</th>
                                 <th>Speed</th>
                                 <th>Dexterity</th>
-                                <th>Daily Xanax / Pace</th>
+                                <th>Exact Xanax (00:00 TCT)</th>
+                                <th>Drug CD Off</th>
                                 <th style="text-align:center;">Actions</th>
                             </tr>
                         </thead>
                         <tbody id="gym-tab-tbody">
-                            <tr><td colspan="9" style="text-align:center; padding:24px; color:var(--text-tertiary);">Switching to Gym &amp; Stat Tracker...</td></tr>
+                            <tr><td colspan="10" style="text-align:center; padding:24px; color:var(--text-tertiary);">Switching to Gym &amp; Stat Tracker...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -3639,6 +3648,20 @@
                         <div style="font-size:0.72em; color:var(--text-tertiary); text-transform:uppercase; font-weight:700;">90-Day Projection</div>
                         <div id="sp-proj-90" style="font-size:1.2em; font-weight:800; color:var(--accent-cobalt); font-family:var(--font-mono); margin-top:2px;">—</div>
                         <div id="sp-proj-90-sub" style="font-size:0.7em; color:var(--text-tertiary);">+0 forecast gain</div>
+                    </div>
+                </div>
+
+                <!-- EXACT XANAX (00:00 TCT) & DRUG COOLDOWN IDLE TRACKING -->
+                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:10px;">
+                    <div style="background:rgba(139,92,246,0.08); border:1px solid rgba(139,92,246,0.28); border-radius:8px; padding:12px 14px;">
+                        <div style="font-size:0.72em; color:var(--accent-purple); font-weight:700; text-transform:uppercase;">💊 Exact Xanax Intake</div>
+                        <div id="sp-xanax-val" style="font-size:1.2em; font-weight:900; font-family:var(--font-mono); color:var(--text-primary); margin-top:4px;">—</div>
+                        <div id="sp-xanax-sub" style="font-size:0.74em; color:var(--text-secondary); margin-top:2px;">00:00 TCT baseline pending</div>
+                    </div>
+                    <div style="background:rgba(245,158,11,0.08); border:1px solid rgba(245,158,11,0.28); border-radius:8px; padding:12px 14px;">
+                        <div style="font-size:0.72em; color:var(--accent-amber); font-weight:700; text-transform:uppercase;">⏱️ Drug Cooldown Inactive</div>
+                        <div id="sp-cd-val" style="font-size:1.2em; font-weight:900; font-family:var(--font-mono); color:var(--text-primary); margin-top:4px;">—</div>
+                        <div id="sp-cd-sub" style="font-size:0.74em; color:var(--text-secondary); margin-top:2px;">Longer off CD = fewer Xanax &amp; jumps</div>
                     </div>
                 </div>
 
@@ -6809,11 +6832,107 @@ function normalizeGymTabMember(m) {
         isSlacker,
         statusLabel: m.status?.state || 'Okay',
         archetype: m.archetype || m.specialty || 'Balanced',
-        xanax24h: m.energy?.xanaxTakenCount ?? null,
+        xanax: m.xanax || null,
+        drugCooldown: m.drugCooldown || null,
+        xanax24h: m.xanax?.takenTodayTct ?? m.energy?.xanaxTakenCount ?? null,
         refillUsed24h: m.energy?.refillUsed ?? null,
-        xanaxTotal: m.energy?.totalXanaxRecorded ?? m.momentum?.xanax ?? 0,
+        xanaxTotal: m.xanax?.exactTotal ?? m.energy?.totalXanaxRecorded ?? m.momentum?.xanax ?? 0,
+        hasExactXanax: Boolean(m.xanax?.hasExactTotal || (m.energy?.totalXanaxRecorded || 0) > 0 || (m.momentum?.xanax || 0) > 0),
         refillsTotal: m.refills?.total ?? m.momentum?.refills ?? 0
     };
+}
+
+function formatDurationCompact(sec) {
+    const s = Math.max(0, Math.round(Number(sec || 0)));
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    if (h > 0) return `${h}h ${m}m`;
+    return `${m}m`;
+}
+
+function getLiveDrugCooldownState(dc) {
+    if (!dc || !dc.tracked) return { tracked: false };
+    const now = Date.now();
+    if (dc.active && dc.cooldownEndsAt && dc.cooldownEndsAt > now) {
+        return {
+            tracked: true,
+            active: true,
+            remainingSec: Math.ceil((dc.cooldownEndsAt - now) / 1000),
+            inactiveHours: 0,
+            inactiveHoursTodayTct: dc.inactiveHoursTodayTct
+        };
+    }
+    const since = (dc.active && dc.cooldownEndsAt && dc.cooldownEndsAt <= now)
+        ? Math.min(now, dc.cooldownEndsAt)
+        : (dc.inactiveSince || dc.lastCheckedAt);
+    const liveHours = since ? Math.max(0, (now - since) / 3600000) : Number(dc.inactiveHours || 0);
+    return {
+        tracked: true,
+        active: false,
+        remainingSec: 0,
+        inactiveHours: Number(liveHours.toFixed(2)),
+        inactiveHoursTodayTct: dc.inactiveHoursTodayTct,
+        isFloorEstimate: Boolean(dc.isFloorEstimate)
+    };
+}
+
+function formatExactXanaxCell(m) {
+    if (m.isMasked) return '<span style="color:var(--text-tertiary);">🔒 Private</span>';
+    const xObj = m.xanax || {};
+    const hasExact = Boolean(xObj.hasExactTotal ?? m.hasExactXanax);
+    const exactTotal = xObj.exactTotal !== undefined && xObj.exactTotal !== null ? Number(xObj.exactTotal) : (hasExact ? Number(m.xanaxTotal || 0) : null);
+    const takenToday = xObj.takenTodayTct !== undefined && xObj.takenTodayTct !== null ? Number(xObj.takenTodayTct) : null;
+    if (!hasExact && exactTotal === null) {
+        return '<span style="color:var(--text-tertiary); font-size:0.84em;" title="Link a personal Torn API key to record exact personalstats.xantaken">🔑 Key Req</span>';
+    }
+    const baseTip = takenToday !== null
+        ? (xObj.baselineIsMidnight ? `00:00 TCT baseline: ${fmtNum(xObj.baselineAtTct || 0)}` : `Baseline (${fmtNum(xObj.baselineAtTct || 0)}) since sync`)
+        : 'Waiting for first 00:00 TCT baseline';
+    const todayBadge = takenToday !== null
+        ? `<span style="font-size:0.78em; padding:1px 6px; border-radius:999px; font-weight:700; background:${takenToday > 0 ? 'rgba(139,92,246,0.18)' : 'var(--bg-elevated)'}; color:${takenToday > 0 ? 'var(--accent-purple)' : 'var(--text-tertiary)'}; border:1px solid ${takenToday > 0 ? 'rgba(139,92,246,0.35)' : 'var(--border-subtle)'};" title="${escapeHtml(baseTip)}">+${takenToday} @ 00:00 TCT</span>`
+        : `<span style="font-size:0.74em; color:var(--text-tertiary);" title="${escapeHtml(baseTip)}">00:00 TCT pending</span>`;
+    return `<div style="display:flex; flex-direction:column; gap:3px; align-items:flex-start;">
+        <span style="font-family:var(--font-mono); color:var(--accent-purple); font-weight:800;">${fmtNum(exactTotal || 0)} 💊${m.refillUsed24h ? ' <span style="color:var(--accent-amber);" title="Refill used">⚡</span>' : ''}</span>
+        ${todayBadge}
+    </div>`;
+}
+
+function formatDrugCooldownOffCell(m) {
+    if (m.isMasked) return '<span style="color:var(--text-tertiary);">🔒 Private</span>';
+    const live = getLiveDrugCooldownState(m.drugCooldown);
+    if (!live.tracked) {
+        return '<span style="color:var(--text-tertiary); font-size:0.82em;" title="Connect personal API key to monitor live drug cooldown inactivity">🔑 Key Req</span>';
+    }
+    if (live.active) {
+        const rem = formatDurationCompact(live.remainingSec);
+        const todaySub = (live.inactiveHoursTodayTct !== null && live.inactiveHoursTodayTct > 0.05)
+            ? `<div style="font-size:0.72em; color:var(--text-tertiary);">${live.inactiveHoursTodayTct.toFixed(1)}h idle earlier today</div>`
+            : '';
+        return `<div><span class="badge-confirmed" style="font-size:0.76em; padding:2px 7px;" title="Drug cooldown active (${rem} left)">0.0h · CD Active (${rem})</span>${todaySub}</div>`;
+    }
+    const hrs = live.inactiveHours || 0;
+    const prefix = live.isFloorEstimate ? '≥' : '';
+    const durLabel = hrs < 1 ? `${prefix}${Math.max(1, Math.round(hrs * 60))}m off CD` : `${prefix}${hrs.toFixed(1)}h off CD`;
+    let color = 'var(--accent-cyan)';
+    let bg = 'rgba(6, 182, 212, 0.12)';
+    let border = 'rgba(6, 182, 212, 0.30)';
+    if (hrs >= 6) {
+        color = 'var(--accent-crimson)';
+        bg = 'rgba(239, 68, 68, 0.14)';
+        border = 'rgba(239, 68, 68, 0.35)';
+    } else if (hrs >= 1) {
+        color = 'var(--accent-amber)';
+        bg = 'rgba(245, 158, 11, 0.14)';
+        border = 'rgba(245, 158, 11, 0.35)';
+    }
+    const missedXan = Math.floor(hrs / 7);
+    const subHint = missedXan >= 1
+        ? `~${missedXan} Xanax / jump window${missedXan > 1 ? 's' : ''} missed`
+        : (live.inactiveHoursTodayTct !== null && live.inactiveHoursTodayTct > 0.05 ? `${live.inactiveHoursTodayTct.toFixed(1)}h idle today (TCT)` : 'Ready for Xanax / jump');
+    return `<div style="display:flex; flex-direction:column; gap:2px; align-items:flex-start;">
+        <span style="font-family:var(--font-mono); font-size:0.8em; font-weight:800; color:${color}; background:${bg}; border:1px solid ${border}; padding:2px 7px; border-radius:999px;">⏱️ ${durLabel}</span>
+        <span style="font-size:0.71em; color:var(--text-tertiary);">${subHint}</span>
+    </div>`;
 }
 
 function renderGymTabTable(membersList) {
@@ -6838,6 +6957,10 @@ function renderGymTabTable(membersList) {
     const filtered = normalized.filter(m => {
         if (gymTabFilter === 'active' && (m.isSlacker || m.isExempt)) return false;
         if (gymTabFilter === 'slackers' && !m.isSlacker) return false;
+        if (gymTabFilter === 'cd_idle') {
+            const dc = getLiveDrugCooldownState(m.drugCooldown);
+            if (!dc.tracked || dc.active) return false;
+        }
         if (gymTabFilter === 'confirmed' && !m.isConfirmed) return false;
         if (gymTabFilter === 'estimated' && m.isConfirmed) return false;
         if (searchQ && !m.playerName.toLowerCase().includes(searchQ) && !String(m.playerId).includes(searchQ)) return false;
@@ -6845,7 +6968,7 @@ function renderGymTabTable(membersList) {
     });
 
     if (filtered.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; padding:24px; color:var(--text-tertiary);">No members match the active Gym filter.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="10" style="text-align:center; padding:24px; color:var(--text-tertiary);">No members match the active Gym filter.</td></tr>`;
         return;
     }
 
@@ -6868,9 +6991,8 @@ function renderGymTabTable(membersList) {
                 ? `<span style="font-size:0.68em; padding:1px 5px; border-radius:999px; background:rgba(239,68,68,0.14); color:var(--accent-crimson); border:1px solid rgba(239,68,68,0.3); font-weight:700;">Slacker</span>`
                 : `<span class="badge-confirmed" style="font-size:0.68em; padding:1px 5px;">Active</span>`);
 
-        const paceDisplay = m.xanax24h !== null
-            ? `<span style="font-family:var(--font-mono); color:var(--accent-purple); font-weight:700;">${m.xanax24h} 💊/d</span>${m.refillUsed24h ? ` <span style="color:var(--accent-amber); font-weight:700;">⚡</span>` : ''} <span style="font-size:0.8em; color:var(--text-tertiary);">(${fmtNum(m.xanaxTotal)})</span>`
-            : `${fmtNum(m.xanaxTotal)} 💊 • ${fmtNum(m.refillsTotal)} ⚡`;
+        const exactXanaxCell = formatExactXanaxCell(m);
+        const drugCdCell = formatDrugCooldownOffCell(m);
 
         return `
             <tr>
@@ -6890,7 +7012,8 @@ function renderGymTabTable(membersList) {
                 <td style="font-family:var(--font-mono); color:var(--accent-emerald); font-weight:600;">${defVal}</td>
                 <td style="font-family:var(--font-mono); color:var(--accent-cobalt); font-weight:600;">${spdVal}</td>
                 <td style="font-family:var(--font-mono); color:var(--accent-purple); font-weight:600;">${dexVal}</td>
-                <td style="font-size:0.82em;">${paceDisplay}</td>
+                <td style="font-size:0.84em;">${exactXanaxCell}</td>
+                <td style="font-size:0.84em;">${drugCdCell}</td>
                 <td style="text-align:center;">
                     <button class="btn btn-xs btn-outline" onclick="openPlayerStatModal('${escapeHtml(String(m.playerId))}')" style="font-size:0.74em; padding:3px 8px;">
                         📊 Log
@@ -6931,6 +7054,7 @@ async function loadGymTabDashboard(force = false) {
             const elActive = document.getElementById('tab-gym-kpi-active');
             const elActiveSub = document.getElementById('tab-gym-kpi-active-sub');
             const elXanax = document.getElementById('tab-gym-kpi-xanax');
+            const elXanaxSub = document.getElementById('tab-gym-kpi-xanax-sub');
 
             const avgTbs = k.averageBattleStats ?? k.avgBattleStats ?? 0;
             const rosterConfCnt = Array.isArray(gymTabRoster)
@@ -6942,7 +7066,18 @@ async function loadGymTabDashboard(force = false) {
             if (elGainsSub) elGainsSub.textContent = `7d Total: +${fmtNum(k.totalGains7d || 0)}`;
             if (elActive) elActive.textContent = `${k.activeTrainersPct || 0}%`;
             if (elActiveSub) elActiveSub.textContent = `${k.activeTrainersToday || 0} active • ${k.slackerCount || 0} slacking • ${k.exemptCount || 0} exempt = ${k.totalMembersCount || 0}`;
-            if (elXanax) elXanax.textContent = `${k.avgXanaxPerDay || 0} / 3.0`;
+            if (elXanax) {
+                const todayCnt = k.totalXanaxTodayTct ?? k.totalXanax24h ?? 0;
+                const tctTracked = k.tctTrackedCount ?? 0;
+                elXanax.textContent = tctTracked > 0 ? `+${fmtNum(todayCnt)} today` : `${fmtNum(k.totalExactXanaxCumulative || 0)} total`;
+            }
+            if (elXanaxSub) {
+                const avgToday = k.avgXanaxTodayTct ?? k.avgXanaxPerDay ?? 0;
+                const cum = fmtNum(k.totalExactXanaxCumulative || 0);
+                const idleCnt = k.drugCooldownIdleCount || 0;
+                const maxOff = k.maxDrugCooldownOffHours || 0;
+                elXanaxSub.textContent = `Avg ${avgToday}/member since 00:00 TCT • ${cum} total • ${idleCnt} off CD (max ${maxOff}h)`;
+            }
 
             const st = data.steadfast || {};
             const pStr = document.getElementById('tab-gym-perk-str');
@@ -6984,6 +7119,7 @@ async function openPlayerStatModal(playerId) {
     const modal = document.getElementById('stat-player-modal');
     if (!modal) return;
     modal.style.display = 'flex';
+    modal.classList.add('open');
 
     document.getElementById('sp-modal-name').textContent = 'Loading...';
     document.getElementById('sp-modal-id').textContent = `[${playerId}]`;
@@ -7041,6 +7177,51 @@ async function openPlayerStatModal(playerId) {
             document.getElementById('sp-proj-90').textContent = isMasked ? 'Private' : fmtNum(vel.projected90d || stats.total || 0);
             document.getElementById('sp-proj-90-sub').textContent = `+${fmtNum(vel.gain90d || 0)} forecast gain`;
 
+            const px = p.xanax || {};
+            const elModalXan = document.getElementById('sp-xanax-val');
+            const elModalXanSub = document.getElementById('sp-xanax-sub');
+            if (elModalXan && elModalXanSub) {
+                if (isMasked) {
+                    elModalXan.textContent = '🔒 Private';
+                    elModalXanSub.textContent = 'Stats masked by member privacy';
+                } else if (px.hasExactTotal) {
+                    const tToday = px.takenTodayTct;
+                    elModalXan.textContent = `${fmtNum(px.exactTotal || 0)} total${tToday !== null ? ` (+${tToday} TCT)` : ''}`;
+                    elModalXanSub.textContent = tToday !== null
+                        ? `00:00 TCT baseline: ${fmtNum(px.baselineAtTct || 0)} (${px.baselineIsMidnight ? 'Midnight anchored' : 'Since sync'})`
+                        : `Lifetime exact xantaken (${px.baselineTctDate || 'TCT'} baseline pending)`;
+                } else {
+                    elModalXan.textContent = '🔑 Key Req';
+                    elModalXanSub.textContent = 'Personal Torn API key needed for exact xantaken';
+                }
+            }
+
+            const pcd = getLiveDrugCooldownState(p.drugCooldown);
+            const elModalCd = document.getElementById('sp-cd-val');
+            const elModalCdSub = document.getElementById('sp-cd-sub');
+            if (elModalCd && elModalCdSub) {
+                if (isMasked) {
+                    elModalCd.textContent = '🔒 Private';
+                    elModalCdSub.textContent = 'Cooldown hidden by privacy';
+                } else if (!pcd.tracked) {
+                    elModalCd.textContent = '🔑 Key Req';
+                    elModalCdSub.textContent = 'Personal Torn API key required for live cooldowns';
+                } else if (pcd.active) {
+                    elModalCd.textContent = `0.0h (Active · ${formatDurationCompact(pcd.remainingSec)})`;
+                    elModalCdSub.textContent = pcd.inactiveHoursTodayTct > 0.05
+                        ? `${pcd.inactiveHoursTodayTct.toFixed(1)}h spent off Drug CD earlier today (TCT)`
+                        : 'Drug cooldown active — zero wasted Xanax window right now';
+                } else {
+                    const hrs = pcd.inactiveHours || 0;
+                    const prefix = pcd.isFloorEstimate ? '≥' : '';
+                    elModalCd.textContent = hrs < 1 ? `${prefix}${Math.max(1, Math.round(hrs * 60))}m off CD` : `${prefix}${hrs.toFixed(1)}h off CD`;
+                    const missed = Math.floor(hrs / 7);
+                    elModalCdSub.textContent = missed >= 1
+                        ? `~${missed} potential Xanax / happy-jump window${missed > 1 ? 's' : ''} uncooled`
+                        : 'Cooldown expired — ready to take Xanax or jump';
+                }
+            }
+
             const hist = p.history || [];
             document.getElementById('sp-history-count').textContent = `${hist.length} snapshots`;
 
@@ -7080,7 +7261,10 @@ async function openPlayerStatModal(playerId) {
 
 function closeStatPlayerModal() {
     const modal = document.getElementById('stat-player-modal');
-    if (modal) modal.style.display = 'none';
+    if (modal) {
+        modal.classList.remove('open');
+        modal.style.display = 'none';
+    }
 }
 
 // ─── War Analyst Functions ───

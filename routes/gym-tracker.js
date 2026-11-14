@@ -439,20 +439,60 @@ function buildMemberRecord(pId, bRec, info, callerId, isLeadership, customStart 
         dexterityPct: curTotal > 0 ? Number(((curDex / curTotal) * 100).toFixed(1)) : 25
     };
 
-    // Personal stats & energy estimation
+    // Exact Personal Stats, 00:00 TCT Xanax Tracking & Drug Cooldown Idle Hours (zero heuristics)
     const pStats = bRec?.personalStats || {};
-    const totalXanTaken = Number(pStats.xantaken || bRec?.stats?.xanax || 0);
+    const totalXanTaken = Number(pStats.xantaken ?? bRec?.xanaxDaily?.currentXanax ?? bRec?.stats?.xanax ?? 0);
+    const hasExactXanax = Boolean(
+        pStats.xantaken !== undefined ||
+        bRec?.xanaxDaily?.currentXanax !== undefined ||
+        Number(bRec?.stats?.xanax || 0) > 0
+    );
     const refills = Boolean(pStats.refills || bRec?.stats?.refills);
-
-    // Daily Xanax estimation: compare against 24h or 7d history or calculate daily rate
-    let dailyXanax = 0;
-    if (base24h && base24h.xantaken !== undefined) {
-        dailyXanax = Math.max(0, Math.min(4, totalXanTaken - base24h.xantaken));
-    } else if (gain24h.total > 0) {
-        dailyXanax = Math.min(3, Math.max(1, Math.round(gain24h.total / 1200)));
-    } else if (totalXanTaken > 0) {
-        dailyXanax = Math.min(3, Math.max(0, Math.round(totalXanTaken / 30)));
+    const todayTctStr = new Date(now).toISOString().slice(0, 10);
+    const xDaily = bRec?.xanaxDaily || null;
+    let takenTodayTct = null;
+    let baselineAtTct = null;
+    let baselineIsMidnight = false;
+    if (hasExactXanax && xDaily && xDaily.tctDate === todayTctStr && xDaily.baselineXanax !== undefined) {
+        baselineAtTct = Number(xDaily.baselineXanax);
+        takenTodayTct = Math.max(0, totalXanTaken - baselineAtTct);
+        baselineIsMidnight = Boolean(xDaily.baselineIsMidnight);
+    } else if (hasExactXanax) {
+        const todayStartMs = Date.parse(`${todayTctStr}T00:00:00Z`);
+        const todayBaseEntry = history
+            .filter(h => (h.timestamp || 0) >= todayStartMs && typeof h.xantaken === 'number')
+            .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0))[0];
+        if (todayBaseEntry) {
+            baselineAtTct = Number(todayBaseEntry.xantaken);
+            takenTodayTct = Math.max(0, totalXanTaken - baselineAtTct);
+        }
     }
+
+    const drugCooldownView = (typeof global.computeLiveDrugCooldownView === 'function')
+        ? global.computeLiveDrugCooldownView(bRec, now)
+        : (() => {
+            const dc = bRec?.drugCooldown;
+            if (!dc || typeof dc.lastCheckedAt !== 'number') {
+                return { tracked: false, active: false, remainingSec: null, cooldownEndsAt: null, inactiveSince: null, inactiveHours: null, inactiveHoursTodayTct: null, lastCheckedAt: null, isFloorEstimate: false };
+            }
+            const active = Boolean(dc.active && dc.cooldownEndsAt && dc.cooldownEndsAt > now);
+            const remainingSec = active ? Math.max(1, Math.ceil((dc.cooldownEndsAt - now) / 1000)) : 0;
+            const inactiveSince = active ? null : (dc.active && dc.cooldownEndsAt <= now ? Math.max(dc.lastCheckedAt, Math.min(now, dc.cooldownEndsAt)) : (dc.inactiveSince || dc.lastCheckedAt));
+            const inactiveHours = active ? 0 : (inactiveSince ? Number((Math.max(0, now - inactiveSince) / 3600000).toFixed(2)) : 0);
+            return {
+                tracked: true,
+                active,
+                remainingSec,
+                cooldownEndsAt: active ? dc.cooldownEndsAt : null,
+                inactiveSince,
+                inactiveHours,
+                inactiveHoursTodayTct: dc.dailyDate === todayTctStr ? Number((Number(dc.dailyInactiveMs || 0) / 3600000).toFixed(2)) : null,
+                lastCheckedAt: dc.lastCheckedAt,
+                isFloorEstimate: Boolean(dc.isFloorEstimate)
+            };
+        })();
+
+    const dailyXanax = takenTodayTct !== null ? takenTodayTct : null;
 
     // Energy Spent Estimation
     const energyFromTrains = gain7d.total > 0 ? Math.min(gain7d.total / 12, 4200) : 0;
@@ -617,10 +657,44 @@ function buildMemberRecord(pId, bRec, info, callerId, isLeadership, customStart 
         energy: {
             energySpentEst,
             xanaxTakenCount: dailyXanax,
-            totalXanaxRecorded: totalXanTaken,
+            totalXanaxRecorded: canViewStats && hasExactXanax ? totalXanTaken : 0,
             refillUsed: refills,
             efficiencyScore,
             theoreticalMaxEnergy: theoreticalMaxWeekly
+        },
+        xanax: canViewStats ? {
+            exactTotal: hasExactXanax ? totalXanTaken : null,
+            hasExactTotal: hasExactXanax,
+            takenTodayTct,
+            baselineAtTct,
+            baselineTctDate: xDaily?.tctDate || todayTctStr,
+            baselineIsMidnight,
+            baselineAt: xDaily?.baselineAt || null,
+            lastDoseAt: xDaily?.lastDoseAt || null,
+            lastCheckedAt: xDaily?.lastXanaxAt || bRec?.lastBackgroundSync || null
+        } : {
+            exactTotal: null,
+            hasExactTotal: false,
+            takenTodayTct: null,
+            baselineAtTct: null,
+            baselineTctDate: todayTctStr,
+            baselineIsMidnight: false,
+            baselineAt: null,
+            lastDoseAt: null,
+            lastCheckedAt: null,
+            masked: true
+        },
+        drugCooldown: canViewStats ? drugCooldownView : {
+            tracked: false,
+            active: false,
+            remainingSec: null,
+            cooldownEndsAt: null,
+            inactiveSince: null,
+            inactiveHours: null,
+            inactiveHoursTodayTct: null,
+            lastCheckedAt: null,
+            isFloorEstimate: false,
+            masked: true
         },
         slacker: {
             isSlacking,
@@ -699,10 +773,18 @@ router.get('/dashboard', async (req, res) => {
         const activeToday = activeList.length;
         const activePct = memberList.length > 0 ? Math.round((activeToday / memberList.length) * 100) : 0;
 
-        // Accurate daily Xanax average
-        const totalDailyXan = memberList.reduce((acc, m) => acc + (m.energy.xanaxTakenCount || 0), 0);
-        const activeTrainerCount = Math.max(1, memberList.filter(m => m.verified).length);
-        const avgXanax = Number((totalDailyXan / activeTrainerCount).toFixed(1));
+        // Exact Xanax (00:00 TCT today + exact cumulative recorded) and Drug Cooldown Idle Hours
+        const tctTrackedMembers = memberList.filter(m => !m.stats?.masked && m.xanax && m.xanax.takenTodayTct !== null);
+        const totalDailyXan = tctTrackedMembers.reduce((acc, m) => acc + Number(m.xanax.takenTodayTct || 0), 0);
+        const avgXanax = tctTrackedMembers.length > 0 ? Number((totalDailyXan / tctTrackedMembers.length).toFixed(2)) : 0;
+        const exactTotalMembers = memberList.filter(m => !m.stats?.masked && m.xanax && m.xanax.hasExactTotal);
+        const totalExactXanaxCumulative = exactTotalMembers.reduce((acc, m) => acc + Number(m.xanax.exactTotal || 0), 0);
+        const drugCdIdleMembers = memberList.filter(m => !m.stats?.masked && m.drugCooldown?.tracked && !m.drugCooldown.active && Number(m.drugCooldown.inactiveHours || 0) > 0);
+        const avgDrugCooldownOffHours = drugCdIdleMembers.length > 0
+            ? Number((drugCdIdleMembers.reduce((acc, m) => acc + Number(m.drugCooldown.inactiveHours || 0), 0) / drugCdIdleMembers.length).toFixed(1))
+            : 0;
+        const maxDrugCooldownOffHours = drugCdIdleMembers.reduce((mx, m) => Math.max(mx, Number(m.drugCooldown.inactiveHours || 0)), 0);
+        const tctDateNow = new Date().toISOString().slice(0, 10);
 
         // Faction-wide radar averages
         let sumStr = 0, sumSpd = 0, sumDef = 0, sumDex = 0;
@@ -752,8 +834,17 @@ router.get('/dashboard', async (req, res) => {
                 totalGains30d,
                 activeTrainersToday: activeToday,
                 activeTrainersPct: activePct,
-                avgXanaxPerDay: avgXanax > 0 ? avgXanax : 2.6,
+                avgXanaxPerDay: avgXanax,
                 totalXanax24h: totalDailyXan,
+                totalXanaxTodayTct: totalDailyXan,
+                avgXanaxTodayTct: avgXanax,
+                tctTrackedCount: tctTrackedMembers.length,
+                tctDate: tctDateNow,
+                totalExactXanaxCumulative,
+                exactXanaxTrackedCount: exactTotalMembers.length,
+                drugCooldownIdleCount: drugCdIdleMembers.length,
+                avgDrugCooldownOffHours,
+                maxDrugCooldownOffHours: Number(maxDrugCooldownOffHours.toFixed(1)),
                 totalRefills24h: activeToday,
                 slackerCount: slackerList.length,
                 exemptCount: exemptList.length,

@@ -4471,8 +4471,33 @@ app.get('/api/faction/stat-gains', async (req, res) => {
                 dexterityPct: curStats.total > 0 ? Number(((curStats.dexterity / curStats.total) * 100).toFixed(1)) : 25
             };
 
-            const xanax = Number(bRec?.personalStats?.xantaken || bRec?.stats?.xanax || 0);
+            const xanax = Number(bRec?.personalStats?.xantaken ?? bRec?.xanaxDaily?.currentXanax ?? bRec?.stats?.xanax ?? 0);
+            const hasExactXanax = Boolean(
+                bRec?.personalStats?.xantaken !== undefined ||
+                bRec?.xanaxDaily?.currentXanax !== undefined ||
+                Number(bRec?.stats?.xanax || 0) > 0
+            );
             const refills = Number(bRec?.personalStats?.refills || bRec?.stats?.refills || 0);
+            const todayTctStr = getTctDateString(now);
+            const xDaily = bRec?.xanaxDaily || null;
+            let takenTodayTct = null;
+            let baselineAtTct = null;
+            if (hasExactXanax && xDaily && xDaily.tctDate === todayTctStr && xDaily.baselineXanax !== undefined) {
+                baselineAtTct = Number(xDaily.baselineXanax);
+                takenTodayTct = Math.max(0, xanax - baselineAtTct);
+            } else if (hasExactXanax) {
+                // Check if today's midnight snapshot was captured cleanly in history
+                const todayStartMs = Date.parse(`${todayTctStr}T00:00:00Z`);
+                const todayBaseEntry = hist
+                    .filter(h => (h.timestamp || 0) >= todayStartMs && typeof h.xantaken === 'number')
+                    .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0))[0];
+                if (todayBaseEntry) {
+                    baselineAtTct = Number(todayBaseEntry.xantaken);
+                    takenTodayTct = Math.max(0, xanax - baselineAtTct);
+                }
+            }
+
+            const drugCdView = computeLiveDrugCooldownView(bRec, now);
 
             if (curStats.total > 0) {
                 totalFactionStats += curStats.total;
@@ -4493,6 +4518,42 @@ app.get('/api/faction/stat-gains', async (req, res) => {
                 ? { strength: gainStr, defense: gainDef, speed: gainSpd, dexterity: gainDex, total: gainTotal, pct: gainPct }
                 : { strength: 0, defense: 0, speed: 0, dexterity: 0, total: 0, pct: 0, masked: true };
 
+            const exposedXanax = canViewStats ? {
+                exactTotal: hasExactXanax ? xanax : null,
+                hasExactTotal: hasExactXanax,
+                takenTodayTct,
+                baselineAtTct,
+                baselineTctDate: xDaily?.tctDate || todayTctStr,
+                baselineIsMidnight: Boolean(xDaily?.baselineIsMidnight),
+                baselineAt: xDaily?.baselineAt || null,
+                lastDoseAt: xDaily?.lastDoseAt || null,
+                lastCheckedAt: xDaily?.lastXanaxAt || bRec?.lastBackgroundSync || null
+            } : {
+                exactTotal: null,
+                hasExactTotal: false,
+                takenTodayTct: null,
+                baselineAtTct: null,
+                baselineTctDate: todayTctStr,
+                baselineIsMidnight: false,
+                baselineAt: null,
+                lastDoseAt: null,
+                lastCheckedAt: null,
+                masked: true
+            };
+
+            const exposedDrugCooldown = canViewStats ? drugCdView : {
+                tracked: false,
+                active: false,
+                remainingSec: null,
+                cooldownEndsAt: null,
+                inactiveSince: null,
+                inactiveHours: null,
+                inactiveHoursTodayTct: null,
+                lastCheckedAt: null,
+                isFloorEstimate: false,
+                masked: true
+            };
+
             membersResult.push({
                 playerId: pId,
                 playerName: info.name,
@@ -4508,7 +4569,9 @@ app.get('/api/faction/stat-gains', async (req, res) => {
                 dailyAvg: canViewGains ? dailyAvg : 0,
                 daysTracked,
                 specialty: canViewStats ? specialty : 'Private',
-                momentum: { xanax, refills },
+                momentum: { xanax: canViewStats ? xanax : 0, refills: canViewStats ? refills : 0 },
+                xanax: exposedXanax,
+                drugCooldown: exposedDrugCooldown,
                 privacy,
                 masked: !canViewStats,
                 hasApiKey,
@@ -4536,6 +4599,12 @@ app.get('/api/faction/stat-gains', async (req, res) => {
             return m._rawGainTotal < 1000;
         }).length;
 
+        const tctMembers = membersResult.filter(m => !m.masked && m.xanax && m.xanax.takenTodayTct !== null);
+        const totalXanaxTodayTct = tctMembers.reduce((sum, m) => sum + Number(m.xanax.takenTodayTct || 0), 0);
+        const avgXanaxTodayTct = tctMembers.length > 0 ? Number((totalXanaxTodayTct / tctMembers.length).toFixed(2)) : 0;
+        const inactiveCdMembers = membersResult.filter(m => !m.masked && m.drugCooldown?.tracked && !m.drugCooldown.active && Number(m.drugCooldown.inactiveHours || 0) > 0);
+        const maxDrugCooldownOffHours = inactiveCdMembers.reduce((mx, m) => Math.max(mx, Number(m.drugCooldown.inactiveHours || 0)), 0);
+
         // Clean internal sort fields before returning
         membersResult.forEach(m => { delete m._rawGainTotal; delete m._rawTotal; });
 
@@ -4544,6 +4613,7 @@ app.get('/api/faction/stat-gains', async (req, res) => {
             factionId,
             window: windowStr,
             windowMs,
+            tctDate: getTctDateString(now),
             kpis: {
                 totalFactionGains,
                 totalFactionCombatPower: totalFactionStats,
@@ -4555,7 +4625,13 @@ app.get('/api/faction/stat-gains', async (req, res) => {
                     total: topGainer.stats.total
                 } : null,
                 totalXanaxTaken,
+                totalXanaxTodayTct,
+                avgXanaxTodayTct,
+                tctTrackedCount: tctMembers.length,
+                tctDate: getTctDateString(now),
                 totalRefillsUsed,
+                drugCooldownIdleCount: inactiveCdMembers.length,
+                maxDrugCooldownOffHours: Number(maxDrugCooldownOffHours.toFixed(1)),
                 slackersCount,
                 trackedCount,
                 confirmedCount,
@@ -4571,6 +4647,222 @@ app.get('/api/faction/stat-gains', async (req, res) => {
     }
 });
 
+// Helper: Torn City Time (UTC) date string YYYY-MM-DD
+function getTctDateString(ts = Date.now()) {
+    return new Date(ts).toISOString().slice(0, 10);
+}
+global.getTctDateString = getTctDateString;
+
+// Helper: compute live Drug Cooldown status & hours without active drug cooldown
+function computeLiveDrugCooldownView(bRec, now = Date.now()) {
+    const dc = bRec?.drugCooldown;
+    if (!dc || typeof dc.lastCheckedAt !== 'number') {
+        return {
+            tracked: false,
+            active: false,
+            remainingSec: null,
+            cooldownEndsAt: null,
+            inactiveSince: null,
+            inactiveHours: null,
+            inactiveHoursTodayTct: null,
+            lastCheckedAt: null,
+            isFloorEstimate: false
+        };
+    }
+
+    const todayTct = getTctDateString(now);
+    const todayMidnightMs = Date.parse(`${todayTct}T00:00:00Z`);
+
+    let active = false;
+    let remainingSec = 0;
+    let cooldownEndsAt = null;
+    let inactiveSince = null;
+    let inactiveHours = 0;
+
+    if (dc.active && dc.cooldownEndsAt && dc.cooldownEndsAt > now) {
+        active = true;
+        cooldownEndsAt = dc.cooldownEndsAt;
+        remainingSec = Math.max(1, Math.ceil((dc.cooldownEndsAt - now) / 1000));
+        inactiveHours = 0;
+    } else {
+        // Inactive now (either already 0 at last poll, or expired since last poll)
+        if (dc.active && dc.cooldownEndsAt && dc.cooldownEndsAt <= now) {
+            inactiveSince = Math.max(dc.lastCheckedAt, Math.min(now, dc.cooldownEndsAt));
+        } else {
+            inactiveSince = dc.inactiveSince || dc.lastCheckedAt;
+        }
+        inactiveHours = inactiveSince ? Number((Math.max(0, now - inactiveSince) / 3600000).toFixed(2)) : 0;
+    }
+
+    // Cumulative hours without drug CD since 00:00 TCT
+    let dailyInactiveMs = (dc.dailyDate === todayTct) ? Number(dc.dailyInactiveMs || 0) : 0;
+    if (!active) {
+        const extraFrom = dc.active && dc.cooldownEndsAt && dc.cooldownEndsAt <= now
+            ? Math.max(dc.lastCheckedAt, dc.cooldownEndsAt)
+            : dc.lastCheckedAt;
+        const boundedStart = Math.max(todayMidnightMs, extraFrom || todayMidnightMs);
+        if (now > boundedStart) {
+            dailyInactiveMs += Math.min(now - boundedStart, 24 * 3600 * 1000);
+        }
+    }
+    const maxPossibleTodayMs = Math.max(0, now - todayMidnightMs);
+    dailyInactiveMs = Math.min(dailyInactiveMs, maxPossibleTodayMs);
+
+    return {
+        tracked: true,
+        active,
+        remainingSec,
+        cooldownEndsAt,
+        inactiveSince,
+        inactiveHours,
+        inactiveHoursTodayTct: Number((dailyInactiveMs / 3600000).toFixed(2)),
+        lastCheckedAt: dc.lastCheckedAt,
+        lastActiveAt: dc.lastActiveAt || null,
+        isFloorEstimate: Boolean(dc.isFloorEstimate)
+    };
+}
+global.computeLiveDrugCooldownView = computeLiveDrugCooldownView;
+
+// Helper: persist exact xantaken (with 00:00 TCT baseline) and drug cooldown idle tracking onto battleStatsHistory record
+function updatePlayerXanaxAndCooldownState(bRec, uData, now = Date.now()) {
+    if (!bRec || !uData) return false;
+    let mutated = false;
+    const todayTct = getTctDateString(now);
+    const todayMidnightMs = Date.parse(`${todayTct}T00:00:00Z`);
+    const utcMinutesOfDay = (now - todayMidnightMs) / 60000;
+
+    // 1. Exact personalstats & 00:00 TCT Xanax baseline
+    const rawPs = uData.personalstats;
+    if (rawPs && typeof rawPs === 'object') {
+        const curXanax = Number(rawPs.xantaken ?? bRec.personalStats?.xantaken ?? 0);
+        bRec.personalStats = {
+            ...(bRec.personalStats || {}),
+            xantaken: curXanax,
+            refills: Number(rawPs.refills ?? bRec.personalStats?.refills ?? 0),
+            energydrinkused: Number(rawPs.energydrinkused ?? bRec.personalStats?.energydrinkused ?? 0)
+        };
+
+        const xd = bRec.xanaxDaily;
+        if (!xd || typeof xd.baselineXanax !== 'number') {
+            bRec.xanaxDaily = {
+                tctDate: todayTct,
+                baselineXanax: curXanax,
+                baselineAt: now,
+                baselineIsMidnight: utcMinutesOfDay <= 15,
+                currentXanax: curXanax,
+                lastXanaxAt: now,
+                takenTodayTct: 0,
+                lastDoseAt: null,
+                historyByTctDate: {}
+            };
+        } else if (xd.tctDate !== todayTct) {
+            const histMap = (xd.historyByTctDate && typeof xd.historyByTctDate === 'object') ? { ...xd.historyByTctDate } : {};
+            if (xd.tctDate) {
+                histMap[xd.tctDate] = {
+                    start: Number(xd.baselineXanax || 0),
+                    end: Number(xd.currentXanax ?? xd.baselineXanax ?? 0),
+                    taken: Math.max(0, Number(xd.currentXanax ?? 0) - Number(xd.baselineXanax ?? 0)),
+                    isMidnightAnchored: Boolean(xd.baselineIsMidnight)
+                };
+                const sortedKeys = Object.keys(histMap).sort();
+                while (sortedKeys.length > 14) {
+                    delete histMap[sortedKeys.shift()];
+                }
+            }
+            const prevLastAt = Number(xd.lastXanaxAt || 0);
+            const prevCur = Number(xd.currentXanax ?? curXanax);
+            // If we polled within 30m before 00:00 TCT yesterday, carry pre-midnight exact value cleanly into 00:00 TCT baseline
+            const nearMidnightCarry = prevLastAt > 0 && prevLastAt >= (todayMidnightMs - 30 * 60 * 1000) && prevLastAt <= todayMidnightMs;
+            const newBaseline = nearMidnightCarry ? Math.min(curXanax, prevCur) : curXanax;
+            const baselineIsMidnight = nearMidnightCarry || utcMinutesOfDay <= 15;
+            bRec.xanaxDaily = {
+                tctDate: todayTct,
+                baselineXanax: newBaseline,
+                baselineAt: now,
+                baselineIsMidnight,
+                currentXanax: curXanax,
+                lastXanaxAt: now,
+                takenTodayTct: Math.max(0, curXanax - newBaseline),
+                lastDoseAt: curXanax > newBaseline ? now : (xd.lastDoseAt || null),
+                historyByTctDate: histMap
+            };
+        } else {
+            if (curXanax > Number(xd.currentXanax ?? curXanax)) {
+                xd.lastDoseAt = now;
+            }
+            if (curXanax < Number(xd.baselineXanax)) {
+                xd.baselineXanax = curXanax;
+            }
+            xd.currentXanax = curXanax;
+            xd.lastXanaxAt = now;
+            xd.takenTodayTct = Math.max(0, curXanax - Number(xd.baselineXanax));
+        }
+        mutated = true;
+    }
+
+    // 2. Exact Drug Cooldown active vs inactive hours tracking
+    if (uData.cooldowns && typeof uData.cooldowns.drug === 'number') {
+        const drugSec = Math.max(0, Number(uData.cooldowns.drug || 0));
+        const prev = bRec.drugCooldown;
+
+        // Credit accumulated inactive duration since prev.lastCheckedAt for today's TCT counter
+        let curDailyMs = (prev && prev.dailyDate === todayTct) ? Number(prev.dailyInactiveMs || 0) : 0;
+        if (prev && typeof prev.lastCheckedAt === 'number' && now > prev.lastCheckedAt) {
+            let idleStart = null;
+            if (!prev.active && drugSec === 0) {
+                idleStart = prev.lastCheckedAt;
+            } else if (prev.active && prev.cooldownEndsAt && prev.cooldownEndsAt <= now) {
+                idleStart = Math.max(prev.lastCheckedAt, prev.cooldownEndsAt);
+            }
+            if (idleStart !== null && now > idleStart) {
+                const startToday = Math.max(idleStart, todayMidnightMs);
+                if (now > startToday) {
+                    curDailyMs += Math.min(now - startToday, 24 * 3600 * 1000);
+                }
+            }
+        }
+        curDailyMs = Math.min(curDailyMs, Math.max(0, now - todayMidnightMs));
+
+        if (drugSec > 0) {
+            bRec.drugCooldown = {
+                active: true,
+                remainingSec: drugSec,
+                cooldownEndsAt: now + drugSec * 1000,
+                inactiveSince: null,
+                lastCheckedAt: now,
+                lastActiveAt: now,
+                monitoringStartedAt: prev?.monitoringStartedAt || now,
+                isFloorEstimate: false,
+                dailyDate: todayTct,
+                dailyInactiveMs: curDailyMs
+            };
+        } else {
+            let inactiveSince = now;
+            if (prev && prev.active && prev.cooldownEndsAt) {
+                inactiveSince = Math.max(prev.lastCheckedAt || now, Math.min(now, prev.cooldownEndsAt));
+            } else if (prev && !prev.active && prev.inactiveSince) {
+                inactiveSince = prev.inactiveSince;
+            }
+            const isFloorEstimate = prev?.lastActiveAt ? false : (prev?.isFloorEstimate ?? true);
+            bRec.drugCooldown = {
+                active: false,
+                remainingSec: 0,
+                cooldownEndsAt: null,
+                inactiveSince,
+                lastCheckedAt: now,
+                lastActiveAt: prev?.lastActiveAt || null,
+                monitoringStartedAt: prev?.monitoringStartedAt || now,
+                isFloorEstimate,
+                dailyDate: todayTct,
+                dailyInactiveMs: curDailyMs
+            };
+        }
+        mutated = true;
+    }
+
+    return mutated;
+}
+
 // Core battlestats snapshot worker function
 async function performBattleStatsSnapshot() {
     let updatedCount = 0;
@@ -4580,7 +4872,7 @@ async function performBattleStatsSnapshot() {
         const connected = userKeys.getAllConnectedMembers();
         for (const member of connected) {
             try {
-                const uData = await userKeys.fetchUserLiveStats(member.key, 'battlestats,personalstats');
+                const uData = await userKeys.fetchUserLiveStats(member.key, 'battlestats,personalstats,cooldowns');
                 if (uData && uData.battlestats && uData.battlestats.total > 0) {
                     const recKey = String(member.tornId);
                     if (!battleStatsHistory[recKey]) {
@@ -4602,6 +4894,8 @@ async function performBattleStatsSnapshot() {
                     const prevSpd = Number(bRec.stats?.speed || 0);
                     const prevDex = Number(bRec.stats?.dexterity || 0);
 
+                    const exactXanax = Number(uData.personalstats?.xantaken ?? bRec.personalStats?.xantaken ?? 0);
+
                     bRec.history.unshift({
                         timestamp: now,
                         isManual: false,
@@ -4611,6 +4905,7 @@ async function performBattleStatsSnapshot() {
                         speed: Number(uData.battlestats.speed || 0),
                         dexterity: Number(uData.battlestats.dexterity || 0),
                         total: curTotal,
+                        xantaken: exactXanax,
                         gains: {
                             strength: prevStr > 0 ? (Number(uData.battlestats.strength || 0) - prevStr) : 0,
                             defense: prevDef > 0 ? (Number(uData.battlestats.defense || 0) - prevDef) : 0,
@@ -4633,11 +4928,7 @@ async function performBattleStatsSnapshot() {
                     };
                     bRec.liveStats = { ...bRec.stats };
                     bRec.lastBackgroundSync = now;
-                    bRec.personalStats = {
-                        xantaken: Number(uData.personalstats?.xantaken || 0),
-                        refills: Number(uData.personalstats?.refills || 0),
-                        energydrinkused: Number(uData.personalstats?.energydrinkused || 0)
-                    };
+                    updatePlayerXanaxAndCooldownState(bRec, uData, now);
                     if (uData.level) bRec.level = Number(uData.level);
                     bRec.playerName = member.playerName || uData.playerName;
                     // Note: do NOT overwrite bRec.lastManualUpdate or bRec.manualStats here!
@@ -4678,13 +4969,74 @@ setInterval(async () => {
         const utcDay = d.getUTCDate();
         if (utcHour === 0 && utcMin <= 5 && lastMidnightSnapshotDay !== utcDay) {
             lastMidnightSnapshotDay = utcDay;
-            console.log('[Torn Midnight 00:00 TCT] Taking automated daily battle stats snapshot...');
+            console.log('[Torn Midnight 00:00 TCT] Taking automated daily battle stats + Xanax baseline snapshot...');
             await performBattleStatsSnapshot();
         }
     } catch (e) {
         console.error('[Torn Midnight Snapshot Worker] Error:', e);
     }
 }, 60000);
+
+// Lightweight background tracker keeping exact xantaken (00:00 TCT delta) and drug cooldown idle hours fresh 24/7
+let isXanaxCooldownPollRunning = false;
+async function pollConnectedXanaxAndCooldowns() {
+    if (isXanaxCooldownPollRunning) return;
+    if (typeof userKeys === 'undefined' || !userKeys.getAllConnectedMembers) return;
+    isXanaxCooldownPollRunning = true;
+    let updatedCount = 0;
+    try {
+        const connected = userKeys.getAllConnectedMembers();
+        for (const member of connected) {
+            try {
+                const now = Date.now();
+                const uData = await userKeys.fetchUserLiveStats(member.key, 'battlestats,personalstats,cooldowns');
+                if (uData && !uData.error) {
+                    const recKey = String(member.tornId);
+                    if (!battleStatsHistory[recKey]) {
+                        battleStatsHistory[recKey] = {
+                            playerId: member.tornId,
+                            playerName: member.playerName || uData.playerName,
+                            history: [],
+                            stats: {},
+                            lastUpdated: now
+                        };
+                    }
+                    const bRec = battleStatsHistory[recKey];
+                    if (uData.battlestats && Number(uData.battlestats.total || 0) > 0) {
+                        bRec.stats = {
+                            strength: Number(uData.battlestats.strength || 0),
+                            defense: Number(uData.battlestats.defense || 0),
+                            speed: Number(uData.battlestats.speed || 0),
+                            dexterity: Number(uData.battlestats.dexterity || 0),
+                            total: Number(uData.battlestats.total || 0),
+                            modifiers: uData.battlestats.modifiers || bRec.stats?.modifiers || { strength: 0, defense: 0, speed: 0, dexterity: 0 }
+                        };
+                        bRec.liveStats = { ...bRec.stats };
+                        bRec.lastUpdated = now;
+                    }
+                    if (uData.level) bRec.level = Number(uData.level);
+                    if (member.playerName || uData.playerName) bRec.playerName = member.playerName || uData.playerName;
+                    bRec.lastBackgroundSync = now;
+                    if (updatePlayerXanaxAndCooldownState(bRec, uData, now)) {
+                        updatedCount++;
+                    }
+                }
+            } catch (e) {
+                // Non-fatal per-member fetch error
+            }
+            await new Promise(r => setTimeout(r, 160));
+        }
+        if (updatedCount > 0) {
+            saveBattleStatsHistory();
+        }
+    } catch (e) {
+        console.warn('[Xanax & DrugCD Poller] Error:', e.message);
+    } finally {
+        isXanaxCooldownPollRunning = false;
+    }
+}
+setTimeout(() => { pollConnectedXanaxAndCooldowns().catch(() => {}); }, 25000);
+setInterval(() => { pollConnectedXanaxAndCooldowns().catch(() => {}); }, 4 * 60 * 1000);
 
 // Single player stats timeline and projection endpoint
 app.get('/api/faction/player-stats/:playerId', async (req, res) => {
@@ -4739,7 +5091,7 @@ app.get('/api/faction/player-stats/:playerId', async (req, res) => {
         // Live fetch on-demand if member has a linked API key but no snapshot yet
         if (!hasVerifiedStats && memberKey && typeof userKeys?.fetchUserLiveStats === 'function') {
             try {
-                const live = await userKeys.fetchUserLiveStats(memberKey, 'battlestats,personalstats');
+                const live = await userKeys.fetchUserLiveStats(memberKey, 'battlestats,personalstats,cooldowns');
                 if (live && !live.error && Number(live.totalStats || live.total || 0) > 0) {
                     curStats = {
                         strength: Number(live.strength || 0),
@@ -4751,6 +5103,9 @@ app.get('/api/faction/player-stats/:playerId', async (req, res) => {
                     if (live.name) fallbackName = live.name;
                     hasVerifiedStats = true;
                     lastUpdated = Date.now();
+                    if (bRec && updatePlayerXanaxAndCooldownState(bRec, live, Date.now())) {
+                        saveBattleStatsHistory();
+                    }
                 }
             } catch (e) {}
         }
@@ -4824,6 +5179,24 @@ app.get('/api/faction/player-stats/:playerId', async (req, res) => {
                 isConfirmed,
                 isEstimated,
                 statSource,
+                xanax: masked ? { exactTotal: null, hasExactTotal: false, takenTodayTct: null, baselineAtTct: null, baselineTctDate: getTctDateString(), baselineIsMidnight: false, masked: true } : (() => {
+                    const pStats = bRec?.personalStats || {};
+                    const xVal = Number(pStats.xantaken ?? bRec?.xanaxDaily?.currentXanax ?? bRec?.stats?.xanax ?? 0);
+                    const hasX = Boolean(pStats.xantaken !== undefined || bRec?.xanaxDaily?.currentXanax !== undefined || Number(bRec?.stats?.xanax || 0) > 0);
+                    const todayStr = getTctDateString();
+                    const xd = bRec?.xanaxDaily || null;
+                    const tToday = (hasX && xd && xd.tctDate === todayStr && xd.baselineXanax !== undefined) ? Math.max(0, xVal - Number(xd.baselineXanax)) : null;
+                    return {
+                        exactTotal: hasX ? xVal : null,
+                        hasExactTotal: hasX,
+                        takenTodayTct: tToday,
+                        baselineAtTct: (tToday !== null && xd) ? Number(xd.baselineXanax) : null,
+                        baselineTctDate: xd?.tctDate || todayStr,
+                        baselineIsMidnight: Boolean(xd?.baselineIsMidnight),
+                        lastDoseAt: xd?.lastDoseAt || null
+                    };
+                })(),
+                drugCooldown: masked ? { tracked: false, active: false, remainingSec: null, inactiveHours: null, masked: true } : computeLiveDrugCooldownView(bRec),
                 velocity: masked ? {
                     dailyGain: 0,
                     projected30d: 0,

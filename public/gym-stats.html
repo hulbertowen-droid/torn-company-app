@@ -40,20 +40,12 @@
 
     <style>
     :root {
-        --bg-base: var(--bg-canvas, #07090e);
-        --bg-surface: var(--bg-surface, #0c1017);
-        --bg-elevated: var(--bg-elevated, #121824);
-        --border-subtle: var(--border-subtle, rgba(255, 255, 255, 0.08));
-        --border-default: var(--border-default, rgba(255, 255, 255, 0.14));
-        --accent-amber: #f59e0b;
-        --accent-amber-light: #fbbf24;
-        
         /* Harmonious, accessible, non-clashing tactical stat colors */
         --stat-str: #f87171; /* Soft Crimson / Red */
         --stat-spd: #60a5fa; /* Soft Cobalt / Blue */
         --stat-def: #34d399; /* Soft Emerald / Green */
         --stat-dex: #c084fc; /* Soft Violet / Purple */
-        
+
         --status-active: #10b981;
         --status-warning: #f59e0b;
         --status-danger: #ef4444;
@@ -66,8 +58,8 @@
     }
 
     body {
-        background-color: var(--bg-base);
-        color: var(--text-primary, #F8FAFC);
+        background-color: var(--bg-canvas);
+        color: var(--text-primary);
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     }
 
@@ -89,50 +81,61 @@
     }
 
     .tracker-table {
-        min-width: 1100px;
+        min-width: 1240px;
     }
 
     .font-mono {
         font-family: 'JetBrains Mono', 'Fira Code', monospace;
     }
 
-    /* Gym Tracker Hero & Ribbon */
+    /* Gym Tracker Hero & Ribbon — Harmonized with Operations Hub */
     .gym-hero {
-        background: linear-gradient(135deg, rgba(18, 24, 36, 0.98) 0%, rgba(12, 16, 23, 0.98) 50%, rgba(18, 24, 36, 0.95) 100%);
-        border: 1px solid var(--border-subtle);
-        border-radius: var(--radius-lg, 14px);
-        padding: 22px 26px;
-        margin-bottom: 20px;
+        background: linear-gradient(135deg, rgba(18, 24, 36, 0.98) 0%, rgba(12, 16, 23, 0.98) 55%, rgba(18, 24, 36, 0.95) 100%);
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-lg, 12px);
+        padding: 20px 24px;
+        margin-bottom: 18px;
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: 20px;
+        flex-wrap: wrap;
+        gap: 18px;
         position: relative;
         overflow: hidden;
-        box-shadow: 0 4px 24px rgba(0, 0, 0, 0.35);
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.28);
     }
     .gym-hero::before {
         content: '';
         position: absolute;
         top: -40%;
         right: -10%;
-        width: 380px;
-        height: 380px;
-        background: radial-gradient(circle, rgba(245, 158, 11, 0.06) 0%, transparent 70%);
+        width: 360px;
+        height: 360px;
+        background: radial-gradient(circle, rgba(59, 130, 246, 0.08) 0%, transparent 70%);
         pointer-events: none;
     }
 
     /* 4-Stat Harmonized Badges */
-    .stat-badge-str { background: rgba(239, 68, 68, 0.10); color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.28); }
-    .stat-badge-spd { background: rgba(59, 130, 246, 0.10); color: #93c5fd; border: 1px solid rgba(59, 130, 246, 0.28); }
-    .stat-badge-def { background: rgba(16, 185, 129, 0.10); color: #6ee7b7; border: 1px solid rgba(16, 185, 129, 0.28); }
-    .stat-badge-dex { background: rgba(168, 85, 247, 0.10); color: #d8b4fe; border: 1px solid rgba(168, 85, 247, 0.28); }
+    .stat-badge-str { background: rgba(239, 68, 68, 0.12); color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.28); }
+    .stat-badge-spd { background: rgba(59, 130, 246, 0.12); color: #93c5fd; border: 1px solid rgba(59, 130, 246, 0.28); }
+    .stat-badge-def { background: rgba(16, 185, 129, 0.12); color: #6ee7b7; border: 1px solid rgba(16, 185, 129, 0.28); }
+    .stat-badge-dex { background: rgba(168, 85, 247, 0.12); color: #d8b4fe; border: 1px solid rgba(168, 85, 247, 0.28); }
 
     /* Time Window Selector Pills */
+    .window-pill-wrap {
+        display: inline-flex;
+        align-items: center;
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-subtle);
+        border-radius: 8px;
+        padding: 4px 6px;
+        gap: 4px;
+        flex-wrap: wrap;
+    }
     .stat-window-pill {
         background: transparent;
         border: 1px solid transparent;
-        color: #94A3B8;
+        color: var(--text-secondary);
         padding: 5px 12px;
         border-radius: 6px;
         font-size: 0.8em;
@@ -142,27 +145,28 @@
         user-select: none;
     }
     .stat-window-pill:hover {
-        color: #F8FAFC;
-        background: rgba(255, 255, 255, 0.06);
+        color: var(--text-primary);
+        background: rgba(59, 130, 246, 0.10);
     }
     .stat-window-pill.active {
-        background: rgba(245, 158, 11, 0.18);
-        border: 1px solid var(--accent-amber);
-        color: var(--accent-amber-light);
+        background: rgba(59, 130, 246, 0.18);
+        border: 1px solid rgba(59, 130, 246, 0.55);
+        color: #93c5fd;
         font-weight: 700;
-        box-shadow: 0 0 10px rgba(245, 158, 11, 0.3);
+        box-shadow: 0 0 10px rgba(59, 130, 246, 0.20);
     }
 
     /* Slacker Warning Banner */
     .slacker-strip {
-        background: rgba(239, 68, 68, 0.06);
-        border: 1px solid rgba(239, 68, 68, 0.25);
+        background: rgba(239, 68, 68, 0.08);
+        border: 1px solid rgba(239, 68, 68, 0.28);
         border-radius: 10px;
         padding: 12px 18px;
-        margin-bottom: 20px;
+        margin-bottom: 18px;
         display: flex;
         align-items: center;
         justify-content: space-between;
+        flex-wrap: wrap;
         gap: 14px;
         font-size: 0.84em;
         box-shadow: 0 2px 12px rgba(239, 68, 68, 0.08);
@@ -171,10 +175,10 @@
     /* Steadfast Perks Ribbon */
     .steadfast-strip {
         background: var(--bg-surface);
-        border: 1px solid var(--border-subtle);
+        border: 1px solid var(--border-default);
         border-radius: 10px;
         padding: 10px 18px;
-        margin-bottom: 20px;
+        margin-bottom: 18px;
         display: flex;
         align-items: center;
         justify-content: space-between;
@@ -195,40 +199,11 @@
         to { opacity: 1; transform: translateY(0); }
     }
 
-    /* Xanax Pill Icons (Visual compliance indicator) */
-    .xan-pill-group {
-        display: inline-flex;
-        align-items: center;
-        gap: 3px;
-        padding: 2px 5px;
-        background: rgba(0, 0, 0, 0.2);
-        border-radius: 6px;
-    }
-    .xan-pill {
-        display: inline-block;
-        width: 12px;
-        height: 12px;
-        border-radius: 50%;
-        transition: transform 0.15s ease;
-    }
-    .xan-pill.pill-green {
-        background: #10B981;
-        box-shadow: 0 0 6px rgba(16, 185, 129, 0.5);
-    }
-    .xan-pill.pill-yellow {
-        background: #F59E0B;
-        box-shadow: 0 0 5px rgba(245, 158, 11, 0.4);
-    }
-    .xan-pill.pill-dim {
-        background: rgba(255, 255, 255, 0.1);
-        border: 1px solid rgba(255, 255, 255, 0.2);
-    }
-
     /* Detail Drawer */
     .drawer-overlay {
         position: fixed;
         inset: 0;
-        background: rgba(0, 0, 0, 0.75);
+        background: rgba(0, 0, 0, 0.72);
         backdrop-filter: blur(4px);
         z-index: 10000;
         display: none;
@@ -242,22 +217,26 @@
         max-width: 640px;
         height: 100vh;
         background: var(--bg-surface);
-        border-left: 1px solid var(--border-subtle);
+        border-left: 1px solid var(--border-default);
         display: flex;
         flex-direction: column;
         overflow-y: auto;
-        box-shadow: -8px 0 32px rgba(0, 0, 0, 0.6);
+        box-shadow: -8px 0 32px rgba(0, 0, 0, 0.45);
         animation: slideLeft 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .drawer-hdr, .drawer-card {
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-subtle);
     }
     @keyframes slideLeft {
         from { transform: translateX(100%); }
         to { transform: translateX(0); }
     }
 
-    /* Podium Styles */
+    /* Podium & Contest Cards */
     .podium-card {
         background: var(--bg-surface);
-        border: 1px solid var(--border-subtle);
+        border: 1px solid var(--border-default);
         border-radius: 12px;
         padding: 18px;
         text-align: center;
@@ -269,42 +248,42 @@
         transform: translateY(-2px);
     }
     .podium-gold {
-        background: linear-gradient(180deg, rgba(245, 158, 11, 0.08) 0%, rgba(12, 16, 23, 0.98) 100%);
-        border-color: rgba(245, 158, 11, 0.35);
+        background: linear-gradient(180deg, rgba(245, 158, 11, 0.10) 0%, var(--bg-surface) 100%);
+        border-color: rgba(245, 158, 11, 0.38);
         box-shadow: 0 4px 20px rgba(245, 158, 11, 0.08);
     }
     .podium-silver {
-        background: linear-gradient(180deg, rgba(148, 163, 184, 0.08) 0%, rgba(12, 16, 23, 0.98) 100%);
-        border-color: rgba(148, 163, 184, 0.3);
+        background: linear-gradient(180deg, rgba(148, 163, 184, 0.10) 0%, var(--bg-surface) 100%);
+        border-color: rgba(148, 163, 184, 0.32);
         box-shadow: 0 4px 16px rgba(148, 163, 184, 0.05);
     }
     .podium-bronze {
-        background: linear-gradient(180deg, rgba(217, 119, 6, 0.08) 0%, rgba(12, 16, 23, 0.98) 100%);
-        border-color: rgba(217, 119, 6, 0.3);
+        background: linear-gradient(180deg, rgba(217, 119, 6, 0.10) 0%, var(--bg-surface) 100%);
+        border-color: rgba(217, 119, 6, 0.32);
         box-shadow: 0 4px 16px rgba(217, 119, 6, 0.05);
     }
+    .contest-hero-card {
+        padding: 22px;
+        background: linear-gradient(135deg, rgba(59, 130, 246, 0.12) 0%, var(--bg-surface) 100%);
+        border: 1px solid rgba(59, 130, 246, 0.35);
+        margin-bottom: 24px;
+        position: relative;
+    }
 
-    /* Custom Table High Density */
+    /* Custom Table High Density & Toolbar */
     .tracker-table th, .tracker-table td {
         padding: 10px 12px;
         vertical-align: middle;
         font-size: 0.84em;
     }
-
-    /* Mobile Sticky First Column */
-    @media (max-width: 768px) {
-        .sticky-col {
-            position: sticky;
-            left: 0;
-            background: var(--bg-surface) !important;
-            z-index: 2;
-            box-shadow: 2px 0 6px rgba(0, 0, 0, 0.4);
-        }
+    .roster-controls .sort-select {
+        width: auto;
+        max-width: 100%;
     }
 
     /* Privacy Tier Card Options */
     .privacy-tier-card {
-        background: rgba(255, 255, 255, 0.03);
+        background: var(--bg-elevated);
         border: 1px solid var(--border-subtle);
         border-radius: 10px;
         padding: 14px;
@@ -315,26 +294,35 @@
         gap: 12px;
     }
     .privacy-tier-card:hover {
-        border-color: var(--accent-amber);
-        background: rgba(245, 158, 11, 0.04);
+        border-color: var(--accent-cobalt);
+        background: rgba(59, 130, 246, 0.06);
     }
     .privacy-tier-card.selected {
-        border-color: var(--accent-amber);
-        background: rgba(245, 158, 11, 0.08);
-        box-shadow: 0 0 12px rgba(245, 158, 11, 0.15);
+        border-color: var(--accent-cobalt);
+        background: rgba(59, 130, 246, 0.10);
+        box-shadow: 0 0 12px rgba(59, 130, 246, 0.18);
     }
 
-    /* ══════════════════════════════════════════════════════════════
-       TACTICAL DARK GLASSMORPHISM BUTTONS & TAB CONTROLS (NO WHITE)
-       ══════════════════════════════════════════════════════════════ */
+    /* Unified Theme Buttons & Controls */
     .btn, button {
         font-family: inherit;
     }
+    .btn-primary {
+        background: var(--accent-cobalt) !important;
+        border-color: var(--accent-cobalt) !important;
+        color: #ffffff !important;
+    }
+    .btn-primary:hover {
+        background: #2563eb !important;
+        border-color: #2563eb !important;
+        color: #ffffff !important;
+        box-shadow: 0 4px 14px rgba(37, 99, 235, 0.30);
+    }
 
     .btn-outline {
-        background: rgba(255, 255, 255, 0.05) !important;
-        border: 1px solid rgba(255, 255, 255, 0.14) !important;
-        color: var(--text-primary, #f8fafc) !important;
+        background: var(--bg-elevated) !important;
+        border: 1px solid var(--border-default) !important;
+        color: var(--text-primary) !important;
         backdrop-filter: blur(8px);
         transition: all 0.18s ease;
         border-radius: var(--radius-sm, 6px);
@@ -342,28 +330,31 @@
         user-select: none;
     }
     .btn-outline:hover {
-        background: rgba(255, 255, 255, 0.12) !important;
-        border-color: rgba(255, 255, 255, 0.28) !important;
-        color: #ffffff !important;
+        background: var(--bg-hover) !important;
+        border-color: var(--accent-cobalt) !important;
+        color: var(--text-primary) !important;
         transform: translateY(-1px);
-        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
     }
     .btn-outline:active {
         transform: translateY(0);
     }
+    .btn-outline.active-filter {
+        background: rgba(59, 130, 246, 0.16) !important;
+        border-color: var(--accent-cobalt) !important;
+        color: #93c5fd !important;
+    }
 
-    /* Amber Outline Actions (Privacy Tiers, New Contest, Net Perk Calculator) */
+    /* Secondary Accent Outline Actions */
     .btn-outline-amber, #btn-privacy, #btn-new-contest, #btn-calc-perks {
-        background: rgba(245, 158, 11, 0.08) !important;
-        border: 1px solid rgba(245, 158, 11, 0.30) !important;
-        color: #fbbf24 !important;
+        background: rgba(245, 158, 11, 0.10) !important;
+        border: 1px solid rgba(245, 158, 11, 0.32) !important;
+        color: var(--accent-amber-light) !important;
         font-weight: 700;
     }
     .btn-outline-amber:hover, #btn-privacy:hover, #btn-new-contest:hover, #btn-calc-perks:hover {
-        background: rgba(245, 158, 11, 0.20) !important;
-        border-color: rgba(245, 158, 11, 0.60) !important;
-        color: #ffffff !important;
-        box-shadow: 0 0 14px rgba(245, 158, 11, 0.28);
+        background: rgba(245, 158, 11, 0.22) !important;
+        border-color: rgba(245, 158, 11, 0.65) !important;
+        color: var(--text-primary) !important;
     }
 
     /* Slacker Danger Quick Filter */
@@ -374,85 +365,97 @@
         font-weight: 700;
     }
     #btn-filter-slackers:hover {
-        background: rgba(239, 68, 68, 0.26) !important;
+        background: rgba(239, 68, 68, 0.24) !important;
         border-color: rgba(239, 68, 68, 0.75) !important;
         color: #ffffff !important;
-        box-shadow: 0 0 14px rgba(239, 68, 68, 0.35);
     }
 
-    /* Slacker Secondary Actions (Copy Discord Pings, Torn Mail) */
-    #btn-copy-pings, #btn-torn-mail {
-        background: rgba(255, 255, 255, 0.05) !important;
-        border: 1px solid rgba(255, 255, 255, 0.16) !important;
-        color: #cbd5e1 !important;
+    /* Top Operations Hub Navigation Tabs — Exact Parity with dashboard.html */
+    .ops-nav-tabs {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 18px;
+        border-bottom: 1px solid var(--border-default);
+        padding-bottom: 0px;
+        overflow-x: auto;
+        scrollbar-width: thin;
     }
-    #btn-copy-pings:hover, #btn-torn-mail:hover {
-        background: rgba(255, 255, 255, 0.12) !important;
-        border-color: rgba(255, 255, 255, 0.32) !important;
-        color: #ffffff !important;
-    }
-
-    /* Topbar Settings Button */
-    .topbar .btn-outline, #btn-open-settings {
-        background: rgba(255, 255, 255, 0.05) !important;
-        border: 1px solid rgba(255, 255, 255, 0.15) !important;
-        color: #cbd5e1 !important;
-        border-radius: 8px !important;
-        width: 36px;
-        height: 36px;
-        padding: 0 !important;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 1.05em;
-        cursor: pointer;
-    }
-    .topbar .btn-outline:hover, #btn-open-settings:hover {
-        background: rgba(255, 255, 255, 0.12) !important;
-        border-color: var(--accent-amber) !important;
-        box-shadow: 0 0 10px rgba(245, 158, 11, 0.25);
-    }
-
-    /* Operational Navigation Tabs */
     .ops-tab-btn {
         display: inline-flex;
         align-items: center;
         gap: 8px;
-        padding: 10px 18px;
-        background: rgba(18, 24, 36, 0.75) !important;
-        border: 1px solid rgba(255, 255, 255, 0.10) !important;
-        border-bottom: 2px solid transparent !important;
-        border-radius: 8px 8px 0 0 !important;
-        color: var(--text-secondary, #94a3b8) !important;
-        font-size: 0.86em;
+        padding: 12px 22px;
+        background: var(--bg-surface) !important;
+        border: 1px solid var(--border-default) !important;
+        border-bottom: none !important;
+        border-radius: var(--radius-md, 8px) var(--radius-md, 8px) 0 0 !important;
+        color: var(--text-secondary) !important;
         font-weight: 700;
+        font-size: 0.88em;
         cursor: pointer;
-        user-select: none;
-        backdrop-filter: blur(8px);
         transition: all 0.2s ease;
-        text-decoration: none;
-        font-family: inherit;
         white-space: nowrap;
+        user-select: none;
+        text-decoration: none;
     }
     .ops-tab-btn:hover {
-        color: #ffffff !important;
-        background: rgba(255, 255, 255, 0.08) !important;
-        border-color: rgba(245, 158, 11, 0.35) !important;
+        color: var(--text-primary) !important;
+        background: var(--bg-hover) !important;
+        border-color: rgba(59, 130, 246, 0.45) !important;
         transform: translateY(-1px);
     }
     .ops-tab-btn.active {
-        color: var(--accent-amber, #f59e0b) !important;
-        background: linear-gradient(180deg, rgba(245, 158, 11, 0.16) 0%, rgba(18, 24, 36, 0.95) 100%) !important;
-        border-color: var(--accent-amber, #f59e0b) !important;
-        border-bottom: 2px solid var(--accent-amber, #f59e0b) !important;
-        box-shadow: 0 -2px 12px rgba(245, 158, 11, 0.18) !important;
+        color: var(--text-primary) !important;
+        background: linear-gradient(180deg, var(--bg-surface) 0%, rgba(59, 130, 246, 0.14) 100%) !important;
+        border-color: var(--accent-cobalt) !important;
+        border-bottom: 2px solid var(--accent-cobalt) !important;
+        box-shadow: 0 -2px 10px rgba(59, 130, 246, 0.14) !important;
+    }
+
+    /* Full Gym Desk Internal Sub-Navigation Pills */
+    .gym-subnav {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 18px;
+        padding: 6px;
+        background: var(--bg-surface);
+        border: 1px solid var(--border-default);
+        border-radius: 10px;
+        overflow-x: auto;
+        scrollbar-width: thin;
+    }
+    .gym-subtab-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        padding: 8px 14px;
+        border-radius: 7px;
+        border: 1px solid transparent;
+        background: transparent;
+        color: var(--text-secondary);
+        font-size: 0.83em;
+        font-weight: 700;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: all 0.16s ease;
+    }
+    .gym-subtab-btn:hover {
+        color: var(--text-primary);
+        background: rgba(59, 130, 246, 0.08);
+        border-color: rgba(59, 130, 246, 0.25);
+    }
+    .gym-subtab-btn.active {
+        color: var(--text-primary);
+        background: rgba(59, 130, 246, 0.16);
+        border-color: rgba(59, 130, 246, 0.50);
+        box-shadow: 0 2px 10px rgba(59, 130, 246, 0.14);
     }
 
     /* Target Matcher Presets */
     .ff-preset-btn {
-        background: rgba(255, 255, 255, 0.04) !important;
-        border: 1px solid rgba(255, 255, 255, 0.14) !important;
-        color: #cbd5e1 !important;
+        background: var(--bg-elevated) !important;
+        border: 1px solid var(--border-default) !important;
+        color: var(--text-secondary) !important;
         padding: 4px 10px;
         font-size: 0.78em;
         border-radius: 6px;
@@ -461,9 +464,116 @@
         transition: all 0.15s ease;
     }
     .ff-preset-btn:hover {
-        background: rgba(245, 158, 11, 0.15) !important;
-        border-color: rgba(245, 158, 11, 0.45) !important;
-        color: #fbbf24 !important;
+        background: rgba(59, 130, 246, 0.14) !important;
+        border-color: rgba(59, 130, 246, 0.45) !important;
+        color: var(--accent-cobalt) !important;
+    }
+
+    /* Modals */
+    .modal-footer-bar {
+        padding: 14px 22px;
+        border-top: 1px solid var(--border-subtle);
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        background: var(--bg-elevated);
+        flex-shrink: 0;
+    }
+
+    /* Light Mode Contrast Overrides — Harmonized with dashboard.html */
+    body.light-mode .sidebar-logo .brand-text {
+        background: linear-gradient(135deg, #0f172a 40%, var(--accent-crimson) 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+    }
+    body.light-mode .ops-tab-btn.active {
+        background: linear-gradient(180deg, #ffffff 0%, #eff6ff 100%) !important;
+        color: #1d4ed8 !important;
+    }
+    body.light-mode .slacker-strip {
+        background: #fef2f2;
+        border-color: rgba(220, 38, 38, 0.32);
+        color: #7f1d1d;
+    }
+    body.light-mode .gym-hero {
+        background: linear-gradient(135deg, #f8fafc 0%, #eef2ff 100%);
+        border-color: #cbd5e1;
+        box-shadow: 0 4px 20px rgba(15, 23, 42, 0.08);
+    }
+    body.light-mode .gym-hero::before {
+        background: radial-gradient(circle, rgba(37, 99, 235, 0.08) 0%, transparent 70%);
+    }
+    body.light-mode .stat-window-pill.active,
+    body.light-mode .gym-subtab-btn.active,
+    body.light-mode .btn-outline.active-filter {
+        background: rgba(37, 99, 235, 0.12) !important;
+        border-color: #3b82f6 !important;
+        color: #1d4ed8 !important;
+        box-shadow: none;
+    }
+    body.light-mode .btn-outline-amber,
+    body.light-mode #btn-privacy,
+    body.light-mode #btn-new-contest,
+    body.light-mode #btn-calc-perks {
+        background: rgba(217, 119, 6, 0.10) !important;
+        border-color: rgba(217, 119, 6, 0.38) !important;
+        color: #b45309 !important;
+    }
+    body.light-mode #btn-filter-slackers {
+        color: #b91c1c !important;
+        border-color: rgba(220, 38, 38, 0.40) !important;
+    }
+    body.light-mode .stat-badge-str { color: #b91c1c; background: rgba(239, 68, 68, 0.10); }
+    body.light-mode .stat-badge-spd { color: #1d4ed8; background: rgba(59, 130, 246, 0.10); }
+    body.light-mode .stat-badge-def { color: #047857; background: rgba(16, 185, 129, 0.10); }
+    body.light-mode .stat-badge-dex { color: #6d28d9; background: rgba(168, 85, 247, 0.10); }
+    body.light-mode .badge-confirmed { color: #047857; background: rgba(16, 185, 129, 0.14); }
+    body.light-mode .badge-estimated { color: #b45309; background: rgba(245, 158, 11, 0.16); }
+    body.light-mode .drawer-overlay { background: rgba(15, 23, 42, 0.45); }
+    body.light-mode .contest-hero-card {
+        background: linear-gradient(135deg, rgba(59, 130, 246, 0.08) 0%, #ffffff 100%);
+    }
+
+    /* Mobile Responsive & Sticky First Column */
+    @media (max-width: 768px) {
+        .sticky-col {
+            position: sticky;
+            left: 0;
+            background: var(--bg-surface) !important;
+            z-index: 2;
+            box-shadow: 2px 0 6px rgba(0, 0, 0, 0.25);
+        }
+        .gym-overview-grid, .war-grid {
+            grid-template-columns: 1fr !important;
+        }
+        .ops-nav-tabs {
+            display: grid !important;
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+            gap: 6px !important;
+            border-bottom: none !important;
+            padding-bottom: 2px !important;
+            overflow: visible !important;
+        }
+        .ops-tab-btn {
+            justify-content: center !important;
+            text-align: center !important;
+            padding: 9px 10px !important;
+            font-size: 0.78em !important;
+            white-space: normal !important;
+            line-height: 1.25 !important;
+            border-radius: var(--radius-sm, 6px) !important;
+            border: 1px solid var(--border-default) !important;
+        }
+        .ops-tab-btn.active {
+            border-color: var(--accent-cobalt) !important;
+            border-bottom-width: 2px !important;
+        }
+        .roster-controls {
+            width: 100%;
+        }
+        .roster-controls .sort-select {
+            width: 100%;
+        }
     }
     </style>
 </head>
@@ -484,11 +594,11 @@
             <div class="nav-section-title">Live Operations</div>
             <a href="/" class="nav-link"><span class="nav-icon">📡</span> <span class="nav-text">Live Warboard</span></a>
             <a href="/dashboard.html" class="nav-link"><span class="nav-icon">📊</span> <span class="nav-text">Operations Hub</span></a>
-            <a href="/gym-stats.html" class="nav-link active"><span class="nav-icon">🏋️</span> <span class="nav-text">Gym &amp; Stat Tracker</span></a>
             <a href="/chain.html" class="nav-link"><span class="nav-icon">🔗</span> <span class="nav-text">Chain Sentinel</span></a>
             <a href="/dashboard.html#armory" class="nav-link"><span class="nav-icon">🛡️</span> <span class="nav-text">Armory Tracker</span></a>
             <a href="/payout.html" class="nav-link"><span class="nav-icon">💰</span> <span class="nav-text">War Payouts</span></a>
             <a href="/members.html" class="nav-link"><span class="nav-icon">👥</span> <span class="nav-text">Faction Roster</span></a>
+            <a href="/gym-stats.html" class="nav-link active"><span class="nav-icon">🏋️</span> <span class="nav-text">Gym &amp; Stat Tracker</span></a>
             <a href="/oc.html" class="nav-link"><span class="nav-icon">💼</span> <span class="nav-text">OC Manager</span></a>
 
             <div class="nav-section-title">Tactical Desk</div>
@@ -497,12 +607,22 @@
             <a href="/bazaar.html" class="nav-link"><span class="nav-icon">🛒</span> <span class="nav-text">Market &amp; Bazaar</span></a>
             <a href="/company.html" class="nav-link"><span class="nav-icon">🏢</span> <span class="nav-text">Company Hub</span></a>
             <a href="/gamble.html" class="nav-link"><span class="nav-icon">🎰</span> <span class="nav-text">Casino Analytics</span></a>
+            <a href="/recruit/" class="nav-link" title="Recruit Engine is currently in early development and not usable"><span class="nav-icon">🎯</span> <span class="nav-text">Recruit Engine</span> <span class="nav-badge-dev">Early Dev</span></a>
+
+            <div class="nav-section-title">Intelligence &amp; Alerts</div>
+            <a href="/ai-sandbox.html" class="nav-link"><span class="nav-icon">🤖</span> <span class="nav-text">F.R.I.D.A.Y. Intel</span></a>
+            <a href="/discord.html" class="nav-link"><span class="nav-icon">📢</span> <span class="nav-text">Discord Sentinel</span></a>
+            <a href="/bugs.html" class="nav-link"><span class="nav-icon">🐛</span> <span class="nav-text">Bug Tracker</span></a>
+            <a onclick="openGlobalSettings ? openGlobalSettings() : openSettings()" class="nav-link" style="cursor:pointer; margin-top:4px;"><span class="nav-icon">⚙️</span> <span class="nav-text">Settings</span></a>
         </div>
-        <div class="sidebar-user">
-            <div class="user-avatar" id="nav-user-avatar">🕷️</div>
-            <div class="user-info">
-                <div class="user-name" id="nav-user-name">Operative</div>
-                <div class="user-sub" id="nav-user-sub">Spider-Verse [52355]</div>
+        <div class="sidebar-footer" id="sidebar-user-footer">
+            <div class="sidebar-user-chip" onclick="openGlobalSettings ? openGlobalSettings() : openSettings()" style="cursor:pointer;" title="Account &amp; API Settings">
+                <div class="sidebar-user-avatar" id="nav-user-avatar">🕷️</div>
+                <div class="sidebar-user-info">
+                    <span class="sidebar-user-name" id="nav-user-name">Tactical Operative</span>
+                    <span class="sidebar-user-faction" id="nav-user-sub">Faction Operations</span>
+                </div>
+                <span style="color:var(--text-tertiary); font-size:0.9em;">⚙️</span>
             </div>
         </div>
     </nav>
@@ -510,53 +630,69 @@
     <!-- MAIN APP CONTAINER -->
     <div class="main-wrapper">
         <!-- GLOBAL TOPBAR -->
-        <header class="topbar">
+        <header class="app-topbar">
             <div class="topbar-left">
-                <button class="mobile-toggle" onclick="toggleSidebar()">☰</button>
-                <div class="breadcrumb">
-                    <span class="crumb-root">FACTION</span>
-                    <span class="crumb-separator">/</span>
-                    <span class="crumb-active" style="color:var(--accent-amber);">GYM &amp; BATTLE STAT TRACKER</span>
+                <button class="toggle-btn" onclick="toggleSidebar()" title="Toggle Sidebar" id="mobile-nav-toggle" style="display:none;">☰</button>
+                <div class="topbar-crumb" id="topbar-breadcrumb">
+                    <span>OPERATIONS</span> / <a href="/dashboard.html#gym" style="color:var(--text-secondary); text-decoration:none;">FACTION DASHBOARD</a> / <strong id="gym-crumb-sub" style="color:var(--text-primary);">GYM COMMAND • OVERVIEW</strong>
                 </div>
             </div>
             <div class="topbar-right">
-                <div class="tct-clock">
-                    <span class="tct-icon">⏱️</span>
-                    <span class="tct-val font-mono" id="topbar-tct-clock">00:00:00 TCT</span>
+                <div class="tct-clock-chip" title="Torn City Time (TCT)">
+                    <span class="tct-label">TCT</span>
+                    <span id="global-tct-clock">--:--:--</span>
                 </div>
-                <div class="ws-status connected" id="ws-status-indicator" title="Live Telemetry Synchronized">
-                    <span class="ws-dot"></span>
-                    <span class="ws-text">SYNCED</span>
+                <div class="telemetry-chip live-ws" id="global-ws-badge" title="Live Telemetry Synchronized">
+                    <span class="pulse-indicator"></span>
+                    <span id="global-ws-status">SYNCED</span>
                 </div>
-                <button class="btn btn-sm btn-outline" id="btn-open-settings" onclick="openGlobalSettings()" title="Settings &amp; Keys">
-                    <span>⚙️</span>
-                </button>
+                <button class="btn btn-secondary btn-sm" id="btn-topbar-sync" onclick="syncGymData(true)" title="Sync Live Stats" style="padding:4px 8px;">⟳</button>
+                <button class="btn btn-secondary btn-sm" id="btn-open-settings" onclick="openGlobalSettings()" title="Settings &amp; Keys" style="padding:4px 8px;">⚙️</button>
             </div>
         </header>
 
         <!-- APP CONTENT -->
         <main class="content-area" style="padding: 24px;">
+            <!-- UNIFIED OPERATIONS HUB NAVIGATION -->
+            <div class="ops-nav-tabs">
+                <a href="/dashboard.html#overview" class="ops-tab-btn">
+                    <span>📊</span> Operations Overview
+                </a>
+                <a href="/dashboard.html#armory" class="ops-tab-btn">
+                    <span>🪖</span> Armory &amp; Logistics
+                </a>
+                <a href="/dashboard.html#sentinel" class="ops-tab-btn">
+                    <span>✈️</span> Airspace &amp; War Intel
+                </a>
+                <a href="/dashboard.html#gym" class="ops-tab-btn active" title="Switch back to Operations Hub Gym Summary or stay in Full Gym Desk">
+                    <span>🏋️</span> Gym &amp; Stat Tracker
+                </a>
+            </div>
+
             <!-- EXECUTIVE GYM HERO -->
             <div class="gym-hero">
                 <div>
-                    <div style="display:flex; align-items:center; gap:10px;">
-                        <h1 style="margin:0; font-size:1.6em; font-weight:900; letter-spacing:-0.5px; color:#FFF; display:flex; align-items:center; gap:8px;">
+                    <div style="display:flex; align-items:center; flex-wrap:wrap; gap:10px;">
+                        <h1 style="margin:0; font-size:1.5em; font-weight:900; letter-spacing:-0.4px; color:var(--text-primary); display:flex; align-items:center; gap:8px;">
                             <span>🏋️ Faction Gym &amp; Battle Stat Command</span>
                         </h1>
-                        <span class="badge" style="background:rgba(245,158,11,0.15); color:var(--accent-amber); border:1px solid rgba(245,158,11,0.35); font-weight:700;">Torn v1 &amp; v2 Engine</span>
+                        <span class="badge" style="background:rgba(59,130,246,0.14); color:var(--accent-cobalt); border:1px solid rgba(59,130,246,0.32); font-weight:700;">Full Tactical Desk</span>
                     </div>
-                    <div style="font-size:0.86em; color:var(--text-secondary); margin-top:6px; max-width:720px; line-height:1.4;">
-                        Track real battle stat deltas, energy utilization velocity, Xanax compliance, slacker detection, and tactical war readiness across customizable training windows.
+                    <div style="font-size:0.84em; color:var(--text-secondary); margin-top:5px; max-width:720px; line-height:1.4;">
+                        Exact Xanax intake since 00:00 TCT, drug cooldown inactive hours, battle stat velocity, Steadfast perks, and Fair Fight readiness.
                     </div>
                 </div>
-                <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                    <a href="/dashboard.html#gym" class="btn btn-sm btn-outline" style="text-decoration:none; font-weight:700;" title="Return to Regular Gym Summary in Operations Hub">
+                        <span>←</span> Regular Summary
+                    </a>
                     <button class="btn btn-sm btn-outline btn-outline-amber" id="btn-privacy" onclick="openPrivacySettingsModal()" title="Manage Battle Stat Privacy Tiers">
                         <span>🔒</span> Privacy Tiers
                     </button>
                     <button class="btn btn-sm btn-outline btn-outline-amber" id="btn-new-contest" onclick="openNewContestModal()" title="Launch Timed Training Competition">
                         <span>🏆</span> New Contest
                     </button>
-                    <button class="btn btn-sm btn-primary" id="btn-force-sync" onclick="syncGymData(true)" style="background:var(--accent-amber); border-color:var(--accent-amber); color:#000; font-weight:700;">
+                    <button class="btn btn-sm btn-primary" id="btn-force-sync" onclick="syncGymData(true)" style="font-weight:700;">
                         <span id="sync-icon">🔄</span> Sync Live Stats
                     </button>
                 </div>
@@ -632,31 +768,31 @@
                     <div class="font-mono" style="font-size:1.75em; font-weight:900; color:#0EA5E9; margin-top:4px;" id="kpi-active-trainers">0%</div>
                     <div style="font-size:0.72em; color:var(--text-tertiary); margin-top:2px;" id="kpi-active-sub">0 of 0 trained today</div>
                 </div>
-                <div class="card" style="padding:16px; background:var(--bg-surface); border:1px solid var(--border-subtle);">
+                <div class="card" style="padding:16px; background:var(--bg-surface); border:1px solid var(--border-default); cursor:pointer;" onclick="switchTrackerView('roster', 'cd_idle')" title="Click to inspect Exact Xanax (00:00 TCT) &amp; Drug Cooldown Off Hours">
                     <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <span style="font-size:0.72em; text-transform:uppercase; font-weight:700; color:var(--text-tertiary);">Average Xanax / Day</span>
+                        <span style="font-size:0.72em; text-transform:uppercase; font-weight:700; color:var(--text-tertiary);">Exact Xanax (00:00 TCT)</span>
                         <span>💊</span>
                     </div>
-                    <div class="font-mono" style="font-size:1.75em; font-weight:900; color:#8B5CF6; margin-top:4px;" id="kpi-avg-xanax">2.6 / 3.0</div>
-                    <div style="font-size:0.72em; color:var(--text-tertiary); margin-top:2px;" id="kpi-xanax-sub">Target: 2 to 3 pills daily</div>
+                    <div class="font-mono" style="font-size:1.75em; font-weight:900; color:#8B5CF6; margin-top:4px;" id="kpi-avg-xanax">—</div>
+                    <div style="font-size:0.72em; color:var(--text-tertiary); margin-top:2px;" id="kpi-xanax-sub">Since 00:00 TCT • Exact total &amp; Drug CD</div>
                 </div>
             </div>
 
-            <!-- MODULAR VIEW NAVIGATION TABS -->
-            <div style="display:flex; gap:8px; border-bottom:1px solid var(--border-subtle); margin-bottom:20px; overflow-x:auto;">
-                <button class="ops-tab-btn active" id="tab-overview" onclick="switchTrackerView('overview')">
+            <!-- FULL GYM DESK SUB-VIEWS -->
+            <div class="gym-subnav" role="tablist" aria-label="Full Gym Desk Sections">
+                <button class="gym-subtab-btn active" id="tab-overview" onclick="switchTrackerView('overview')">
                     <span>📊</span> Faction Overview
                 </button>
-                <button class="ops-tab-btn" id="tab-roster" onclick="switchTrackerView('roster')">
-                    <span>👥</span> Member Roster &amp; Data Grid
+                <button class="gym-subtab-btn" id="tab-roster" onclick="switchTrackerView('roster')">
+                    <span>👥</span> Member Roster &amp; Cooldowns
                 </button>
-                <button class="ops-tab-btn" id="tab-contests" onclick="switchTrackerView('contests')">
+                <button class="gym-subtab-btn" id="tab-contests" onclick="switchTrackerView('contests')">
                     <span>🏆</span> Contests &amp; Gamification
                 </button>
-                <button class="ops-tab-btn" id="tab-war" onclick="switchTrackerView('war')">
+                <button class="gym-subtab-btn" id="tab-war" onclick="switchTrackerView('war')">
                     <span>⚔️</span> War Room &amp; Fair Fight
                 </button>
-                <button class="ops-tab-btn" id="tab-sentinel" onclick="switchTrackerView('sentinel')">
+                <button class="gym-subtab-btn" id="tab-sentinel" onclick="switchTrackerView('sentinel')">
                     <span>✈️</span> Airspace &amp; War Intel
                 </button>
             </div>
@@ -665,7 +801,7 @@
             <!-- VIEW 1: FACTION OVERVIEW -->
             <!-- ══════════════════════════════════════════════════════════ -->
             <div class="tracker-tab-pane active" id="pane-overview">
-                <div style="display:grid; grid-template-columns:2fr 1fr; gap:20px; margin-bottom:22px;">
+                <div class="gym-overview-grid" style="display:grid; grid-template-columns:2fr 1fr; gap:20px; margin-bottom:22px;">
                     <!-- Stat Velocity Chart -->
                     <div class="card" style="padding:20px; background:var(--bg-surface); border:1px solid var(--border-subtle);">
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
@@ -722,12 +858,12 @@
             <!-- VIEW 2: MASTER MEMBER ROSTER & DATA GRID -->
             <!-- ══════════════════════════════════════════════════════════ -->
             <div class="tracker-tab-pane" id="pane-roster">
-                <div class="card" style="background:var(--bg-surface); border:1px solid var(--border-subtle); border-radius:10px; overflow:hidden;">
+                <div class="card" style="background:var(--bg-surface); border:1px solid var(--border-default); border-radius:10px; overflow:hidden;">
                     <!-- Roster Controls & Filters Bar -->
-                    <div style="padding:16px 20px; border-bottom:1px solid var(--border-subtle); display:flex; flex-wrap:wrap; gap:12px; justify-content:space-between; align-items:center; background:rgba(0,0,0,0.15);">
+                    <div style="padding:16px 20px; border-bottom:1px solid var(--border-subtle); display:flex; flex-wrap:wrap; gap:12px; justify-content:space-between; align-items:center; background:var(--bg-elevated);">
                         <!-- Left: Time Window Pills -->
-                        <div style="display:inline-flex; align-items:center; background:#0B0F17; border:1px solid var(--border-subtle); border-radius:8px; padding:4px 6px; gap:4px;">
-                            <span style="font-size:0.75em; font-weight:700; color:var(--accent-amber); margin:0 6px;">⏱️ WINDOW:</span>
+                        <div class="window-pill-wrap">
+                            <span style="font-size:0.75em; font-weight:700; color:var(--accent-cobalt); margin:0 6px;">⏱️ WINDOW:</span>
                             <button class="stat-window-pill" data-window="24h" onclick="setRosterTimeframe('24h', this)">24 Hours</button>
                             <button class="stat-window-pill active" data-window="7d" onclick="setRosterTimeframe('7d', this)">7 Days</button>
                             <button class="stat-window-pill" data-window="30d" onclick="setRosterTimeframe('30d', this)">30 Days</button>
@@ -735,8 +871,8 @@
                         </div>
 
                         <!-- Right: Search, Filter Dropdowns, and Export -->
-                        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-                            <input type="text" id="roster-search" placeholder="🔍 Search member or ID..." class="sort-select" style="min-width:180px; padding:6px 12px; font-size:0.8em;" oninput="filterRosterDebounced()">
+                        <div class="roster-controls" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                            <input type="text" id="roster-search" placeholder="🔍 Search member or ID..." class="sort-select" style="min-width:190px; padding:6px 12px; font-size:0.8em;" oninput="filterRosterDebounced()">
                             <select id="roster-filter-bracket" class="sort-select" onchange="filterRoster()" style="padding:6px 10px; font-size:0.8em;">
                                 <option value="all">All Stat Brackets</option>
                                 <option value="under10m">&lt; 10M Stats</option>
@@ -753,6 +889,9 @@
                                 <option value="DexterityGhost">🎯 Dexterity Ghost</option>
                                 <option value="GlassCannon">💥 Glass Cannon</option>
                             </select>
+                            <button class="btn btn-sm btn-outline" id="btn-toggle-cd-idle" onclick="toggleCdIdleFilter()" style="font-size:0.78em; padding:6px 10px;" title="Show connected members with no active drug cooldown (0s)">
+                                <span>💊</span> Off Drug CD
+                            </button>
                             <button class="btn btn-sm btn-outline" id="btn-toggle-slackers" onclick="toggleSlackerFilter()" style="font-size:0.78em; padding:6px 10px;">
                                 <span>😴</span> Show Slackers Only
                             </button>
@@ -768,20 +907,21 @@
                             <thead>
                                 <tr>
                                     <th onclick="sortRoster('name')" class="sticky-col" style="cursor:pointer; min-width:180px;">Member <span id="sind-name">↕</span></th>
-                                    <th onclick="sortRoster('level')" style="cursor:pointer; min-width:80px;">Level <span id="sind-level">↕</span></th>
-                                    <th onclick="sortRoster('status')" style="cursor:pointer; min-width:120px;">Status <span id="sind-status">↕</span></th>
-                                    <th onclick="sortRoster('str')" style="cursor:pointer; min-width:130px;"><span style="color:var(--stat-str);">💪 Strength</span> <span id="sind-str">↕</span></th>
-                                    <th onclick="sortRoster('spd')" style="cursor:pointer; min-width:130px;"><span style="color:var(--stat-spd);">⚡ Speed</span> <span id="sind-spd">↕</span></th>
-                                    <th onclick="sortRoster('def')" style="cursor:pointer; min-width:130px;"><span style="color:var(--stat-def);">🛡️ Defense</span> <span id="sind-def">↕</span></th>
-                                    <th onclick="sortRoster('dex')" style="cursor:pointer; min-width:130px;"><span style="color:var(--stat-dex);">🎯 Dexterity</span> <span id="sind-dex">↕</span></th>
-                                    <th onclick="sortRoster('total')" style="cursor:pointer; min-width:150px;">Total / Gain (Δ) <span id="sind-total">↓</span></th>
-                                    <th onclick="sortRoster('energy')" style="cursor:pointer; min-width:120px;">Est. Energy <span id="sind-energy">↕</span></th>
-                                    <th onclick="sortRoster('xanax')" style="cursor:pointer; min-width:110px;">Xanax (3/d) <span id="sind-xanax">↕</span></th>
-                                    <th style="text-align:center; min-width:90px;">Actions</th>
+                                    <th onclick="sortRoster('level')" style="cursor:pointer; min-width:75px;">Level <span id="sind-level">↕</span></th>
+                                    <th onclick="sortRoster('status')" style="cursor:pointer; min-width:115px;">Status <span id="sind-status">↕</span></th>
+                                    <th onclick="sortRoster('str')" style="cursor:pointer; min-width:115px;"><span style="color:var(--stat-str);">💪 Strength</span> <span id="sind-str">↕</span></th>
+                                    <th onclick="sortRoster('spd')" style="cursor:pointer; min-width:115px;"><span style="color:var(--stat-spd);">⚡ Speed</span> <span id="sind-spd">↕</span></th>
+                                    <th onclick="sortRoster('def')" style="cursor:pointer; min-width:115px;"><span style="color:var(--stat-def);">🛡️ Defense</span> <span id="sind-def">↕</span></th>
+                                    <th onclick="sortRoster('dex')" style="cursor:pointer; min-width:115px;"><span style="color:var(--stat-dex);">🎯 Dexterity</span> <span id="sind-dex">↕</span></th>
+                                    <th onclick="sortRoster('total')" style="cursor:pointer; min-width:140px;">Total / Gain (Δ) <span id="sind-total">↓</span></th>
+                                    <th onclick="sortRoster('energy')" style="cursor:pointer; min-width:105px;">Est. Energy <span id="sind-energy">↕</span></th>
+                                    <th onclick="sortRoster('xanax')" style="cursor:pointer; min-width:138px;" title="Exact personalstats.xantaken total and count taken since 00:00 TCT">Exact Xanax (00:00 TCT) <span id="sind-xanax">↕</span></th>
+                                    <th onclick="sortRoster('drugcd')" style="cursor:pointer; min-width:145px;" title="Hours since Torn Drug Cooldown expired (0 = currently active)">Drug CD Off <span id="sind-drugcd">↕</span></th>
+                                    <th style="text-align:center; min-width:88px;">Actions</th>
                                 </tr>
                             </thead>
                             <tbody id="roster-tbody">
-                                <tr><td colspan="11" style="text-align:center; padding:32px; color:var(--text-tertiary);"><span class="loading-spinner"></span> Loading faction gym and battle stat telemetry...</td></tr>
+                                <tr><td colspan="12" style="text-align:center; padding:32px; color:var(--text-tertiary);"><span class="loading-spinner"></span> Loading faction gym and battle stat telemetry...</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -793,29 +933,29 @@
             <!-- ══════════════════════════════════════════════════════════ -->
             <div class="tracker-tab-pane" id="pane-contests">
                 <!-- Clean Empty State Card (Shown when no active contest exists) -->
-                <div id="contest-empty-state" style="display:none; text-align:center; padding:48px 24px; background:var(--bg-surface); border:1px dashed var(--border-subtle); border-radius:12px; margin-bottom:24px;">
+                <div id="contest-empty-state" style="display:none; text-align:center; padding:48px 24px; background:var(--bg-surface); border:1px dashed var(--border-default); border-radius:12px; margin-bottom:24px;">
                     <div style="font-size:3em; margin-bottom:12px;">🏆</div>
-                    <h3 style="margin:0 0 8px 0; font-size:1.3em; font-weight:800; color:#FFF;">No Active Faction Competition</h3>
+                    <h3 style="margin:0 0 8px 0; font-size:1.3em; font-weight:800; color:var(--text-primary);">No Active Faction Competition</h3>
                     <p style="color:var(--text-secondary); max-width:520px; margin:0 auto 20px auto; font-size:0.88em; line-height:1.5;">
                         There are currently no active stat blitz or energy derby competitions running. Launch a competition to gamify training gains, track leaderboard progress, and prepare for war.
                     </p>
-                    <button class="btn btn-primary" onclick="openNewContestModal()" style="font-weight:700; padding:10px 22px; background:var(--accent-amber); border-color:var(--accent-amber); color:#000;">
+                    <button class="btn btn-primary" onclick="openNewContestModal()" style="font-weight:700; padding:10px 22px;">
                         ✨ Create Competition
                     </button>
                 </div>
 
                 <!-- Active Competition Banner -->
-                <div class="card" style="padding:22px; background:linear-gradient(135deg, rgba(245,158,11,0.12) 0%, rgba(19,27,42,0.95) 100%); border:1px solid rgba(245,158,11,0.4); margin-bottom:24px; position:relative;" id="active-contest-banner">
+                <div class="card contest-hero-card" id="active-contest-banner">
                     <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
                         <div style="flex:1; min-width:280px;">
                             <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
-                                <span class="badge" style="background:var(--accent-amber); color:#000; font-weight:800; font-size:0.72em;">ACTIVE CONTEST</span>
+                                <span class="badge" style="background:var(--accent-cobalt); color:#fff; font-weight:800; font-size:0.72em;">ACTIVE CONTEST</span>
                                 <div id="contest-select-wrap" style="display:none;">
-                                    <select id="contest-select-dropdown" class="sort-select" onchange="selectContest(this.value)" style="padding:2px 8px; font-size:0.75em; font-weight:700; background:rgba(0,0,0,0.5); border:1px solid rgba(245,158,11,0.4); color:#FFF; border-radius:4px;">
+                                    <select id="contest-select-dropdown" class="sort-select" onchange="selectContest(this.value)" style="padding:2px 8px; font-size:0.75em; font-weight:700; border-radius:4px;">
                                     </select>
                                 </div>
                             </div>
-                            <h2 style="margin:8px 0 4px 0; font-size:1.4em; font-weight:900; color:#FFF;" id="contest-title">Faction Competition</h2>
+                            <h2 style="margin:8px 0 4px 0; font-size:1.4em; font-weight:900; color:var(--text-primary);" id="contest-title">Faction Competition</h2>
                             <div style="font-size:0.82em; color:var(--text-secondary);" id="contest-desc">Faction-wide competition.</div>
                         </div>
                         <div style="text-align:right; display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
@@ -865,7 +1005,7 @@
             <!-- VIEW 4: WAR ROOM & FAIR FIGHT TACTICAL MATCHER -->
             <!-- ══════════════════════════════════════════════════════════ -->
             <div class="tracker-tab-pane" id="pane-war">
-                <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:24px;">
+                <div class="war-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:24px;">
                     <!-- Tactical Role Breakdown -->
                     <div class="card" style="padding:20px; background:var(--bg-surface); border:1px solid var(--border-subtle);">
                         <h3 style="margin:0 0 10px 0; font-size:1.05em; font-weight:800; color:var(--text-primary); display:flex; align-items:center; gap:8px;">
@@ -922,7 +1062,7 @@
 
                         <div style="display:flex; gap:10px; margin-bottom:14px;">
                             <input type="number" id="ff-target-stats" placeholder="Enemy Total Stats (e.g. 10000000)" class="sort-select" style="flex:1; padding:8px 12px; font-size:0.85em;" value="10000000">
-                            <button class="btn btn-sm btn-primary" onclick="queryFairFightMatches()" style="background:var(--accent-amber); border-color:var(--accent-amber); color:#000; font-weight:700;">
+                            <button class="btn btn-sm btn-primary" onclick="queryFairFightMatches()" style="font-weight:700;">
                                 Calculate Matches
                             </button>
                         </div>
@@ -968,7 +1108,7 @@
                             </div>
                         </div>
                         <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-                            <a href="/dashboard.html#sentinel" class="btn btn-sm btn-primary" style="background:var(--teal, #00cec9); border-color:var(--teal, #00cec9); color:#000; font-weight:800; text-decoration:none;">
+                            <a href="/dashboard.html#sentinel" class="btn btn-sm btn-primary" style="font-weight:800; text-decoration:none;">
                                 <span>✈️</span> Full War Flight Audit →
                             </a>
                             <button class="btn btn-sm btn-outline" onclick="loadSentinelFlightData(true)" id="btn-refresh-sentinel-gym">
@@ -1036,12 +1176,12 @@
     <!-- ══════════════════════════════════════════════════════════════ -->
     <div class="drawer-overlay" id="member-drawer-overlay" onclick="closeDrawerOnBackdrop(event)">
         <div class="drawer-panel" id="member-drawer-panel">
-            <div style="padding:20px; border-bottom:1px solid var(--border-subtle); display:flex; justify-content:space-between; align-items:center; background:rgba(0,0,0,0.2);">
+            <div class="drawer-hdr" style="padding:20px; border-bottom:1px solid var(--border-subtle); display:flex; justify-content:space-between; align-items:center;">
                 <div style="display:flex; align-items:center; gap:12px;">
                     <div style="font-size:2em;" id="dossier-avatar">🏋️</div>
                     <div>
                         <div style="display:flex; align-items:center; gap:8px;">
-                            <h2 style="margin:0; font-size:1.25em; font-weight:900; color:#FFF;" id="dossier-name">Player Dossier</h2>
+                            <h2 style="margin:0; font-size:1.25em; font-weight:900; color:var(--text-primary);" id="dossier-name">Player Dossier</h2>
                             <span class="badge" id="dossier-id" style="font-size:0.7em;">[—]</span>
                             <span class="badge" id="dossier-verified" style="font-size:0.68em; background:rgba(16,185,129,0.15); color:var(--status-active);">Verified Key</span>
                         </div>
@@ -1076,14 +1216,28 @@
                     </div>
                 </div>
 
-                <!-- Personal Milestone Goal -->
-                <div class="card" style="padding:14px; background:rgba(0,0,0,0.25); border:1px solid var(--border-subtle);">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                        <span style="font-size:0.78em; font-weight:700; color:var(--accent-amber);" id="dos-goal-title">🎯 Road to 50M Soft Cap</span>
-                        <span class="font-mono" style="font-size:0.78em; font-weight:800; color:#FFF;" id="dos-goal-pct">0%</span>
+                <!-- Exact Xanax (00:00 TCT) & Drug Cooldown Idle Hours -->
+                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:10px;">
+                    <div class="card drawer-card" style="padding:12px;">
+                        <div style="font-size:0.72em; text-transform:uppercase; font-weight:700; color:var(--accent-purple);">💊 Exact Xanax Intake</div>
+                        <div class="font-mono" style="font-size:1.25em; font-weight:900; color:var(--text-primary); margin-top:4px;" id="dos-xanax-val">—</div>
+                        <div style="font-size:0.72em; color:var(--text-tertiary); margin-top:3px;" id="dos-xanax-sub">Tracked from personalstats.xantaken (00:00 TCT reset)</div>
                     </div>
-                    <div style="height:6px; background:rgba(255,255,255,0.08); border-radius:3px; overflow:hidden;">
-                        <div id="dos-goal-bar" style="width:0%; height:100%; background:var(--accent-amber); transition:width 0.4s ease;"></div>
+                    <div class="card drawer-card" style="padding:12px;">
+                        <div style="font-size:0.72em; text-transform:uppercase; font-weight:700; color:var(--accent-cyan);">⏱️ Drug Cooldown Inactive</div>
+                        <div class="font-mono" style="font-size:1.25em; font-weight:900; color:var(--text-primary); margin-top:4px;" id="dos-cd-val">—</div>
+                        <div style="font-size:0.72em; color:var(--text-tertiary); margin-top:3px;" id="dos-cd-sub">Continuous hours without an active drug cooldown</div>
+                    </div>
+                </div>
+
+                <!-- Personal Milestone Goal -->
+                <div class="card drawer-card" style="padding:14px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                        <span style="font-size:0.78em; font-weight:700; color:var(--accent-cobalt);" id="dos-goal-title">🎯 Road to 50M Soft Cap</span>
+                        <span class="font-mono" style="font-size:0.78em; font-weight:800; color:var(--text-primary);" id="dos-goal-pct">0%</span>
+                    </div>
+                    <div style="height:6px; background:var(--border-subtle); border-radius:3px; overflow:hidden;">
+                        <div id="dos-goal-bar" style="width:0%; height:100%; background:var(--accent-cobalt); transition:width 0.4s ease;"></div>
                     </div>
                     <div style="display:flex; justify-content:space-between; font-size:0.7em; color:var(--text-tertiary); margin-top:4px;">
                         <span id="dos-goal-cur">Current: 0</span>
@@ -1092,7 +1246,7 @@
                 </div>
 
                 <!-- Individual Radar Chart -->
-                <div class="card" style="padding:16px; background:rgba(0,0,0,0.2); border:1px solid var(--border-subtle);">
+                <div class="card drawer-card" style="padding:16px;">
                     <div style="font-size:0.82em; font-weight:700; color:var(--text-primary); margin-bottom:10px;">
                         ⚖️ Individual vs Faction Average Balance
                     </div>
@@ -1173,9 +1327,9 @@
                     </div>
                 </div>
             </div>
-            <div style="padding:14px 22px; border-top:1px solid var(--border-subtle); display:flex; justify-content:flex-end; gap:10px; background:rgba(0,0,0,0.15); flex-shrink:0;">
+            <div class="modal-footer-bar">
                 <button class="btn btn-sm btn-outline" onclick="closePrivacySettingsModal()">Cancel</button>
-                <button class="btn btn-sm btn-primary" onclick="saveSelectedPrivacyTier()" style="background:var(--accent-amber); border-color:var(--accent-amber); color:#000; font-weight:700;">Save Preference</button>
+                <button class="btn btn-sm btn-primary" onclick="saveSelectedPrivacyTier()" style="font-weight:700;">Save Preference</button>
             </div>
         </div>
     </div>
@@ -1217,7 +1371,7 @@
                     </div>
                 </div>
 
-                <div style="background:rgba(0,0,0,0.3); border:1px solid var(--border-subtle); border-radius:10px; padding:14px;">
+                <div style="background:var(--bg-elevated); border:1px solid var(--border-subtle); border-radius:10px; padding:14px;">
                     <div style="font-size:0.8em; font-weight:700; color:var(--text-primary); margin-bottom:8px;">Projected Gain Multiplier:</div>
                     <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:8px;">
                         <div class="stat-badge-str badge" style="padding:8px;" id="calc-res-str">Strength: +45.0%</div>
@@ -1227,7 +1381,7 @@
                     </div>
                 </div>
             </div>
-            <div style="padding:14px 22px; border-top:1px solid var(--border-subtle); display:flex; justify-content:flex-end; background:rgba(0,0,0,0.15); flex-shrink:0;">
+            <div class="modal-footer-bar">
                 <button class="btn btn-sm btn-outline" onclick="closeModifierCalculatorModal()">Close</button>
             </div>
         </div>
@@ -1280,9 +1434,9 @@
                     <textarea id="contest-input-desc" rows="2" class="sort-select" style="width:100%; padding:8px 12px; margin-top:4px;" placeholder="Faction Bank distribution: 50% 1st, 30% 2nd, 20% 3rd"></textarea>
                 </div>
             </div>
-            <div style="padding:14px 20px; border-top:1px solid var(--border-subtle); display:flex; justify-content:flex-end; gap:10px; background:rgba(0,0,0,0.1); flex-shrink:0;">
+            <div class="modal-footer-bar">
                 <button class="btn btn-sm btn-outline" onclick="closeNewContestModal()">Cancel</button>
-                <button class="btn btn-sm btn-primary" onclick="submitNewContest()" style="background:var(--accent-amber); border-color:var(--accent-amber); color:#000; font-weight:700;">Launch Contest</button>
+                <button class="btn btn-sm btn-primary" onclick="submitNewContest()" style="font-weight:700;">Launch Contest</button>
             </div>
         </div>
     </div>
@@ -1302,8 +1456,131 @@
     let rosterSortCol = 'total';
     let rosterSortAsc = false;
     let showSlackersOnly = false;
+    let showCdIdleOnly = false;
     let selectedPrivacyTier = 'full';
     let contestCountdownInterval = null;
+    let lastMemberDrawerData = null;
+
+    function escapeHtml(str) {
+        return String(str ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    function getChartThemePalette() {
+        const isLight = document.body.classList.contains('light-mode');
+        return {
+            isLight,
+            grid: isLight ? 'rgba(15, 23, 42, 0.08)' : 'rgba(255, 255, 255, 0.06)',
+            angleLine: isLight ? 'rgba(15, 23, 42, 0.14)' : 'rgba(255, 255, 255, 0.10)',
+            tick: isLight ? '#475569' : '#94a3b8',
+            label: isLight ? '#0f172a' : '#e2e8f0'
+        };
+    }
+
+    function formatDurationCompact(sec) {
+        const s = Math.max(0, Math.round(Number(sec || 0)));
+        const h = Math.floor(s / 3600);
+        const m = Math.floor((s % 3600) / 60);
+        if (h > 0) return `${h}h ${m}m`;
+        return `${m}m`;
+    }
+
+    function getLiveDrugCooldownState(dc) {
+        if (!dc || !dc.tracked) return { tracked: false };
+        const now = Date.now();
+        if (dc.active && dc.cooldownEndsAt && dc.cooldownEndsAt > now) {
+            return {
+                tracked: true,
+                active: true,
+                remainingSec: Math.ceil((dc.cooldownEndsAt - now) / 1000),
+                inactiveHours: 0,
+                inactiveHoursTodayTct: dc.inactiveHoursTodayTct
+            };
+        }
+        const since = (dc.active && dc.cooldownEndsAt && dc.cooldownEndsAt <= now)
+            ? Math.min(now, dc.cooldownEndsAt)
+            : (dc.inactiveSince || dc.lastCheckedAt);
+        const liveHours = since ? Math.max(0, (now - since) / 3600000) : Number(dc.inactiveHours || 0);
+        return {
+            tracked: true,
+            active: false,
+            remainingSec: 0,
+            inactiveHours: Number(liveHours.toFixed(2)),
+            inactiveHoursTodayTct: dc.inactiveHoursTodayTct,
+            isFloorEstimate: Boolean(dc.isFloorEstimate)
+        };
+    }
+
+    function formatExactXanaxHtml(m) {
+        if (m.stats?.masked) return '<span style="color:var(--text-tertiary);">🔒 Private</span>';
+        const xObj = m.xanax || {};
+        const hasExact = Boolean(xObj.hasExactTotal || (m.energy?.totalXanaxRecorded || 0) > 0);
+        const exactTotal = xObj.exactTotal !== undefined && xObj.exactTotal !== null
+            ? Number(xObj.exactTotal)
+            : (hasExact ? Number(m.energy?.totalXanaxRecorded || 0) : null);
+        const takenToday = xObj.takenTodayTct !== undefined && xObj.takenTodayTct !== null
+            ? Number(xObj.takenTodayTct)
+            : null;
+        if (!hasExact && exactTotal === null) {
+            return '<span style="color:var(--text-tertiary); font-size:0.84em;" title="Connect personal Torn API key to track exact personalstats.xantaken">🔑 Key Req</span>';
+        }
+        const baseTip = takenToday !== null
+            ? (xObj.baselineIsMidnight ? `00:00 TCT baseline: ${fmt(xObj.baselineAtTct || 0)}` : `Baseline (${fmt(xObj.baselineAtTct || 0)}) since sync`)
+            : 'Waiting for 00:00 TCT baseline';
+        const todayBadge = takenToday !== null
+            ? `<span style="font-size:0.76em; padding:1px 6px; border-radius:999px; font-weight:700; background:${takenToday > 0 ? 'rgba(139,92,246,0.16)' : 'var(--bg-elevated)'}; color:${takenToday > 0 ? 'var(--accent-purple)' : 'var(--text-tertiary)'}; border:1px solid ${takenToday > 0 ? 'rgba(139,92,246,0.35)' : 'var(--border-subtle)'};" title="${escapeHtml(baseTip)}">+${takenToday} @ 00:00 TCT</span>`
+            : `<span style="font-size:0.74em; color:var(--text-tertiary);" title="${escapeHtml(baseTip)}">00:00 TCT pending</span>`;
+        const refillTag = m.energy?.refillUsed ? ' <span style="color:var(--accent-amber);" title="Daily refill used">⚡</span>' : '';
+        return `<div style="display:flex; flex-direction:column; gap:3px; align-items:flex-start;">
+            <span class="font-mono" style="color:var(--accent-purple); font-weight:800;">${fmt(exactTotal || 0)} 💊${refillTag}</span>
+            ${todayBadge}
+        </div>`;
+    }
+
+    function formatDrugCooldownOffHtml(m) {
+        if (m.stats?.masked) return '<span style="color:var(--text-tertiary);">🔒 Private</span>';
+        const live = getLiveDrugCooldownState(m.drugCooldown);
+        if (!live.tracked) {
+            return '<span style="color:var(--text-tertiary); font-size:0.82em;" title="Connect personal API key to monitor drug cooldown inactive hours">🔑 Key Req</span>';
+        }
+        if (live.active) {
+            const rem = formatDurationCompact(live.remainingSec);
+            const todaySub = (live.inactiveHoursTodayTct !== null && live.inactiveHoursTodayTct > 0.05)
+                ? `<span style="font-size:0.72em; color:var(--text-tertiary);">${live.inactiveHoursTodayTct.toFixed(1)}h idle earlier today</span>`
+                : '';
+            return `<div style="display:flex; flex-direction:column; gap:2px; align-items:flex-start;">
+                <span class="badge-confirmed" style="font-size:0.76em; padding:2px 7px;" title="Drug cooldown active (${rem} remaining)">0.0h · CD Active (${rem})</span>
+                ${todaySub}
+            </div>`;
+        }
+        const hrs = live.inactiveHours || 0;
+        const prefix = live.isFloorEstimate ? '≥' : '';
+        const durLabel = hrs < 1 ? `${prefix}${Math.max(1, Math.round(hrs * 60))}m off CD` : `${prefix}${hrs.toFixed(1)}h off CD`;
+        let color = 'var(--accent-cyan)';
+        let bg = 'rgba(6, 182, 212, 0.12)';
+        let border = 'rgba(6, 182, 212, 0.30)';
+        if (hrs >= 6) {
+            color = 'var(--status-danger)';
+            bg = 'rgba(239, 68, 68, 0.14)';
+            border = 'rgba(239, 68, 68, 0.35)';
+        } else if (hrs >= 1) {
+            color = 'var(--accent-amber)';
+            bg = 'rgba(245, 158, 11, 0.14)';
+            border = 'rgba(245, 158, 11, 0.35)';
+        }
+        const missedXan = Math.floor(hrs / 7);
+        const subHint = missedXan >= 1
+            ? `~${missedXan} Xanax / jump window${missedXan > 1 ? 's' : ''} missed`
+            : (live.inactiveHoursTodayTct !== null && live.inactiveHoursTodayTct > 0.05 ? `${live.inactiveHoursTodayTct.toFixed(1)}h idle today (TCT)` : 'Ready for Xanax / jump');
+        return `<div style="display:flex; flex-direction:column; gap:2px; align-items:flex-start;">
+            <span class="font-mono" style="font-size:0.8em; font-weight:800; color:${color}; background:${bg}; border:1px solid ${border}; padding:2px 7px; border-radius:999px;">⏱️ ${durLabel}</span>
+            <span style="font-size:0.71em; color:var(--text-tertiary);">${subHint}</span>
+        </div>`;
+    }
 
     // Chart instances
     let velocityChartInstance = null;
@@ -1348,24 +1625,56 @@
         }, 4000);
     }
 
-    // ─── Tab Switching ───
-    function switchTrackerView(viewKey, subFilter = null) {
-        currentActiveView = viewKey;
-        document.querySelectorAll('.ops-tab-btn').forEach(b => b.classList.toggle('active', b.id === `tab-${viewKey}`));
-        document.querySelectorAll('.tracker-tab-pane').forEach(p => p.classList.toggle('active', p.id === `pane-${viewKey}`));
+    // ─── Tab Switching & Hash Routing ───
+    const GYM_VIEW_LABELS = {
+        overview: 'GYM COMMAND • OVERVIEW',
+        roster: 'GYM COMMAND • ROSTER & COOLDOWNS',
+        contests: 'GYM COMMAND • CONTESTS',
+        war: 'GYM COMMAND • WAR & FAIR FIGHT',
+        sentinel: 'GYM COMMAND • AIRSPACE & WAR INTEL'
+    };
 
-        if (viewKey === 'roster') {
+    function getRequestedTrackerHash() {
+        const raw = (window.location.hash || '').replace(/^#/, '').toLowerCase();
+        if (!raw) return { viewKey: 'overview', subFilter: null };
+        const [viewPart, queryPart] = raw.split('?');
+        const viewKey = GYM_VIEW_LABELS[viewPart] ? viewPart : 'overview';
+        const params = new URLSearchParams(queryPart || '');
+        const subFilter = params.get('filter') || null;
+        return { viewKey, subFilter };
+    }
+
+    function switchTrackerView(viewKey, subFilter = null, updateHash = true) {
+        const safeView = GYM_VIEW_LABELS[viewKey] ? viewKey : 'overview';
+        currentActiveView = safeView;
+        document.querySelectorAll('.gym-subtab-btn').forEach(b => b.classList.toggle('active', b.id === `tab-${safeView}`));
+        document.querySelectorAll('.tracker-tab-pane').forEach(p => p.classList.toggle('active', p.id === `pane-${safeView}`));
+
+        const crumb = document.getElementById('gym-crumb-sub');
+        if (crumb) crumb.textContent = GYM_VIEW_LABELS[safeView] || 'GYM COMMAND';
+
+        if (updateHash && window.location.hash !== `#${safeView}`) {
+            try { window.history.replaceState(null, '', `#${safeView}`); } catch (_) {}
+        }
+
+        if (safeView === 'roster') {
             if (subFilter === 'slacker') {
                 showSlackersOnly = true;
-                const btn = document.getElementById('btn-toggle-slackers');
-                if (btn) btn.classList.add('active');
+                showCdIdleOnly = false;
+            } else if (subFilter === 'cd_idle') {
+                showCdIdleOnly = true;
+                showSlackersOnly = false;
             }
-            renderRosterTable();
-        } else if (viewKey === 'contests') {
+            const btnSlack = document.getElementById('btn-toggle-slackers');
+            if (btnSlack) btnSlack.classList.toggle('active-filter', showSlackersOnly);
+            const btnCd = document.getElementById('btn-toggle-cd-idle');
+            if (btnCd) btnCd.classList.toggle('active-filter', showCdIdleOnly);
+            filterRoster();
+        } else if (safeView === 'contests') {
             loadCompetitions();
-        } else if (viewKey === 'war') {
+        } else if (safeView === 'war') {
             loadWarReadiness();
-        } else if (viewKey === 'sentinel') {
+        } else if (safeView === 'sentinel') {
             loadSentinelFlightData();
         }
     }
@@ -1497,7 +1806,21 @@
         document.getElementById('kpi-gains-sub').textContent = `7d: +${fmt(kpis.totalGains7d)} total`;
         document.getElementById('kpi-active-trainers').textContent = `${kpis.activeTrainersPct}%`;
         document.getElementById('kpi-active-sub').textContent = `${kpis.activeTrainersToday} active • ${kpis.slackerCount} slacking • ${kpis.exemptCount || 0} exempt (${kpis.totalMembersCount} total)`;
-        document.getElementById('kpi-avg-xanax').textContent = `${kpis.avgXanaxPerDay} / 3.0`;
+
+        const xanEl = document.getElementById('kpi-avg-xanax');
+        const xanSubEl = document.getElementById('kpi-xanax-sub');
+        const todayTctCnt = kpis.totalXanaxTodayTct ?? 0;
+        const tctTrackedCnt = kpis.tctTrackedCount ?? 0;
+        const cumXan = kpis.totalExactXanaxCumulative ?? 0;
+        if (xanEl) {
+            xanEl.textContent = tctTrackedCnt > 0 ? `+${fmt(todayTctCnt)} today` : `${fmt(cumXan)} total`;
+        }
+        if (xanSubEl) {
+            const avgToday = kpis.avgXanaxTodayTct ?? 0;
+            const idleCnt = kpis.drugCooldownIdleCount || 0;
+            const maxOff = kpis.maxDrugCooldownOffHours || 0;
+            xanSubEl.textContent = `Avg ${avgToday}/member since 00:00 TCT • ${fmt(cumXan)} total • ${idleCnt} off CD (max ${maxOff}h)`;
+        }
 
         // Slacker Banner
         const slackerBanner = document.getElementById('slacker-banner');
@@ -1530,9 +1853,10 @@
 
         if (velocityChartInstance) velocityChartInstance.destroy();
 
+        const pal = getChartThemePalette();
         const gradient = ctx.createLinearGradient(0, 0, 0, 260);
-        gradient.addColorStop(0, 'rgba(245, 158, 11, 0.35)');
-        gradient.addColorStop(1, 'rgba(245, 158, 11, 0.0)');
+        gradient.addColorStop(0, 'rgba(59, 130, 246, 0.32)');
+        gradient.addColorStop(1, 'rgba(59, 130, 246, 0.0)');
 
         velocityChartInstance = new Chart(ctx, {
             type: 'line',
@@ -1541,7 +1865,7 @@
                 datasets: [{
                     label: 'Faction Total Battle Stats',
                     data: vcData.factionTotals,
-                    borderColor: '#F59E0B',
+                    borderColor: '#3b82f6',
                     backgroundColor: gradient,
                     borderWidth: 2.5,
                     fill: true,
@@ -1563,13 +1887,13 @@
                 },
                 scales: {
                     x: {
-                        grid: { color: 'rgba(255, 255, 255, 0.05)' },
-                        ticks: { color: '#64748B', font: { size: 10 } }
+                        grid: { color: pal.grid },
+                        ticks: { color: pal.tick, font: { size: 10 } }
                     },
                     y: {
-                        grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                        grid: { color: pal.grid },
                         ticks: {
-                            color: '#64748B',
+                            color: pal.tick,
                             font: { size: 10 },
                             callback: (val) => (val >= 1e6 ? `${(val/1e6).toFixed(1)}M` : val.toLocaleString())
                         }
@@ -1587,6 +1911,8 @@
 
         if (factionRadarChartInstance) factionRadarChartInstance.destroy();
 
+        const pal = getChartThemePalette();
+
         factionRadarChartInstance = new Chart(ctx, {
             type: 'radar',
             data: {
@@ -1594,10 +1920,10 @@
                 datasets: [{
                     label: 'Faction Average %',
                     data: [radarData.strengthPct, radarData.speedPct, radarData.defensePct, radarData.dexterityPct],
-                    backgroundColor: 'rgba(245, 158, 11, 0.25)',
-                    borderColor: '#F59E0B',
+                    backgroundColor: 'rgba(6, 182, 212, 0.22)',
+                    borderColor: '#06b6d4',
                     borderWidth: 2,
-                    pointBackgroundColor: '#F59E0B'
+                    pointBackgroundColor: '#3b82f6'
                 }]
             },
             options: {
@@ -1606,9 +1932,9 @@
                 plugins: { legend: { display: false } },
                 scales: {
                     r: {
-                        angleLines: { color: 'rgba(255, 255, 255, 0.1)' },
-                        grid: { color: 'rgba(255, 255, 255, 0.1)' },
-                        pointLabels: { color: '#E2E8F0', font: { size: 11, weight: '700' } },
+                        angleLines: { color: pal.angleLine },
+                        grid: { color: pal.angleLine },
+                        pointLabels: { color: pal.label, font: { size: 11, weight: '700' } },
                         ticks: { display: false, maxTicksLimit: 4 }
                     }
                 }
@@ -1685,6 +2011,11 @@
 
             if (showSlackersOnly && !m.slacker.isSlacking) return false;
 
+            if (showCdIdleOnly) {
+                const dc = getLiveDrugCooldownState(m.drugCooldown);
+                if (!dc.tracked || dc.active) return false;
+            }
+
             if (archetype !== 'all' && m.archetype !== archetype) return false;
 
             const t = typeof m.stats.total === 'number' ? m.stats.total : (m.rawStats?.total || 0);
@@ -1713,7 +2044,19 @@
                 return rosterSortAsc ? (a.energy.energySpentEst - b.energy.energySpentEst) : (b.energy.energySpentEst - a.energy.energySpentEst);
             }
             if (rosterSortCol === 'xanax') {
-                return rosterSortAsc ? (a.energy.xanaxTakenCount - b.energy.xanaxTakenCount) : (b.energy.xanaxTakenCount - a.energy.xanaxTakenCount);
+                const xaToday = a.xanax?.takenTodayTct ?? -1;
+                const xbToday = b.xanax?.takenTodayTct ?? -1;
+                if (xaToday !== xbToday) return rosterSortAsc ? (xaToday - xbToday) : (xbToday - xaToday);
+                const xaTot = a.xanax?.exactTotal ?? -1;
+                const xbTot = b.xanax?.exactTotal ?? -1;
+                return rosterSortAsc ? (xaTot - xbTot) : (xbTot - xaTot);
+            }
+            if (rosterSortCol === 'drugcd') {
+                const da = getLiveDrugCooldownState(a.drugCooldown);
+                const db = getLiveDrugCooldownState(b.drugCooldown);
+                const ha = da.tracked ? (da.active ? 0 : (da.inactiveHours || 0)) : -1;
+                const hb = db.tracked ? (db.active ? 0 : (db.inactiveHours || 0)) : -1;
+                return rosterSortAsc ? (ha - hb) : (hb - ha);
             }
 
             if (currentRosterTimeframe === '24h') { va = a.gains.gain24h.total; vb = b.gains.gain24h.total; }
@@ -1742,7 +2085,14 @@
     function toggleSlackerFilter() {
         showSlackersOnly = !showSlackersOnly;
         const btn = document.getElementById('btn-toggle-slackers');
-        if (btn) btn.classList.toggle('active', showSlackersOnly);
+        if (btn) btn.classList.toggle('active-filter', showSlackersOnly);
+        filterRoster();
+    }
+
+    function toggleCdIdleFilter() {
+        showCdIdleOnly = !showCdIdleOnly;
+        const btn = document.getElementById('btn-toggle-cd-idle');
+        if (btn) btn.classList.toggle('active-filter', showCdIdleOnly);
         filterRoster();
     }
 
@@ -1751,7 +2101,7 @@
         if (!tbody) return;
 
         if (!currentFilteredRoster.length) {
-            tbody.innerHTML = `<tr><td colspan="11" style="text-align:center; padding:32px; color:var(--text-tertiary);">No members matching the current filters.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="12" style="text-align:center; padding:32px; color:var(--text-tertiary);">No members matching the current filters.</td></tr>`;
             return;
         }
 
@@ -1770,7 +2120,7 @@
                 if (currentRosterTimeframe === '30d') g = m.gains.gain30d;
 
                 if (g.total > 0) {
-                    totalValDisplay = `<span style="color:var(--status-active); font-weight:800;">+${fmt(g.total)}</span> <span style="font-size:0.72em; background:rgba(16,185,129,0.12); border:1px solid rgba(16,185,129,0.25); padding:1px 5px; border-radius:4px; color:#6ee7b7; font-weight:600;">+${g.pct}%</span>`;
+                    totalValDisplay = `<span style="color:var(--status-active); font-weight:800;">+${fmt(g.total)}</span> <span class="badge-confirmed" style="font-size:0.72em; padding:1px 5px;">+${g.pct}%</span>`;
                 } else {
                     totalValDisplay = `<span style="color:var(--text-tertiary);">0</span>`;
                 }
@@ -1791,46 +2141,34 @@
                 dexVal = m.stats.masked ? '🔒' : `<span style="color:var(--text-primary);">${fmt(m.stats.dexterity)}</span>`;
             }
 
-            // Xanax 3/day pills indicator with yellow & green states
-            const xanCount = m.energy.xanaxTakenCount || 0;
-            const p1 = xanCount >= 1 ? (xanCount >= 3 ? 'pill-green' : 'pill-yellow') : 'pill-dim';
-            const p2 = xanCount >= 2 ? (xanCount >= 3 ? 'pill-green' : 'pill-yellow') : 'pill-dim';
-            const p3 = xanCount >= 3 ? 'pill-green' : 'pill-dim';
-
-            const xanPillsHtml = `
-                <div class="xan-pill-group" title="Xanax: ${xanCount} of 3 taken today • Refill: ${m.energy.refillUsed ? 'Used' : 'Unused'}">
-                    <span class="xan-pill ${p1}"></span>
-                    <span class="xan-pill ${p2}"></span>
-                    <span class="xan-pill ${p3}"></span>
-                    <span style="font-size:0.7em; color:var(--text-secondary); margin-left:3px; font-weight:700;">${xanCount}/3</span>
-                </div>
-            `;
+            const exactXanaxHtml = formatExactXanaxHtml(m);
+            const drugCdOffHtml = formatDrugCooldownOffHtml(m);
 
             const statusDot = m.onlineStatus === 'online' ? '🟢' : (m.onlineStatus === 'idle' ? '🟡' : '⚪');
             const relativeTimeStr = formatRelativeTime(m.lastActionTimestamp);
 
-            const slackerTag = m.slacker.isSlacking ? `<span class="badge" style="background:rgba(239,68,68,0.15); color:var(--status-danger); font-size:0.68em; margin-left:4px;" title="${m.slacker.warningReasons.join('; ')}">⚠️ Slacking</span>` : '';
-            const exemptTag = (m.exempt && m.exempt.isExempt) ? `<span class="badge" style="background:rgba(148,163,184,0.15); color:#94a3b8; border:1px solid rgba(148,163,184,0.3); font-size:0.68em; margin-left:4px;" title="Exempt: ${m.exempt.reason}">🛡️ ${m.exempt.reason}</span>` : '';
+            const slackerTag = m.slacker.isSlacking ? `<span class="badge" style="background:rgba(239,68,68,0.15); color:var(--status-danger); font-size:0.68em; margin-left:4px;" title="${escapeHtml((m.slacker.warningReasons || []).join('; '))}">⚠️ Slacking</span>` : '';
+            const exemptTag = (m.exempt && m.exempt.isExempt) ? `<span class="badge" style="background:rgba(148,163,184,0.15); color:var(--text-secondary); border:1px solid rgba(148,163,184,0.3); font-size:0.68em; margin-left:4px;" title="Exempt: ${escapeHtml(m.exempt.reason)}">🛡️ ${escapeHtml(m.exempt.reason)}</span>` : '';
             const verifiedBadge = (m.isConfirmed || m.hasApiKey || m.verified)
-                ? `<span class="badge" style="background:rgba(16,185,129,0.14); color:#6ee7b7; border:1px solid rgba(16,185,129,0.3); font-size:0.68em; margin-left:4px;" title="Confirmed via Torn API key / Discord bot sync">🟢 Confirmed</span>`
-                : `<span class="badge" style="background:rgba(245,158,11,0.12); color:#fbbf24; border:1px solid rgba(245,158,11,0.3); font-size:0.68em; margin-left:4px;" title="Estimated stats (No API key on file)">⚠️ Estimated</span>`;
+                ? `<span class="badge-confirmed" style="font-size:0.68em; padding:1px 6px; margin-left:4px;" title="Confirmed via Torn API key / Discord bot sync">🟢 Confirmed</span>`
+                : `<span class="badge-estimated" style="font-size:0.68em; padding:1px 6px; margin-left:4px;" title="Estimated stats (No API key on file)">⚠️ Estimated</span>`;
 
             return `
                 <tr>
                     <td class="sticky-col">
                         <div style="font-weight:700; display:flex; align-items:center; flex-wrap:wrap; gap:4px;">
-                            <a href="https://www.torn.com/profiles.php?XID=${m.playerId}" target="_blank" style="color:var(--text-primary); text-decoration:none;">${m.playerName}</a>
+                            <a href="https://www.torn.com/profiles.php?XID=${encodeURIComponent(m.playerId)}" target="_blank" style="color:var(--text-primary); text-decoration:none;">${escapeHtml(m.playerName)}</a>
                             ${slackerTag}
                             ${exemptTag}
                             ${verifiedBadge}
                         </div>
-                        <div style="font-size:0.75em; color:var(--text-tertiary);">${m.role} • [${m.playerId}]</div>
+                        <div style="font-size:0.75em; color:var(--text-tertiary);">${escapeHtml(m.role)} • [${escapeHtml(m.playerId)}]</div>
                     </td>
                     <td>
-                        <span class="badge" style="background:rgba(255,255,255,0.06); color:var(--text-secondary); font-weight:700;">Lv ${m.level || 1}</span>
+                        <span class="badge" style="background:var(--bg-elevated); border:1px solid var(--border-subtle); color:var(--text-secondary); font-weight:700;">Lv ${m.level || 1}</span>
                     </td>
                     <td>
-                        <div style="display:flex; align-items:center; gap:4px;">${statusDot} <span style="text-transform:capitalize;">${m.onlineStatus}</span></div>
+                        <div style="display:flex; align-items:center; gap:4px;">${statusDot} <span style="text-transform:capitalize;">${escapeHtml(m.onlineStatus)}</span></div>
                         <div style="font-size:0.72em; color:var(--text-tertiary); margin-top:2px;">${relativeTimeStr}</div>
                     </td>
                     <td class="font-mono">${strVal}</td>
@@ -1843,10 +2181,13 @@
                         <div style="font-size:0.7em; color:${m.energy.efficiencyScore >= 70 ? 'var(--status-active)' : 'var(--status-warning)'}; font-weight:700;">${m.energy.efficiencyScore}% Eff.</div>
                     </td>
                     <td>
-                        ${xanPillsHtml}
+                        ${exactXanaxHtml}
+                    </td>
+                    <td>
+                        ${drugCdOffHtml}
                     </td>
                     <td style="text-align:center;">
-                        <button class="btn btn-xs btn-outline" onclick="openMemberDrawer('${m.playerId}')" style="font-size:0.74em; padding:3px 8px;">
+                        <button class="btn btn-xs btn-outline" onclick="openMemberDrawer('${escapeHtml(m.playerId)}')" style="font-size:0.74em; padding:3px 8px;">
                             <span>🔍</span> Dossier
                         </button>
                     </td>
@@ -1877,6 +2218,7 @@
     }
 
     function renderMemberDrawer(d) {
+        lastMemberDrawerData = d;
         const m = d.member;
         document.getElementById('dossier-name').textContent = m.playerName;
         document.getElementById('dossier-id').textContent = `[${m.playerId}]`;
@@ -1893,6 +2235,53 @@
         document.getElementById('dos-pct-def').textContent = `${m.balance.defensePct}% of total`;
         document.getElementById('dos-pct-dex').textContent = `${m.balance.dexterityPct}% of total`;
 
+        const dosXanVal = document.getElementById('dos-xanax-val');
+        const dosXanSub = document.getElementById('dos-xanax-sub');
+        const dosCdVal = document.getElementById('dos-cd-val');
+        const dosCdSub = document.getElementById('dos-cd-sub');
+        const xData = m.xanax || {};
+        if (dosXanVal && dosXanSub) {
+            if (s.masked) {
+                dosXanVal.textContent = '🔒 Private';
+                dosXanSub.textContent = 'Protected by player privacy tier';
+            } else if (xData.hasExactTotal) {
+                dosXanVal.textContent = `${fmt(xData.exactTotal || 0)} 💊 (${xData.takenTodayTct ?? 0} today)`;
+                dosXanSub.textContent = xData.takenTodayTct !== null && xData.takenTodayTct !== undefined
+                    ? (xData.baselineIsMidnight
+                        ? `00:00 TCT baseline: ${fmt(xData.baselineAtTct || 0)} exact Xanax`
+                        : `Tracking delta since ${fmt(xData.baselineAtTct || 0)} (${xData.baselineTctDate || 'TCT'})`)
+                    : 'Exact total from Torn personalstats.xantaken (awaiting 00:00 TCT roll)';
+            } else {
+                dosXanVal.textContent = '🔑 Key Req';
+                dosXanSub.textContent = 'Link a personal API key to track exact Xanax & 00:00 TCT intake';
+            }
+        }
+        const liveDc = getLiveDrugCooldownState(m.drugCooldown);
+        if (dosCdVal && dosCdSub) {
+            if (s.masked) {
+                dosCdVal.textContent = '🔒 Private';
+                dosCdSub.textContent = 'Protected by player privacy tier';
+            } else if (!liveDc.tracked) {
+                dosCdVal.textContent = '🔑 Key Req';
+                dosCdSub.textContent = 'Link a personal API key to track live drug cooldown idle hours';
+            } else if (liveDc.active) {
+                dosCdVal.textContent = `0.0h idle (CD ${formatDurationCompact(liveDc.remainingSec)} left)`;
+                dosCdSub.textContent = liveDc.inactiveHoursTodayTct > 0.05
+                    ? `${liveDc.inactiveHoursTodayTct.toFixed(1)}h without active drug CD earlier today (TCT)`
+                    : 'Drug cooldown active — on pace for Xanax / jumps';
+            } else {
+                const hrs = liveDc.inactiveHours || 0;
+                const prefix = liveDc.isFloorEstimate ? '≥' : '';
+                dosCdVal.textContent = hrs < 1
+                    ? `${prefix}${Math.max(1, Math.round(hrs * 60))}m without CD`
+                    : `${prefix}${hrs.toFixed(1)}h without CD`;
+                const missed = Math.floor(hrs / 7);
+                dosCdSub.textContent = missed >= 1
+                    ? `~${missed} Xanax / happy jump window${missed > 1 ? 's' : ''} lost${liveDc.inactiveHoursTodayTct > 0.05 ? ` • ${liveDc.inactiveHoursTodayTct.toFixed(1)}h idle today (TCT)` : ''}`
+                    : (liveDc.inactiveHoursTodayTct > 0.05 ? `${liveDc.inactiveHoursTodayTct.toFixed(1)}h idle today (TCT)` : 'Ready for next Xanax / happy jump');
+            }
+        }
+
         // Milestone Goal
         if (m.goal) {
             document.getElementById('dos-goal-title').textContent = `🎯 ${m.goal.title}`;
@@ -1906,6 +2295,8 @@
 
         // Timeline
         const tbody = document.getElementById('dos-timeline-tbody');
+        const histCountEl = document.getElementById('dos-history-count');
+        if (histCountEl) histCountEl.textContent = `${(d.timeline30d || []).length} snapshots`;
         if (tbody) {
             if (!d.timeline30d || !d.timeline30d.length) {
                 tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; padding:12px; color:var(--text-tertiary);">No historical snapshots found.</td></tr>`;
@@ -1913,7 +2304,7 @@
                 tbody.innerHTML = d.timeline30d.map(h => `
                     <tr>
                         <td>${h.date}</td>
-                        <td class="font-mono" style="color:var(--accent-amber);">${fmt(h.total)}</td>
+                        <td class="font-mono" style="color:var(--accent-cobalt);">${fmt(h.total)}</td>
                         <td class="font-mono" style="color:var(--status-active); font-weight:700;">+${fmt(h.gain)}</td>
                         <td class="font-mono">${fmt(h.energySpentEst)}e</td>
                     </tr>
@@ -1927,6 +2318,8 @@
         if (!ctx) return;
 
         if (memberRadarChartInstance) memberRadarChartInstance.destroy();
+
+        const pal = getChartThemePalette();
 
         memberRadarChartInstance = new Chart(ctx, {
             type: 'radar',
@@ -1943,8 +2336,8 @@
                     {
                         label: 'Faction Average %',
                         data: [facBal.strengthPct, facBal.speedPct, facBal.defensePct, facBal.dexterityPct],
-                        borderColor: '#F59E0B',
-                        backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                        borderColor: '#3b82f6',
+                        backgroundColor: 'rgba(59, 130, 246, 0.12)',
                         borderWidth: 1.5,
                         borderDash: [4, 4]
                     }
@@ -1953,11 +2346,14 @@
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                plugins: {
+                    legend: { labels: { color: pal.tick } }
+                },
                 scales: {
                     r: {
-                        angleLines: { color: 'rgba(255,255,255,0.1)' },
-                        grid: { color: 'rgba(255,255,255,0.1)' },
-                        pointLabels: { color: '#E2E8F0', font: { size: 10, weight: '700' } },
+                        angleLines: { color: pal.angleLine },
+                        grid: { color: pal.angleLine },
+                        pointLabels: { color: pal.label, font: { size: 10, weight: '700' } },
                         ticks: { display: false }
                     }
                 }
@@ -2161,8 +2557,8 @@
             const top3 = active.leaderboard.slice(0, 3);
             podiumGrid.innerHTML = top3.map((p, i) => `
                 <div class="podium-card ${i === 0 ? 'podium-gold' : (i === 1 ? 'podium-silver' : 'podium-bronze')}">
-                    <div style="font-size:0.75em; font-weight:800; color:var(--accent-amber);">${p.rewardTier || `#${i+1}`}</div>
-                    <div style="font-weight:800; font-size:1.15em; color:#FFF; margin:4px 0;">${p.playerName}</div>
+                    <div style="font-size:0.75em; font-weight:800; color:var(--accent-cobalt);">${p.rewardTier || `#${i+1}`}</div>
+                    <div style="font-weight:800; font-size:1.15em; color:var(--text-primary); margin:4px 0;">${escapeHtml(p.playerName)}</div>
                     <div class="font-mono" style="font-size:1.35em; font-weight:900; color:var(--status-active);">${p.scoreFormatted}</div>
                     <div style="font-size:0.72em; color:var(--text-tertiary); margin-top:4px;">Projected Prize: $${(p.rewardAmount || 0).toLocaleString()}</div>
                 </div>
@@ -2173,12 +2569,12 @@
         if (tbody && active.leaderboard) {
             tbody.innerHTML = active.leaderboard.map(p => `
                 <tr>
-                    <td class="font-mono" style="font-weight:800; color:var(--accent-amber);">#${p.rank}</td>
-                    <td style="font-weight:700;"><a href="https://www.torn.com/profiles.php?XID=${p.playerId}" target="_blank" style="color:#FFF; text-decoration:none;">${p.playerName}</a></td>
+                    <td class="font-mono" style="font-weight:800; color:var(--accent-cobalt);">#${p.rank}</td>
+                    <td style="font-weight:700;"><a href="https://www.torn.com/profiles.php?XID=${encodeURIComponent(p.playerId)}" target="_blank" style="color:var(--text-primary); text-decoration:none;">${escapeHtml(p.playerName)}</a></td>
                     <td class="font-mono" style="color:var(--status-active); font-weight:800;">${p.scoreFormatted}</td>
                     <td>
                         <div style="display:flex; align-items:center; gap:8px;">
-                            <div style="flex:1; height:6px; background:rgba(255,255,255,0.08); border-radius:3px; overflow:hidden;">
+                            <div style="flex:1; height:6px; background:var(--border-subtle); border-radius:3px; overflow:hidden;">
                                 <div style="width:${p.progressPct}%; height:100%; background:var(--status-active);"></div>
                             </div>
                             <span style="font-size:0.72em; color:var(--text-tertiary);">${p.progressPct}%</span>
@@ -2278,7 +2674,7 @@
                         return `
                             <tr>
                                 <td style="font-weight:700;">
-                                    <a href="https://www.torn.com/profiles.php?XID=${a.playerId}" target="_blank" rel="noopener noreferrer" style="color:#FFF; text-decoration:none;">${a.playerName}</a>
+                                    <a href="https://www.torn.com/profiles.php?XID=${encodeURIComponent(a.playerId)}" target="_blank" rel="noopener noreferrer" style="color:var(--text-primary); text-decoration:none;">${escapeHtml(a.playerName)}</a>
                                     <span style="font-size:0.72em; color:var(--text-tertiary);"> (Lv ${a.level || 1})</span>
                                 </td>
                                 <td class="font-mono">${fmt(a.totalStats)}</td>
@@ -2375,7 +2771,7 @@
 
     function exportRosterCSV() {
         if (!currentFilteredRoster.length) return;
-        const headers = ["Player ID", "Name", "Level", "Role", "Strength", "Speed", "Defense", "Dexterity", "Total Stats", "7d Gain", "Xanax Taken", "Est Energy", "Efficiency"];
+        const headers = ["Player ID", "Name", "Level", "Role", "Strength", "Speed", "Defense", "Dexterity", "Total Stats", "7d Gain", "Exact Xanax Total", "Xanax Since 00:00 TCT", "Drug CD Off (Hours)", "Est Energy", "Efficiency"];
 
         function sanitizeCSVCell(val) {
             if (val === null || val === undefined) return '""';
@@ -2387,21 +2783,27 @@
             return `"${str.replace(/"/g, '""')}"`;
         }
 
-        const rows = currentFilteredRoster.map(m => [
-            m.playerId,
-            sanitizeCSVCell(m.playerName),
-            m.level || 1,
-            sanitizeCSVCell(m.role),
-            typeof m.stats.strength === 'number' ? m.stats.strength : 0,
-            typeof m.stats.speed === 'number' ? m.stats.speed : 0,
-            typeof m.stats.defense === 'number' ? m.stats.defense : 0,
-            typeof m.stats.dexterity === 'number' ? m.stats.dexterity : 0,
-            typeof m.stats.total === 'number' ? m.stats.total : 0,
-            m.gains.gain7d.total,
-            m.energy.xanaxTakenCount || 0,
-            m.energy.energySpentEst,
-            sanitizeCSVCell(`${m.energy.efficiencyScore}%`)
-        ]);
+        const rows = currentFilteredRoster.map(m => {
+            const liveDc = getLiveDrugCooldownState(m.drugCooldown);
+            const cdHoursCell = liveDc.tracked ? (liveDc.active ? 0 : liveDc.inactiveHours) : '';
+            return [
+                m.playerId,
+                sanitizeCSVCell(m.playerName),
+                m.level || 1,
+                sanitizeCSVCell(m.role),
+                typeof m.stats.strength === 'number' ? m.stats.strength : 0,
+                typeof m.stats.speed === 'number' ? m.stats.speed : 0,
+                typeof m.stats.defense === 'number' ? m.stats.defense : 0,
+                typeof m.stats.dexterity === 'number' ? m.stats.dexterity : 0,
+                typeof m.stats.total === 'number' ? m.stats.total : 0,
+                m.gains.gain7d.total,
+                m.xanax?.exactTotal ?? '',
+                m.xanax?.takenTodayTct ?? '',
+                cdHoursCell,
+                m.energy.energySpentEst,
+                sanitizeCSVCell(`${m.energy.efficiencyScore}%`)
+            ];
+        });
         const csvContent = "data:text/csv;charset=utf-8," + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
         const encodedUri = encodeURI(csvContent);
         const link = document.createElement("a");
@@ -2420,10 +2822,38 @@
         };
     }
 
+    function refreshChartsForTheme() {
+        if (currentDashboard) {
+            renderVelocityChart(currentDashboard.velocityChart);
+            renderFactionRadar(currentDashboard.radarAverages);
+        }
+        if (lastMemberDrawerData?.member) {
+            renderMemberRadar(lastMemberDrawerData.member.balance, lastMemberDrawerData.factionAverageRadar);
+        }
+    }
+
     // Initialization on DOMContentLoaded
     document.addEventListener('DOMContentLoaded', () => {
+        const origToggleTheme = window.toggleTheme;
+        if (typeof origToggleTheme === 'function') {
+            window.toggleTheme = function() {
+                origToggleTheme.apply(this, arguments);
+                setTimeout(refreshChartsForTheme, 30);
+            };
+        }
+
+        const initial = getRequestedTrackerHash();
+        if (initial.viewKey && initial.viewKey !== 'overview') {
+            switchTrackerView(initial.viewKey, initial.subFilter, false);
+        }
+
         loadDashboard();
         loadRoster();
+    });
+
+    window.addEventListener('hashchange', () => {
+        const next = getRequestedTrackerHash();
+        switchTrackerView(next.viewKey, next.subFilter, false);
     });
     </script>
 </body>
