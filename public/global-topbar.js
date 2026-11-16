@@ -116,6 +116,13 @@
             localStorage.setItem('sv_sidebar_collapsed', '1');
         }
         syncUserIdentity();
+        // Ensure bottom-left Helper AI Co-Pilot is loaded on every page
+        if (!window.__fridayHelperLoaded && !document.querySelector('script[src*="/friday-helper.js"]')) {
+            const s = document.createElement('script');
+            s.src = '/friday-helper.js?v=4.4.0';
+            s.defer = true;
+            document.head.appendChild(s);
+        }
     });
 
     // 5. Global WebSocket Badge Updater Helper

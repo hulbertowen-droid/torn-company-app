@@ -286,7 +286,7 @@ body.light-mode ::-webkit-scrollbar-thumb:hover {
     display: flex;
     flex-direction: column;
     gap: 2px;
-    padding: 10px 10px 24px;
+    padding: 10px 10px 76px;
     flex: 1;
     min-height: 0;
     overflow-y: auto;

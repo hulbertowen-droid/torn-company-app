@@ -69,7 +69,6 @@
             '/travel.html',
             '/company.html',
             '/gamble.html',
-            '/ai-sandbox.html',
             '/discord.html',
             '/bugs.html'
         ];

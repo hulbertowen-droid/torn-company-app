@@ -295,9 +295,9 @@
                         <div class="app-tile-icon" style="background: rgba(255, 64, 129, 0.15); color: #ff4081;">🎰</div>
                         <div class="app-tile-name">Casino Hub</div>
                     </a>
-                    <a href="/ai-sandbox.html" class="mobile-app-tile">
+                    <a href="javascript:void(0)" onclick="if(window.toggleFridayHelper) window.toggleFridayHelper(true);" class="mobile-app-tile">
                         <div class="app-tile-icon" style="background: rgba(6, 182, 212, 0.15); color: #06b6d4;">🤖</div>
-                        <div class="app-tile-name">F.R.I.D.A.Y.</div>
+                        <div class="app-tile-name">Helper AI</div>
                     </a>
                     <a href="/discord.html" class="mobile-app-tile">
                         <div class="app-tile-icon" style="background: rgba(88, 101, 242, 0.15); color: #5865f2;">💬</div>

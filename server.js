@@ -710,6 +710,9 @@ app.get('/members.html', (req, res) => {
 app.get('/bazaar.html', (req, res) => {
     res.redirect(302, '/discord.html#market');
 });
+app.get(['/ai-sandbox.html', '/ai-sandbox'], (req, res) => {
+    res.redirect(302, '/');
+});
 
 app.post('/api/sync-recruits-now', async (req, res) => {
     syncRecruitsToPlayers().catch(e => console.error("[Manual RecruitSync Error]", e.message));
@@ -11389,6 +11392,392 @@ app.post('/api/ai/chat', async (req, res) => {
             sources: result.sources
         });
     } catch(err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// ─── F.R.I.D.A.Y. Bottom-Left Site Co-Pilot & Auto-Action Engine ─────────────
+function resolveSiteHelperIntent(rawMsg, currentPage = '/') {
+    const q = String(rawMsg || '').toLowerCase().trim();
+    if (!q) return null;
+
+    // 1. Theme / UI / Settings
+    if (/\b(light\s*mode|bright\s*mode|day\s*mode)\b/.test(q)) {
+        return {
+            reply: "I've switched FactionOS to **Light Mode** for you.",
+            action: { type: 'theme', mode: 'light', label: 'Switch to Light Mode' }
+        };
+    }
+    if (/\b(dark\s*mode|night\s*mode)\b/.test(q)) {
+        return {
+            reply: "I've switched FactionOS to **Dark Mode** for you.",
+            action: { type: 'theme', mode: 'dark', label: 'Switch to Dark Mode' }
+        };
+    }
+    if (/\b(toggle|switch|change)\s+(the\s+)?(theme|color\s*mode)\b/.test(q)) {
+        return {
+            reply: "I've toggled the **Dark / Light Theme** for you.",
+            action: { type: 'theme', mode: 'toggle', label: 'Toggle Theme' }
+        };
+    }
+    if (/\b(collapse|hide|minimize|close)\s+(the\s+)?sidebar\b/.test(q)) {
+        return {
+            reply: "I've collapsed the left navigation sidebar for you.",
+            action: { type: 'sidebar', state: 'collapse', label: 'Collapse Sidebar' }
+        };
+    }
+    if (/\b(expand|open|show)\s+(the\s+)?sidebar\b/.test(q)) {
+        return {
+            reply: "I've expanded the left navigation sidebar for you.",
+            action: { type: 'sidebar', state: 'expand', label: 'Expand Sidebar' }
+        };
+    }
+    if (/\b(api\s*key|open\s*settings|change\s*key|ff\s*scouter\s*key|torn\s*stats\s*key|enemy\s*faction\s*id|callsign)\b/.test(q)) {
+        const enemyMatch = q.match(/\b(\d{3,7})\b/);
+        return {
+            reply: enemyMatch
+                ? `I've opened **Operations & API Settings** and pre-filled Enemy Faction ID **${enemyMatch[1]}** for you.`
+                : "I've opened the **Operations & API Settings** modal where you can update your Torn API key, FF Scouter key, TornStats key, or Enemy Faction ID.",
+            action: { type: 'open_settings', enemyId: enemyMatch ? enemyMatch[1] : null, label: 'Open API Settings' }
+        };
+    }
+
+    // 2. Armory & Blood Bags
+    if (/\b(blood\s*bag|blood\s*fill|empty\s*blood|filled\s*blood|who\s*filled)\b/.test(q)) {
+        if (/\b(stock|vault|matrix|inventory|how\s*many\s*in\s*stock)\b/.test(q)) {
+            return {
+                reply: "Taking you to **Armory & Logistics → Stock, Burn Rate & Blood Bags** so you can inspect the live Blood Bag Vault Matrix.",
+                action: { type: 'armory_filter', page: '/armory.html', tab: 'stock', label: 'Open Blood Bag Stock Matrix' }
+            };
+        }
+        return {
+            reply: "I've opened **Armory & Logistics → Usage & Deposits** and filtered the ledger to **🩸 Blood Bag Fillers** (counting members who used Empty Blood Bags from the faction armory).",
+            action: { type: 'armory_filter', page: '/armory.html', tab: 'usage', segment: 'bloodfillers', actionFilter: 'filled', label: 'Filter to Blood Bag Fillers' }
+        };
+    }
+    if (/\b(armory\s*deposit|who\s*deposited|donated\s*to\s*armory|inflow)\b/.test(q)) {
+        return {
+            reply: "I've filtered **Armory & Logistics → Usage & Deposits** to show **🟢 Deposits (+) Only**.",
+            action: { type: 'armory_filter', page: '/armory.html', tab: 'usage', segment: 'depositors', actionFilter: 'inflow', label: 'Filter Armory to Deposits (+)' }
+        };
+    }
+    if (/\b(loaned\s*weapon|loaned\s*armor|loaner|active\s*loan|who\s*has\s*loan|weapons\s*and\s*armor)\b/.test(q)) {
+        return {
+            reply: "I've switched **Armory & Logistics** to the **🔫 Weapons, Armor & Loans** tab for you.",
+            action: { type: 'armory_filter', page: '/armory.html', tab: 'arsenal', label: 'Open Weapons, Armor & Loans' }
+        };
+    }
+    if (/\b(low\s*stock\s*threshold|safety\s*threshold|armory\s*alert\s*threshold)\b/.test(q)) {
+        return {
+            reply: "I've opened **Armory & Logistics → Safety Thresholds & Alerts** so you can adjust minimum reserve levels.",
+            action: { type: 'armory_filter', page: '/armory.html', tab: 'thresholds', label: 'Open Safety Thresholds' }
+        };
+    }
+
+    // 3. Gym & Stat Tracker
+    if (/\b(slacker|slacking|under\s*training|not\s*training|low\s*xanax)\b/.test(q)) {
+        return {
+            reply: "I've opened **Gym & Stat Tracker → Member Roster** and activated the **⚠️ Slackers Only** filter.",
+            action: { type: 'gym_action', page: '/gym-stats.html', view: 'roster', subFilter: 'slacker', label: 'Filter Roster to Slackers' }
+        };
+    }
+    if (/\b(drug\s*cd|drug\s*cooldown|cooldown\s*off|idle\s*cooldown|idle\s*cd|not\s*on\s*drug)\b/.test(q)) {
+        return {
+            reply: "I've opened **Gym & Stat Tracker → Member Roster** and filtered to members with **💊 Drug Cooldown OFF / Idle**.",
+            action: { type: 'gym_action', page: '/gym-stats.html', view: 'roster', subFilter: 'cd_idle', sortCol: 'drugcd', label: 'Filter to Drug Cooldown Idle' }
+        };
+    }
+    if (/\b(fair\s*fight\s*matcher|ff\s*matcher|match\s*target|target\s*matcher)\b/.test(q) || (/\bfair\s*fight\b/.test(q) && /\b(\d+\s*[mbk])\b/i.test(q))) {
+        let targetStats = 100000000;
+        const m = q.match(/(\d+(?:\.\d+)?)\s*([kmb])/i);
+        if (m) {
+            const mult = m[2].toLowerCase() === 'b' ? 1e9 : (m[2].toLowerCase() === 'm' ? 1e6 : 1e3);
+            targetStats = Math.round(parseFloat(m[1]) * mult);
+        }
+        return {
+            reply: `I've opened **Gym & Stat Tracker → War Room & FF Matcher** and calculated optimal attackers for **${targetStats.toLocaleString()}** enemy stats.`,
+            action: { type: 'gym_action', page: '/gym-stats.html', view: 'war', ffTargetStats: targetStats, label: `Calculate FF Matches (${targetStats.toLocaleString()})` }
+        };
+    }
+    if (/\b(24\s*h(our)?s?\s*gain|today'?s?\s*gain|30\s*d(ay)?s?\s*gain|7\s*d(ay)?s?\s*gain|actual\s*battle\s*stats)\b/.test(q)) {
+        const tf = /24\s*h|today/.test(q) ? '24h' : (/30\s*d/.test(q) ? '30d' : (/actual/.test(q) ? 'stats' : '7d'));
+        return {
+            reply: `I've switched the **Gym & Stat Tracker Roster** window to **${tf.toUpperCase()}** for you.`,
+            action: { type: 'gym_action', page: '/gym-stats.html', view: 'roster', timeframe: tf, label: `Set Gym Window to ${tf.toUpperCase()}` }
+        };
+    }
+    if (/\bsort\b.*\b(xanax|energy|strength|speed|defense|dexterity)\b/.test(q)) {
+        const colMap = { xanax: 'xanax', energy: 'energy', strength: 'str', speed: 'spd', defense: 'def', dexterity: 'dex' };
+        const found = Object.keys(colMap).find(k => q.includes(k)) || 'total';
+        return {
+            reply: `I've sorted the **Gym & Stat Tracker Roster** by **${found.toUpperCase()}**.`,
+            action: { type: 'gym_action', page: '/gym-stats.html', view: 'roster', sortCol: colMap[found], label: `Sort Roster by ${found.toUpperCase()}` }
+        };
+    }
+
+    // 4. Live Warboard Filters
+    if (/\b(enemy|enemies|target|targets)\b/.test(q) && /\b(online|okay|hosp|hospital|travel|flying|abroad|optimal|ff|unclaimed|reviv)\b/.test(q)) {
+        let flt = 'all';
+        if (/\bokay\b/.test(q)) flt = 'okay';
+        else if (/\bhosp|3\s*m/.test(q)) flt = 'hosp3m';
+        else if (/\btravel|flying|abroad\b/.test(q)) flt = 'travel';
+        else if (/\boptimal|ff\b/.test(q)) flt = 'optimalff';
+        else if (/\bunclaimed\b/.test(q)) flt = 'unclaimed';
+        else if (/\breviv/.test(q)) flt = 'revive';
+        else if (/\bonline\b/.test(q)) flt = 'online';
+        return {
+            reply: `I've filtered the **Live Warboard Opponent Scouter** to **${flt.toUpperCase()}** targets for you.`,
+            action: { type: 'warboard_action', page: '/', enemyFilter: flt, label: `Filter Enemies: ${flt.toUpperCase()}` }
+        };
+    }
+    if (/\b(exposed\s*friendly|friendly\s*exposed|friendly\s*in\s*hospital|friendly\s*online)\b/.test(q)) {
+        const fFlt = /exposed/.test(q) ? 'exposed' : (/hosp/.test(q) ? 'hosp' : 'online');
+        return {
+            reply: `I've filtered the **Live Warboard Friendly Team** table to **${fFlt.toUpperCase()}**.`,
+            action: { type: 'warboard_action', page: '/', friendlyFilter: fFlt, label: `Filter Friendly: ${fFlt.toUpperCase()}` }
+        };
+    }
+    if (/\b(mini\s*hud|compact\s*hud)\b/.test(q)) {
+        return {
+            reply: "I've toggled the compact **⚡ Mini HUD** overlay on the Live Warboard.",
+            action: { type: 'warboard_action', page: '/', toggleHud: true, label: 'Toggle Mini HUD' }
+        };
+    }
+    if (/\b(sim\s*war|simulate\s*war|war\s*simulation)\b/.test(q)) {
+        return {
+            reply: "I've toggled **⚔️ Sim War View** on the Live Warboard so you can preview active Ranked War telemetry.",
+            action: { type: 'warboard_action', page: '/', toggleSim: true, label: 'Toggle Sim War View' }
+        };
+    }
+
+    // 5. Travel Profit Desk
+    if (/\b(plushie|flower|travel\s*profit|travel\s*capacity|airstrip|wlt|bct|business\s*class)\b/.test(q)) {
+        let filter = null;
+        if (/\bplushie/.test(q)) filter = 'plushie';
+        else if (/\bflower/.test(q)) filter = 'flower';
+        else if (/\bdrug|xanax/.test(q)) filter = 'drug';
+        else if (/\bin\s*stock/.test(q)) filter = 'instock';
+        const capMatch = q.match(/\b(\d{1,2})\s*(?:cap|capacity|items)\b/) || (q.includes('capacity') && q.match(/\b(\d{1,2})\b/));
+        const capacity = capMatch ? parseInt(capMatch[1], 10) : null;
+        let flightProfile = null;
+        if (/\bwlt\b/.test(q)) flightProfile = 'wlt';
+        else if (/\bbct|business\s*class\b/.test(q)) flightProfile = 'bct';
+        else if (/\bstandard\b/.test(q)) flightProfile = 'standard';
+        else if (/\bairstrip|private\s*island\b/.test(q)) flightProfile = 'airstrip';
+        return {
+            reply: `I've updated the **Travel Profit Desk**${filter ? ` to filter by **${filter}**` : ''}${capacity ? `, set capacity to **${capacity}**` : ''}${flightProfile ? `, and set flight mode to **${flightProfile.toUpperCase()}**` : ''}.`,
+            action: { type: 'travel_action', page: '/travel.html', filter, capacity, flightProfile, label: 'Apply Travel Desk Settings' }
+        };
+    }
+
+    // 6. Airspace & War Intel
+    if (/\b(airspace|who\s*is\s*flying|flight\s*audit|ghost\s*aviator|farmed\s*in\s*war)\b/.test(q)) {
+        return {
+            reply: "I've opened **Operations Overview → ✈️ Airspace & War Intel** to show live flights and war audit telemetry.",
+            action: { type: 'dashboard_action', page: '/dashboard.html', tab: 'sentinel', label: 'Open Airspace & War Intel' }
+        };
+    }
+
+    // 7. Chain Sentinel
+    if (/\b(auto\s*fill\s*chain|fill\s*lineup|chain\s*lineup|chain\s*sentinel)\b/.test(q)) {
+        const autoFill = /auto\s*fill|fill\s*lineup|eligible/.test(q);
+        return {
+            reply: autoFill
+                ? "I've opened **Chain Sentinel** and auto-filled the lineup with currently online & okay faction members."
+                : "I've opened **Chain Sentinel** for you.",
+            action: { type: 'chain_action', page: '/chain.html', autoFill, label: autoFill ? 'Auto-Fill Chain Lineup' : 'Open Chain Sentinel' }
+        };
+    }
+
+    // 8. OC Manager
+    if (/\b(ready\s*oc|planning\s*oc|recruiting\s*oc|oc\s*manager|organized\s*crime)\b/.test(q)) {
+        const tab = /ready/.test(q) ? 'ready' : (/planning/.test(q) ? 'planning' : 'recruiting');
+        return {
+            reply: `I've opened **OC Manager** and switched to the **${tab.toUpperCase()}** crimes tab.`,
+            action: { type: 'oc_action', page: '/oc.html', tab, label: `Open OC Manager (${tab.toUpperCase()})` }
+        };
+    }
+
+    // 9. War Payouts
+    if (/\b(war\s*payout|payout\s*calculator|load\s*last\s*war|cache\s*breakdown)\b/.test(q)) {
+        return {
+            reply: "I've opened **War Payouts** and loaded the latest war report for you.",
+            action: { type: 'payout_action', page: '/payout.html', loadLastWar: true, label: 'Open War Payouts & Load War' }
+        };
+    }
+
+    // 10. Company Hub
+    if (/\b(company\s*hub|employee\s*addiction|company\s*stock|director\s*analysis|company\s*advisor)\b/.test(q)) {
+        const runAi = /advisor|analysis|ai/.test(q);
+        return {
+            reply: "I've opened the **Company Hub** so you can review employee effectiveness, addiction flags, stock burn rates, and Director AI recommendations.",
+            action: { type: 'company_action', page: '/company.html', runAdvisor: runAi, label: 'Open Company Hub' }
+        };
+    }
+
+    // 11. Casino Analytics
+    if (/\b(russian\s*roulette|blackjack|high[\s-]*low|poker\s*odds|bookie|craps|roulette\s*odds|slots\s*merit|casino|kelly\s*criterion)\b/.test(q)) {
+        let tab = 'rr';
+        if (/blackjack|\bbj\b/.test(q)) tab = 'bj';
+        else if (/high[\s-]*low|\bhl\b/.test(q)) tab = 'hl';
+        else if (/poker/.test(q)) tab = 'poker';
+        else if (/bookie|arbitrage/.test(q)) tab = 'bookie';
+        else if (/craps/.test(q)) tab = 'craps';
+        else if (/roulette/.test(q) && !/russian/.test(q)) tab = 'roulette';
+        else if (/slot/.test(q)) tab = 'slots';
+        return {
+            reply: `I've opened **Casino Analytics** and switched to the **${tab.toUpperCase()}** odds & Kelly sizing calculator.`,
+            action: { type: 'gamble_action', page: '/gamble.html', tab, label: `Open Casino Calculator (${tab.toUpperCase()})` }
+        };
+    }
+
+    // 12. Discord Sentinel & Market Sniper
+    if (/\b(market\s*sniper|bazaar\s*sniper|undercut\s*scanner|snipe\s*item|bazaar)\b/.test(q)) {
+        return {
+            reply: "I've opened **Discord Sentinel → 🛒 Market & Bazaar Sniper** for you.",
+            action: { type: 'discord_action', page: '/discord.html', tab: 'market', label: 'Open Market & Bazaar Sniper' }
+        };
+    }
+    if (/\b(discord\s*sentinel|slash\s*command|channel\s*routing|broadcast\s*studio|bot\s*gateway)\b/.test(q)) {
+        let tab = 'sentinel';
+        if (/broadcast|rule/.test(q)) tab = 'broadcast';
+        else if (/routing|channel/.test(q)) tab = 'routing';
+        else if (/slash|command/.test(q)) tab = 'slash';
+        else if (/gateway|token|log/.test(q)) tab = 'gateway';
+        return {
+            reply: `I've opened **Discord Sentinel** on the **${tab.toUpperCase()}** tab.`,
+            action: { type: 'discord_action', page: '/discord.html', tab, label: `Open Discord (${tab.toUpperCase()})` }
+        };
+    }
+
+    // 13. Bug Tracker
+    if (/\b(report\s*a?\s*bug|bug\s*tracker|submit\s*bug)\b/.test(q)) {
+        return {
+            reply: "I've opened the **Bug Tracker** and popped open the **Submit Bug Report** modal for you.",
+            action: { type: 'bugs_action', page: '/bugs.html', openModal: /report|submit/.test(q), label: 'Open Bug Tracker' }
+        };
+    }
+
+    return null;
+}
+
+app.post('/api/ai/helper', async (req, res) => {
+    try {
+        const { message = '', currentPage = '/', history = [] } = req.body || {};
+        const cleanMsg = String(message || '').trim();
+        if (!cleanMsg) {
+            return res.status(400).json({ success: false, error: 'Message is required.' });
+        }
+
+        // 1. Instant deterministic site action match (<5ms)
+        const directMatch = resolveSiteHelperIntent(cleanMsg, currentPage);
+        if (directMatch) {
+            return res.json({
+                success: true,
+                reply: directMatch.reply,
+                action: directMatch.action
+            });
+        }
+
+        // 2. LLM Co-Pilot (uses server-wide Gemini pool + OpenRouter failover — no user key needed)
+        const helperSystemPrompt = `You are F.R.I.D.A.Y., the built-in AI Co-Pilot located in the bottom-left corner of the FactionOS web app for the Spider-Verse Torn City faction.
+Your job is to:
+1. Help users find anything on the website AND execute UI actions/filters/settings changes for them automatically.
+2. Answer Torn City gameplay & Spider-Verse faction questions concisely (1-3 short paragraphs max).
+
+Current page the user is viewing: ${currentPage}
+
+Available FactionOS pages & actions you can trigger automatically by including an "action" object in your JSON response:
+- Live Warboard ("/"):
+  { "type": "warboard_action", "page": "/", "enemyFilter": "all|online|idle|offline|okay|hosp3m|travel|optimalff|unclaimed|revive", "friendlyFilter": "all|online|hosp|travel|exposed", "enemySort": "hosp_asc|ff_desc|stats_asc|stats_desc|score_desc|level_desc|online_first", "toggleHud": true/false, "toggleSim": true/false, "label": "Short button label" }
+- Chain Sentinel ("/chain.html"):
+  { "type": "chain_action", "page": "/chain.html", "autoFill": true/false, "toggleAuto": true/false, "copyLineup": true/false, "label": "Short button label" }
+- Operations Overview & Airspace Intel ("/dashboard.html"):
+  { "type": "dashboard_action", "page": "/dashboard.html", "tab": "overview|sentinel", "label": "Short button label" }
+- Armory & Logistics ("/armory.html"):
+  { "type": "armory_filter", "page": "/armory.html", "tab": "usage|stock|arsenal|thresholds", "segment": "all|depositors|consumers|bloodfillers", "actionFilter": "all|inflow|outflow|filled|loans", "label": "Short button label" }
+- Gym & Stat Tracker ("/gym-stats.html"):
+  { "type": "gym_action", "page": "/gym-stats.html", "view": "overview|roster|contests|war", "subFilter": "slacker|cd_idle|null", "timeframe": "24h|7d|30d|stats", "sortCol": "total|name|level|status|str|spd|def|dex|energy|xanax|drugcd", "ffTargetStats": 100000000, "search": "player name", "label": "Short button label" }
+- War Payouts ("/payout.html"):
+  { "type": "payout_action", "page": "/payout.html", "loadLastWar": true, "label": "Short button label" }
+- OC Manager ("/oc.html"):
+  { "type": "oc_action", "page": "/oc.html", "tab": "recruiting|planning|ready", "label": "Short button label" }
+- Travel Profit Desk ("/travel.html"):
+  { "type": "travel_action", "page": "/travel.html", "filter": "all|plushie|flower|drug|instock", "capacity": 29, "flightProfile": "airstrip|wlt|bct|standard", "label": "Short button label" }
+- Company Hub ("/company.html"):
+  { "type": "company_action", "page": "/company.html", "runAdvisor": true/false, "openAlerts": true/false, "label": "Short button label" }
+- Casino Analytics ("/gamble.html"):
+  { "type": "gamble_action", "page": "/gamble.html", "tab": "rr|bj|hl|poker|bookie|craps|roulette|slots", "bankroll": 100000000, "label": "Short button label" }
+- Discord Sentinel & Market Sniper ("/discord.html"):
+  { "type": "discord_action", "page": "/discord.html", "tab": "sentinel|broadcast|routing|slash|gateway|market", "label": "Short button label" }
+- Bug Tracker ("/bugs.html"):
+  { "type": "bugs_action", "page": "/bugs.html", "openModal": true/false, "label": "Short button label" }
+- Global UI / Settings:
+  { "type": "theme", "mode": "light|dark|toggle", "label": "Switch Theme" }
+  { "type": "open_settings", "enemyId": null, "label": "Open API Settings" }
+
+Respond ONLY with valid JSON in this exact format:
+{
+  "reply": "Clear, helpful response explaining what you did or answering their Torn question.",
+  "action": null_or_action_object_above
+}`;
+
+        const keys = getGeminiApiKeys();
+        if (keys.length > 0) {
+            const contents = [];
+            if (Array.isArray(history)) {
+                for (const h of history.slice(-6)) {
+                    if (h.role && h.text) {
+                        contents.push({
+                            role: h.role === 'user' ? 'user' : 'model',
+                            parts: [{ text: String(h.text) }]
+                        });
+                    }
+                }
+            }
+            contents.push({ role: 'user', parts: [{ text: cleanMsg }] });
+
+            const payload = {
+                contents,
+                systemInstruction: { parts: [{ text: helperSystemPrompt }] },
+                generationConfig: { responseMimeType: 'application/json' }
+            };
+            const gRes = await callGeminiWithFallback(payload, null, { timeout: 9000 });
+            if (gRes.success) {
+                const rawText = gRes.data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+                try {
+                    const parsed = JSON.parse(rawText);
+                    if (parsed && parsed.reply) {
+                        return res.json({
+                            success: true,
+                            reply: parsed.reply,
+                            action: parsed.action || null
+                        });
+                    }
+                } catch (_) {
+                    if (rawText.trim()) {
+                        return res.json({ success: true, reply: rawText.trim(), action: null });
+                    }
+                }
+            }
+        }
+
+        // 3. Fallback to askTornAI / deterministic Torn knowledge
+        const tornRes = await askTornAI(cleanMsg, history).catch(() => null);
+        if (tornRes && tornRes.reply) {
+            return res.json({
+                success: true,
+                reply: tornRes.reply,
+                action: null
+            });
+        }
+
+        return res.json({
+            success: true,
+            reply: "I can navigate to any tab or apply filters for you automatically! Try asking me things like **\"Show blood bag fillers\"**, **\"Show gym slackers\"**, **\"Filter enemies to okay now\"**, **\"Filter travel to plushies\"**, or **\"Switch to light mode\"**.",
+            action: null
+        });
+    } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
 });
