@@ -2860,8 +2860,8 @@
 
                             <!-- EXPORT ACTIONS -->
                             <div class="filter-group" style="margin-left:auto; gap:6px;">
-                                <button class="btn btn-sm btn-outline" onclick="copyTrackerDiscord()" title="Copy formatted markdown summary table to clipboard">
-                                    <span>💬</span> Copy Discord Table
+                                <button class="btn btn-sm btn-outline" id="btn-copy-tracker-discord" onclick="copyTrackerDiscord()" title="Copy clean list of blood bags filled per member and faction total for Discord">
+                                    <span>💬</span> Copy Discord Summary
                                 </button>
                                 <button class="btn btn-sm btn-outline" onclick="exportTrackerCSV()" title="Download CSV ledger of member armory usage">
                                     <span>📊</span> Export CSV
@@ -4772,7 +4772,7 @@ async function fetchConsumptionData() {
 
 function isBloodBagFillEvent(entry) {
     if (!entry) return false;
-    if (entry.action === 'filled') return true;
+    if (entry.action) return entry.action === 'filled';
     const raw = (entry.rawText || '').toLowerCase();
     return raw.includes('empty blood bag') && raw.includes('filled');
 }
@@ -5659,44 +5659,46 @@ function exportTrackerCSV() {
     showToast('Exported armory ledger to CSV!', 'success');
 }
 
+function buildTrackerDiscordSummary() {
+    const fillers = [...(currentFilteredMemberList || [])]
+        .filter(m => Number(m.bloodBagsFilled || 0) > 0)
+        .sort((a, b) => (Number(b.bloodBagsFilled || 0) - Number(a.bloodBagsFilled || 0)) || (a.name || '').localeCompare(b.name || ''));
+
+    if (!fillers.length) return null;
+
+    const fromVal = document.getElementById('tracker-date-from')?.value || '';
+    const toVal = document.getElementById('tracker-date-to')?.value || '';
+    const presetLabel = (document.querySelector('.date-presets .filter-pill.active')?.textContent || '')
+        .replace(/^[^\w]+/, '').trim();
+    const warBadgeEl = document.getElementById('tracker-active-war-badge');
+    const warText = (warBadgeEl && warBadgeEl.style.display !== 'none') ? warBadgeEl.textContent.trim() : '';
+    const periodStr = warText
+        ? warText
+        : (fromVal && toVal ? `${presetLabel ? presetLabel + ' · ' : ''}${fromVal} → ${toVal}` : (presetLabel || 'Loaded Window'));
+
+    const totalFilled = fillers.reduce((sum, m) => sum + Number(m.bloodBagsFilled || 0), 0);
+
+    let md = `🩸 **Faction Blood Bags Filled**\n`;
+    md += `*${periodStr}*\n\n`;
+    fillers.forEach((m, idx) => {
+        const count = Number(m.bloodBagsFilled || 0);
+        const name = (m.name || `ID ${m.id}`).trim();
+        md += `${idx + 1}. **${name}** — ${fmtNum(count)} ${count === 1 ? 'bag' : 'bags'}\n`;
+    });
+    md += `\n**Total Filled:** ${fmtNum(totalFilled)} blood ${totalFilled === 1 ? 'bag' : 'bags'} (${fillers.length} ${fillers.length === 1 ? 'member' : 'members'})`;
+
+    return { md, totalFilled, memberCount: fillers.length };
+}
+
 function copyTrackerDiscord() {
-    if (!currentFilteredMemberList || !currentFilteredMemberList.length) {
-        showToast('No member data to copy', 'warn');
+    const summary = buildTrackerDiscordSummary();
+    if (!summary) {
+        showToast('No members filled faction empty blood bags in this period', 'warn');
         return;
     }
-    const topConsumers = [...currentFilteredMemberList].sort((a, b) => b.totalUsed - a.totalUsed).slice(0, 10);
-    const topDonors = [...currentFilteredMemberList].sort((a, b) => b.totalDeposited - a.totalDeposited).slice(0, 10);
 
-    let md = `**📊 Faction Armory Audit Summary**\n`;
-    md += `*Period: ${armoryTimeFilter} | Active Members: ${currentFilteredMemberList.length}*\n\n`;
-    md += `**🔥 Top Consumers (Outflow)**\n`;
-    md += '```\n';
-    md += `${'Member'.padEnd(20)} | ${'Used'.padStart(6)} | ${'Net'.padStart(6)} | ${'Xan'.padStart(4)} | Meds\n`;
-    md += `${'-'.repeat(21)}+${'-'.repeat(8)}+${'-'.repeat(8)}+${'-'.repeat(6)}+${'-'.repeat(6)}\n`;
-    topConsumers.forEach(m => {
-        const name = (m.name || 'Unknown').substring(0, 20).padEnd(20);
-        const used = String(m.totalUsed).padStart(6);
-        const net = String(m.netBalance >= 0 ? '+' + m.netBalance : m.netBalance).padStart(6);
-        const xan = String(m.xanaxTaken).padStart(4);
-        const meds = String(m.medsTaken).padStart(4);
-        md += `${name} | ${used} | ${net} | ${xan} | ${meds}\n`;
-    });
-    md += '```\n';
-
-    md += `**🟢 Top Donors (Inflow)**\n`;
-    md += '```\n';
-    md += `${'Member'.padEnd(20)} | ${'Dep'.padStart(6)} | ${'Net'.padStart(6)}\n`;
-    md += `${'-'.repeat(21)}+${'-'.repeat(8)}+${'-'.repeat(8)}\n`;
-    topDonors.forEach(m => {
-        const name = (m.name || 'Unknown').substring(0, 20).padEnd(20);
-        const dep = String(m.totalDeposited).padStart(6);
-        const net = String(m.netBalance >= 0 ? '+' + m.netBalance : m.netBalance).padStart(6);
-        md += `${name} | ${dep} | ${net}\n`;
-    });
-    md += '```\n';
-
-    navigator.clipboard.writeText(md).then(() => {
-        showToast('Discord summary table copied to clipboard!', 'success');
+    navigator.clipboard.writeText(summary.md).then(() => {
+        showToast(`Copied blood bag summary (${fmtNum(summary.totalFilled)} bags across ${summary.memberCount} members) for Discord!`, 'success');
     }).catch(err => {
         console.error('Clipboard copy failed:', err);
         showToast('Failed to copy to clipboard', 'error');
