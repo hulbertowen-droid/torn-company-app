@@ -393,8 +393,120 @@ function computeDelta(curStats, baseStats) {
     };
 }
 
+// Torn City Vladar V2.0 Gym Formula Helpers
+const VLADAR_STAT_PARAMS = {
+    strength:  { A: 1600, B: 1700, perkKey: 'strengthGymBonus' },
+    speed:     { A: 1600, B: 2000, perkKey: 'speedGymBonus' },
+    defense:   { A: 2100, B: -600, perkKey: 'defenseGymBonus' },
+    dexterity: { A: 1800, B: 1500, perkKey: 'dexterityGymBonus' }
+};
+
+function applyStatSoftCap(statVal) {
+    const s = Number(statVal || 0);
+    if (s <= 50000000) return s;
+    return 50000000 + (s - 50000000) / (8.77635 * Math.log10(s));
+}
+
+function estimateGymDots(totalStats) {
+    const t = Number(totalStats || 0);
+    if (t < 150000) return 3.2;     // Lightweight gyms
+    if (t < 1500000) return 4.6;    // Middleweight gyms
+    if (t < 15000000) return 6.0;   // Heavyweight gyms
+    if (t < 80000000) return 6.9;   // Specialist / Early George's
+    return 7.3;                     // George's / Special gyms
+}
+
+function vladarGainPerEnergy(statVal, gymDots, happy, steadFastPct, statKey) {
+    const sEff = applyStatSoftCap(statVal);
+    const h = Math.max(100, Number(happy || 4500));
+    const round4 = (n) => Math.round(n * 10000) / 10000;
+    const happyMult = round4(1 + 0.07 * round4(Math.log(1 + h / 250)));
+    const { A, B } = VLADAR_STAT_PARAMS[statKey] || VLADAR_STAT_PARAMS.strength;
+    const happyTail = 8 * Math.pow(h, 1.05) + (1 - Math.pow(h / 99999, 2)) * A + B;
+    const baseGain = (sEff * happyMult + happyTail) / 200000;
+    // Standard Private Island + Education (~3%) + live faction Steadfast perk
+    const perksMult = 1.03 * (1 + Math.max(0, Number(steadFastPct || 0)) / 100);
+    return Math.max(0.01, baseGain * gymDots * perksMult);
+}
+
+function estimateWindowEnergy(gainObj, curStats, baseStats, perks, windowDays, xanDeltaInWindow, refillsCount) {
+    const netTotal = Math.max(0, Number(gainObj?.total || 0));
+    const theoreticalMaxEnergy = Math.max(1400, Math.round(windowDays * 1400));
+
+    // Strictly return 0e / 0% Eff when net stat gain is 0 or negative
+    if (netTotal <= 0) {
+        return {
+            energySpentEst: 0,
+            efficiencyScore: 0,
+            theoreticalMaxEnergy,
+            xanaxInWindow: xanDeltaInWindow
+        };
+    }
+
+    const totalCur = Number(curStats?.total || 0) || (
+        Number(curStats?.strength || 0) + Number(curStats?.speed || 0) +
+        Number(curStats?.defense || 0) + Number(curStats?.dexterity || 0)
+    );
+    const gymDots = estimateGymDots(totalCur);
+    const statKeys = ['strength', 'speed', 'defense', 'dexterity'];
+
+    let estEnergySum = 0;
+    let positiveDeltaSum = 0;
+
+    for (const k of statKeys) {
+        const delta = Math.max(0, Number(gainObj?.[k] || 0));
+        if (delta <= 0) continue;
+        positiveDeltaSum += delta;
+        const curK = Math.max(0, Number(curStats?.[k] || 0));
+        const baseK = Number(baseStats?.[k] || 0) > 0 ? Number(baseStats[k]) : Math.max(0, curK - delta);
+        const midS = Math.max(100, (curK + baseK) / 2);
+        const sfPct = Number(perks?.[VLADAR_STAT_PARAMS[k].perkKey] || 0);
+        const perE = vladarGainPerEnergy(midS, gymDots, 4500, sfPct, k);
+        estEnergySum += delta / perE;
+    }
+
+    // If overall total gain is positive but individual stat breakdown was unavailable/zeroed, infer from average stat
+    if (estEnergySum <= 0 && netTotal > 0) {
+        const avgS = Math.max(100, totalCur / 4);
+        const avgSf = (Number(perks?.strengthGymBonus || 0) + Number(perks?.speedGymBonus || 0) + Number(perks?.defenseGymBonus || 0) + Number(perks?.dexterityGymBonus || 0)) / 4;
+        estEnergySum = netTotal / vladarGainPerEnergy(avgS, gymDots, 4500, avgSf, 'strength');
+    } else if (positiveDeltaSum > netTotal && netTotal > 0) {
+        // Adjust proportionally if another stat dipped slightly via baseline noise
+        estEnergySum = estEnergySum * (netTotal / positiveDeltaSum);
+    }
+
+    // Account smoothly for happy-jump multipliers at lower stat tiers where 30k-99k happy amplifies gain per energy
+    // Cross-check upper physical ceiling using observed Xanax + natural regen (720e/day) + refills when Xanax delta is tracked
+    const xanNum = (typeof xanDeltaInWindow === 'number' && !Number.isNaN(xanDeltaInWindow) && xanDeltaInWindow >= 0) ? xanDeltaInWindow : null;
+    if (xanNum !== null && totalCur < 5000000 && estEnergySum > theoreticalMaxEnergy) {
+        const xanEnergyEstimate = xanNum * 250 + Math.round(windowDays * 720) + (refillsCount ? windowDays * 150 : 0);
+        if (xanEnergyEstimate > 0) {
+            estEnergySum = Math.min(estEnergySum, Math.max(100, xanEnergyEstimate));
+        }
+    }
+
+    const energySpentEst = Math.max(5, Math.round(Math.min(theoreticalMaxEnergy * 1.35, estEnergySum)));
+    const efficiencyScore = Math.min(100, Math.max(1, Math.round((energySpentEst / theoreticalMaxEnergy) * 100)));
+
+    return {
+        energySpentEst,
+        efficiencyScore,
+        theoreticalMaxEnergy,
+        xanaxInWindow: xanDeltaInWindow
+    };
+}
+
+// Compute Xanax taken between baseline snapshot and current total
+function computeXanaxDeltaInWindow(totalXanTaken, hasExactXanax, baseSnap, fallbackTodayTct) {
+    if (!hasExactXanax) return null;
+    if (baseSnap && typeof baseSnap.xantaken === 'number' && baseSnap.xantaken >= 0) {
+        return Math.max(0, totalXanTaken - Number(baseSnap.xantaken));
+    }
+    return fallbackTodayTct !== null && fallbackTodayTct !== undefined ? Number(fallbackTodayTct) : null;
+}
+
 // Build unified member record with accurate Level, Relative Time, and Compliance
-function buildMemberRecord(pId, bRec, info, callerId, isLeadership, customStart = null, customEnd = null) {
+function buildMemberRecord(pId, bRec, info, callerId, isLeadership, customStart = null, customEnd = null, perks = null, activeTimeframe = '7d') {
     const now = Date.now();
     const curStats = bRec?.stats || (bRec?.history?.[0]) || { strength: 0, speed: 0, defense: 0, dexterity: 0, total: 0 };
     const curTotal = Number(curStats.total || (Number(curStats.strength||0) + Number(curStats.speed||0) + Number(curStats.defense||0) + Number(curStats.dexterity||0)));
@@ -494,11 +606,44 @@ function buildMemberRecord(pId, bRec, info, callerId, isLeadership, customStart 
 
     const dailyXanax = takenTodayTct !== null ? takenTodayTct : null;
 
-    // Energy Spent Estimation
-    const energyFromTrains = gain7d.total > 0 ? Math.min(gain7d.total / 12, 4200) : 0;
-    const energySpentEst = Math.max(0, Math.round(energyFromTrains + (refills ? 150 : 0)));
-    const theoreticalMaxWeekly = 7 * 1400; // 7 days @ 1400e (3 xanax + natural + refill)
-    const efficiencyScore = Math.min(100, Math.max(5, Math.round((energySpentEst / theoreticalMaxWeekly) * 100)));
+    // Dynamic Energy Spent Estimation per window (24h, 7d, 30d, custom) via Vladar V2.0 inverse formula
+    const activePerks = perks || tornKnowledge.liveFactionPerks || {};
+    const customDays = (customStart && customEnd && customEnd > customStart)
+        ? Math.max(1, Math.round((customEnd - customStart) / 86400000))
+        : (customStart ? Math.max(1, Math.round((now - customStart) / 86400000)) : 7);
+
+    const curStatsObj = { strength: curStr, speed: curSpd, defense: curDef, dexterity: curDex, total: curTotal };
+    const baseCustomSnap = customStart ? getBaselineSnapshot(history, customStart) : null;
+
+    const xan24h = computeXanaxDeltaInWindow(totalXanTaken, hasExactXanax, base24h, dailyXanax);
+    const xan7d = computeXanaxDeltaInWindow(totalXanTaken, hasExactXanax, base7d, dailyXanax);
+    const xan30d = computeXanaxDeltaInWindow(totalXanTaken, hasExactXanax, base30d, dailyXanax);
+    const xanCustom = customStart ? computeXanaxDeltaInWindow(totalXanTaken, hasExactXanax, baseCustomSnap, dailyXanax) : null;
+
+    const e24h = canViewStats
+        ? estimateWindowEnergy(gain24h, curStatsObj, base24h, activePerks, 1, xan24h, refills)
+        : { energySpentEst: 0, efficiencyScore: 0, theoreticalMaxEnergy: 1400, xanaxInWindow: null };
+    const e7d = canViewStats
+        ? estimateWindowEnergy(gain7d, curStatsObj, base7d, activePerks, 7, xan7d, refills)
+        : { energySpentEst: 0, efficiencyScore: 0, theoreticalMaxEnergy: 9800, xanaxInWindow: null };
+    const e30d = canViewStats
+        ? estimateWindowEnergy(gain30d, curStatsObj, base30d, activePerks, 30, xan30d, refills)
+        : { energySpentEst: 0, efficiencyScore: 0, theoreticalMaxEnergy: 42000, xanaxInWindow: null };
+    const eCustom = customGain && canViewStats
+        ? estimateWindowEnergy(customGain, curStatsObj, baseCustomSnap, activePerks, customDays, xanCustom, refills)
+        : null;
+
+    const energyByWindow = {
+        '24h': e24h,
+        '7d': e7d,
+        '30d': e30d,
+        'stats': e7d,
+        ...(eCustom ? { custom: eCustom } : {})
+    };
+    const activeEnergy = energyByWindow[activeTimeframe] || e7d;
+    const energySpentEst = activeEnergy.energySpentEst;
+    const theoreticalMaxWeekly = activeEnergy.theoreticalMaxEnergy;
+    const efficiencyScore = activeEnergy.efficiencyScore;
 
     // Normalize Last Action Timestamp (ALWAYS in SECONDS)
     let lastActiveSec = Number(info?.lastActionTimestamp || info?.last_action?.timestamp || 0);
@@ -516,7 +661,7 @@ function buildMemberRecord(pId, bRec, info, callerId, isLeadership, customStart 
     const hoursSinceActive = Math.floor(secondsSinceActive / 3600);
     const zeroTrainHours = gain24h.total <= 0 ? 24 : 0;
     const weeklyQuota = 1500;
-    const quotaMet = energySpentEst >= weeklyQuota;
+    const quotaMet = e7d.energySpentEst >= weeklyQuota;
     
     // Flag wasted natural energy if online/idle and 0 trains in 24h
     const energyCapped = (zeroTrainHours >= 24 && hoursSinceActive < 4);
@@ -540,9 +685,12 @@ function buildMemberRecord(pId, bRec, info, callerId, isLeadership, customStart 
     } else if (state === 'Jail' || descLower.includes('jail')) {
         isExempt = true;
         exemptReason = 'In Jail';
-    } else if (state === 'Abroad' || state === 'Traveling' || descLower.includes('traveling') || descLower.includes('abroad') || descLower.includes('islands') || descLower.includes('switzerland') || descLower.includes('japan') || descLower.includes('argentina') || descLower.includes('china') || descLower.includes('mexico') || descLower.includes('canada') || descLower.includes('hawaii') || descLower.includes('united kingdom') || descLower.includes('south africa') || descLower.includes('uae')) {
+    } else if (state === 'Traveling' || descLower.includes('traveling') || descLower.includes('returning to torn')) {
         isExempt = true;
-        exemptReason = state === 'Traveling' ? 'Traveling' : 'Abroad / Traveling';
+        exemptReason = 'Traveling';
+    } else if (state === 'Abroad' || descLower.includes('abroad') || descLower.includes('islands') || descLower.includes('switzerland') || descLower.includes('japan') || descLower.includes('argentina') || descLower.includes('china') || descLower.includes('mexico') || descLower.includes('canada') || descLower.includes('hawaii') || descLower.includes('united kingdom') || descLower.includes('south africa') || descLower.includes('uae')) {
+        isExempt = true;
+        exemptReason = 'Abroad';
     } else if (state === 'Hospital' || descLower.includes('hospital')) {
         isExempt = true;
         exemptReason = 'Hospitalized';
@@ -660,8 +808,10 @@ function buildMemberRecord(pId, bRec, info, callerId, isLeadership, customStart 
             totalXanaxRecorded: canViewStats && hasExactXanax ? totalXanTaken : 0,
             refillUsed: refills,
             efficiencyScore,
-            theoreticalMaxEnergy: theoreticalMaxWeekly
+            theoreticalMaxEnergy: theoreticalMaxWeekly,
+            byWindow: energyByWindow
         },
+        energyByWindow,
         xanax: canViewStats ? {
             exactTotal: hasExactXanax ? totalXanTaken : null,
             hasExactTotal: hasExactXanax,
@@ -701,7 +851,7 @@ function buildMemberRecord(pId, bRec, info, callerId, isLeadership, customStart 
             zeroTrainHours,
             energyCapped,
             quotaMet,
-            weeklyEnergySpent: energySpentEst,
+            weeklyEnergySpent: e7d.energySpentEst,
             weeklyQuota,
             warningReasons
         },
@@ -749,6 +899,10 @@ router.get('/dashboard', async (req, res) => {
             battleStats = JSON.parse(fs.readFileSync(BATTLESTATS_FILE, 'utf8'));
         }
 
+        // Dynamic Steadfast perks for this faction
+        const perks = await tornKnowledge.fetchFactionPerks(userKey, targetFacId);
+        const factionName = (targetFacId === '52355' || !targetFacId) ? "Spider-Verse" : (perks.factionName || "Faction");
+
         const rosterMap = await getUnifiedFactionRoster(targetFacId, userKey);
         const memberList = [];
 
@@ -756,7 +910,7 @@ router.get('/dashboard', async (req, res) => {
         // Never append random outsiders from battlestats_history or Discord.
         for (const [id, rInfo] of rosterMap.entries()) {
             const bRec = battleStats[String(id)] || null;
-            const m = buildMemberRecord(id, bRec, rInfo, callerId, isLeadership);
+            const m = buildMemberRecord(id, bRec, rInfo, callerId, isLeadership, null, null, perks, '7d');
             memberList.push(m);
         }
 
@@ -777,6 +931,7 @@ router.get('/dashboard', async (req, res) => {
         const tctTrackedMembers = memberList.filter(m => !m.stats?.masked && m.xanax && m.xanax.takenTodayTct !== null);
         const totalDailyXan = tctTrackedMembers.reduce((acc, m) => acc + Number(m.xanax.takenTodayTct || 0), 0);
         const avgXanax = tctTrackedMembers.length > 0 ? Number((totalDailyXan / tctTrackedMembers.length).toFixed(2)) : 0;
+        const avgXanaxRoster = memberList.length > 0 ? Number((totalDailyXan / memberList.length).toFixed(2)) : 0;
         const exactTotalMembers = memberList.filter(m => !m.stats?.masked && m.xanax && m.xanax.hasExactTotal);
         const totalExactXanaxCumulative = exactTotalMembers.reduce((acc, m) => acc + Number(m.xanax.exactTotal || 0), 0);
         const drugCdIdleMembers = memberList.filter(m => !m.stats?.masked && m.drugCooldown?.tracked && !m.drugCooldown.active && Number(m.drugCooldown.inactiveHours || 0) > 0);
@@ -817,10 +972,6 @@ router.get('/dashboard', async (req, res) => {
 
         const activeContests = competitions.filter(c => c.status === 'active');
 
-        // Dynamic Steadfast perks for this faction
-        const perks = await tornKnowledge.fetchFactionPerks(userKey, targetFacId);
-        const factionName = (targetFacId === '52355' || !targetFacId) ? "Spider-Verse" : (perks.factionName || "Faction");
-
         res.json({
             success: true,
             factionId: Number(targetFacId) || 52355,
@@ -838,6 +989,7 @@ router.get('/dashboard', async (req, res) => {
                 totalXanax24h: totalDailyXan,
                 totalXanaxTodayTct: totalDailyXan,
                 avgXanaxTodayTct: avgXanax,
+                avgXanaxTodayTctRoster: avgXanaxRoster,
                 tctTrackedCount: tctTrackedMembers.length,
                 tctDate: tctDateNow,
                 totalExactXanaxCumulative,
@@ -904,13 +1056,14 @@ router.get('/roster', async (req, res) => {
             battleStats = JSON.parse(fs.readFileSync(BATTLESTATS_FILE, 'utf8'));
         }
 
+        const perks = await tornKnowledge.fetchFactionPerks(userKey, targetFacId);
         const rosterMap = await getUnifiedFactionRoster(targetFacId, userKey);
         const members = [];
 
         // STRICT ENFORCEMENT: Only confirmed members of this faction
         for (const [id, rInfo] of rosterMap.entries()) {
             const bRec = battleStats[String(id)] || null;
-            const m = buildMemberRecord(id, bRec, rInfo, callerId, isLeadership, customStart, customEnd);
+            const m = buildMemberRecord(id, bRec, rInfo, callerId, isLeadership, customStart, customEnd, perks, timeframe);
             members.push(m);
         }
 
@@ -960,17 +1113,27 @@ router.get('/member/:playerId', async (req, res) => {
             battleStats = JSON.parse(fs.readFileSync(BATTLESTATS_FILE, 'utf8'));
         }
 
+        const perks = await tornKnowledge.fetchFactionPerks(userKey, targetFacId);
         const rosterMap = await getUnifiedFactionRoster(targetFacId, userKey);
         const rInfo = rosterMap.get(pId) || {};
         const bRec = battleStats[String(pId)] || { playerName: rInfo.name || `Player [${pId}]`, history: [] };
 
-        const member = buildMemberRecord(pId, bRec, rInfo, callerId, isLeadership);
+        const member = buildMemberRecord(pId, bRec, rInfo, callerId, isLeadership, null, null, perks, '7d');
 
         // Build 30-day timeline
         const history = Array.isArray(bRec.history) ? [...bRec.history].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)) : [];
         const timeline30d = history.slice(0, 30).map((h, i) => {
             const next = history[i + 1] || h;
-            const gain = (h.total || 0) - (next.total || 0);
+            const dObj = computeDelta(h, next);
+            const daysSpan = (h.timestamp && next.timestamp && h.timestamp > next.timestamp)
+                ? Math.max(0.25, Math.min(7, (h.timestamp - next.timestamp) / 86400000))
+                : 1;
+            const xDelta = (typeof h.xantaken === 'number' && typeof next.xantaken === 'number')
+                ? Math.max(0, h.xantaken - next.xantaken)
+                : null;
+            const est = member.masked
+                ? { energySpentEst: 0 }
+                : estimateWindowEnergy(dObj, h, next, perks, daysSpan, xDelta, member.energy?.refillUsed);
             return {
                 date: new Date(h.timestamp).toISOString().split('T')[0],
                 timestamp: h.timestamp,
@@ -979,8 +1142,8 @@ router.get('/member/:playerId', async (req, res) => {
                 defense: h.defense,
                 dexterity: h.dexterity,
                 total: h.total,
-                gain: gain > 0 ? gain : 0,
-                energySpentEst: Math.round(Math.max(100, (gain > 0 ? gain / 12 : 100)))
+                gain: dObj.total > 0 ? dObj.total : 0,
+                energySpentEst: est.energySpentEst
             };
         });
 

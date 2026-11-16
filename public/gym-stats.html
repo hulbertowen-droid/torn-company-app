@@ -51,22 +51,17 @@
         --status-danger: #ef4444;
     }
 
-    html, body {
-        min-height: 100vh;
-        height: auto;
-        overflow-y: auto;
-    }
-
     body {
         background-color: var(--bg-canvas);
         color: var(--text-primary);
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     }
 
-    .main-wrapper {
-        min-height: 100vh;
-        height: auto;
-        overflow: visible;
+    .content-area {
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+        overflow-x: hidden;
     }
 
     .roster-table-container {
@@ -81,7 +76,68 @@
     }
 
     .tracker-table {
-        min-width: 1240px;
+        min-width: 1020px;
+    }
+
+    #master-roster-table th.sticky-col,
+    #master-roster-table td.sticky-col {
+        position: sticky;
+        left: 0;
+        z-index: 10;
+        background: var(--bg-surface);
+        border-right: 1px solid var(--border-default);
+        box-shadow: 4px 0 12px rgba(0, 0, 0, 0.28);
+    }
+    #master-roster-table thead th.sticky-col {
+        z-index: 16;
+        background: var(--bg-elevated);
+    }
+    #master-roster-table tbody tr.roster-row-clickable {
+        cursor: pointer;
+        transition: background 0.12s ease;
+    }
+    #master-roster-table tbody tr.roster-row-clickable:hover td,
+    #master-roster-table tbody tr.roster-row-clickable:hover td.sticky-col {
+        background: var(--bg-hover);
+    }
+    .sort-ind {
+        opacity: 0.42;
+        font-size: 0.85em;
+        margin-left: 3px;
+        transition: opacity 0.15s ease, color 0.15s ease;
+    }
+    .sort-th-active {
+        color: var(--text-primary) !important;
+    }
+    .sort-th-active .sort-ind {
+        opacity: 1;
+        color: var(--accent-cobalt);
+        font-weight: 900;
+    }
+    @keyframes cdUrgentPulse {
+        0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.45); }
+        50% { box-shadow: 0 0 0 5px rgba(239, 68, 68, 0); }
+    }
+    .cd-urgent-pulse {
+        animation: cdUrgentPulse 1.8s infinite;
+    }
+    .drawer-close-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 34px;
+        height: 34px;
+        border-radius: 8px;
+        border: 1px solid var(--border-subtle);
+        background: transparent;
+        color: var(--text-tertiary);
+        cursor: pointer;
+        transition: all 0.15s ease;
+    }
+    .drawer-close-btn:hover {
+        color: var(--text-primary);
+        background: var(--bg-hover);
+        border-color: var(--border-default);
     }
 
     .font-mono {
@@ -272,9 +328,9 @@
 
     /* Custom Table High Density & Toolbar */
     .tracker-table th, .tracker-table td {
-        padding: 10px 12px;
+        padding: 8px 10px;
         vertical-align: middle;
-        font-size: 0.84em;
+        font-size: 0.83em;
     }
     .roster-controls .sort-select {
         width: auto;
@@ -703,10 +759,10 @@
                     <span style="font-size:0.8em; font-weight:700; color:var(--text-tertiary); text-transform:uppercase;">Steadfast Perks:</span>
                 </div>
                 <div style="display:flex; gap:10px; flex-wrap:wrap;">
-                    <span class="stat-badge-str badge" id="perk-str">💪 Strength: +7%</span>
-                    <span class="stat-badge-spd badge" id="perk-spd">⚡ Speed: +4%</span>
-                    <span class="stat-badge-def badge" id="perk-def">🛡️ Defense: +7%</span>
-                    <span class="stat-badge-dex badge" id="perk-dex">🎯 Dexterity: +3%</span>
+                    <span class="stat-badge-str badge" id="perk-str">💪 Strength: —%</span>
+                    <span class="stat-badge-spd badge" id="perk-spd">⚡ Speed: —%</span>
+                    <span class="stat-badge-def badge" id="perk-def">🛡️ Defense: —%</span>
+                    <span class="stat-badge-dex badge" id="perk-dex">🎯 Dexterity: —%</span>
                 </div>
                 <div style="display:flex; align-items:center; gap:10px;">
                     <button class="btn btn-xs btn-outline btn-outline-amber" id="btn-calc-perks" onclick="openModifierCalculatorModal()" style="font-size:0.75em; padding:4px 10px; border-color:var(--accent-amber); color:var(--accent-amber);">
@@ -877,7 +933,7 @@
 
                         <!-- Right: Search, Filter Dropdowns, and Export -->
                         <div class="roster-controls" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-                            <input type="text" id="roster-search" placeholder="🔍 Search member or ID..." class="sort-select" style="min-width:190px; padding:6px 12px; font-size:0.8em;" oninput="filterRosterDebounced()">
+                            <input type="text" id="roster-search" placeholder="🔍 Search member or ID..." class="sort-select" style="min-width:185px; padding:6px 12px; font-size:0.8em;">
                             <select id="roster-filter-bracket" class="sort-select" onchange="filterRoster()" style="padding:6px 10px; font-size:0.8em;">
                                 <option value="all">All Stat Brackets</option>
                                 <option value="under10m">&lt; 10M Stats</option>
@@ -897,6 +953,9 @@
                             <button class="btn btn-sm btn-outline" id="btn-toggle-cd-idle" onclick="toggleCdIdleFilter()" style="font-size:0.78em; padding:6px 10px;" title="Show connected members with no active drug cooldown (0s)">
                                 <span>💊</span> Off Drug CD
                             </button>
+                            <button class="btn btn-sm btn-outline" id="btn-copy-off-cd-roster" onclick="copyDrugCdDiscordPings(6)" style="font-size:0.78em; padding:6px 10px; border-color:rgba(139,92,246,0.45) !important; color:var(--accent-purple) !important; font-weight:700;" title="Copy Discord mentions for members whose Drug Cooldown has been 00:00 for over 6 hours">
+                                <span>💊</span> Copy Off-CD Pings
+                            </button>
                             <button class="btn btn-sm btn-outline" id="btn-toggle-slackers" onclick="toggleSlackerFilter()" style="font-size:0.78em; padding:6px 10px;">
                                 <span>😴</span> Show Slackers Only
                             </button>
@@ -911,22 +970,25 @@
                         <table class="armory-table tracker-table" id="master-roster-table">
                             <thead>
                                 <tr>
-                                    <th onclick="sortRoster('name')" class="sticky-col" style="cursor:pointer; min-width:180px;">Member <span id="sind-name">↕</span></th>
-                                    <th onclick="sortRoster('level')" style="cursor:pointer; min-width:75px;">Level <span id="sind-level">↕</span></th>
-                                    <th onclick="sortRoster('status')" style="cursor:pointer; min-width:115px;">Status <span id="sind-status">↕</span></th>
-                                    <th onclick="sortRoster('str')" style="cursor:pointer; min-width:115px;"><span style="color:var(--stat-str);">💪 Strength</span> <span id="sind-str">↕</span></th>
-                                    <th onclick="sortRoster('spd')" style="cursor:pointer; min-width:115px;"><span style="color:var(--stat-spd);">⚡ Speed</span> <span id="sind-spd">↕</span></th>
-                                    <th onclick="sortRoster('def')" style="cursor:pointer; min-width:115px;"><span style="color:var(--stat-def);">🛡️ Defense</span> <span id="sind-def">↕</span></th>
-                                    <th onclick="sortRoster('dex')" style="cursor:pointer; min-width:115px;"><span style="color:var(--stat-dex);">🎯 Dexterity</span> <span id="sind-dex">↕</span></th>
-                                    <th onclick="sortRoster('total')" style="cursor:pointer; min-width:140px;">Total / Gain (Δ) <span id="sind-total">↓</span></th>
-                                    <th onclick="sortRoster('energy')" style="cursor:pointer; min-width:105px;">Est. Energy <span id="sind-energy">↕</span></th>
-                                    <th onclick="sortRoster('xanax')" style="cursor:pointer; min-width:138px;" title="Exact personalstats.xantaken total and count taken since 00:00 TCT">Exact Xanax (00:00 TCT) <span id="sind-xanax">↕</span></th>
-                                    <th onclick="sortRoster('drugcd')" style="cursor:pointer; min-width:145px;" title="Hours since Torn Drug Cooldown expired (0 = currently active)">Drug CD Off <span id="sind-drugcd">↕</span></th>
-                                    <th style="text-align:center; min-width:88px;">Actions</th>
+                                    <th onclick="sortRoster('name')" class="sticky-col" data-sort="name" style="cursor:pointer; min-width:175px;">
+                                        <div style="display:flex; align-items:center; justify-content:space-between; gap:6px;">
+                                            <span>Member <span class="sort-ind" id="sind-name">↕</span></span>
+                                            <span onclick="event.stopPropagation(); sortRoster('level')" data-sort="level" title="Sort by Level" style="font-size:0.86em; padding:1px 6px; border-radius:4px; background:var(--bg-surface); border:1px solid var(--border-subtle); cursor:pointer;">Lv <span class="sort-ind" id="sind-level">↕</span></span>
+                                        </div>
+                                    </th>
+                                    <th onclick="sortRoster('status')" data-sort="status" style="cursor:pointer; min-width:118px;">Status <span class="sort-ind" id="sind-status">↕</span></th>
+                                    <th onclick="sortRoster('str')" data-sort="str" style="cursor:pointer; min-width:98px;"><span style="color:var(--stat-str);">💪 Strength</span> <span class="sort-ind" id="sind-str">↕</span></th>
+                                    <th onclick="sortRoster('spd')" data-sort="spd" style="cursor:pointer; min-width:98px;"><span style="color:var(--stat-spd);">⚡ Speed</span> <span class="sort-ind" id="sind-spd">↕</span></th>
+                                    <th onclick="sortRoster('def')" data-sort="def" style="cursor:pointer; min-width:98px;"><span style="color:var(--stat-def);">🛡️ Defense</span> <span class="sort-ind" id="sind-def">↕</span></th>
+                                    <th onclick="sortRoster('dex')" data-sort="dex" style="cursor:pointer; min-width:98px;"><span style="color:var(--stat-dex);">🎯 Dexterity</span> <span class="sort-ind" id="sind-dex">↕</span></th>
+                                    <th onclick="sortRoster('total')" data-sort="total" class="sort-th-active" style="cursor:pointer; min-width:128px;">Total / Gain (Δ) <span class="sort-ind" id="sind-total">↓</span></th>
+                                    <th onclick="sortRoster('energy')" data-sort="energy" style="cursor:pointer; min-width:100px;" title="Estimated energy spent for the active window (0e when net gain is 0)">Est. Energy <span class="sort-ind" id="sind-energy">↕</span></th>
+                                    <th onclick="sortRoster('xanax')" data-sort="xanax" style="cursor:pointer; min-width:126px;" title="Exact personalstats.xantaken total and count taken since 00:00 TCT">Exact Xanax (00:00 TCT) <span class="sort-ind" id="sind-xanax">↕</span></th>
+                                    <th onclick="sortRoster('drugcd')" data-sort="drugcd" style="cursor:pointer; min-width:132px;" title="Hours since Torn Drug Cooldown expired (0 = currently active)">Drug CD Off <span class="sort-ind" id="sind-drugcd">↕</span></th>
                                 </tr>
                             </thead>
                             <tbody id="roster-tbody">
-                                <tr><td colspan="12" style="text-align:center; padding:32px; color:var(--text-tertiary);"><span class="loading-spinner"></span> Loading faction gym and battle stat telemetry...</td></tr>
+                                <tr><td colspan="10" style="text-align:center; padding:32px; color:var(--text-tertiary);">Click Sync Live Stats to load faction roster.</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -1114,7 +1176,12 @@
                         <div style="font-size:0.76em; color:var(--text-tertiary); margin-top:2px;" id="dossier-sub">Level — • Role: —</div>
                     </div>
                 </div>
-                <button onclick="closeMemberDrawer()" style="background:transparent; border:none; color:var(--text-tertiary); font-size:1.6em; cursor:pointer;">✕</button>
+                <button type="button" class="drawer-close-btn" onclick="closeMemberDrawer()" aria-label="Close Operative Dossier" title="Close (Esc)">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
             </div>
 
             <div style="padding:20px; flex:1; display:flex; flex-direction:column; gap:20px;">
@@ -1386,6 +1453,33 @@
     let selectedPrivacyTier = 'full';
     let contestCountdownInterval = null;
     let lastMemberDrawerData = null;
+    let rosterLoadedOnce = false;
+    let autoSyncAttempted = false;
+
+    const GYM_DASH_CACHE_KEY = 'sv_cache_gym_dash_v2';
+    const GYM_ROSTER_CACHE_PREFIX = 'sv_cache_gym_roster_v2_';
+
+    function getMemberEnergyForWindow(m, tf = currentRosterTimeframe) {
+        const winKey = (tf === 'stats' || !tf) ? '7d' : tf;
+        const winObj = m.energyByWindow?.[winKey] || m.energy?.byWindow?.[winKey];
+        if (winObj && typeof winObj.energySpentEst === 'number') {
+            return {
+                energySpentEst: winObj.energySpentEst,
+                efficiencyScore: Number(winObj.efficiencyScore || 0),
+                theoreticalMaxEnergy: Number(winObj.theoreticalMaxEnergy || 9800)
+            };
+        }
+        // Fallback if cached/legacy payload lacks per-window energy: strictly show 0e (0% Eff.) when net gain for window is 0
+        const gObj = tf === '24h' ? m.gains?.gain24h : (tf === '30d' ? m.gains?.gain30d : m.gains?.gain7d);
+        if (gObj && Number(gObj.total || 0) <= 0) {
+            return { energySpentEst: 0, efficiencyScore: 0, theoreticalMaxEnergy: tf === '24h' ? 1400 : (tf === '30d' ? 42000 : 9800) };
+        }
+        return {
+            energySpentEst: Number(m.energy?.energySpentEst || 0),
+            efficiencyScore: Number(m.energy?.efficiencyScore || 0),
+            theoreticalMaxEnergy: Number(m.energy?.theoreticalMaxEnergy || 9800)
+        };
+    }
 
     function escapeHtml(str) {
         return String(str ?? '')
@@ -1460,11 +1554,39 @@
         const todayBadge = takenToday !== null
             ? `<span style="font-size:0.76em; padding:1px 6px; border-radius:999px; font-weight:700; background:${takenToday > 0 ? 'rgba(139,92,246,0.16)' : 'var(--bg-elevated)'}; color:${takenToday > 0 ? 'var(--accent-purple)' : 'var(--text-tertiary)'}; border:1px solid ${takenToday > 0 ? 'rgba(139,92,246,0.35)' : 'var(--border-subtle)'};" title="${escapeHtml(baseTip)}">+${takenToday} @ 00:00 TCT</span>`
             : `<span style="font-size:0.74em; color:var(--text-tertiary);" title="${escapeHtml(baseTip)}">00:00 TCT pending</span>`;
-        const refillTag = m.energy?.refillUsed ? ' <span style="color:var(--accent-amber);" title="Daily refill used">⚡</span>' : '';
+        const refillTag = m.energy?.refillUsed ? ' <span style="color:var(--accent-amber);" title="Daily energy refill used">⚡</span>' : '';
+        const sourceTag = (m.isConfirmed || m.hasApiKey || m.verified)
+            ? '<span title="Confirmed via Torn API key" style="font-size:0.75em; margin-right:3px;">🟢</span>'
+            : '<span title="Estimated stats (No API key on file)" style="font-size:0.75em; margin-right:3px; color:var(--accent-amber);">⚠️</span>';
         return `<div style="display:flex; flex-direction:column; gap:3px; align-items:flex-start;">
-            <span class="font-mono" style="color:var(--accent-purple); font-weight:800;">${fmt(exactTotal || 0)} 💊${refillTag}</span>
+            <span class="font-mono" style="color:var(--accent-purple); font-weight:800;">${sourceTag}${fmt(exactTotal || 0)} 💊${refillTag}</span>
             ${todayBadge}
         </div>`;
+    }
+
+    function getDrugCdUrgencyStyle(hrs) {
+        if (hrs > 12) {
+            return {
+                color: '#f87171',
+                bg: 'rgba(239, 68, 68, 0.16)',
+                border: 'rgba(239, 68, 68, 0.48)',
+                cls: 'cd-urgent-pulse'
+            };
+        }
+        if (hrs >= 2) {
+            return {
+                color: '#f59e0b',
+                bg: 'rgba(245, 158, 11, 0.15)',
+                border: 'rgba(245, 158, 11, 0.38)',
+                cls: ''
+            };
+        }
+        return {
+            color: hrs < 0.25 ? 'var(--text-secondary)' : '#34d399',
+            bg: hrs < 0.25 ? 'var(--bg-elevated)' : 'rgba(16, 185, 129, 0.12)',
+            border: hrs < 0.25 ? 'var(--border-subtle)' : 'rgba(16, 185, 129, 0.32)',
+            cls: ''
+        };
     }
 
     function formatDrugCooldownOffHtml(m) {
@@ -1479,32 +1601,21 @@
                 ? `<span style="font-size:0.72em; color:var(--text-tertiary);">${live.inactiveHoursTodayTct.toFixed(1)}h idle earlier today</span>`
                 : '';
             return `<div style="display:flex; flex-direction:column; gap:2px; align-items:flex-start;">
-                <span class="badge-confirmed" style="font-size:0.76em; padding:2px 7px;" title="Drug cooldown active (${rem} remaining)">0.0h · CD Active (${rem})</span>
+                <span class="badge-confirmed" style="font-size:0.76em; padding:2px 7px; white-space:nowrap;" title="Drug cooldown active (${rem} remaining)">0.0h · CD Active (${rem})</span>
                 ${todaySub}
             </div>`;
         }
         const hrs = live.inactiveHours || 0;
         const prefix = live.isFloorEstimate ? '≥' : '';
         const durLabel = hrs < 1 ? `${prefix}${Math.max(1, Math.round(hrs * 60))}m off CD` : `${prefix}${hrs.toFixed(1)}h off CD`;
-        let color = 'var(--accent-cyan)';
-        let bg = 'rgba(6, 182, 212, 0.12)';
-        let border = 'rgba(6, 182, 212, 0.30)';
-        if (hrs >= 6) {
-            color = 'var(--status-danger)';
-            bg = 'rgba(239, 68, 68, 0.14)';
-            border = 'rgba(239, 68, 68, 0.35)';
-        } else if (hrs >= 1) {
-            color = 'var(--accent-amber)';
-            bg = 'rgba(245, 158, 11, 0.14)';
-            border = 'rgba(245, 158, 11, 0.35)';
-        }
+        const { color, bg, border, cls } = getDrugCdUrgencyStyle(hrs);
         const missedXan = Math.floor(hrs / 7);
         const subHint = missedXan >= 1
             ? `~${missedXan} Xanax / jump window${missedXan > 1 ? 's' : ''} missed`
             : (live.inactiveHoursTodayTct !== null && live.inactiveHoursTodayTct > 0.05 ? `${live.inactiveHoursTodayTct.toFixed(1)}h idle today (TCT)` : 'Ready for Xanax / jump');
         return `<div style="display:flex; flex-direction:column; gap:2px; align-items:flex-start;">
-            <span class="font-mono" style="font-size:0.8em; font-weight:800; color:${color}; background:${bg}; border:1px solid ${border}; padding:2px 7px; border-radius:999px;">⏱️ ${durLabel}</span>
-            <span style="font-size:0.71em; color:var(--text-tertiary);">${subHint}</span>
+            <span class="font-mono ${cls}" style="font-size:0.8em; font-weight:800; color:${color}; background:${bg}; border:1px solid ${border}; padding:2px 8px; border-radius:999px; white-space:nowrap;">⏱️ ${durLabel}</span>
+            <span style="font-size:0.71em; color:var(--text-tertiary); white-space:nowrap;">${subHint}</span>
         </div>`;
     }
 
@@ -1603,6 +1714,30 @@
     }
 
     // ─── Load Dashboard Data ───
+    function hydrateCachedGymData() {
+        try {
+            const dashRaw = localStorage.getItem(GYM_DASH_CACHE_KEY);
+            if (dashRaw) {
+                const cachedDash = JSON.parse(dashRaw);
+                if (cachedDash && cachedDash.kpis) {
+                    currentDashboard = cachedDash;
+                    renderDashboard(cachedDash);
+                }
+            }
+            const rosterRaw = localStorage.getItem(GYM_ROSTER_CACHE_PREFIX + currentRosterTimeframe) || localStorage.getItem(GYM_ROSTER_CACHE_PREFIX + '7d');
+            if (rosterRaw) {
+                const cachedRoster = JSON.parse(rosterRaw);
+                if (Array.isArray(cachedRoster) && cachedRoster.length > 0) {
+                    currentRoster = cachedRoster;
+                    rosterLoadedOnce = true;
+                    renderSpotlightGainers(currentRoster);
+                    renderOverviewReadinessAndLeaders(currentRoster);
+                    filterRoster();
+                }
+            }
+        } catch (_) {}
+    }
+
     async function loadDashboard() {
         try {
             const myKey = typeof getApiKey === 'function' ? getApiKey() : '';
@@ -1610,6 +1745,7 @@
             const data = await res.json();
             if (data && data.success) {
                 currentDashboard = data;
+                try { localStorage.setItem(GYM_DASH_CACHE_KEY, JSON.stringify(data)); } catch (_) {}
                 renderDashboard(data);
             }
         } catch(e) {
@@ -1632,15 +1768,17 @@
         const xanSubEl = document.getElementById('kpi-xanax-sub');
         const todayTctCnt = kpis.totalXanaxTodayTct ?? 0;
         const tctTrackedCnt = kpis.tctTrackedCount ?? 0;
+        const totalMemCnt = kpis.totalMembersCount ?? 0;
         const cumXan = kpis.totalExactXanaxCumulative ?? 0;
         if (xanEl) {
             xanEl.textContent = tctTrackedCnt > 0 ? `+${fmt(todayTctCnt)} today` : `${fmt(cumXan)} total`;
         }
         if (xanSubEl) {
-            const avgToday = kpis.avgXanaxTodayTct ?? 0;
+            const avgTracked = Number(kpis.avgXanaxTodayTct ?? (tctTrackedCnt > 0 ? (todayTctCnt / tctTrackedCnt) : 0)).toFixed(2);
+            const avgRoster = Number(kpis.avgXanaxTodayTctRoster ?? (totalMemCnt > 0 ? (todayTctCnt / totalMemCnt) : 0)).toFixed(2);
             const idleCnt = kpis.drugCooldownIdleCount || 0;
             const maxOff = kpis.maxDrugCooldownOffHours || 0;
-            xanSubEl.textContent = `Avg ${avgToday}/member since 00:00 TCT • ${fmt(cumXan)} total • ${idleCnt} off CD (max ${maxOff}h)`;
+            xanSubEl.textContent = `Avg ${avgTracked} / tracked (${tctTrackedCnt}) • ${avgRoster} / roster (${totalMemCnt}) • ${fmt(cumXan)} total • ${idleCnt} off CD (max ${maxOff}h)`;
         }
 
         // Slacker Banner
@@ -1783,6 +1921,14 @@
             const data = await res.json();
             if (data && data.success) {
                 currentRoster = data.members || [];
+                rosterLoadedOnce = currentRoster.length > 0;
+                if (rosterLoadedOnce) {
+                    try { localStorage.setItem(GYM_ROSTER_CACHE_PREFIX + currentRosterTimeframe, JSON.stringify(currentRoster)); } catch (_) {}
+                } else if (myKey && !autoSyncAttempted) {
+                    autoSyncAttempted = true;
+                    syncGymData(true);
+                    return;
+                }
                 renderSpotlightGainers(currentRoster);
                 renderOverviewReadinessAndLeaders(currentRoster);
                 filterRoster();
@@ -1839,7 +1985,7 @@
                 cdListEl.innerHTML = idleList.slice(0, 10).map(({ m, live }) => {
                     const hrs = Number(live.inactiveHours || 0);
                     const missed = Math.floor(hrs / 7);
-                    const color = hrs >= 6 ? 'var(--accent-crimson)' : (hrs >= 1 ? 'var(--accent-amber)' : 'var(--accent-cyan)');
+                    const { color } = getDrugCdUrgencyStyle(hrs);
                     const durText = hrs < 1 ? `${Math.max(1, Math.round(hrs * 60))}m` : `${hrs.toFixed(1)}h`;
                     return `<div class="readiness-row" style="cursor:pointer;" onclick="openMemberDrawer('${escapeHtml(String(m.playerId))}')">
                         <div>
@@ -1889,27 +2035,37 @@
         }
     }
 
-    function copyDrugCdDiscordPings() {
+    function copyDrugCdDiscordPings(minHours = 0) {
+        const minH = Math.max(0, Number(minHours || 0));
         const idle = (currentRoster || [])
             .map(m => ({ m, live: getLiveDrugCooldownState(m.drugCooldown) }))
-            .filter(x => x.live.tracked && !x.live.active)
+            .filter(x => x.live.tracked && !x.live.active && (minH === 0 || Number(x.live.inactiveHours || 0) > minH))
             .sort((a, b) => (b.live.inactiveHours || 0) - (a.live.inactiveHours || 0));
 
         if (!idle.length) {
-            showToast('All connected members currently have active drug cooldowns!', 'success');
+            showToast(
+                minH > 0
+                    ? `No members currently off Drug Cooldown for >${minH} hours!`
+                    : 'All connected members currently have active drug cooldowns!',
+                'success'
+            );
             return;
         }
 
-        let md = '💊 **Off Drug Cooldown — Xanax / Happy Jump Ready**\n\n';
+        let md = minH > 0
+            ? `💊 **Drug Cooldown Inactive (>${minH}h) — Reminder to Pop Xanax**\n\n`
+            : '💊 **Off Drug Cooldown — Xanax / Happy Jump Ready**\n\n';
         idle.forEach((x, idx) => {
             const hrs = Number(x.live.inactiveHours || 0);
             const durText = hrs < 1 ? `${Math.max(1, Math.round(hrs * 60))}m` : `${hrs.toFixed(1)}h`;
-            md += `${idx + 1}. **${x.m.playerName}** — ${durText} off CD\n`;
+            md += minH > 0
+                ? `${idx + 1}. @${x.m.playerName} [${x.m.playerId}] — **${durText}** off CD (pop Xanax)\n`
+                : `${idx + 1}. **${x.m.playerName}** — ${durText} off CD\n`;
         });
-        md += `\n**Total Ready / Uncooled:** ${idle.length} member${idle.length === 1 ? '' : 's'}`;
+        md += `\n**Total ${minH > 0 ? `>${minH}h Idle` : 'Ready / Uncooled'}:** ${idle.length} member${idle.length === 1 ? '' : 's'}`;
 
         navigator.clipboard.writeText(md).then(() => {
-            showToast(`Copied ${idle.length} off-CD reminder entries for Discord!`, 'success');
+            showToast(`Copied ${idle.length} ${minH > 0 ? `>${minH}h ` : ''}off-CD reminder${idle.length === 1 ? '' : 's'} for Discord!`, 'success');
         }).catch(() => showToast('Clipboard copy blocked', 'error'));
     }
 
@@ -1920,6 +2076,19 @@
         filterRoster();
     }
 
+    function updateSortIndicators() {
+        document.querySelectorAll('#master-roster-table thead th').forEach(th => th.classList.remove('sort-th-active'));
+        document.querySelectorAll('#master-roster-table thead th .sort-ind').forEach(ind => {
+            ind.textContent = '↕';
+        });
+        const targetInd = document.getElementById(`sind-${rosterSortCol}`) || document.getElementById('sind-total');
+        if (targetInd) {
+            targetInd.textContent = rosterSortAsc ? '↑' : '↓';
+            const parentTh = targetInd.closest('th');
+            if (parentTh) parentTh.classList.add('sort-th-active');
+        }
+    }
+
     function filterRoster() {
         const query = (document.getElementById('roster-search')?.value || '').toLowerCase().trim();
         const bracket = document.getElementById('roster-filter-bracket')?.value || 'all';
@@ -1928,7 +2097,7 @@
         currentFilteredRoster = currentRoster.filter(m => {
             if (query && !m.playerName.toLowerCase().includes(query) && !String(m.playerId).includes(query)) return false;
 
-            if (showSlackersOnly && !m.slacker.isSlacking) return false;
+            if (showSlackersOnly && !m.slacker?.isSlacking) return false;
 
             if (showCdIdleOnly) {
                 const dc = getLiveDrugCooldownState(m.drugCooldown);
@@ -1937,7 +2106,7 @@
 
             if (archetype !== 'all' && m.archetype !== archetype) return false;
 
-            const t = typeof m.stats.total === 'number' ? m.stats.total : (m.rawStats?.total || 0);
+            const t = typeof m.stats?.total === 'number' ? m.stats.total : (m.rawStats?.total || 0);
             if (bracket === 'under10m' && t >= 10000000) return false;
             if (bracket === '10m-100m' && (t < 10000000 || t >= 100000000)) return false;
             if (bracket === '100m-1b' && (t < 100000000 || t >= 1000000000)) return false;
@@ -1946,21 +2115,31 @@
             return true;
         });
 
-        // Sorting
+        const getGainByWindow = (m) => {
+            if (currentRosterTimeframe === '24h') return m.gains?.gain24h || {};
+            if (currentRosterTimeframe === '30d') return m.gains?.gain30d || {};
+            return m.gains?.gain7d || {};
+        };
+
+        // Sorting across all columns cleanly
         currentFilteredRoster.sort((a, b) => {
-            let va = a.stats.total;
-            let vb = b.stats.total;
             if (rosterSortCol === 'name') {
                 return rosterSortAsc ? a.playerName.localeCompare(b.playerName) : b.playerName.localeCompare(a.playerName);
             }
             if (rosterSortCol === 'level') {
-                return rosterSortAsc ? (a.level - b.level) : (b.level - a.level);
+                return rosterSortAsc ? ((a.level || 0) - (b.level || 0)) : ((b.level || 0) - (a.level || 0));
             }
             if (rosterSortCol === 'status') {
-                return rosterSortAsc ? a.onlineStatus.localeCompare(b.onlineStatus) : b.onlineStatus.localeCompare(a.onlineStatus);
+                const cmp = String(a.onlineStatus || '').localeCompare(String(b.onlineStatus || ''));
+                if (cmp !== 0) return rosterSortAsc ? cmp : -cmp;
+                return rosterSortAsc
+                    ? ((a.lastActionTimestamp || 0) - (b.lastActionTimestamp || 0))
+                    : ((b.lastActionTimestamp || 0) - (a.lastActionTimestamp || 0));
             }
             if (rosterSortCol === 'energy') {
-                return rosterSortAsc ? (a.energy.energySpentEst - b.energy.energySpentEst) : (b.energy.energySpentEst - a.energy.energySpentEst);
+                const ea = getMemberEnergyForWindow(a).energySpentEst;
+                const eb = getMemberEnergyForWindow(b).energySpentEst;
+                return rosterSortAsc ? (ea - eb) : (eb - ea);
             }
             if (rosterSortCol === 'xanax') {
                 const xaToday = a.xanax?.takenTodayTct ?? -1;
@@ -1978,14 +2157,27 @@
                 return rosterSortAsc ? (ha - hb) : (hb - ha);
             }
 
-            if (currentRosterTimeframe === '24h') { va = a.gains.gain24h.total; vb = b.gains.gain24h.total; }
-            else if (currentRosterTimeframe === '7d') { va = a.gains.gain7d.total; vb = b.gains.gain7d.total; }
-            else if (currentRosterTimeframe === '30d') { va = a.gains.gain30d.total; vb = b.gains.gain30d.total; }
-            else { va = (typeof a.stats.total === 'number' ? a.stats.total : 0); vb = (typeof b.stats.total === 'number' ? b.stats.total : 0); }
+            if (['str', 'spd', 'def', 'dex'].includes(rosterSortCol)) {
+                const mapKey = { str: 'strength', spd: 'speed', def: 'defense', dex: 'dexterity' }[rosterSortCol];
+                const va = currentRosterTimeframe === 'stats'
+                    ? (typeof a.stats?.[mapKey] === 'number' ? a.stats[mapKey] : -1)
+                    : Number(getGainByWindow(a)[mapKey] || 0);
+                const vb = currentRosterTimeframe === 'stats'
+                    ? (typeof b.stats?.[mapKey] === 'number' ? b.stats[mapKey] : -1)
+                    : Number(getGainByWindow(b)[mapKey] || 0);
+                return rosterSortAsc ? (va - vb) : (vb - va);
+            }
 
+            const va = currentRosterTimeframe === 'stats'
+                ? (typeof a.stats?.total === 'number' ? a.stats.total : -1)
+                : Number(getGainByWindow(a).total || 0);
+            const vb = currentRosterTimeframe === 'stats'
+                ? (typeof b.stats?.total === 'number' ? b.stats.total : -1)
+                : Number(getGainByWindow(b).total || 0);
             return rosterSortAsc ? (va - vb) : (vb - va);
         });
 
+        updateSortIndicators();
         renderRosterTable();
     }
 
@@ -1994,12 +2186,12 @@
             rosterSortAsc = !rosterSortAsc;
         } else {
             rosterSortCol = col;
-            rosterSortAsc = false;
+            rosterSortAsc = col === 'name';
         }
         filterRoster();
     }
 
-    const filterRosterDebounced = debounce(filterRoster, 180);
+    const filterRosterDebounced = debounce(filterRoster, 150);
 
     function toggleSlackerFilter() {
         showSlackersOnly = !showSlackersOnly;
@@ -2015,12 +2207,49 @@
         filterRoster();
     }
 
+    function renderCompactStatusBadge(m) {
+        const state = (m.status?.state || '').trim();
+        const desc = (m.status?.description || '').trim();
+        const exReason = (m.exempt?.reason || '').trim();
+        const isExempt = Boolean(m.exempt?.isExempt);
+
+        if (isExempt) {
+            const low = (state + ' ' + exReason + ' ' + desc).toLowerCase();
+            if (low.includes('travel') || low.includes('returning to')) {
+                return `<span class="badge" style="background:rgba(59,130,246,0.14); color:#60a5fa; border:1px solid rgba(59,130,246,0.32); font-size:0.72em; padding:1px 7px; white-space:nowrap;" title="${escapeHtml(desc || 'Traveling')}">✈️ Traveling</span>`;
+            }
+            if (low.includes('abroad') || state === 'Abroad') {
+                return `<span class="badge" style="background:rgba(6,182,212,0.14); color:#22d3ee; border:1px solid rgba(6,182,212,0.32); font-size:0.72em; padding:1px 7px; white-space:nowrap;" title="${escapeHtml(desc || 'Abroad')}">🌐 Abroad</span>`;
+            }
+            if (low.includes('recruit') || low.includes('grace')) {
+                return `<span class="badge" style="background:rgba(148,163,184,0.14); color:var(--text-secondary); border:1px solid rgba(148,163,184,0.3); font-size:0.72em; padding:1px 7px; white-space:nowrap;" title="${escapeHtml(exReason || 'New Recruit Grace Period (<3 days)')}">🛡️ Grace (&lt;3d)</span>`;
+            }
+            if (low.includes('hospital')) {
+                return `<span class="badge" style="background:rgba(239,68,68,0.12); color:#f87171; border:1px solid rgba(239,68,68,0.3); font-size:0.72em; padding:1px 7px; white-space:nowrap;" title="${escapeHtml(desc || 'Hospitalized')}">🏥 Hosp</span>`;
+            }
+            if (low.includes('federal')) {
+                return `<span class="badge" style="background:rgba(239,68,68,0.16); color:#f87171; border:1px solid rgba(239,68,68,0.38); font-size:0.72em; padding:1px 7px; white-space:nowrap;" title="${escapeHtml(exReason)}">⛔ Fed</span>`;
+            }
+            if (low.includes('jail')) {
+                return `<span class="badge" style="background:rgba(245,158,11,0.14); color:#fbbf24; border:1px solid rgba(245,158,11,0.32); font-size:0.72em; padding:1px 7px; white-space:nowrap;" title="${escapeHtml(desc || exReason)}">⛓️ Jail</span>`;
+            }
+            return `<span class="badge" style="background:rgba(148,163,184,0.14); color:var(--text-secondary); border:1px solid rgba(148,163,184,0.3); font-size:0.72em; padding:1px 7px; white-space:nowrap;" title="${escapeHtml(exReason)}">🏖️ ${escapeHtml(exReason.length > 14 ? 'Leave' : exReason)}</span>`;
+        }
+        if (m.slacker?.isSlacking) {
+            return `<span class="badge" style="background:rgba(239,68,68,0.14); color:var(--status-danger); border:1px solid rgba(239,68,68,0.35); font-size:0.72em; padding:1px 7px; white-space:nowrap;" title="${escapeHtml((m.slacker.warningReasons || []).join('; '))}">⚠️ Slacking</span>`;
+        }
+        return '';
+    }
+
     function renderRosterTable() {
         const tbody = document.getElementById('roster-tbody');
         if (!tbody) return;
 
         if (!currentFilteredRoster.length) {
-            tbody.innerHTML = `<tr><td colspan="12" style="text-align:center; padding:32px; color:var(--text-tertiary);">No members matching the current filters.</td></tr>`;
+            const msg = (!rosterLoadedOnce && currentRoster.length === 0)
+                ? 'Click Sync Live Stats to load faction roster.'
+                : 'No members matching the current filters.';
+            tbody.innerHTML = `<tr><td colspan="10" style="text-align:center; padding:32px; color:var(--text-tertiary);">${msg}</td></tr>`;
             return;
         }
 
@@ -2033,15 +2262,20 @@
             let defVal = '';
             let dexVal = '';
 
+            const isConfirmed = Boolean(m.isConfirmed || m.hasApiKey || m.verified);
+            const srcDot = isConfirmed
+                ? `<span title="Confirmed via Torn API Key" style="font-size:0.74em; color:var(--accent-emerald);">●</span>`
+                : `<span title="Estimated / Unverified" style="font-size:0.74em; color:var(--accent-amber);">⚠</span>`;
+
             if (isGainsView) {
                 let g = m.gains.gain7d;
                 if (currentRosterTimeframe === '24h') g = m.gains.gain24h;
                 if (currentRosterTimeframe === '30d') g = m.gains.gain30d;
 
                 if (g.total > 0) {
-                    totalValDisplay = `<span style="color:var(--status-active); font-weight:800;">+${fmt(g.total)}</span> <span class="badge-confirmed" style="font-size:0.72em; padding:1px 5px;">+${g.pct}%</span>`;
+                    totalValDisplay = `<span style="color:var(--status-active); font-weight:800;">+${fmt(g.total)}</span> <span class="badge-confirmed" style="font-size:0.72em; padding:1px 5px; white-space:nowrap;">+${g.pct}%</span> ${srcDot}`;
                 } else {
-                    totalValDisplay = `<span style="color:var(--text-tertiary);">0</span>`;
+                    totalValDisplay = `<span style="color:var(--text-tertiary);">0</span> ${srcDot}`;
                 }
 
                 strVal = g.strength > 0 ? `<span style="color:var(--text-primary); font-weight:600;"><span style="color:var(--stat-str); font-weight:700; margin-right:1px;">+</span>${fmt(g.strength)}</span>` : `<span style="color:var(--text-tertiary); opacity:0.6;">—</span>`;
@@ -2049,66 +2283,53 @@
                 defVal = g.defense > 0 ? `<span style="color:var(--text-primary); font-weight:600;"><span style="color:var(--stat-def); font-weight:700; margin-right:1px;">+</span>${fmt(g.defense)}</span>` : `<span style="color:var(--text-tertiary); opacity:0.6;">—</span>`;
                 dexVal = g.dexterity > 0 ? `<span style="color:var(--text-primary); font-weight:600;"><span style="color:var(--stat-dex); font-weight:700; margin-right:1px;">+</span>${fmt(g.dexterity)}</span>` : `<span style="color:var(--text-tertiary); opacity:0.6;">—</span>`;
             } else {
-                const isConfirmed = Boolean(m.isConfirmed || m.hasApiKey || m.verified);
                 const statColor = isConfirmed ? 'var(--accent-emerald, #10b981)' : 'var(--text-secondary)';
                 const statPrefix = isConfirmed ? '' : '~';
-                const statSuffix = isConfirmed ? ` <span title="Confirmed via Torn API Key" style="font-size:0.7em; color:var(--accent-emerald);">✓</span>` : ` <span title="Estimated / Unverified" style="font-size:0.7em; color:var(--accent-amber);">(est)</span>`;
-                totalValDisplay = m.stats.masked ? `<span style="color:var(--text-tertiary);">🔒 Hidden</span>` : `<span style="color:${statColor}; font-weight:800;">${statPrefix}${fmt(m.stats.total)}</span>${statSuffix}`;
+                totalValDisplay = m.stats.masked ? `<span style="color:var(--text-tertiary);">🔒 Hidden</span>` : `<span style="color:${statColor}; font-weight:800;">${statPrefix}${fmt(m.stats.total)}</span> ${srcDot}`;
                 strVal = m.stats.masked ? '🔒' : `<span style="color:var(--text-primary);">${fmt(m.stats.strength)}</span>`;
                 spdVal = m.stats.masked ? '🔒' : `<span style="color:var(--text-primary);">${fmt(m.stats.speed)}</span>`;
                 defVal = m.stats.masked ? '🔒' : `<span style="color:var(--text-primary);">${fmt(m.stats.defense)}</span>`;
                 dexVal = m.stats.masked ? '🔒' : `<span style="color:var(--text-primary);">${fmt(m.stats.dexterity)}</span>`;
             }
 
+            const winEnergy = getMemberEnergyForWindow(m);
+            const effColor = winEnergy.energySpentEst <= 0
+                ? 'var(--text-tertiary)'
+                : (winEnergy.efficiencyScore >= 70 ? 'var(--status-active)' : 'var(--status-warning)');
             const exactXanaxHtml = formatExactXanaxHtml(m);
             const drugCdOffHtml = formatDrugCooldownOffHtml(m);
 
             const statusDot = m.onlineStatus === 'online' ? '🟢' : (m.onlineStatus === 'idle' ? '🟡' : '⚪');
             const relativeTimeStr = formatRelativeTime(m.lastActionTimestamp);
-
-            const slackerTag = m.slacker.isSlacking ? `<span class="badge" style="background:rgba(239,68,68,0.15); color:var(--status-danger); font-size:0.68em; margin-left:4px;" title="${escapeHtml((m.slacker.warningReasons || []).join('; '))}">⚠️ Slacking</span>` : '';
-            const exemptTag = (m.exempt && m.exempt.isExempt) ? `<span class="badge" style="background:rgba(148,163,184,0.15); color:var(--text-secondary); border:1px solid rgba(148,163,184,0.3); font-size:0.68em; margin-left:4px;" title="Exempt: ${escapeHtml(m.exempt.reason)}">🛡️ ${escapeHtml(m.exempt.reason)}</span>` : '';
-            const verifiedBadge = (m.isConfirmed || m.hasApiKey || m.verified)
-                ? `<span class="badge-confirmed" style="font-size:0.68em; padding:1px 6px; margin-left:4px;" title="Confirmed via Torn API key / Discord bot sync">🟢 Confirmed</span>`
-                : `<span class="badge-estimated" style="font-size:0.68em; padding:1px 6px; margin-left:4px;" title="Estimated stats (No API key on file)">⚠️ Estimated</span>`;
+            const compactStatusBadge = renderCompactStatusBadge(m);
 
             return `
-                <tr>
+                <tr class="roster-row-clickable" onclick="openMemberDrawer('${escapeHtml(m.playerId)}')" title="Click row to open Operative Dossier for ${escapeHtml(m.playerName)}">
                     <td class="sticky-col">
-                        <div style="font-weight:700; display:flex; align-items:center; flex-wrap:wrap; gap:4px;">
-                            <a href="https://www.torn.com/profiles.php?XID=${encodeURIComponent(m.playerId)}" target="_blank" style="color:var(--text-primary); text-decoration:none;">${escapeHtml(m.playerName)}</a>
-                            ${slackerTag}
-                            ${exemptTag}
-                            ${verifiedBadge}
+                        <div style="font-weight:700; display:flex; align-items:center; gap:5px; white-space:nowrap;">
+                            <a href="https://www.torn.com/profiles.php?XID=${encodeURIComponent(m.playerId)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()" style="color:var(--text-primary); text-decoration:none;">${escapeHtml(m.playerName)}</a>
+                            <span class="badge" style="background:var(--bg-elevated); border:1px solid var(--border-subtle); color:var(--text-secondary); font-size:0.72em; padding:1px 5px; font-weight:700;">Lv ${m.level || 1}</span>
                         </div>
-                        <div style="font-size:0.75em; color:var(--text-tertiary);">${escapeHtml(m.role)} • [${escapeHtml(m.playerId)}]</div>
+                        <div style="font-size:0.74em; color:var(--text-tertiary); white-space:nowrap; margin-top:2px;">${escapeHtml(m.role)} • [${escapeHtml(m.playerId)}]</div>
                     </td>
-                    <td>
-                        <span class="badge" style="background:var(--bg-elevated); border:1px solid var(--border-subtle); color:var(--text-secondary); font-weight:700;">Lv ${m.level || 1}</span>
+                    <td style="white-space:nowrap;">
+                        <div style="display:flex; align-items:center; gap:5px; white-space:nowrap;">${statusDot} <span style="text-transform:capitalize;">${escapeHtml(m.onlineStatus)}</span> <span style="font-size:0.84em; color:var(--text-tertiary);">· ${relativeTimeStr}</span></div>
+                        ${compactStatusBadge ? `<div style="margin-top:3px; white-space:nowrap;">${compactStatusBadge}</div>` : ''}
                     </td>
-                    <td>
-                        <div style="display:flex; align-items:center; gap:4px;">${statusDot} <span style="text-transform:capitalize;">${escapeHtml(m.onlineStatus)}</span></div>
-                        <div style="font-size:0.72em; color:var(--text-tertiary); margin-top:2px;">${relativeTimeStr}</div>
-                    </td>
-                    <td class="font-mono">${strVal}</td>
-                    <td class="font-mono">${spdVal}</td>
-                    <td class="font-mono">${defVal}</td>
-                    <td class="font-mono">${dexVal}</td>
-                    <td class="font-mono">${totalValDisplay}</td>
-                    <td>
-                        <div class="font-mono" style="color:var(--text-primary);">${fmt(m.energy.energySpentEst)}e</div>
-                        <div style="font-size:0.7em; color:${m.energy.efficiencyScore >= 70 ? 'var(--status-active)' : 'var(--status-warning)'}; font-weight:700;">${m.energy.efficiencyScore}% Eff.</div>
+                    <td class="font-mono" style="white-space:nowrap;">${strVal}</td>
+                    <td class="font-mono" style="white-space:nowrap;">${spdVal}</td>
+                    <td class="font-mono" style="white-space:nowrap;">${defVal}</td>
+                    <td class="font-mono" style="white-space:nowrap;">${dexVal}</td>
+                    <td class="font-mono" style="white-space:nowrap;">${totalValDisplay}</td>
+                    <td style="white-space:nowrap;">
+                        <div class="font-mono" style="color:${winEnergy.energySpentEst <= 0 ? 'var(--text-tertiary)' : 'var(--text-primary)'}; font-weight:700;">${fmt(winEnergy.energySpentEst)}e</div>
+                        <div style="font-size:0.71em; color:${effColor}; font-weight:700;">${winEnergy.efficiencyScore}% Eff.</div>
                     </td>
                     <td>
                         ${exactXanaxHtml}
                     </td>
                     <td>
                         ${drugCdOffHtml}
-                    </td>
-                    <td style="text-align:center;">
-                        <button class="btn btn-xs btn-outline" onclick="openMemberDrawer('${escapeHtml(m.playerId)}')" style="font-size:0.74em; padding:3px 8px;">
-                            <span>🔍</span> Dossier
-                        </button>
                     </td>
                 </tr>
             `;
@@ -2705,6 +2926,7 @@
         const rows = currentFilteredRoster.map(m => {
             const liveDc = getLiveDrugCooldownState(m.drugCooldown);
             const cdHoursCell = liveDc.tracked ? (liveDc.active ? 0 : liveDc.inactiveHours) : '';
+            const winEnergy = getMemberEnergyForWindow(m);
             return [
                 m.playerId,
                 sanitizeCSVCell(m.playerName),
@@ -2719,8 +2941,8 @@
                 m.xanax?.exactTotal ?? '',
                 m.xanax?.takenTodayTct ?? '',
                 cdHoursCell,
-                m.energy.energySpentEst,
-                sanitizeCSVCell(`${m.energy.efficiencyScore}%`)
+                winEnergy.energySpentEst,
+                sanitizeCSVCell(`${winEnergy.efficiencyScore}%`)
             ];
         });
         const csvContent = "data:text/csv;charset=utf-8," + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
@@ -2760,6 +2982,17 @@
                 setTimeout(refreshChartsForTheme, 30);
             };
         }
+
+        const searchEl = document.getElementById('roster-search');
+        if (searchEl) {
+            searchEl.addEventListener('input', filterRosterDebounced);
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closeMemberDrawer();
+        });
+
+        hydrateCachedGymData();
 
         const initial = getRequestedTrackerHash();
         if (initial.viewKey && initial.viewKey !== 'overview') {
