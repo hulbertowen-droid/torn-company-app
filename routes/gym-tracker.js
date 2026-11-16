@@ -356,7 +356,63 @@ function evaluateCombatMatchup(attacker, defender) {
     };
 }
 
-// Get baseline snapshot from player history closest to cutoff
+// Get interpolated or closest baseline snapshot from player history at cutoff timestamp
+function getWindowBaseline(history, curPoint, cutoff) {
+    const valid = (Array.isArray(history) ? history : []).filter(h => (h.total || 0) > 0 && (h.timestamp || 0) > 0);
+    const pts = curPoint && (curPoint.total || 0) > 0 ? [...valid, curPoint] : [...valid];
+    if (pts.length === 0) return { snap: null, spanDays: 1, interpolated: false };
+
+    pts.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0)); // Oldest first
+    if (cutoff <= 0) {
+        const snap = pts[0];
+        const spanDays = Math.max(0.25, ((curPoint?.timestamp || pts[pts.length - 1].timestamp) - snap.timestamp) / 86400000);
+        return { snap, spanDays, interpolated: false };
+    }
+
+    let before = null;
+    let after = null;
+    for (const p of pts) {
+        if ((p.timestamp || 0) <= cutoff) before = p;
+        else if (!after) after = p;
+    }
+
+    const endTs = curPoint?.timestamp || pts[pts.length - 1].timestamp;
+    if (!before) {
+        const snap = pts[0];
+        const spanDays = Math.max(0.25, (endTs - snap.timestamp) / 86400000);
+        return { snap, spanDays, interpolated: false };
+    }
+
+    if (!after || after.timestamp <= before.timestamp || before.timestamp === cutoff) {
+        const spanDays = Math.max(0.25, (endTs - before.timestamp) / 86400000);
+        return { snap: before, spanDays, interpolated: false };
+    }
+
+    // Linearly interpolate stats & personalstats counters when snapshots bracket cutoff
+    const t = Math.max(0, Math.min(1, (cutoff - before.timestamp) / (after.timestamp - before.timestamp)));
+    const lerpStat = (k) => Math.round(Number(before[k] || 0) + t * (Number(after[k] || 0) - Number(before[k] || 0)));
+    const lerpOpt = (k) => (typeof before[k] === 'number' && typeof after[k] === 'number')
+        ? (Number(before[k]) + t * (Number(after[k]) - Number(before[k])))
+        : null;
+
+    return {
+        snap: {
+            timestamp: cutoff,
+            strength: lerpStat('strength'),
+            speed: lerpStat('speed'),
+            defense: lerpStat('defense'),
+            dexterity: lerpStat('dexterity'),
+            total: lerpStat('total'),
+            xantaken: lerpOpt('xantaken'),
+            refills: lerpOpt('refills'),
+            energydrinkused: lerpOpt('energydrinkused')
+        },
+        spanDays: Math.max(0.25, (endTs - cutoff) / 86400000),
+        interpolated: true
+    };
+}
+
+// Get baseline snapshot from player history closest to cutoff (used by competitions & custom windows)
 function getBaselineSnapshot(history, cutoff) {
     if (!Array.isArray(history) || history.length === 0) return null;
     const sorted = [...history].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)); // Newest first
@@ -409,27 +465,58 @@ function applyStatSoftCap(statVal) {
 
 function estimateGymDots(totalStats) {
     const t = Number(totalStats || 0);
-    if (t < 150000) return 3.2;     // Lightweight gyms
-    if (t < 1500000) return 4.6;    // Middleweight gyms
-    if (t < 15000000) return 6.0;   // Heavyweight gyms
-    if (t < 80000000) return 6.9;   // Specialist / Early George's
-    return 7.3;                     // George's / Special gyms
+    if (t < 100000) return 3.8;     // Lightweight -> early Middleweight gyms
+    if (t < 1000000) return 5.3;    // Middleweight gyms (Core / Racing / Complete Cardio)
+    if (t < 15000000) return 6.6;   // Heavyweight gyms (Atlas / Cronus / Hephaestus / Frontline)
+    if (t < 80000000) return 7.5;   // George's / Specialist gyms
+    return 8.0;                     // Top Specialist gyms
 }
 
 function vladarGainPerEnergy(statVal, gymDots, happy, steadFastPct, statKey) {
     const sEff = applyStatSoftCap(statVal);
-    const h = Math.max(100, Number(happy || 4500));
+    const h = Math.max(100, Number(happy || 5025));
     const round4 = (n) => Math.round(n * 10000) / 10000;
     const happyMult = round4(1 + 0.07 * round4(Math.log(1 + h / 250)));
     const { A, B } = VLADAR_STAT_PARAMS[statKey] || VLADAR_STAT_PARAMS.strength;
     const happyTail = 8 * Math.pow(h, 1.05) + (1 - Math.pow(h / 99999, 2)) * A + B;
     const baseGain = (sEff * happyMult + happyTail) / 200000;
-    // Standard Private Island + Education (~3%) + live faction Steadfast perk
-    const perksMult = 1.03 * (1 + Math.max(0, Number(steadFastPct || 0)) / 100);
+    // Standard Private Island (+2%) + Education (~3%) + live faction Steadfast perk
+    const perksMult = 1.05 * (1 + Math.max(0, Number(steadFastPct || 0)) / 100);
     return Math.max(0.01, baseGain * gymDots * perksMult);
 }
 
-function estimateWindowEnergy(gainObj, curStats, baseStats, perks, windowDays, xanDeltaInWindow, refillsCount) {
+function solveEnergyAtHappy(gainObj, curStats, baseStats, perks, happyVal) {
+    const totalCur = Number(curStats?.total || 0) || (
+        Number(curStats?.strength || 0) + Number(curStats?.speed || 0) +
+        Number(curStats?.defense || 0) + Number(curStats?.dexterity || 0)
+    );
+    const gymDots = estimateGymDots(totalCur);
+    const netTotal = Math.max(0, Number(gainObj?.total || 0));
+    let estEnergySum = 0;
+    let positiveDeltaSum = 0;
+
+    for (const k of ['strength', 'speed', 'defense', 'dexterity']) {
+        const delta = Math.max(0, Number(gainObj?.[k] || 0));
+        if (delta <= 0) continue;
+        positiveDeltaSum += delta;
+        const curK = Math.max(0, Number(curStats?.[k] || 0));
+        const baseK = Number(baseStats?.[k] || 0) > 0 ? Number(baseStats[k]) : Math.max(0, curK - delta);
+        const midS = Math.max(100, (curK + baseK) / 2);
+        const sfPct = Number(perks?.[VLADAR_STAT_PARAMS[k].perkKey] || 0);
+        estEnergySum += delta / vladarGainPerEnergy(midS, gymDots, happyVal, sfPct, k);
+    }
+
+    if (estEnergySum <= 0 && netTotal > 0) {
+        const avgS = Math.max(100, totalCur / 4);
+        const avgSf = (Number(perks?.strengthGymBonus || 0) + Number(perks?.speedGymBonus || 0) + Number(perks?.defenseGymBonus || 0) + Number(perks?.dexterityGymBonus || 0)) / 4;
+        estEnergySum = netTotal / vladarGainPerEnergy(avgS, gymDots, happyVal, avgSf, 'strength');
+    } else if (positiveDeltaSum > netTotal && netTotal > 0) {
+        estEnergySum = estEnergySum * (netTotal / positiveDeltaSum);
+    }
+    return estEnergySum;
+}
+
+function estimateWindowEnergy(gainObj, curStats, baseStats, perks, windowDays, xanDeltaInWindow, refillDeltaInWindow = 0, canDeltaInWindow = 0, actualSpanDays = windowDays) {
     const netTotal = Math.max(0, Number(gainObj?.total || 0));
     const theoreticalMaxEnergy = Math.max(1400, Math.round(windowDays * 1400));
 
@@ -447,62 +534,58 @@ function estimateWindowEnergy(gainObj, curStats, baseStats, perks, windowDays, x
         Number(curStats?.strength || 0) + Number(curStats?.speed || 0) +
         Number(curStats?.defense || 0) + Number(curStats?.dexterity || 0)
     );
-    const gymDots = estimateGymDots(totalCur);
-    const statKeys = ['strength', 'speed', 'defense', 'dexterity'];
 
-    let estEnergySum = 0;
-    let positiveDeltaSum = 0;
+    // Solve energy at standard PI Happy (5,025). If snapshot span exceeded windowDays (e.g. 46h on a 24h view), scale cleanly to the window rate.
+    const spanNorm = (actualSpanDays > windowDays * 1.1) ? (windowDays / actualSpanDays) : 1;
+    let estEnergy = solveEnergyAtHappy(gainObj, curStats, baseStats, perks, 5025) * spanNorm;
 
-    for (const k of statKeys) {
-        const delta = Math.max(0, Number(gainObj?.[k] || 0));
-        if (delta <= 0) continue;
-        positiveDeltaSum += delta;
-        const curK = Math.max(0, Number(curStats?.[k] || 0));
-        const baseK = Number(baseStats?.[k] || 0) > 0 ? Number(baseStats[k]) : Math.max(0, curK - delta);
-        const midS = Math.max(100, (curK + baseK) / 2);
-        const sfPct = Number(perks?.[VLADAR_STAT_PARAMS[k].perkKey] || 0);
-        const perE = vladarGainPerEnergy(midS, gymDots, 4500, sfPct, k);
-        estEnergySum += delta / perE;
-    }
+    const xanNumRaw = (typeof xanDeltaInWindow === 'number' && !Number.isNaN(xanDeltaInWindow) && xanDeltaInWindow >= 0) ? xanDeltaInWindow : null;
+    const xanPerWindow = xanNumRaw !== null ? (xanNumRaw * spanNorm) : null;
+    const refillEnergy = Math.max(0, Number(refillDeltaInWindow || 0)) * spanNorm * 150;
+    const canEnergy = Math.max(0, Number(canDeltaInWindow || 0)) * spanNorm * 25;
 
-    // If overall total gain is positive but individual stat breakdown was unavailable/zeroed, infer from average stat
-    if (estEnergySum <= 0 && netTotal > 0) {
-        const avgS = Math.max(100, totalCur / 4);
-        const avgSf = (Number(perks?.strengthGymBonus || 0) + Number(perks?.speedGymBonus || 0) + Number(perks?.defenseGymBonus || 0) + Number(perks?.dexterityGymBonus || 0)) / 4;
-        estEnergySum = netTotal / vladarGainPerEnergy(avgS, gymDots, 4500, avgSf, 'strength');
-    } else if (positiveDeltaSum > netTotal && netTotal > 0) {
-        // Adjust proportionally if another stat dipped slightly via baseline noise
-        estEnergySum = estEnergySum * (netTotal / positiveDeltaSum);
-    }
+    // Realistic physical daily energy budget in Torn:
+    // Natural regen (30e/hr max = 720e, realistic active ~620e/day) + Xanax (250e each) + verified refills/cans
+    const naturalCap = windowDays * 650;
+    const physicalBudget = xanPerWindow !== null
+        ? Math.min(theoreticalMaxEnergy + refillEnergy + canEnergy, Math.round(xanPerWindow * 250 + naturalCap + refillEnergy + canEnergy))
+        : (theoreticalMaxEnergy + refillEnergy + canEnergy);
 
-    // Account smoothly for happy-jump multipliers at lower stat tiers where 30k-99k happy amplifies gain per energy
-    // Cross-check upper physical ceiling using observed Xanax + natural regen (720e/day) + refills when Xanax delta is tracked
-    const xanNum = (typeof xanDeltaInWindow === 'number' && !Number.isNaN(xanDeltaInWindow) && xanDeltaInWindow >= 0) ? xanDeltaInWindow : null;
-    if (xanNum !== null && totalCur < 5000000 && estEnergySum > theoreticalMaxEnergy) {
-        const xanEnergyEstimate = xanNum * 250 + Math.round(windowDays * 720) + (refillsCount ? windowDays * 150 : 0);
-        if (xanEnergyEstimate > 0) {
-            estEnergySum = Math.min(estEnergySum, Math.max(100, xanEnergyEstimate));
+    // Happy Jump awareness (<5M stats): if Vladar @ 5,025H exceeds physical daily energy, solve upward across Candy/eDVD/Ecstasy happy tiers
+    const jumpThreshold = (windowDays <= 1.1 && totalCur < 5000000) ? Math.min(900, physicalBudget) : physicalBudget;
+    if (totalCur < 5000000 && estEnergy > jumpThreshold) {
+        for (const jumpH of [12000, 25000, 45000, 75000, 99999]) {
+            const solved = solveEnergyAtHappy(gainObj, curStats, baseStats, perks, jumpH) * spanNorm;
+            estEnergy = solved;
+            if (solved <= jumpThreshold) break;
         }
     }
 
-    const energySpentEst = Math.max(5, Math.round(Math.min(theoreticalMaxEnergy * 1.35, estEnergySum)));
+    // Clamp to physical energy bounds so impossible single-day spikes (>1k on 0-1 Xanax, or >100% theoretical max) never appear
+    const hardCap = xanPerWindow !== null
+        ? (xanPerWindow <= 1.2 && refillEnergy === 0 && canEnergy === 0 && windowDays <= 1.1
+            ? Math.min(950, physicalBudget)
+            : physicalBudget)
+        : (windowDays <= 1.1 && totalCur < 5000000 ? 950 : physicalBudget);
+
+    const energySpentEst = Math.max(5, Math.round(Math.min(estEnergy, hardCap, theoreticalMaxEnergy + refillEnergy + canEnergy)));
     const efficiencyScore = Math.min(100, Math.max(1, Math.round((energySpentEst / theoreticalMaxEnergy) * 100)));
 
     return {
         energySpentEst,
         efficiencyScore,
         theoreticalMaxEnergy,
-        xanaxInWindow: xanDeltaInWindow
+        xanaxInWindow: xanPerWindow !== null ? Number(xanPerWindow.toFixed(1)) : null
     };
 }
 
-// Compute Xanax taken between baseline snapshot and current total
-function computeXanaxDeltaInWindow(totalXanTaken, hasExactXanax, baseSnap, fallbackTodayTct) {
-    if (!hasExactXanax) return null;
-    if (baseSnap && typeof baseSnap.xantaken === 'number' && baseSnap.xantaken >= 0) {
-        return Math.max(0, totalXanTaken - Number(baseSnap.xantaken));
+// Compute exact delta for numeric personalstats counters between baseline and current value
+function computeCounterDelta(curVal, hasCounter, baseSnap, key, fallbackVal = null) {
+    if (!hasCounter) return fallbackVal;
+    if (baseSnap && typeof baseSnap[key] === 'number' && !Number.isNaN(baseSnap[key]) && baseSnap[key] >= 0) {
+        return Math.max(0, Number(curVal) - Number(baseSnap[key]));
     }
-    return fallbackTodayTct !== null && fallbackTodayTct !== undefined ? Number(fallbackTodayTct) : null;
+    return fallbackVal;
 }
 
 // Build unified member record with accurate Level, Relative Time, and Compliance
@@ -526,10 +609,38 @@ function buildMemberRecord(pId, bRec, info, callerId, isLeadership, customStart 
     const isSelf = (callerId === Number(pId));
     const canViewStats = isOwnerOrSelfOrFull(privacy, isSelf, isLeadership);
 
-    // Baseline snapshots for 24h, 7d, 30d
-    const base24h = getBaselineSnapshot(history, now - 86400000);
-    const base7d = getBaselineSnapshot(history, now - (7 * 86400000));
-    const base30d = getBaselineSnapshot(history, now - (30 * 86400000));
+    const pStats = bRec?.personalStats || {};
+    const totalXanTaken = Number(pStats.xantaken ?? bRec?.xanaxDaily?.currentXanax ?? bRec?.stats?.xanax ?? 0);
+    const hasExactXanax = Boolean(
+        pStats.xantaken !== undefined ||
+        bRec?.xanaxDaily?.currentXanax !== undefined ||
+        Number(bRec?.stats?.xanax || 0) > 0
+    );
+    const totalRefills = Number(pStats.refills ?? bRec?.stats?.refills ?? 0);
+    const hasRefills = pStats.refills !== undefined;
+    const totalCans = Number(pStats.energydrinkused ?? 0);
+    const hasCans = pStats.energydrinkused !== undefined;
+    const refills = Boolean(totalRefills);
+
+    const curPoint = {
+        timestamp: bRec?.lastBackgroundSync || bRec?.lastUpdated || now,
+        strength: curStr,
+        speed: curSpd,
+        defense: curDef,
+        dexterity: curDex,
+        total: curTotal,
+        ...(hasExactXanax ? { xantaken: totalXanTaken } : {}),
+        ...(hasRefills ? { refills: totalRefills } : {}),
+        ...(hasCans ? { energydrinkused: totalCans } : {})
+    };
+
+    // Interpolated baseline snapshots at exact 24h, 7d, 30d cutoffs
+    const win24h = getWindowBaseline(history, curPoint, now - 86400000);
+    const win7d = getWindowBaseline(history, curPoint, now - (7 * 86400000));
+    const win30d = getWindowBaseline(history, curPoint, now - (30 * 86400000));
+    const base24h = win24h.snap;
+    const base7d = win7d.snap;
+    const base30d = win30d.snap;
 
     const gain24h = computeDelta({ strength: curStr, speed: curSpd, defense: curDef, dexterity: curDex, total: curTotal }, base24h);
     const gain7d = computeDelta({ strength: curStr, speed: curSpd, defense: curDef, dexterity: curDex, total: curTotal }, base7d);
@@ -552,14 +663,6 @@ function buildMemberRecord(pId, bRec, info, callerId, isLeadership, customStart 
     };
 
     // Exact Personal Stats, 00:00 TCT Xanax Tracking & Drug Cooldown Idle Hours (zero heuristics)
-    const pStats = bRec?.personalStats || {};
-    const totalXanTaken = Number(pStats.xantaken ?? bRec?.xanaxDaily?.currentXanax ?? bRec?.stats?.xanax ?? 0);
-    const hasExactXanax = Boolean(
-        pStats.xantaken !== undefined ||
-        bRec?.xanaxDaily?.currentXanax !== undefined ||
-        Number(bRec?.stats?.xanax || 0) > 0
-    );
-    const refills = Boolean(pStats.refills || bRec?.stats?.refills);
     const todayTctStr = new Date(now).toISOString().slice(0, 10);
     const xDaily = bRec?.xanaxDaily || null;
     let takenTodayTct = null;
@@ -615,22 +718,32 @@ function buildMemberRecord(pId, bRec, info, callerId, isLeadership, customStart 
     const curStatsObj = { strength: curStr, speed: curSpd, defense: curDef, dexterity: curDex, total: curTotal };
     const baseCustomSnap = customStart ? getBaselineSnapshot(history, customStart) : null;
 
-    const xan24h = computeXanaxDeltaInWindow(totalXanTaken, hasExactXanax, base24h, dailyXanax);
-    const xan7d = computeXanaxDeltaInWindow(totalXanTaken, hasExactXanax, base7d, dailyXanax);
-    const xan30d = computeXanaxDeltaInWindow(totalXanTaken, hasExactXanax, base30d, dailyXanax);
-    const xanCustom = customStart ? computeXanaxDeltaInWindow(totalXanTaken, hasExactXanax, baseCustomSnap, dailyXanax) : null;
+    const xan24h = computeCounterDelta(totalXanTaken, hasExactXanax, base24h, 'xantaken', dailyXanax);
+    const xan7d = computeCounterDelta(totalXanTaken, hasExactXanax, base7d, 'xantaken', null);
+    const xan30d = computeCounterDelta(totalXanTaken, hasExactXanax, base30d, 'xantaken', null);
+    const xanCustom = customStart ? computeCounterDelta(totalXanTaken, hasExactXanax, baseCustomSnap, 'xantaken', null) : null;
+
+    const ref24h = computeCounterDelta(totalRefills, hasRefills, base24h, 'refills', 0);
+    const ref7d = computeCounterDelta(totalRefills, hasRefills, base7d, 'refills', 0);
+    const ref30d = computeCounterDelta(totalRefills, hasRefills, base30d, 'refills', 0);
+    const refCustom = customStart ? computeCounterDelta(totalRefills, hasRefills, baseCustomSnap, 'refills', 0) : 0;
+
+    const can24h = computeCounterDelta(totalCans, hasCans, base24h, 'energydrinkused', 0);
+    const can7d = computeCounterDelta(totalCans, hasCans, base7d, 'energydrinkused', 0);
+    const can30d = computeCounterDelta(totalCans, hasCans, base30d, 'energydrinkused', 0);
+    const canCustom = customStart ? computeCounterDelta(totalCans, hasCans, baseCustomSnap, 'energydrinkused', 0) : 0;
 
     const e24h = canViewStats
-        ? estimateWindowEnergy(gain24h, curStatsObj, base24h, activePerks, 1, xan24h, refills)
+        ? estimateWindowEnergy(gain24h, curStatsObj, base24h, activePerks, 1, xan24h, ref24h, can24h, win24h.spanDays)
         : { energySpentEst: 0, efficiencyScore: 0, theoreticalMaxEnergy: 1400, xanaxInWindow: null };
     const e7d = canViewStats
-        ? estimateWindowEnergy(gain7d, curStatsObj, base7d, activePerks, 7, xan7d, refills)
+        ? estimateWindowEnergy(gain7d, curStatsObj, base7d, activePerks, 7, xan7d, ref7d, can7d, Math.max(7, win7d.spanDays))
         : { energySpentEst: 0, efficiencyScore: 0, theoreticalMaxEnergy: 9800, xanaxInWindow: null };
     const e30d = canViewStats
-        ? estimateWindowEnergy(gain30d, curStatsObj, base30d, activePerks, 30, xan30d, refills)
+        ? estimateWindowEnergy(gain30d, curStatsObj, base30d, activePerks, 30, xan30d, ref30d, can30d, Math.max(30, win30d.spanDays))
         : { energySpentEst: 0, efficiencyScore: 0, theoreticalMaxEnergy: 42000, xanaxInWindow: null };
     const eCustom = customGain && canViewStats
-        ? estimateWindowEnergy(customGain, curStatsObj, baseCustomSnap, activePerks, customDays, xanCustom, refills)
+        ? estimateWindowEnergy(customGain, curStatsObj, baseCustomSnap, activePerks, customDays, xanCustom, refCustom, canCustom, customDays)
         : null;
 
     const energyByWindow = {
@@ -1131,9 +1244,15 @@ router.get('/member/:playerId', async (req, res) => {
             const xDelta = (typeof h.xantaken === 'number' && typeof next.xantaken === 'number')
                 ? Math.max(0, h.xantaken - next.xantaken)
                 : null;
+            const rDelta = (typeof h.refills === 'number' && typeof next.refills === 'number')
+                ? Math.max(0, h.refills - next.refills)
+                : 0;
+            const cDelta = (typeof h.energydrinkused === 'number' && typeof next.energydrinkused === 'number')
+                ? Math.max(0, h.energydrinkused - next.energydrinkused)
+                : 0;
             const est = member.masked
                 ? { energySpentEst: 0 }
-                : estimateWindowEnergy(dObj, h, next, perks, daysSpan, xDelta, member.energy?.refillUsed);
+                : estimateWindowEnergy(dObj, h, next, perks, Math.max(1, daysSpan), xDelta, rDelta, cDelta, Math.max(1, daysSpan));
             return {
                 date: new Date(h.timestamp).toISOString().split('T')[0],
                 timestamp: h.timestamp,

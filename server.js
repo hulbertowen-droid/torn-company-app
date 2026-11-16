@@ -4895,6 +4895,8 @@ async function performBattleStatsSnapshot() {
                     const prevDex = Number(bRec.stats?.dexterity || 0);
 
                     const exactXanax = Number(uData.personalstats?.xantaken ?? bRec.personalStats?.xantaken ?? 0);
+                    const exactRefills = Number(uData.personalstats?.refills ?? bRec.personalStats?.refills ?? 0);
+                    const exactEnergyDrinks = Number(uData.personalstats?.energydrinkused ?? bRec.personalStats?.energydrinkused ?? 0);
 
                     bRec.history.unshift({
                         timestamp: now,
@@ -4906,6 +4908,8 @@ async function performBattleStatsSnapshot() {
                         dexterity: Number(uData.battlestats.dexterity || 0),
                         total: curTotal,
                         xantaken: exactXanax,
+                        refills: exactRefills,
+                        energydrinkused: exactEnergyDrinks,
                         gains: {
                             strength: prevStr > 0 ? (Number(uData.battlestats.strength || 0) - prevStr) : 0,
                             defense: prevDef > 0 ? (Number(uData.battlestats.defense || 0) - prevDef) : 0,
