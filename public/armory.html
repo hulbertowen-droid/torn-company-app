@@ -23,12 +23,12 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/global.css?v=4.3.0">
+    <link rel="stylesheet" href="/global.css?v=4.4.0">
 
-    <script src="/auth-gate.js?v=4.3.0"></script>
-    <script src="/global_settings.js?v=4.3.0"></script>
-    <script src="/global-topbar.js?v=4.3.0"></script>
-    <script src="/pwa-helper.js?v=1.1.0" defer></script>
+    <script src="/auth-gate.js?v=4.4.0"></script>
+    <script src="/global_settings.js?v=4.4.0"></script>
+    <script src="/global-topbar.js?v=4.4.0"></script>
+    <script src="/pwa-helper.js?v=1.2.0" defer></script>
     <script src="/instant-nav.js?v=1.0.0" defer></script>
 
     <style>
@@ -107,7 +107,7 @@
         font-weight: 700;
         border-radius: var(--radius-sm);
         border: 1px solid var(--border-subtle);
-        background: var(--bg-card);
+        background: var(--bg-surface);
         color: var(--text-secondary);
         cursor: pointer;
         transition: all var(--transition-fast);
@@ -130,7 +130,7 @@
 
     /* Subpanels & Tables */
     .armory-subpanel {
-        background: var(--bg-card);
+        background: var(--bg-surface);
         border: 1px solid var(--border-default);
         border-radius: var(--radius-lg);
         margin-bottom: 18px;
@@ -238,7 +238,7 @@
 
     /* Date Bar & Filters */
     .tracker-date-bar {
-        background: var(--bg-card);
+        background: var(--bg-surface);
         border: 1px solid var(--border-default);
         border-radius: var(--radius-md);
         padding: 11px 15px;
@@ -309,7 +309,7 @@
         flex-wrap: wrap;
         max-width: 100%;
         gap: 4px;
-        background: var(--bg-card);
+        background: var(--bg-surface);
         padding: 2px;
         border-radius: var(--radius-sm);
         border: 1px solid var(--border-subtle);
@@ -632,7 +632,7 @@
         font-size: 0.76em;
         font-weight: 700;
         border: 1px solid var(--border-default);
-        background: var(--bg-card);
+        background: var(--bg-surface);
         color: var(--text-secondary);
         cursor: pointer;
         transition: all var(--transition-fast);
@@ -672,7 +672,7 @@
     }
     .thresh-input {
         flex: 1;
-        background: var(--bg-card);
+        background: var(--bg-surface);
         border: 1px solid var(--border-default);
         border-radius: var(--radius-sm);
         padding: 6px 10px;
@@ -743,7 +743,7 @@
         width: auto;
         min-width: 140px;
         max-width: 100%;
-        background: var(--bg-card);
+        background: var(--bg-surface);
         color: var(--text-primary);
         border: 1px solid var(--border-default);
         border-radius: var(--radius-sm);
@@ -768,7 +768,7 @@
     }
     .modal-backdrop.open { opacity: 1; pointer-events: auto; }
     .modal-dialog {
-        background: var(--bg-card);
+        background: var(--bg-surface);
         border: 1px solid var(--border-default);
         border-radius: var(--radius-lg);
         width: 100%;
@@ -862,55 +862,36 @@
                 <span class="brand-text">FactionOS</span>
             </div>
             <div class="sidebar-actions">
-                <button class="theme-toggle" onclick="toggleTheme()" title="Toggle Dark/Light Mode">🌗</button>
-                <button class="toggle-btn" onclick="toggleSidebar()" title="Collapse Sidebar">☰</button>
+                <button type="button" class="theme-toggle" onclick="toggleTheme()" title="Toggle Dark/Light Mode" aria-label="Toggle Dark/Light Mode"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg></button>
+                <button type="button" class="toggle-btn" onclick="toggleSidebar()" title="Collapse Sidebar" aria-label="Collapse Sidebar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
             </div>
         </div>
         <div class="nav-items">
             <div class="nav-section-title">Live Operations</div>
             <a href="/" class="nav-link"><span class="nav-icon">📡</span> <span class="nav-text">Live Warboard</span></a>
             <a href="/chain.html" class="nav-link"><span class="nav-icon">🔗</span> <span class="nav-text">Chain Sentinel</span></a>
-            <a href="/dashboard.html" class="nav-link"><span class="nav-icon">📊</span> <span class="nav-text">Operations Overview</span></a>
-            <a href="/armory.html" class="nav-link active" id="nav-link-armory">
-                <span class="nav-icon">🛡️</span>
-                <span class="nav-text">Armory &amp; Logistics</span>
-                <span class="badge-danger" id="nav-armory-badge" style="display:none; margin-left:auto;">0 Low</span>
-            </a>
+            <a href="/dashboard.html" class="nav-link" id="nav-link-overview"><span class="nav-icon">📊</span> <span class="nav-text">Operations Overview</span></a>
+            <a href="/armory.html" class="nav-link active" id="nav-link-armory"><span class="nav-icon">🛡️</span> <span class="nav-text">Armory &amp; Logistics</span> <span class="nav-badge" id="nav-armory-badge" style="display:none;"></span></a>
             <a href="/gym-stats.html" class="nav-link"><span class="nav-icon">🏋️</span> <span class="nav-text">Gym &amp; Stat Tracker</span></a>
             <a href="/payout.html" class="nav-link"><span class="nav-icon">💰</span> <span class="nav-text">War Payouts</span></a>
-            <a href="/members.html" class="nav-link"><span class="nav-icon">👥</span> <span class="nav-text">Faction Roster</span></a>
             <a href="/oc.html" class="nav-link"><span class="nav-icon">💼</span> <span class="nav-text">OC Manager</span></a>
 
             <div class="nav-section-title">Tactical Desk</div>
-            <a href="/dashboard.html#sentinel" class="nav-link"><span class="nav-icon">✈️</span> <span class="nav-text">Airspace &amp; War Intel</span></a>
             <a href="/travel.html" class="nav-link"><span class="nav-icon">🌍</span> <span class="nav-text">Travel Profit Desk</span></a>
-            <a href="/bazaar.html" class="nav-link"><span class="nav-icon">🛒</span> <span class="nav-text">Market &amp; Bazaar</span></a>
             <a href="/company.html" class="nav-link"><span class="nav-icon">🏢</span> <span class="nav-text">Company Hub</span></a>
             <a href="/gamble.html" class="nav-link"><span class="nav-icon">🎰</span> <span class="nav-text">Casino Analytics</span></a>
-            <a href="/recruit/" class="nav-link" title="Recruit Engine is currently in early development and not usable"><span class="nav-icon">🎯</span> <span class="nav-text">Recruit Engine</span> <span class="nav-badge-dev">Early Dev</span></a>
 
             <div class="nav-section-title">Intelligence &amp; Alerts</div>
             <a href="/ai-sandbox.html" class="nav-link"><span class="nav-icon">🤖</span> <span class="nav-text">F.R.I.D.A.Y. Intel</span></a>
             <a href="/discord.html" class="nav-link"><span class="nav-icon">📢</span> <span class="nav-text">Discord Sentinel</span></a>
             <a href="/bugs.html" class="nav-link"><span class="nav-icon">🐛</span> <span class="nav-text">Bug Tracker</span></a>
-            <a onclick="openGlobalSettings ? openGlobalSettings() : openSettings()" class="nav-link" style="cursor:pointer; margin-top:4px;"><span class="nav-icon">⚙️</span> <span class="nav-text">Settings</span></a>
-        </div>
-        <div class="sidebar-footer" id="sidebar-user-footer">
-            <div class="sidebar-user-chip" onclick="openGlobalSettings ? openGlobalSettings() : openSettings()" style="cursor:pointer;" title="Account &amp; API Settings">
-                <div class="sidebar-user-avatar" id="nav-user-avatar">🕷️</div>
-                <div class="sidebar-user-info">
-                    <span class="sidebar-user-name" id="nav-user-name">Tactical Operative</span>
-                    <span class="sidebar-user-faction" id="nav-user-sub">Faction Operations</span>
-                </div>
-                <span style="color:var(--text-tertiary); font-size:0.9em;">⚙️</span>
-            </div>
         </div>
     </nav>
 
     <div class="main-wrapper">
         <header class="app-topbar">
             <div class="topbar-left">
-                <button class="toggle-btn" onclick="toggleSidebar()" title="Toggle Sidebar" id="mobile-nav-toggle" style="display:none;">☰</button>
+                <button class="toggle-btn" onclick="toggleSidebar()" title="Toggle Sidebar" id="mobile-nav-toggle" style="display:none;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
                 <div class="topbar-crumb" id="topbar-breadcrumb">
                     <span>OPERATIONS</span> / <span>ARMORY &amp; LOGISTICS</span> / <strong id="crumb-active-sub" style="color:var(--text-primary);">USAGE &amp; DEPOSITS</strong>
                 </div>
@@ -924,7 +905,7 @@
                     <span class="pulse-indicator"></span>
                     <span id="global-ws-status">LIVE</span>
                 </div>
-                <button class="btn btn-secondary btn-sm" onclick="loadArmoryAll(true)" title="Refresh Armory Data" style="padding:4px 8px;">⟳</button>
+                <button class="btn btn-secondary btn-sm" onclick="loadArmoryAll(true)" title="Refresh Armory Data" style="padding:4px 8px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></button>
                 <button class="btn btn-secondary btn-sm" onclick="openGlobalSettings ? openGlobalSettings() : openSettings()" title="Settings" style="padding:4px 8px;">⚙️</button>
             </div>
         </header>
@@ -950,8 +931,8 @@
                     <a href="https://www.torn.com/factions.php?step=your#/tab=armoury" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline">
                         <span>🔫</span> Torn Armory ↗
                     </a>
-                    <button class="btn btn-sm btn-primary" onclick="loadArmoryAll(true)" id="btn-refresh-armory">
-                        <span>↻</span> Refresh All
+                    <button class="btn btn-sm btn-primary" onclick="loadArmoryAll(true)" id="btn-refresh-armory" style="display:inline-flex;align-items:center;gap:6px;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> Refresh All
                     </button>
                 </div>
             </div>
@@ -1632,6 +1613,8 @@ function switchArmorySubTab(tabName, stockSubFilter = null, updateHash = true) {
     }
 }
 
+let armoryHasAutoSwitchedForLimited = false;
+
 function initArmoryHash() {
     const raw = (window.location.hash || '').replace('#', '').toLowerCase();
     if (raw === 'stock' || raw === 'arsenal' || raw === 'thresholds' || raw === 'usage') {
@@ -1645,13 +1628,14 @@ window.addEventListener('hashchange', initArmoryHash);
 
 // ── Main Data Fetch & Render ──
 async function loadArmoryAll(forceRefresh = false) {
-    myKey = localStorage.getItem('warboard_apikey') || '';
+    myKey = typeof getApiKey === 'function' ? getApiKey() : (localStorage.getItem('warboard_apikey') || '');
+    const hasAccess = (typeof hasTornAccess === 'function' && hasTornAccess()) || Boolean(myKey);
     if (forceRefresh) {
         armoryInitialRangeSynced = false;
         armoryForceNextSync = true;
     }
 
-    if (!myKey && !localStorage.getItem('sv_session_token')) {
+    if (!hasAccess) {
         const lu = document.getElementById('last-updated');
         if (lu) lu.textContent = 'Connect API key to load armory data';
         return;
@@ -1723,6 +1707,12 @@ function renderArmory(d) {
 
     const limitedBanner = document.getElementById('armory-limited-banner');
     if (limitedBanner) limitedBanner.style.display = limitedAccess ? 'flex' : 'none';
+
+    const rawHash = (window.location.hash || '').replace('#', '').toLowerCase();
+    if (limitedAccess && !armoryHasAutoSwitchedForLimited && !['usage', 'stock', 'thresholds'].includes(rawHash)) {
+        armoryHasAutoSwitchedForLimited = true;
+        switchArmorySubTab('arsenal', null, false);
+    }
 
     const heroFaction = document.getElementById('armory-hero-faction');
     if (heroFaction) {
@@ -2387,6 +2377,29 @@ function toggleMemberRowDrawer(id) {
 }
 
 function renderItemUsageTracker() {
+    const limitedAccess = Boolean(currentArmoryData?.armory?.limitedAccess);
+    if (limitedAccess) {
+        ['tkpi-xanax', 'tkpi-medical', 'tkpi-boosters', 'ledger-kpi-deposited', 'ledger-kpi-used', 'ledger-kpi-net', 'ledger-kpi-blood-filled'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = 'Restricted';
+        });
+        const bloodGrid = document.getElementById('blood-types-grid');
+        if (bloodGrid) bloodGrid.innerHTML = `<div style="grid-column:1/-1; text-align:center; padding:18px; color:var(--accent-amber);">🔐 Blood bag inventory requires Faction API Medical permissions.</div>`;
+        const noticeHtml = `<div style="padding:28px 20px; text-align:center;">
+            <div style="font-size:1.1em; font-weight:800; color:var(--accent-amber); margin-bottom:6px;">🔐 Restricted API Access — Faction Armory Logs Unavailable</div>
+            <div style="font-size:0.86em; color:var(--text-secondary); max-width:560px; margin:0 auto 14px;">Your Torn API key has Gear &amp; Loan permissions only. Full Medical, Drug, Booster, Vault, and Blood Bag fill logs require Faction API Access permissions.</div>
+            <button class="btn btn-sm btn-primary" onclick="switchArmorySubTab('arsenal')">Open Weapons, Armor &amp; Loans →</button>
+        </div>`;
+        const mb = document.getElementById('usage-members-tbody');
+        const ib = document.getElementById('usage-items-tbody');
+        const fb = document.getElementById('usage-feed-tbody');
+        if (mb) mb.innerHTML = `<tr><td colspan="12">${noticeHtml}</td></tr>`;
+        if (ib) ib.innerHTML = `<tr><td colspan="7">${noticeHtml}</td></tr>`;
+        if (fb) fb.innerHTML = `<tr><td colspan="7">${noticeHtml}</td></tr>`;
+        const badge = document.getElementById('usage-total-badge');
+        if (badge) badge.textContent = 'Restricted Key (Gear & Loans Active)';
+        return;
+    }
     if (!currentArmoryData?.armory?.usageStats && !loadedArmoryEvents.length) return;
     const initialStats = currentArmoryData?.armory?.usageStats || {};
     if (!loadedArmoryEvents.length && initialStats.recentLog?.length) {

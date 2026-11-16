@@ -703,6 +703,14 @@ app.get('/recruitment.html', (req, res) => {
     res.redirect(301, '/recruit/');
 });
 
+app.get('/members.html', (req, res) => {
+    res.redirect(302, '/gym-stats.html#roster');
+});
+
+app.get('/bazaar.html', (req, res) => {
+    res.redirect(302, '/discord.html#market');
+});
+
 app.post('/api/sync-recruits-now', async (req, res) => {
     syncRecruitsToPlayers().catch(e => console.error("[Manual RecruitSync Error]", e.message));
     res.json({ success: true, message: "Recruit sync triggered in background" });
@@ -1233,7 +1241,11 @@ function saveOcConfig() { fs.writeFileSync('oc_config.json', JSON.stringify(ocCo
 
 function saveSpyDb() { fs.writeFileSync('spy_db.json', JSON.stringify(spyDatabase)); saveToMongo(); }
 function saveTracking() { fs.writeFileSync('user_tracking.json', JSON.stringify(userTracking)); saveToMongo(); }
-function saveApiPool() { fs.writeFileSync('api_pool.json', JSON.stringify(apiPoolConfig)); syncTornApiManagerKeys(); saveToMongo(); }
+function saveApiPool() {
+    fs.writeFileSync('api_pool.json', JSON.stringify(apiPoolConfig));
+    if (typeof syncTornApiManagerKeys === 'function') syncTornApiManagerKeys();
+    saveToMongo();
+}
 function saveCompanyConfig() { fs.writeFileSync('company_config.json', JSON.stringify(companyConfig)); saveToMongo(); }
 
 // --- CENTRALIZED DISCORD RATE-LIMIT QUEUE ---
@@ -6738,7 +6750,7 @@ app.post('/api/test-discord-alert', async (req, res) => {
             ],
             links: [
                 { label: "🏥 Faction Armory", url: "https://www.torn.com/factions.php?step=your#/tab=armoury" },
-                { label: "🛒 Torn Market", url: "https://faction-os.duckdns.org/bazaar.html" }
+                { label: "🛒 Torn Market", url: "https://faction-os.duckdns.org/discord.html#market" }
             ],
             footer: { text: "F.R.I.D.A.Y. • Faction Logistics & Armory Sentinel" },
             timestamp: new Date().toISOString()
@@ -7892,17 +7904,20 @@ global.dashboardDataCache = dashboardDataCache;
 
 app.get('/api/dashboard-data', async (req, res) => {
     let userKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey;
-    if (!userKey || userKey === 'null' || userKey.trim() === '') {
-        if (req.userSession || req.headers['x-session-token']) {
+    if (!userKey || userKey === 'null' || userKey === 'undefined' || userKey.trim() === '') {
+        if (req.userSession) {
             userKey = discordConfig.apiKey;
         } else {
             return res.status(401).json({ error: "Authentication required" });
         }
     }
-    const ffKey = (req.headers['x-ff-key'] || req.query.ffKey) || null;
+    const rawFf = req.headers['x-ff-key'] || req.query.ffKey;
+    const ffKey = (rawFf && rawFf !== 'null' && rawFf !== 'undefined' && String(rawFf).trim().length > 10)
+        ? String(rawFf).trim()
+        : (typeof getGlobalFFKey === 'function' ? getGlobalFFKey() : null);
     try {
         await verifySubscription(userKey);
-        const isPremium = (ffKey && ffKey !== "null" && ffKey.trim().length > 10);
+        const isPremium = Boolean(ffKey && ffKey.length > 10);
 
         const userInfo = await getUserFactionInfo(userKey);
         let targetFacId = (req.query.factionId || req.headers['x-faction-id'])
@@ -7928,7 +7943,8 @@ app.get('/api/dashboard-data', async (req, res) => {
             targetFacId = discordConfig.factionId || dynamicFactionId || "";
         }
 
-        const cacheKey = `${targetFacId || 'default'}_${isPremium ? 'prem' : 'free'}`;
+        const keyScopeDigest = crypto.createHash('sha256').update(String(userKey)).digest('hex').slice(0, 8);
+        const cacheKey = `${targetFacId || 'default'}_${isPremium ? 'prem' : 'free'}_${keyScopeDigest}`;
         if (!req.query.force && dashboardDataCache[cacheKey] && (Date.now() - dashboardDataCache[cacheKey].timestamp) < 15000) {
             return res.json(dashboardDataCache[cacheKey].data);
         }
@@ -7937,14 +7953,13 @@ app.get('/api/dashboard-data', async (req, res) => {
         const thirtyDaysAgo = nowSec - (86400 * 30);
 
         // Fetch basic, armory (including medical, drugs, boosters, donations, armorynews with 30-day history), and chain/rankedwars in parallel for maximum speed
-        const basicUrl = targetFacId
-            ? `https://api.torn.com/faction/${targetFacId}?selections=basic&key=${userKey}`
-            : `https://api.torn.com/faction/?selections=basic&key=${userKey}`;
-        const armoryUrl = `https://api.torn.com/faction/?selections=armor,weapons,temporary,medical,drugs,boosters,donations,armorynews&from=${thirtyDaysAgo}&key=${userKey}`;
+        const facSegment = targetFacId ? `/${targetFacId}` : '';
+        const basicUrl = `https://api.torn.com/faction${facSegment}?selections=basic&key=${userKey}`;
+        const armoryUrl = `https://api.torn.com/faction${facSegment}?selections=armor,weapons,temporary,medical,drugs,boosters,donations,armorynews&from=${thirtyDaysAgo}&key=${userKey}`;
         const [basicResp, armoryResp, chainResp] = await Promise.all([
             fetch(basicUrl).catch(e => null),
             fetch(armoryUrl).catch(e => null),
-            fetch(`https://api.torn.com/faction/?selections=chain,rankedwars&key=${userKey}`).catch(e => null)
+            fetch(`https://api.torn.com/faction${facSegment}?selections=chain,rankedwars&key=${userKey}`).catch(e => null)
         ]);
 
         let basicData = basicResp ? await basicResp.json().catch(() => ({})) : {};
@@ -7965,19 +7980,29 @@ app.get('/api/dashboard-data', async (req, res) => {
         let loans = [];
         let armoryError = false;
         let isLimitedArmoryAccess = false;
+        let armoryQueryKey = userKey;
         let armoryData = armoryResp ? await armoryResp.json().catch(() => ({ error: true })) : { error: true };
 
-        // Fallback to server/faction key if user key lacks permissions (code 7) or errored
-        const factionApiKeyFallback = (targetFacId ? getFactionDiscordConfig(targetFacId)?.apiKey : null) || discordConfig.apiKey;
+        // Fallback to server/faction key ONLY if caller belongs to that same configured faction (strict multi-faction isolation)
+        const hostFacStr = String(discordConfig.factionId || dynamicFactionId || '');
+        const isCallerHostFac = Boolean(hostFacStr && targetFacId && String(targetFacId) === hostFacStr);
+        const factionApiKeyFallback = (targetFacId ? getFactionDiscordConfig(targetFacId)?.apiKey : null)
+            || (isCallerHostFac ? discordConfig.apiKey : null);
         if (armoryData.error && factionApiKeyFallback && userKey !== factionApiKeyFallback) {
             try {
-                const fallbackResp = await fetch(`https://api.torn.com/faction/?selections=armor,weapons,temporary,medical,drugs,boosters,donations,armorynews&from=${thirtyDaysAgo}&key=${factionApiKeyFallback}`).catch(e => null);
-                if (fallbackResp) armoryData = await fallbackResp.json().catch(() => ({ error: true }));
+                const fallbackResp = await fetch(`https://api.torn.com/faction${facSegment}?selections=armor,weapons,temporary,medical,drugs,boosters,donations,armorynews&from=${thirtyDaysAgo}&key=${factionApiKeyFallback}`).catch(e => null);
+                if (fallbackResp) {
+                    const fallbackParsed = await fallbackResp.json().catch(() => ({ error: true }));
+                    if (!fallbackParsed.error) {
+                        armoryData = fallbackParsed;
+                        armoryQueryKey = factionApiKeyFallback;
+                    }
+                }
             } catch(e) {}
         }
         if (armoryData.error) {
             try {
-                const fallbackResp = await fetch(`https://api.torn.com/faction/?selections=armor,weapons,temporary&key=${userKey}`).catch(e => null);
+                const fallbackResp = await fetch(`https://api.torn.com/faction${facSegment}?selections=armor,weapons,temporary&key=${userKey}`).catch(e => null);
                 if (fallbackResp) {
                     armoryData = await fallbackResp.json().catch(() => ({ error: true }));
                     if (!armoryData.error) isLimitedArmoryAccess = true;
@@ -7994,7 +8019,7 @@ app.get('/api/dashboard-data', async (req, res) => {
                 const earliestTs = initialList[initialList.length - 1].timestamp;
                 if (earliestTs && earliestTs > thirtyDaysAgo) {
                     try {
-                        const page2Url = `https://api.torn.com/faction/?selections=armorynews&from=${thirtyDaysAgo}&to=${earliestTs - 1}&key=${userKey}`;
+                        const page2Url = `https://api.torn.com/faction${facSegment}?selections=armorynews&from=${thirtyDaysAgo}&to=${earliestTs - 1}&key=${armoryQueryKey}`;
                         const page2Resp = await fetch(page2Url).catch(() => null);
                         if (page2Resp) {
                             const page2Data = await page2Resp.json().catch(() => ({}));
@@ -8306,7 +8331,7 @@ app.get('/api/dashboard-data', async (req, res) => {
 // Helper: deep-paginate Torn faction armorynews without dropping same-second boundary entries
 const armoryHistoryCache = new Map();
 
-async function fetchArmoryNewsRange({ initialKey, fallbackKey = null, fromTs, toTs = null, maxPages = 60 }) {
+async function fetchArmoryNewsRange({ initialKey, fallbackKey = null, factionId = null, fromTs, toTs = null, maxPages = 60 }) {
     const allEntries = {};
     let activeKey = initialKey;
     let cursorTo = Number.isFinite(toTs) && toTs > 0 ? toTs : null;
@@ -8314,9 +8339,10 @@ async function fetchArmoryNewsRange({ initialKey, fallbackKey = null, fromTs, to
     let truncated = false;
     let minTsSeen = null;
     let maxTsSeen = null;
+    const facSeg = (factionId && String(factionId) !== '0') ? `/${factionId}` : '';
 
     for (let p = 0; p < maxPages; p++) {
-        let url = `https://api.torn.com/faction/?selections=armorynews&from=${fromTs}&key=${activeKey}`;
+        let url = `https://api.torn.com/faction${facSeg}?selections=armorynews&from=${fromTs}&key=${activeKey}`;
         if (cursorTo) url += `&to=${cursorTo}`;
 
         let r = await fetch(url).catch(() => null);
@@ -8326,7 +8352,7 @@ async function fetchArmoryNewsRange({ initialKey, fallbackKey = null, fromTs, to
         // If user's personal key lacks faction permissions (code 7) or is invalid (code 2), retry with faction key
         if (d.error && (d.error.code === 7 || d.error.code === 2) && fallbackKey && activeKey !== fallbackKey) {
             activeKey = fallbackKey;
-            url = `https://api.torn.com/faction/?selections=armorynews&from=${fromTs}&key=${activeKey}`;
+            url = `https://api.torn.com/faction${facSeg}?selections=armorynews&from=${fromTs}&key=${activeKey}`;
             if (cursorTo) url += `&to=${cursorTo}`;
             r = await fetch(url).catch(() => null);
             if (!r) break;
@@ -8382,10 +8408,13 @@ async function fetchArmoryNewsRange({ initialKey, fallbackKey = null, fromTs, to
 // Dedicated Armory History & Audit Endpoint with custom day ranges and deep pagination
 app.get('/api/armory-history', async (req, res) => {
     const sessionFacId = req.userSession?.factionId || req.headers['x-faction-id'] || null;
-    const facFallbackKey = (sessionFacId ? getFactionDiscordConfig(sessionFacId)?.apiKey : null) || discordConfig.apiKey;
+    const hostFacIdStr = String(discordConfig.factionId || dynamicFactionId || '');
+    const isHostFac = Boolean(sessionFacId && hostFacIdStr && String(sessionFacId) === hostFacIdStr);
+    const facFallbackKey = (sessionFacId ? getFactionDiscordConfig(sessionFacId)?.apiKey : null)
+        || (isHostFac ? discordConfig.apiKey : null);
     let userKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey || req.query.key;
-    if (!userKey || userKey === 'null' || userKey.trim() === '') {
-        if (req.userSession || req.headers['x-session-token'] || facFallbackKey) {
+    if (!userKey || userKey === 'null' || userKey === 'undefined' || userKey.trim() === '') {
+        if (req.userSession && facFallbackKey) {
             userKey = facFallbackKey;
         } else {
             return res.status(401).json({ error: "Authentication required" });
@@ -8416,6 +8445,7 @@ app.get('/api/armory-history', async (req, res) => {
         const { allEntries, pagesFetched, truncated, earliestTs, latestTs } = await fetchArmoryNewsRange({
             initialKey: userKey,
             fallbackKey: facFallbackKey,
+            factionId: sessionFacId,
             fromTs,
             toTs,
             maxPages
@@ -8462,19 +8492,22 @@ app.post('/api/armory/remind', async (req, res) => {
 const companyApiCache = {};
 
 app.get('/api/company', async (req, res) => {
-    const apiKey = req.headers['x-api-key'] || req.query.apiKey;
+    const apiKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey;
+    if (!apiKey || apiKey === 'null' || apiKey === 'undefined' || apiKey.trim() === '') {
+        return res.status(401).json({ error: "Authentication required. Connect your Torn API key in Settings." });
+    }
     try {
         await verifySubscription(apiKey);
-        const cacheKey = String(apiKey || 'default');
+        const cacheKey = crypto.createHash('sha256').update(String(apiKey)).digest('hex').slice(0, 12);
         if (!req.query.force && companyApiCache[cacheKey] && (Date.now() - companyApiCache[cacheKey].timestamp) < 20000) {
             return res.json(companyApiCache[cacheKey].data);
         }
 
-        const resp = await fetch(`https://api.torn.com/company/?selections=profile,detailed,employees,stock&key=${apiKey}`);
+        const resp = await fetch(`https://api.torn.com/company/?selections=profile,detailed,employees,stock&key=${encodeURIComponent(apiKey)}`);
         const data = await resp.json();
         
         if (data.error) {
-            return res.status(400).json({ error: "Torn API Error: " + data.error.error });
+            return res.status(400).json({ error: "Torn API Error: " + data.error.error, code: data.error.code });
         }
         
         const resultPayload = { success: true, company: data };
@@ -9490,8 +9523,9 @@ app.get('/api/war-bounty-reimbursements', async (req, res) => {
 });
 
 app.get('/api/inspect', async (req, res) => {
-    const apiKey = req.headers['x-api-key'] || req.query.apiKey;
-    const tsKey = req.headers['x-ts-key'] || req.query.tsKey;
+    const apiKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey;
+    const rawTs = req.headers['x-ts-key'] || req.query.tsKey || discordConfig.tsKey || '';
+    const tsKey = (rawTs && rawTs !== 'null' && rawTs !== 'undefined') ? String(rawTs).trim() : '';
     const targetId = req.query.targetId;
     try {
         await verifySubscription(apiKey);
@@ -9597,7 +9631,8 @@ app.get('/api/warboard', async (req, res) => {
         myFacIdFast = hostFacId;
     }
 
-    const hasFfKey = (req.headers['x-ff-key'] || req.query.ffKey) && (req.headers['x-ff-key'] || req.query.ffKey) !== 'null' && (req.headers['x-ff-key'] || req.query.ffKey) !== '';
+    const rawFfFast = req.headers['x-ff-key'] || req.query.ffKey;
+    const hasFfKey = Boolean(rawFfFast && rawFfFast !== 'null' && rawFfFast !== 'undefined' && String(rawFfFast).trim() !== '');
     if (myFacIdFast) {
         // Multi-faction isolation: NEVER leak host payload to an external faction!
         const cachedPayload = lastGoodWarboardByFaction[myFacIdFast] || (String(myFacIdFast) === hostFacId ? lastGoodWarboardPayload : null);
@@ -9622,10 +9657,10 @@ app.get('/api/warboard', async (req, res) => {
             return res.status(503).json({ error: "No faction API key available on server. Please configure an API key." });
         }
         isServerKey = !userKeyProvided || userKeyProvided === discordConfig.apiKey || userKeyProvided === TORN_API_KEY;
-        const ffKey = (req.headers['x-ff-key'] || req.query.ffKey) && (req.headers['x-ff-key'] || req.query.ffKey) !== "null" && (req.headers['x-ff-key'] || req.query.ffKey) !== "" ? (req.headers['x-ff-key'] || req.query.ffKey) : null;
+        const ffKey = hasFfKey ? String(rawFfFast).trim() : ((typeof getGlobalFFKey === 'function' ? getGlobalFFKey() : null) || null);
         await verifySubscription(userKey);
 
-        const isPremium = (ffKey && ffKey !== "null" && ffKey.trim().length > 10);
+        const isPremium = Boolean(ffKey && ffKey !== "null" && ffKey.trim().length > 10);
         requestedFacId = req.headers['x-faction-id'] || req.query.myFactionId;
         const userInfo = await getUserFactionInfo(userKey);
         let myData = null;
@@ -9633,9 +9668,9 @@ app.get('/api/warboard', async (req, res) => {
         // Step 1: If user explicitly requested a faction ID (via header or query), fetch that
         if (requestedFacId) {
             targetMyFacId = requestedFacId.toString();
-            myData = await cachedTornFetch(`https://api.torn.com/faction/${targetMyFacId}?selections=basic,rankedwars,attacks&key=${userKey}`, `my_faction_${targetMyFacId}_${userKey}`, 2500);
+            myData = await cachedTornFetch(`https://api.torn.com/faction/${targetMyFacId}?selections=basic,rankedwars,chain,attacks&key=${userKey}`, `my_faction_${targetMyFacId}_${userKey}`, 2500);
             if (myData && myData.error && (myData.error.code === 6 || myData.error.code === 7 || myData.error.code === 16)) {
-                myData = await cachedTornFetch(`https://api.torn.com/faction/${targetMyFacId}?selections=basic,rankedwars&key=${userKey}`, `my_faction_basic_${targetMyFacId}_${userKey}`, 2500);
+                myData = await cachedTornFetch(`https://api.torn.com/faction/${targetMyFacId}?selections=basic,rankedwars,chain&key=${userKey}`, `my_faction_basic_${targetMyFacId}_${userKey}`, 2500);
             }
         }
 
@@ -9643,9 +9678,9 @@ app.get('/api/warboard', async (req, res) => {
         // Only fall back to personal /faction/ if user supplied their own key, OR if the request is for the host faction!
         const canFallbackToPersonal = Boolean(userKeyProvided) || (!requestedFacId || String(requestedFacId) === hostFacId);
         if ((!myData || myData.error) && canFallbackToPersonal) {
-            myData = await cachedTornFetch(`https://api.torn.com/faction/?selections=basic,rankedwars,attacks&key=${userKey}`, `my_faction_personal_${userKey}`, 2500);
+            myData = await cachedTornFetch(`https://api.torn.com/faction/?selections=basic,rankedwars,chain,attacks&key=${userKey}`, `my_faction_personal_${userKey}`, 2500);
             if (myData && myData.error && (myData.error.code === 6 || myData.error.code === 7 || myData.error.code === 16)) {
-                myData = await cachedTornFetch(`https://api.torn.com/faction/?selections=basic,rankedwars&key=${userKey}`, `my_faction_personal_basic_${userKey}`, 2500);
+                myData = await cachedTornFetch(`https://api.torn.com/faction/?selections=basic,rankedwars,chain&key=${userKey}`, `my_faction_personal_basic_${userKey}`, 2500);
             }
             if (myData && myData.ID) {
                 targetMyFacId = myData.ID.toString();
@@ -9658,7 +9693,7 @@ app.get('/api/warboard', async (req, res) => {
         if ((!myData || myData.error || !myData.members || Object.keys(myData.members).length === 0) && resolvedFacId && isHostMember) {
             const poolKey = getNextApiKey() || TORN_API_KEY;
             if (poolKey) {
-                const pooledData = await cachedTornFetch(`https://api.torn.com/faction/${resolvedFacId}?selections=basic,rankedwars&key=${poolKey}`, `my_faction_pooled_${resolvedFacId}`, 2500);
+                const pooledData = await cachedTornFetch(`https://api.torn.com/faction/${resolvedFacId}?selections=basic,rankedwars,chain&key=${poolKey}`, `my_faction_pooled_${resolvedFacId}`, 2500);
                 if (pooledData && !pooledData.error && pooledData.members && Object.keys(pooledData.members).length > 0) {
                     myData = pooledData;
                     targetMyFacId = resolvedFacId;
@@ -9705,11 +9740,24 @@ app.get('/api/warboard', async (req, res) => {
 
 
 
-        let enemyId = (req.headers['x-enemy-id'] || req.query.enemyFaction) || null;
-        if (!enemyId) enemyId = autoDetectEnemyFaction(myData);
+        const autoEnemy = autoDetectEnemyFaction(myData);
+        const requestedEnemy = req.headers['x-enemy-id'] || req.query.enemyFaction || null;
+        let enemyId = autoEnemy || (requestedEnemy && requestedEnemy !== 'null' ? String(requestedEnemy).trim() : null) || null;
+        if (!enemyId && myData?.rankedwars) {
+            const latestRw = Object.values(myData.rankedwars)
+                .filter(w => w?.factions)
+                .sort((a, b) => (b.war?.start || 0) - (a.war?.start || 0))[0];
+            if (latestRw?.factions) {
+                const opp = Object.keys(latestRw.factions).find(f => String(f) !== String(myFacId));
+                if (opp) enemyId = opp;
+            }
+        }
         let enemyDataResult = { members: {} };
         if (enemyId) { 
-            enemyDataResult = await cachedTornFetch(`https://api.torn.com/faction/${enemyId}?selections=basic&key=${getNextApiKey() || userKey || TORN_API_KEY}`, `enemy_faction_${enemyId}`, 2500); 
+            enemyDataResult = await cachedTornFetch(`https://api.torn.com/faction/${enemyId}?selections=basic,chain&key=${getNextApiKey() || userKey || TORN_API_KEY}`, `enemy_faction_${enemyId}`, 2500); 
+            if (enemyDataResult && enemyDataResult.error && !enemyDataResult.members) {
+                enemyDataResult = await cachedTornFetch(`https://api.torn.com/faction/${enemyId}?selections=basic&key=${userKey || getNextApiKey() || TORN_API_KEY}`, `enemy_faction_basic_${enemyId}`, 2500);
+            }
         }
 
         const nowSec = Math.floor(Date.now() / 1000);
@@ -10061,6 +10109,25 @@ app.get('/api/warboard', async (req, res) => {
 // ── Universal Torn Web Session & Authentication Engine ─────────────────────
 const sessionRoutes = require('./routes/session');
 sessionRoutes.setTargetFactionGetter(() => String(discordConfig.factionId || adminFactionId || dynamicFactionId || ''));
+if (typeof sessionRoutes.setActiveEnemyGetter === 'function') {
+    sessionRoutes.setActiveEnemyGetter((facId) => {
+        const fid = String(facId || discordConfig.factionId || dynamicFactionId || '');
+        const wb = (fid && lastGoodWarboardByFaction[fid]) || lastGoodWarboardPayload || null;
+        if (wb?.warInfo?.active && wb.warInfo?.enemyFaction?.id) {
+            return String(wb.warInfo.enemyFaction.id);
+        }
+        if (wb?.warInfo?.upcomingWar?.enemyFaction?.id) {
+            return String(wb.warInfo.upcomingWar.enemyFaction.id);
+        }
+        if (wb?.detectedEnemyId) {
+            return String(wb.detectedEnemyId);
+        }
+        if (wb?.warInfo?.recentWar?.enemyId) {
+            return String(wb.warInfo.recentWar.enemyId);
+        }
+        return String(discordConfig.enemyFacId || '');
+    });
+}
 app.use('/api/session', sessionRoutes);
 app.use('/api/auth', sessionRoutes);
 
@@ -10352,9 +10419,19 @@ app.post('/api/sync-configs', (req, res) => {
 
 app.get('/api/global-settings', (req, res) => {
     // SECURITY HARDENING: Never leak server master keys or private bot/channel tokens
+    const facId = String(req.userSession?.factionId || discordConfig.factionId || dynamicFactionId || '');
+    const wb = (facId && lastGoodWarboardByFaction[facId]) || lastGoodWarboardPayload || null;
+    const detectedEnemy = String(
+        (wb?.warInfo?.active && wb.warInfo?.enemyFaction?.id)
+        || wb?.warInfo?.upcomingWar?.enemyFaction?.id
+        || wb?.detectedEnemyId
+        || wb?.warInfo?.recentWar?.enemyId
+        || ''
+    );
     res.json({
         success: true,
-        enemyFacId: discordConfig.enemyFacId || "",
+        enemyFacId: detectedEnemy || discordConfig.enemyFacId || "",
+        detectedEnemyFacId: detectedEnemy,
         cpm: discordConfig.cpm || "12"
     });
 });
@@ -10393,74 +10470,128 @@ const ocApiCache = {};
 
 app.get('/api/ocs', async (req, res) => {
     try {
-        const userKey = req.headers['x-api-key'] || req.query.apiKey;
-        if (!userKey || userKey === "null" || userKey.trim() === "") return res.status(401).json({ error: "No API key provided. Please add your API key in Settings." });
+        const userKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey;
+        if (!userKey || userKey === "null" || userKey === "undefined" || userKey.trim() === "") {
+            return res.status(401).json({ error: "No API key provided. Please add your API key in Settings." });
+        }
 
         // Resolve faction ID from session, cache, or profile
-        let fid = req.userSession?.factionId;
+        let fid = (req.userSession?.factionId && String(req.userSession.factionId) !== '0') ? String(req.userSession.factionId) : null;
         if (!fid) {
             const userInfo = await getUserFactionInfo(userKey);
             fid = userInfo?.facId;
         }
 
-        if (fid && !req.query.force && ocApiCache[fid] && (Date.now() - ocApiCache[fid].timestamp) < 15000) {
-            return res.json(ocApiCache[fid].data);
+        const keyDigest = crypto.createHash('sha256').update(String(userKey)).digest('hex').slice(0, 8);
+        const ocCacheKey = fid ? `${fid}:${keyDigest}` : null;
+        if (ocCacheKey && !req.query.force && ocApiCache[ocCacheKey] && (Date.now() - ocApiCache[ocCacheKey].timestamp) < 15000) {
+            return res.json(ocApiCache[ocCacheKey].data);
         }
 
         if (!fid) {
             // Fetch user profile to get their faction ID (v2 API requires explicit ID)
-            const userRes = await fetch(`https://api.torn.com/user/?selections=profile&key=${userKey}`);
+            const userRes = await fetch(`https://api.torn.com/user/?selections=profile&key=${encodeURIComponent(userKey)}`);
             const userData = await userRes.json();
             
             if (userData.error) {
-                return res.status(400).json({ error: `API Key Error: ${userData.error.error}` });
+                return res.status(400).json({ error: `API Key Error: ${userData.error.error}`, code: userData.error.code });
             }
             if (!userData.faction || userData.faction.faction_id === 0) {
                 return res.status(400).json({ error: "You are not currently in a faction, so you cannot view Organized Crimes." });
             }
-            fid = userData.faction.faction_id;
+            fid = String(userData.faction.faction_id);
         }
 
-        if (!req.query.force && ocApiCache[fid] && (Date.now() - ocApiCache[fid].timestamp) < 15000) {
-            return res.json(ocApiCache[fid].data);
+        const resolvedCacheKey = `${fid}:${keyDigest}`;
+        if (!req.query.force && ocApiCache[resolvedCacheKey] && (Date.now() - ocApiCache[resolvedCacheKey].timestamp) < 15000) {
+            return res.json(ocApiCache[resolvedCacheKey].data);
         }
 
         // 2. Fetch OC crimes AND faction members explicitly by faction ID
         const [crimeRes, memberRes] = await Promise.all([
-            fetch(`https://api.torn.com/v2/faction/${fid}/crimes?cat=available&key=${userKey}`),
-            fetch(`https://api.torn.com/faction/${fid}?selections=basic&key=${userKey}`)
+            fetch(`https://api.torn.com/v2/faction/${fid}/crimes?cat=available&key=${encodeURIComponent(userKey)}`),
+            fetch(`https://api.torn.com/faction/${fid}?selections=basic&key=${encodeURIComponent(userKey)}`)
         ]);
         const crimeData = await crimeRes.json();
         const memberData = await memberRes.json();
 
         if (crimeData.error) {
-            return res.status(400).json({ error: `Torn API Error: ${crimeData.error.error || JSON.stringify(crimeData.error)}` });
-        }
-
-        // Build a name lookup map: { "1234567": "PlayerName", ... }
-        const memberNames = {};
-        if (memberData.members) {
-            Object.entries(memberData.members).forEach(([id, m]) => {
-                memberNames[id] = m.name;
+            const errCode = Number(crimeData.error.code || 0);
+            const isPermErr = errCode === 7 || errCode === 16 || /permission|access level/i.test(crimeData.error.error || '');
+            return res.status(isPermErr ? 403 : 400).json({
+                error: `Torn API Error: ${crimeData.error.error || JSON.stringify(crimeData.error)}`,
+                code: errCode,
+                permissionError: isPermErr,
+                requiresAA: isPermErr
             });
         }
 
-        // Inject names into every crime slot
+        // Build a member lookup map: name + live status
+        const memberLookup = {};
+        if (memberData.members) {
+            Object.entries(memberData.members).forEach(([id, m]) => {
+                memberLookup[id] = { name: m.name, status: m.status || null, last_action: m.last_action || null };
+            });
+        }
+
+        // Inject names & live status into every crime slot
         const crimes = (crimeData.crimes || []).map(crime => {
             const slots = (crime.slots || []).map(slot => {
                 if (slot.user && slot.user.id) {
-                    slot.user.name = memberNames[slot.user.id.toString()] || `ID:${slot.user.id}`;
+                    const info = memberLookup[slot.user.id.toString()];
+                    slot.user.name = info?.name || slot.user.name || `ID:${slot.user.id}`;
+                    if (info?.status) slot.user.status = info.status;
+                    if (info?.last_action) slot.user.last_action = info.last_action;
                 }
                 return slot;
             });
             return { ...crime, slots };
         });
 
-        const resultPayload = { success: true, crimes };
-        ocApiCache[fid] = { timestamp: Date.now(), data: resultPayload };
+        const resultPayload = { success: true, factionId: fid, crimes };
+        ocApiCache[resolvedCacheKey] = { timestamp: Date.now(), data: resultPayload };
         res.json(resultPayload);
     } catch (err) {
         res.status(500).json({ error: err.message });
+    }
+});
+
+// On-demand Discord ping for a Ready Organized Crime
+app.post('/api/oc-ping', async (req, res) => {
+    try {
+        const callerKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey;
+        if (!req.userSession && !callerKey) {
+            return res.status(401).json({ success: false, error: 'Authentication required to send Discord pings.' });
+        }
+        const { crimeId, crimeName, difficulty, rewardCash, participants, channelId } = req.body || {};
+        const targetChan = channelId || ocConfig.globalChannelId || discordConfig.ocChannelId || discordConfig.globalChannelId;
+        const token = discordConfig.globalBotToken;
+        if (!targetChan) return res.status(400).json({ success: false, error: 'No Discord OC channel configured.' });
+        if (!token) return res.status(400).json({ success: false, error: 'Discord Bot Token is not configured.' });
+
+        const teamLines = (Array.isArray(participants) ? participants : [])
+            .map(p => p?.id
+                ? `• [${p.name || 'Operative'} [${p.id}]](https://www.torn.com/profiles.php?XID=${p.id})${p.position ? ` — *${p.position}*` : ''}`
+                : `• ${p?.name || 'Empty Slot'}`)
+            .join('\n') || '• Team details unavailable';
+        const mention = ocConfig.roleId ? `<@&${ocConfig.roleId}>` : '';
+        const senderNote = req.userSession?.playerName ? `Triggered by ${req.userSession.playerName} [${req.userSession.playerId}]` : 'FactionOS OC Manager';
+
+        const embed = {
+            title: `🟢 OC Ready to Launch: ${crimeName || 'Organized Crime'}${difficulty ? ` [T${difficulty}]` : ''}`,
+            description: `Organized Crime **#${crimeId || 'N/A'}** is ready to initiate!\n\n**Assigned Team:**\n${teamLines}${rewardCash ? `\n\n💰 **Est. Reward:** $${Number(rewardCash).toLocaleString()}` : ''}\n\n👉 [Initiate Organized Crime](https://www.torn.com/factions.php?step=your#/tab=crimes)`,
+            color: UI.COLORS.SUCCESS,
+            footer: { text: `F.R.I.D.A.Y. • ${senderNote}` },
+            timestamp: new Date().toISOString()
+        };
+
+        const sendRes = await sendChannelMessage(token, targetChan, embed, mention, true);
+        if (sendRes && !sendRes.success) {
+            return res.status(400).json({ success: false, error: sendRes.error || 'Discord dispatch failed.' });
+        }
+        return res.json({ success: true, message: `Discord ping dispatched for ${crimeName || 'OC'}!` });
+    } catch (e) {
+        return res.status(500).json({ success: false, error: e.message });
     }
 });
 
@@ -10494,9 +10625,21 @@ Keep your advice specific to the data provided. Be concise, punchy, and use emoj
         // To make it easy, we will just use the official Gemini API if an API key is provided, 
         // or for this mockup, I'll return a simulated response if we don't have a Gemini API key.
         
-        let advisorKey = process.env.GEMINI_API_KEY;
+        const poolGemini = (typeof getGeminiApiKeys === 'function' ? getGeminiApiKeys() : []) || [];
+        let advisorKey = poolGemini[0] || process.env.GEMINI_API_KEY || "";
         if (!advisorKey) {
-            return res.json({ success: true, advice: "🧠 **AI Advisor Simulated Response**\n\n1. **Stock Warning:** You don't have a Gemini API Key configured on the server (`GEMINI_API_KEY`). \n2. **Employee Analysis:** I need a real API key to parse this data!\n3. **Action:** Have your developer add a Gemini API key to your environment variables!" });
+            // Deterministic expert analysis from live company data when external Gemini key is unset
+            const empList = Object.values(employees || {});
+            const addicted = empList.filter(e => Number(e.effectiveness?.addiction || 0) < 0);
+            const inactive = empList.filter(e => (e.last_action?.status === 'Offline') && (Date.now() / 1000 - (e.last_action?.timestamp || 0)) > 86400);
+            const stockArr = Object.entries(stock || {});
+            const lowStock = stockArr.filter(([, s]) => ((s.in_stock || 0) + (s.on_order || 0)) <= (s.sold_amount || 0) * 2).map(([k]) => k);
+            const tips = [
+                addicted.length ? `🧪 **Rehab Alerts:** ${addicted.length} employee(s) show addiction penalties (${addicted.slice(0, 3).map(e => `${e.name}: ${e.effectiveness.addiction}`).join(', ')}). Rehab restores maximum effectiveness.` : `✅ **Clean Workforce:** Zero addiction penalties across ${empList.length} employees.`,
+                lowStock.length ? `📦 **Reorder Needed (<2d Runway):** ${lowStock.join(', ')} — restock soon to protect daily revenue.` : `📦 **Stock Runway Healthy:** All stocked lines cover >2 days of demand.`,
+                inactive.length ? `⚠️ **Inactivity Check:** ${inactive.length} employee(s) offline >24h — swap or nudge to maximize company rating.` : `🟢 **Attendance Solid:** All employees active within the last 24 hours.`
+            ];
+            return res.json({ success: true, advice: tips.join('\n\n') });
         }
 
         const gRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${advisorKey}`, {
@@ -12399,13 +12542,19 @@ app.get('/api/items', async (req, res) => {
 });
 
 app.get('/api/travel-profits', async (req, res) => {
-    const apiKey = req.headers['x-api-key'] || req.query.apiKey;
-    if (!apiKey) return res.status(400).json({ error: "API Key required" });
+    const rawReqKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey;
+    const serverFallbackKey = (typeof getNextApiKey === 'function' ? getNextApiKey() : null) || discordConfig.apiKey || TORN_API_KEY || null;
+    const apiKey = (rawReqKey && rawReqKey !== 'null' && rawReqKey !== 'undefined' && String(rawReqKey).trim().length >= 16)
+        ? String(rawReqKey).trim()
+        : serverFallbackKey;
+    if (!apiKey) return res.status(401).json({ error: "API Key required" });
     try {
-        await verifySubscription(apiKey);
-        
+        if (rawReqKey && rawReqKey !== 'null' && rawReqKey !== 'undefined' && String(rawReqKey).trim().length >= 16) {
+            await verifySubscription(apiKey).catch(() => null);
+        }
+
         // Fetch Torn market data using high-speed server cache
-        const cachedCatalog = await cachedTornFetch(`https://api.torn.com/torn/?selections=items&key=${apiKey}`, 'torn_items_catalog', 3600000);
+        const cachedCatalog = await cachedTornFetch(`https://api.torn.com/torn/?selections=items&key=${encodeURIComponent(apiKey)}`, 'torn_items_catalog', 3600000);
         if (!cachedCatalog || !cachedCatalog.items) {
             return res.status(500).json({ error: "Failed to load Torn items database" });
         }
@@ -12415,79 +12564,98 @@ app.get('/api/travel-profits', async (req, res) => {
         if (!yataData || !yataData.stocks) {
             return res.status(503).json({ error: "YATA travel stock feed is temporarily unavailable. Please try again shortly." });
         }
-        
-        const yataCountryMap = {
-            "Mexico": "mex", "Cayman Islands": "cay", "Canada": "can", "Hawaii": "haw",
-            "UK": "uni", "Argentina": "arg", "Switzerland": "swi", "Japan": "jap",
-            "China": "chi", "UAE": "uae", "South Africa": "sou"
-        };
 
         const items = cachedCatalog.items;
-        const foreignItems = [
-            { id: 261, name: "Wolverine Plushie", country: "Canada", cost: 30, flightTimeMins: 29 },
-            { id: 274, name: "Jaguar Plushie", country: "Mexico", cost: 10000, flightTimeMins: 18 },
-            { id: 266, name: "Nessie Plushie", country: "UK", cost: 200, flightTimeMins: 111 },
-            { id: 268, name: "Red Fox Plushie", country: "UK", cost: 1000, flightTimeMins: 111 },
-            { id: 273, name: "Monkey Plushie", country: "Argentina", cost: 400, flightTimeMins: 117 },
-            { id: 269, name: "Chamois Plushie", country: "Switzerland", cost: 400, flightTimeMins: 123 },
-            { id: 277, name: "Kitten Plushie", country: "Switzerland", cost: 500, flightTimeMins: 123 },
-            { id: 272, name: "Stingray Plushie", country: "Japan", cost: 400, flightTimeMins: 158 },
-            { id: 264, name: "Panda Plushie", country: "China", cost: 400, flightTimeMins: 164 },
-            { id: 258, name: "Lion Plushie", country: "South Africa", cost: 400, flightTimeMins: 209 },
-            { id: 281, name: "Camel Plushie", country: "UAE", cost: 14000, flightTimeMins: 190 },
-            { id: 260, name: "Tribulus Omanense", country: "UAE", cost: 6000, flightTimeMins: 190 },
-            { id: 263, name: "African Violet", country: "South Africa", cost: 2000, flightTimeMins: 209 },
-            { id: 267, name: "Heather", country: "UK", cost: 5000, flightTimeMins: 111 },
-            { id: 271, name: "Edelweiss", country: "Switzerland", cost: 3000, flightTimeMins: 123 },
-            { id: 276, name: "Peony", country: "China", cost: 5000, flightTimeMins: 164 },
-            { id: 282, name: "Cherry Blossom", country: "Japan", cost: 500, flightTimeMins: 158 },
-            { id: 270, name: "Ceibo Flower", country: "Argentina", cost: 500, flightTimeMins: 117 },
-            { id: 275, name: "Dahlia", country: "Mexico", cost: 300, flightTimeMins: 18 },
-            { id: 262, name: "Crocus", country: "Canada", cost: 600, flightTimeMins: 29 },
-            { id: 259, name: "Orchid", country: "Hawaii", cost: 700, flightTimeMins: 94 },
-            
-            // High Value / Drugs
-            { id: 206, name: "Xanax", country: "South Africa", cost: 808000, flightTimeMins: 209 },
-            { id: 226, name: "Smoke Grenade", country: "South Africa", cost: 20000, flightTimeMins: 209 },
-            { id: 242, name: "Flash Grenade", country: "UAE", cost: 24000, flightTimeMins: 190 },
-            { id: 254, name: "Tear Gas", country: "China", cost: 30000, flightTimeMins: 164 }
+        // Canonical abroad high-volume trade items using verified Torn IDs matching FALLBACK_DESTINATIONS & YATA
+        const trackedCountries = [
+            { code: "mex", country: "Mexico", flag: "🇲🇽", itemIds: [258, 260, 259, 409, 1125, 1499] },
+            { code: "cay", country: "Cayman Islands", flag: "🏝️", itemIds: [618, 617, 1482] },
+            { code: "can", country: "Canada", flag: "🇨🇦", itemIds: [261, 263, 206, 197, 1483, 1504] },
+            { code: "haw", country: "Hawaii", flag: "🌺", itemIds: [264, 1485, 1486, 1502] },
+            { code: "uni", country: "UK", flag: "🇬🇧", itemIds: [268, 266, 267, 206, 197, 1501] },
+            { code: "arg", country: "Argentina", flag: "🇦🇷", itemIds: [269, 271, 256, 199, 1487, 1488] },
+            { code: "swi", country: "Switzerland", flag: "🇨🇭", itemIds: [273, 272, 222, 199, 1489, 1491] },
+            { code: "jap", country: "Japan", flag: "🇯🇵", itemIds: [277, 206, 197, 1333, 1492] },
+            { code: "chi", country: "China", flag: "🇨🇳", itemIds: [274, 276, 1462, 1494, 1498] },
+            { code: "uae", country: "UAE", flag: "🇦🇪", itemIds: [384, 385, 1264, 1495] },
+            { code: "sou", country: "South Africa", flag: "🇿🇦", itemIds: [281, 282, 206, 226, 358, 1497] }
         ];
 
+        const countryRestock = {};
         let results = [];
-        for (let item of foreignItems) {
-            let marketPrice = items[item.id] ? items[item.id].market_value : 0;
-            let cost = item.cost;
-            let stock = 0;
-            
-            let yCode = yataCountryMap[item.country];
-            if (yCode && yataData.stocks && yataData.stocks[yCode]) {
-                let s = yataData.stocks[yCode].stocks.find(i => i.id === item.id);
-                if (s) {
-                    cost = s.cost;
-                    stock = s.quantity;
+        for (const cMeta of trackedCountries) {
+            const prof = FLIGHT_PROFILES[cMeta.code] || { standard: 120, airstrip: 84 };
+            const yEntry = yataData.stocks[cMeta.code] || null;
+            const yStocks = Array.isArray(yEntry?.stocks) ? yEntry.stocks : [];
+            const yUpdated = yEntry?.update ? Number(yEntry.update) : 0;
+            if (yUpdated) countryRestock[cMeta.code] = yUpdated;
+
+            const fallbackList = FALLBACK_DESTINATIONS[cMeta.code] || [];
+            const candidateIds = new Set(cMeta.itemIds);
+            // Also include any stocked Plushie/Flower/Drug/Special from live YATA for this country
+            for (const ys of yStocks) {
+                if (!ys || !ys.id) continue;
+                const meta = items[ys.id];
+                const tType = String(meta?.type || '');
+                if (['Plushie', 'Flower', 'Drug', 'Temporary', 'Special', 'Supply Pack'].includes(tType)) {
+                    candidateIds.add(Number(ys.id));
                 }
             }
-            
-            let profit = marketPrice - cost;
-            let roundTrip = item.flightTimeMins * 2;
-            let profitPerMin = roundTrip > 0 ? profit / roundTrip : 0;
-            let profitPerHr = profitPerMin * 60;
-            
-            results.push({
-                ...item,
-                cost,
-                stock,
-                marketPrice,
-                profit,
-                profitPerMin,
-                profitPerHr,
-                roundTrip
-            });
+
+            const standardMins = prof.standard;
+            const airstripMins = prof.airstrip;
+            const wltMins = Math.max(1, Math.round(airstripMins * 0.70));
+            const bctMins = Math.max(1, Math.round(airstripMins * 0.42));
+
+            for (const itemId of candidateIds) {
+                const tornItem = items[itemId];
+                const fbItem = fallbackList.find(f => Number(f.id) === Number(itemId));
+                const ys = yStocks.find(s => Number(s.id) === Number(itemId));
+                const marketPrice = Number(tornItem?.market_value || 0);
+                if (marketPrice <= 0) continue;
+
+                const cost = Number(ys?.cost ?? fbItem?.cost ?? tornItem?.buy_price ?? 0);
+                const stock = ys ? Number(ys.quantity || 0) : 0;
+                const name = ys?.name || tornItem?.name || fbItem?.name || `Item #${itemId}`;
+                const type = tornItem?.type || 'Item';
+
+                const profit = marketPrice - cost;
+                const roundTrip = airstripMins * 2;
+                const profitPerMin = roundTrip > 0 ? profit / roundTrip : 0;
+                const profitPerHr = profitPerMin * 60;
+
+                results.push({
+                    id: Number(itemId),
+                    name,
+                    type,
+                    country: cMeta.country,
+                    countryCode: cMeta.code,
+                    flag: cMeta.flag,
+                    flightTimeMins: airstripMins,
+                    standardMins,
+                    airstripMins,
+                    wltMins,
+                    bctMins,
+                    cost,
+                    stock,
+                    yataUpdated: yUpdated,
+                    marketPrice,
+                    profit,
+                    profitPerMin,
+                    profitPerHr,
+                    roundTrip
+                });
+            }
         }
-        
-        // Sort by Profit / Hour by default
+
+        // Sort by single-item Profit / Hour descending by default
         results.sort((a, b) => b.profitPerHr - a.profitPerHr);
-        res.json({ success: true, items: results });
+        res.json({
+            success: true,
+            yataTimestamp: yataData.timestamp || Math.floor(Date.now() / 1000),
+            countryRestock,
+            items: results
+        });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -28732,15 +28900,19 @@ app.get('/api/chain/data', async (req, res) => {
 app.get('/api/chain/members', async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-api-key, Authorization');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-api-key, x-session-token, x-faction-id, Authorization');
     if (req.method === 'OPTIONS') return res.sendStatus(200);
 
-    const userKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey;
-    if (!userKey || userKey === 'null' || userKey.trim() === '') {
+    const hostFacId = String(discordConfig.factionId || dynamicFactionId || '');
+    const serverKey = (discordConfig && discordConfig.apiKey) || TORN_API_KEY || (typeof getNextApiKey === 'function' ? getNextApiKey() : null);
+    const reqFac = String(req.userSession?.factionId || req.headers['x-faction-id'] || '');
+    const isHostMember = Boolean(req.userSession?.isSpiderVerse || (hostFacId && reqFac && reqFac === hostFacId));
+    const userKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey || (isHostMember ? serverKey : null);
+    if (!userKey || userKey === 'null' || userKey === 'undefined' || String(userKey).trim() === '') {
         return res.status(401).json({ error: 'Authentication required. Torn API key required.' });
     }
-    const cleanKey = userKey.trim();
-    const cacheKey = cleanKey.slice(-8);
+    const cleanKey = String(userKey).trim();
+    const cacheKey = crypto.createHash('sha256').update(cleanKey).digest('hex').slice(0, 10);
     const cached = chainMembersCache.get(cacheKey);
     if (cached && (Date.now() - cached.ts) < 30000) {
         return res.json(cached.data);
@@ -28770,15 +28942,19 @@ app.get('/api/chain/members', async (req, res) => {
 app.get('/api/chain/attacks', async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-api-key, Authorization');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-api-key, x-session-token, x-faction-id, Authorization');
     if (req.method === 'OPTIONS') return res.sendStatus(200);
 
-    const userKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey;
-    if (!userKey || userKey === 'null' || userKey.trim() === '') {
+    const hostFacId = String(discordConfig.factionId || dynamicFactionId || '');
+    const serverKey = (discordConfig && discordConfig.apiKey) || TORN_API_KEY || (typeof getNextApiKey === 'function' ? getNextApiKey() : null);
+    const reqFac = String(req.userSession?.factionId || req.headers['x-faction-id'] || '');
+    const isHostMember = Boolean(req.userSession?.isSpiderVerse || (hostFacId && reqFac && reqFac === hostFacId));
+    const userKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey || (isHostMember ? serverKey : null);
+    if (!userKey || userKey === 'null' || userKey === 'undefined' || String(userKey).trim() === '') {
         return res.status(401).json({ error: 'Authentication required. Torn API key required.' });
     }
-    const cleanKey = userKey.trim();
-    const cacheKey = cleanKey.slice(-8);
+    const cleanKey = String(userKey).trim();
+    const cacheKey = crypto.createHash('sha256').update(cleanKey).digest('hex').slice(0, 10);
     const cached = chainAtksCache.get(cacheKey);
     if (cached && (Date.now() - cached.ts) < 1000) {
         return res.json(cached.data);
@@ -28789,14 +28965,15 @@ app.get('/api/chain/attacks', async (req, res) => {
         });
         let data = await r.json();
 
-        // If user's key lacks Faction AA (code 7 or 16), automatically fall back to server key!
-        if (data && data.error && (data.error.code === 7 || data.error.code === 16 || data.error.code === 2) && serverKey && serverKey !== cleanKey) {
-            const serverCacheKey = serverKey.slice(-8);
+        // If host member's key lacks Faction AA (code 7 or 16), automatically fall back to host faction serverKey!
+        const facCfgKey = (reqFac ? getFactionDiscordConfig(reqFac)?.apiKey : null) || (isHostMember ? serverKey : null);
+        if (data && data.error && (data.error.code === 7 || data.error.code === 16 || data.error.code === 2) && facCfgKey && facCfgKey !== cleanKey) {
+            const serverCacheKey = crypto.createHash('sha256').update(String(facCfgKey)).digest('hex').slice(0, 10);
             const serverCached = chainAtksCache.get(serverCacheKey);
             if (serverCached && (Date.now() - serverCached.ts) < 1000) {
                 return res.json(serverCached.data);
             }
-            r = await fetch(`https://api.torn.com/faction/?selections=attacks&key=${serverKey}`, {
+            r = await fetch(`https://api.torn.com/faction/?selections=attacks&key=${facCfgKey}`, {
                 signal: AbortSignal.timeout(6000)
             });
             data = await r.json();
@@ -28904,13 +29081,22 @@ async function refreshWarboardBackground() {
     if (!apiKey) return;
 
     try {
-        let myData = await cachedTornFetch(`https://api.torn.com/faction/${facId}?selections=basic,rankedwars&key=${apiKey}`, `my_faction_bg_${facId}`, 4000);
+        let myData = await cachedTornFetch(`https://api.torn.com/faction/${facId}?selections=basic,rankedwars,chain&key=${apiKey}`, `my_faction_bg_${facId}`, 4000);
         if (!myData || myData.error || !myData.members) return;
 
         let enemyId = autoDetectEnemyFaction(myData);
+        if (!enemyId && myData.rankedwars) {
+            const latestRw = Object.values(myData.rankedwars)
+                .filter(w => w?.factions)
+                .sort((a, b) => (b.war?.start || 0) - (a.war?.start || 0))[0];
+            if (latestRw?.factions) {
+                const opp = Object.keys(latestRw.factions).find(f => String(f) !== String(facId));
+                if (opp) enemyId = opp;
+            }
+        }
         let enemyDataResult = { members: {} };
         if (enemyId) {
-            enemyDataResult = await cachedTornFetch(`https://api.torn.com/faction/${enemyId}?selections=basic&key=${getNextApiKey() || apiKey || TORN_API_KEY}`, `enemy_faction_bg_${enemyId}`, 4000);
+            enemyDataResult = await cachedTornFetch(`https://api.torn.com/faction/${enemyId}?selections=basic,chain&key=${getNextApiKey() || apiKey || TORN_API_KEY}`, `enemy_faction_bg_${enemyId}`, 4000);
         }
 
         const nowSec = Math.floor(Date.now() / 1000);
@@ -29123,13 +29309,19 @@ async function refreshWarboardBackground() {
                     id: myData?.ID || facId,
                     name: myData?.name || "Spider-Verse",
                     score: (activeWar.factions && myData.ID && activeWar.factions[myData.ID.toString()]) ? (activeWar.factions[myData.ID.toString()].score || 0) : 0,
-                    chain: (activeWar.factions && myData.ID && activeWar.factions[myData.ID.toString()]) ? (activeWar.factions[myData.ID.toString()].chain || 0) : 0
+                    chain: (activeWar.factions && myData.ID && activeWar.factions[myData.ID.toString()]) ? (activeWar.factions[myData.ID.toString()].chain || 0) : (myData?.chain?.current || 0),
+                    chainTimeout: myData?.chain?.timeout || 0,
+                    chainModifier: myData?.chain?.modifier || 1,
+                    chainMax: myData?.chain?.maximum || 100
                 },
                 enemyFaction: {
                     id: enemyId,
                     name: enemyDataResult?.name || "Enemy Faction",
                     score: (activeWar.factions && enemyId && activeWar.factions[enemyId.toString()]) ? (activeWar.factions[enemyId.toString()].score || 0) : 0,
-                    chain: (activeWar.factions && enemyId && activeWar.factions[enemyId.toString()]) ? (activeWar.factions[enemyId.toString()].chain || 0) : 0
+                    chain: (activeWar.factions && enemyId && activeWar.factions[enemyId.toString()]) ? (activeWar.factions[enemyId.toString()].chain || 0) : (enemyDataResult?.chain?.current || 0),
+                    chainTimeout: enemyDataResult?.chain?.timeout || 0,
+                    chainModifier: enemyDataResult?.chain?.modifier || 1,
+                    chainMax: enemyDataResult?.chain?.maximum || 100
                 }
             } : {
                 active: false,

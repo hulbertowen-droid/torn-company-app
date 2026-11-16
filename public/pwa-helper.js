@@ -271,9 +271,9 @@
                         <div class="app-tile-icon" style="background: rgba(171, 71, 188, 0.15); color: #ab47bc;">✈️</div>
                         <div class="app-tile-name">Travel Radar</div>
                     </a>
-                    <a href="/members.html" class="mobile-app-tile">
+                    <a href="/gym-stats.html#roster" class="mobile-app-tile">
                         <div class="app-tile-icon" style="background: rgba(77, 182, 172, 0.15); color: #4db6ac;">👥</div>
-                        <div class="app-tile-name">Members</div>
+                        <div class="app-tile-name">Member Roster</div>
                     </a>
                     <a href="/payout.html" class="mobile-app-tile">
                         <div class="app-tile-icon" style="background: rgba(255, 214, 0, 0.15); color: #ffd600;">💰</div>
@@ -283,17 +283,21 @@
                         <div class="app-tile-icon" style="background: rgba(239, 83, 80, 0.15); color: #ef5350;">🕵️</div>
                         <div class="app-tile-name">Organized Crimes</div>
                     </a>
-                    <a href="/bazaar.html" class="mobile-app-tile">
-                        <div class="app-tile-icon" style="background: rgba(100, 255, 218, 0.15); color: #64ffda;">🏪</div>
-                        <div class="app-tile-name">Bazaar</div>
+                    <a href="/discord.html#market" class="mobile-app-tile">
+                        <div class="app-tile-icon" style="background: rgba(100, 255, 218, 0.15); color: #64ffda;">🛒</div>
+                        <div class="app-tile-name">Market Sniper</div>
                     </a>
                     <a href="/company.html" class="mobile-app-tile">
                         <div class="app-tile-icon" style="background: rgba(124, 77, 255, 0.15); color: #7c4dff;">🏢</div>
-                        <div class="app-tile-name">Company</div>
+                        <div class="app-tile-name">Company Hub</div>
                     </a>
                     <a href="/gamble.html" class="mobile-app-tile">
                         <div class="app-tile-icon" style="background: rgba(255, 64, 129, 0.15); color: #ff4081;">🎰</div>
                         <div class="app-tile-name">Casino Hub</div>
+                    </a>
+                    <a href="/ai-sandbox.html" class="mobile-app-tile">
+                        <div class="app-tile-icon" style="background: rgba(6, 182, 212, 0.15); color: #06b6d4;">🤖</div>
+                        <div class="app-tile-name">F.R.I.D.A.Y.</div>
                     </a>
                     <a href="/discord.html" class="mobile-app-tile">
                         <div class="app-tile-icon" style="background: rgba(88, 101, 242, 0.15); color: #5865f2;">💬</div>

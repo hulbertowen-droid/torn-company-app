@@ -61,15 +61,17 @@
         const topTabs = [
             '/',
             '/chain.html',
-            '/oc.html',
-            '/members.html',
             '/dashboard.html',
             '/armory.html',
             '/gym-stats.html',
             '/payout.html',
-            '/company.html',
+            '/oc.html',
             '/travel.html',
-            '/discord.html'
+            '/company.html',
+            '/gamble.html',
+            '/ai-sandbox.html',
+            '/discord.html',
+            '/bugs.html'
         ];
 
         let index = 0;

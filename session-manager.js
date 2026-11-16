@@ -125,6 +125,42 @@ function getSession(token) {
 }
 
 /**
+ * Retrieve active session by token, falling back to MongoDB on in-memory miss (e.g. cold restart)
+ */
+async function getSessionAsync(token) {
+    const cached = getSession(token);
+    if (cached) return cached;
+    if (!token || typeof token !== 'string') return null;
+    const clean = token.trim();
+    if (!clean) return null;
+
+    try {
+        if (mongoose.connection && mongoose.connection.readyState === 1) {
+            const col = mongoose.connection.db.collection(SESSIONS_COL);
+            const doc = await col.findOne({ token: clean, expiresAt: { $gt: new Date() } });
+            if (doc && doc.playerId) {
+                const hydrated = {
+                    token: doc.token,
+                    playerId: doc.playerId,
+                    playerName: doc.playerName,
+                    level: doc.level || 1,
+                    factionId: String(doc.factionId || '0'),
+                    factionName: doc.factionName || 'None',
+                    factionRole: doc.factionRole || '',
+                    isSpiderVerse: doc.isSpiderVerse !== undefined ? Boolean(doc.isSpiderVerse) : Boolean(_configuredFactionId && String(doc.factionId || '') === _configuredFactionId),
+                    bars: doc.bars || null,
+                    createdAt: doc.createdAt ? new Date(doc.createdAt).getTime() : Date.now(),
+                    expiresAt: doc.expiresAt ? new Date(doc.expiresAt).getTime() : (Date.now() + SESSION_TTL_MS)
+                };
+                sessionsMemory.set(clean, hydrated);
+                return hydrated;
+            }
+        }
+    } catch (e) {}
+    return null;
+}
+
+/**
  * Invalidate and delete a session
  */
 async function deleteSession(token) {
@@ -156,6 +192,13 @@ function extractTokenFromRequest(req) {
     if (req.cookies && req.cookies.sv_session_token) {
         return String(req.cookies.sv_session_token).trim();
     }
+    const rawCookie = req.headers['cookie'];
+    if (rawCookie && typeof rawCookie === 'string') {
+        const match = rawCookie.match(/(?:^|;\s*)sv_session_token=([^;]+)/);
+        if (match && match[1]) {
+            try { return decodeURIComponent(match[1].trim()); } catch (_) { return match[1].trim(); }
+        }
+    }
     return '';
 }
 
@@ -163,26 +206,28 @@ function extractTokenFromRequest(req) {
  * Express middleware to attach authenticated session and Torn API key to req
  */
 function resolveSessionMiddleware(userKeys) {
-    return function(req, res, next) {
-        const token = extractTokenFromRequest(req);
-        if (token) {
-            const session = getSession(token);
-            if (session) {
-                req.userSession = session;
-                const keyRec = userKeys.resolveUserApiKeyByTornId(session.playerId);
-                if (keyRec && keyRec.key) {
-                    req.userTornKey = keyRec.key;
+    return async function(req, res, next) {
+        try {
+            const token = extractTokenFromRequest(req);
+            if (token) {
+                const session = await getSessionAsync(token);
+                if (session) {
+                    req.userSession = session;
+                    const keyRec = userKeys.resolveUserApiKeyByTornId(session.playerId);
+                    if (keyRec && keyRec.key) {
+                        req.userTornKey = keyRec.key;
+                    }
                 }
             }
-        }
 
-        // Backwards-compatible fallback for userscript or developer calls with direct x-api-key
-        if (!req.userTornKey) {
-            const directKey = (req.headers['x-api-key'] || req.query.apiKey || '').trim();
-            if (directKey && directKey !== 'null' && directKey.length >= 16) {
-                req.userTornKey = directKey;
+            // Backwards-compatible fallback for userscript or developer calls with direct x-api-key
+            if (!req.userTornKey) {
+                const directKey = String(req.headers['x-api-key'] || req.query.apiKey || '').trim();
+                if (directKey && directKey !== 'null' && directKey !== 'undefined' && directKey.length >= 16) {
+                    req.userTornKey = directKey;
+                }
             }
-        }
+        } catch (e) {}
 
         next();
     };

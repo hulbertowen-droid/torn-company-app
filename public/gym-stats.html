@@ -27,16 +27,16 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/global.css?v=4.3.0">
+    <link rel="stylesheet" href="/global.css?v=4.4.0">
 
     <!-- Chart.js for Velocity & Radar Visualizations -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <!-- Scripts & Authentication -->
-    <script src="/auth-gate.js?v=4.3.0"></script>
-    <script src="/global_settings.js?v=4.3.0"></script>
-    <script src="/global-topbar.js?v=4.3.0"></script>
-    <script src="/pwa-helper.js?v=1.0.0" defer></script>
+    <script src="/auth-gate.js?v=4.4.0"></script>
+    <script src="/global_settings.js?v=4.4.0"></script>
+    <script src="/global-topbar.js?v=4.4.0"></script>
+    <script src="/pwa-helper.js?v=1.2.0" defer></script>
 
     <style>
     :root {
@@ -75,8 +75,32 @@
         -webkit-overflow-scrolling: touch;
     }
 
-    .tracker-table {
+    #master-roster-table {
         min-width: 1020px;
+    }
+
+    .war-grid > .card {
+        min-width: 0;
+        overflow: hidden;
+    }
+
+    #ff-matches-table th.sticky-col,
+    #ff-matches-table td.sticky-col {
+        position: sticky;
+        left: 0;
+        z-index: 6;
+        background: var(--bg-surface);
+        border-right: 1px solid var(--border-default);
+        box-shadow: 3px 0 8px rgba(0, 0, 0, 0.25);
+    }
+    #ff-matches-table thead th.sticky-col {
+        z-index: 8;
+        background: var(--bg-elevated);
+    }
+    @media (max-width: 1100px) {
+        .war-grid {
+            grid-template-columns: 1fr !important;
+        }
     }
 
     #master-roster-table th.sticky-col,
@@ -637,44 +661,29 @@
                 <span class="brand-text">FactionOS</span>
             </div>
             <div class="sidebar-actions">
-                <button class="theme-toggle" onclick="toggleTheme()" title="Toggle Dark/Light Mode">🌗</button>
-                <button class="toggle-btn" onclick="toggleSidebar()" title="Collapse Sidebar">☰</button>
+                <button type="button" class="theme-toggle" onclick="toggleTheme()" title="Toggle Dark/Light Mode" aria-label="Toggle Dark/Light Mode"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg></button>
+                <button type="button" class="toggle-btn" onclick="toggleSidebar()" title="Collapse Sidebar" aria-label="Collapse Sidebar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
             </div>
         </div>
         <div class="nav-items">
             <div class="nav-section-title">Live Operations</div>
             <a href="/" class="nav-link"><span class="nav-icon">📡</span> <span class="nav-text">Live Warboard</span></a>
             <a href="/chain.html" class="nav-link"><span class="nav-icon">🔗</span> <span class="nav-text">Chain Sentinel</span></a>
-            <a href="/dashboard.html" class="nav-link"><span class="nav-icon">📊</span> <span class="nav-text">Operations Overview</span></a>
-            <a href="/armory.html" class="nav-link"><span class="nav-icon">🛡️</span> <span class="nav-text">Armory &amp; Logistics</span></a>
+            <a href="/dashboard.html" class="nav-link" id="nav-link-overview"><span class="nav-icon">📊</span> <span class="nav-text">Operations Overview</span></a>
+            <a href="/armory.html" class="nav-link" id="nav-link-armory"><span class="nav-icon">🛡️</span> <span class="nav-text">Armory &amp; Logistics</span> <span class="nav-badge" id="nav-armory-badge" style="display:none;"></span></a>
             <a href="/gym-stats.html" class="nav-link active"><span class="nav-icon">🏋️</span> <span class="nav-text">Gym &amp; Stat Tracker</span></a>
             <a href="/payout.html" class="nav-link"><span class="nav-icon">💰</span> <span class="nav-text">War Payouts</span></a>
-            <a href="/members.html" class="nav-link"><span class="nav-icon">👥</span> <span class="nav-text">Faction Roster</span></a>
             <a href="/oc.html" class="nav-link"><span class="nav-icon">💼</span> <span class="nav-text">OC Manager</span></a>
 
             <div class="nav-section-title">Tactical Desk</div>
-            <a href="/dashboard.html#sentinel" class="nav-link"><span class="nav-icon">✈️</span> <span class="nav-text">Airspace &amp; War Intel</span></a>
             <a href="/travel.html" class="nav-link"><span class="nav-icon">🌍</span> <span class="nav-text">Travel Profit Desk</span></a>
-            <a href="/bazaar.html" class="nav-link"><span class="nav-icon">🛒</span> <span class="nav-text">Market &amp; Bazaar</span></a>
             <a href="/company.html" class="nav-link"><span class="nav-icon">🏢</span> <span class="nav-text">Company Hub</span></a>
             <a href="/gamble.html" class="nav-link"><span class="nav-icon">🎰</span> <span class="nav-text">Casino Analytics</span></a>
-            <a href="/recruit/" class="nav-link" title="Recruit Engine is currently in early development and not usable"><span class="nav-icon">🎯</span> <span class="nav-text">Recruit Engine</span> <span class="nav-badge-dev">Early Dev</span></a>
 
             <div class="nav-section-title">Intelligence &amp; Alerts</div>
             <a href="/ai-sandbox.html" class="nav-link"><span class="nav-icon">🤖</span> <span class="nav-text">F.R.I.D.A.Y. Intel</span></a>
             <a href="/discord.html" class="nav-link"><span class="nav-icon">📢</span> <span class="nav-text">Discord Sentinel</span></a>
             <a href="/bugs.html" class="nav-link"><span class="nav-icon">🐛</span> <span class="nav-text">Bug Tracker</span></a>
-            <a onclick="openGlobalSettings ? openGlobalSettings() : openSettings()" class="nav-link" style="cursor:pointer; margin-top:4px;"><span class="nav-icon">⚙️</span> <span class="nav-text">Settings</span></a>
-        </div>
-        <div class="sidebar-footer" id="sidebar-user-footer">
-            <div class="sidebar-user-chip" onclick="openGlobalSettings ? openGlobalSettings() : openSettings()" style="cursor:pointer;" title="Account &amp; API Settings">
-                <div class="sidebar-user-avatar" id="nav-user-avatar">🕷️</div>
-                <div class="sidebar-user-info">
-                    <span class="sidebar-user-name" id="nav-user-name">Tactical Operative</span>
-                    <span class="sidebar-user-faction" id="nav-user-sub">Faction Operations</span>
-                </div>
-                <span style="color:var(--text-tertiary); font-size:0.9em;">⚙️</span>
-            </div>
         </div>
     </nav>
 
@@ -683,7 +692,7 @@
         <!-- GLOBAL TOPBAR -->
         <header class="app-topbar">
             <div class="topbar-left">
-                <button class="toggle-btn" onclick="toggleSidebar()" title="Toggle Sidebar" id="mobile-nav-toggle" style="display:none;">☰</button>
+                <button class="toggle-btn" onclick="toggleSidebar()" title="Toggle Sidebar" id="mobile-nav-toggle" style="display:none;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
                 <div class="topbar-crumb" id="topbar-breadcrumb">
                     <span>OPERATIONS</span> / <span>GYM &amp; STAT TRACKER</span> / <strong id="gym-crumb-sub" style="color:var(--text-primary);">OVERVIEW</strong>
                 </div>
@@ -697,7 +706,7 @@
                     <span class="pulse-indicator"></span>
                     <span id="global-ws-status">SYNCED</span>
                 </div>
-                <button class="btn btn-secondary btn-sm" id="btn-topbar-sync" onclick="syncGymData(true)" title="Sync Live Stats" style="padding:4px 8px;">⟳</button>
+                <button class="btn btn-secondary btn-sm" id="btn-topbar-sync" onclick="syncGymData(true)" title="Sync Live Stats" style="padding:4px 8px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></button>
                 <button class="btn btn-secondary btn-sm" id="btn-open-settings" onclick="openGlobalSettings()" title="Settings &amp; Keys" style="padding:4px 8px;">⚙️</button>
             </div>
         </header>
@@ -933,7 +942,10 @@
 
                         <!-- Right: Search, Filter Dropdowns, and Export -->
                         <div class="roster-controls" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-                            <input type="text" id="roster-search" placeholder="🔍 Search member or ID..." class="sort-select" style="min-width:185px; padding:6px 12px; font-size:0.8em;">
+                            <div style="position:relative; display:inline-flex; align-items:center;">
+                                <input type="text" id="roster-search" placeholder="Search member or ID..." class="sort-select" style="min-width:195px; padding:6px 28px 6px 12px; font-size:0.8em;">
+                                <button type="button" id="roster-search-clear" onclick="clearRosterSearch()" title="Clear search" aria-label="Clear search" style="display:none; position:absolute; right:6px; background:transparent; border:none; color:var(--text-tertiary); cursor:pointer; padding:2px; align-items:center; justify-content:center;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+                            </div>
                             <select id="roster-filter-bracket" class="sort-select" onchange="filterRoster()" style="padding:6px 10px; font-size:0.8em;">
                                 <option value="all">All Stat Brackets</option>
                                 <option value="under10m">&lt; 10M Stats</option>
@@ -1072,7 +1084,7 @@
             <!-- VIEW 4: WAR ROOM & FAIR FIGHT TACTICAL MATCHER -->
             <!-- ══════════════════════════════════════════════════════════ -->
             <div class="tracker-tab-pane" id="pane-war">
-                <div class="war-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:24px;">
+                <div class="war-grid" style="display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:20px; margin-bottom:24px;">
                     <!-- Tactical Role Breakdown -->
                     <div class="card" style="padding:20px; background:var(--bg-surface); border:1px solid var(--border-subtle);">
                         <h3 style="margin:0 0 10px 0; font-size:1.05em; font-weight:800; color:var(--text-primary); display:flex; align-items:center; gap:8px;">
@@ -1139,10 +1151,10 @@
                         </div>
 
                         <div class="scrollable" style="max-height:220px; border:1px solid var(--border-subtle); border-radius:6px;">
-                            <table class="armory-table tracker-table">
+                            <table class="armory-table" id="ff-matches-table">
                                 <thead>
                                     <tr>
-                                        <th>Attacker</th>
+                                        <th class="sticky-col">Attacker</th>
                                         <th>Your Stats</th>
                                         <th>FF Multiplier</th>
                                         <th>Tactical Match Rating</th>
@@ -1700,6 +1712,9 @@
             } else if (subFilter === 'cd_idle') {
                 showCdIdleOnly = true;
                 showSlackersOnly = false;
+            } else {
+                showSlackersOnly = false;
+                showCdIdleOnly = false;
             }
             const btnSlack = document.getElementById('btn-toggle-slackers');
             if (btnSlack) btnSlack.classList.toggle('active-filter', showSlackersOnly);
@@ -1915,8 +1930,10 @@
     async function loadRoster() {
         try {
             const myKey = typeof getApiKey === 'function' ? getApiKey() : '';
+            const hasAccess = (typeof hasTornAccess === 'function' && hasTornAccess()) || Boolean(myKey);
+            const headers = myKey ? { 'x-api-key': myKey } : {};
             const res = await fetch(`/api/gym-tracker/roster?timeframe=${currentRosterTimeframe}`, {
-                headers: { 'x-api-key': myKey }
+                headers
             });
             const data = await res.json();
             if (data && data.success) {
@@ -1924,7 +1941,7 @@
                 rosterLoadedOnce = currentRoster.length > 0;
                 if (rosterLoadedOnce) {
                     try { localStorage.setItem(GYM_ROSTER_CACHE_PREFIX + currentRosterTimeframe, JSON.stringify(currentRoster)); } catch (_) {}
-                } else if (myKey && !autoSyncAttempted) {
+                } else if (hasAccess && !autoSyncAttempted) {
                     autoSyncAttempted = true;
                     syncGymData(true);
                     return;
@@ -2130,8 +2147,10 @@
                 return rosterSortAsc ? ((a.level || 0) - (b.level || 0)) : ((b.level || 0) - (a.level || 0));
             }
             if (rosterSortCol === 'status') {
-                const cmp = String(a.onlineStatus || '').localeCompare(String(b.onlineStatus || ''));
-                if (cmp !== 0) return rosterSortAsc ? cmp : -cmp;
+                const statusPriority = { online: 0, idle: 1, offline: 2 };
+                const pa = statusPriority[String(a.onlineStatus || '').toLowerCase()] ?? 2;
+                const pb = statusPriority[String(b.onlineStatus || '').toLowerCase()] ?? 2;
+                if (pa !== pb) return rosterSortAsc ? (pb - pa) : (pa - pb);
                 return rosterSortAsc
                     ? ((a.lastActionTimestamp || 0) - (b.lastActionTimestamp || 0))
                     : ((b.lastActionTimestamp || 0) - (a.lastActionTimestamp || 0));
@@ -2191,7 +2210,20 @@
         filterRoster();
     }
 
-    const filterRosterDebounced = debounce(filterRoster, 150);
+    function clearRosterSearch() {
+        const el = document.getElementById('roster-search');
+        if (el) el.value = '';
+        const clr = document.getElementById('roster-search-clear');
+        if (clr) clr.style.display = 'none';
+        filterRoster();
+    }
+
+    const filterRosterDebounced = debounce(() => {
+        const clr = document.getElementById('roster-search-clear');
+        const el = document.getElementById('roster-search');
+        if (clr && el) clr.style.display = el.value.trim() ? 'inline-flex' : 'none';
+        filterRoster();
+    }, 150);
 
     function toggleSlackerFilter() {
         showSlackersOnly = !showSlackersOnly;
@@ -2813,7 +2845,7 @@
                         const warnTags = (a.warnings || []).map(w => `<span class="badge" style="background:rgba(239,68,68,0.15); color:var(--status-danger); font-size:0.68em; margin-right:4px;">${w}</span>`).join('');
                         return `
                             <tr>
-                                <td style="font-weight:700;">
+                                <td class="sticky-col" style="font-weight:700;">
                                     <a href="https://www.torn.com/profiles.php?XID=${encodeURIComponent(a.playerId)}" target="_blank" rel="noopener noreferrer" style="color:var(--text-primary); text-decoration:none;">${escapeHtml(a.playerName)}</a>
                                     <span style="font-size:0.72em; color:var(--text-tertiary);"> (Lv ${a.level || 1})</span>
                                 </td>

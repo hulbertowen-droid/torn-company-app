@@ -6,9 +6,14 @@ const userKeys = require('../user-keys');
 const sessionManager = require('../session-manager');
 
 let targetFactionGetter = () => '';
+let activeEnemyGetter = () => '';
 
 function setTargetFactionGetter(fn) {
     if (typeof fn === 'function') targetFactionGetter = fn;
+}
+
+function setActiveEnemyGetter(fn) {
+    if (typeof fn === 'function') activeEnemyGetter = fn;
 }
 
 // GET /api/session (or /api/session/me, /api/auth/me) — Check current authenticated session
@@ -16,8 +21,10 @@ router.get(['/', '/me'], (req, res) => {
     if (!req.userSession) {
         return res.json({ authenticated: false, message: "No active session" });
     }
+    const detectedEnemyFacId = String(activeEnemyGetter(req.userSession.factionId) || '');
     return res.json({
         authenticated: true,
+        detectedEnemyFacId,
         user: {
             playerId: req.userSession.playerId,
             playerName: req.userSession.playerName,
@@ -29,6 +36,67 @@ router.get(['/', '/me'], (req, res) => {
             bars: req.userSession.bars
         }
     });
+});
+
+// GET/POST /api/auth/verify — Live validation against Torn API user/?selections=basic&key={API_KEY}
+router.all('/verify', async (req, res) => {
+    try {
+        const candidateKey = String(
+            req.body?.apiKey ||
+            req.headers['x-api-key'] ||
+            req.query?.apiKey ||
+            req.userTornKey ||
+            ''
+        ).trim().replace(/['"\s]/g, '');
+
+        if (!candidateKey || candidateKey === 'null' || candidateKey === 'undefined') {
+            return res.status(401).json({
+                ok: false,
+                connected: false,
+                error: 'No API Key configured'
+            });
+        }
+
+        const tornRes = await fetch(`https://api.torn.com/user/?selections=basic&key=${encodeURIComponent(candidateKey)}`, {
+            signal: AbortSignal.timeout(8000)
+        });
+        const data = await tornRes.json();
+
+        if (data.error) {
+            return res.status(400).json({
+                ok: false,
+                connected: false,
+                code: data.error.code || 0,
+                error: data.error.error || 'Torn API key validation failed'
+            });
+        }
+
+        if (!data.player_id) {
+            return res.status(400).json({
+                ok: false,
+                connected: false,
+                error: 'Unexpected response from Torn API'
+            });
+        }
+
+        const facId = String(data.faction?.faction_id || '0');
+        const detectedEnemyFacId = String(activeEnemyGetter(facId) || '');
+        return res.json({
+            ok: true,
+            connected: true,
+            player_id: data.player_id,
+            name: data.name || `Player #${data.player_id}`,
+            faction_id: facId,
+            faction_name: data.faction?.faction_name || 'None',
+            detectedEnemyFacId
+        });
+    } catch (err) {
+        return res.status(502).json({
+            ok: false,
+            connected: false,
+            error: err?.message || 'Unable to reach Torn API'
+        });
+    }
 });
 
 // POST /api/session/connect (or /api/auth/connect) — Authenticate Torn API key, encrypt in vault, issue session
@@ -170,3 +238,4 @@ router.post('/verify-faction-access', async (req, res) => {
 
 module.exports = router;
 module.exports.setTargetFactionGetter = setTargetFactionGetter;
+module.exports.setActiveEnemyGetter = setActiveEnemyGetter;

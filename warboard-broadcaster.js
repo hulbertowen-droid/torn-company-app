@@ -163,6 +163,32 @@ class WarboardBroadcaster {
         }
     }
 
+    /**
+     * Generic event broadcast helper (supports 'warboard_update' and custom typed payloads)
+     */
+    broadcast(type, data) {
+        if (type === 'warboard_update') {
+            return this.broadcastWarboardUpdate(data);
+        }
+        const messageStr = JSON.stringify({
+            type: type || 'update',
+            data,
+            ts: Date.now()
+        });
+        for (const ws of this.wsClients) {
+            if (ws.readyState === WebSocket.OPEN) {
+                try { ws.send(messageStr); } catch(e) {}
+            }
+        }
+        for (const client of this.sseClients) {
+            try {
+                client.res.write(`data: ${messageStr}\n\n`);
+            } catch(e) {
+                this.sseClients.delete(client);
+            }
+        }
+    }
+
     getClientStats() {
         return {
             wsCount: this.wsClients.size,

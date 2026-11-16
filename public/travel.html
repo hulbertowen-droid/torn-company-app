@@ -26,13 +26,13 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/global.css?v=4.0.0">
+    <link rel="stylesheet" href="/global.css?v=4.4.0">
     
     <!-- Scripts & Auth -->
-    <script src="/auth-gate.js?v=4.0.0"></script>
-    <script src="/global_settings.js?v=4.0.0"></script>
-    <script src="/global-topbar.js?v=4.0.0"></script>
-    <script src="/pwa-helper.js?v=1.0.0" defer></script>
+    <script src="/auth-gate.js?v=4.4.0"></script>
+    <script src="/global_settings.js?v=4.4.0"></script>
+    <script src="/global-topbar.js?v=4.4.0"></script>
+    <script src="/pwa-helper.js?v=1.2.0" defer></script>
 
     <style>
     /* ─── Page-Specific Travel Desk Styling ─── */
@@ -224,6 +224,57 @@
         color: var(--text-tertiary);
         margin-top: 1px;
     }
+    .refresh-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 7px 14px;
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--border-default);
+        background: var(--bg-elevated);
+        color: var(--text-primary);
+        font-size: 0.82em;
+        font-weight: 700;
+        cursor: pointer;
+        transition: all var(--transition-fast);
+        font-family: inherit;
+    }
+    .refresh-btn:hover {
+        border-color: var(--accent-cobalt);
+        color: var(--accent-cobalt);
+    }
+    .refresh-btn:disabled { opacity: 0.6; cursor: wait; }
+    .item-name { font-weight: 700; color: var(--text-primary); }
+    .item-category { font-size: 0.72em; color: var(--text-tertiary); margin-top: 2px; }
+    .country-flag { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+    .country-badge {
+        padding: 2px 8px;
+        border-radius: 99px;
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-subtle);
+        font-size: 0.8em;
+        font-weight: 700;
+    }
+    .flight-time { font-family: var(--font-mono); color: var(--text-secondary); white-space: nowrap; }
+    .profit-item, .profit-hr { font-family: var(--font-mono); font-weight: 800; white-space: nowrap; }
+    .profit-item { color: var(--accent-emerald); }
+    .profit-hr { color: #38bdf8; }
+    .stock-none {
+        display: inline-block; padding: 2px 8px; border-radius: 99px;
+        background: rgba(239, 68, 68, 0.14); color: var(--accent-crimson);
+        border: 1px solid rgba(239, 68, 68, 0.35); font-size: 0.74em; font-weight: 800;
+    }
+    .stock-low {
+        display: inline-block; padding: 2px 8px; border-radius: 99px;
+        background: rgba(245, 158, 11, 0.15); color: var(--accent-amber);
+        border: 1px solid rgba(245, 158, 11, 0.35); font-family: var(--font-mono); font-size: 0.78em; font-weight: 800;
+    }
+    .stock-ok {
+        display: inline-block; padding: 2px 8px; border-radius: 99px;
+        background: rgba(16, 185, 129, 0.14); color: var(--accent-emerald);
+        border: 1px solid rgba(16, 185, 129, 0.3); font-family: var(--font-mono); font-size: 0.78em; font-weight: 800;
+    }
+    tr.out-stock { opacity: 0.58; }
     </style>
 </head>
 <body>
@@ -234,50 +285,35 @@
                 <span class="brand-text">FactionOS</span>
             </div>
             <div class="sidebar-actions">
-                <button class="theme-toggle" onclick="toggleTheme()" title="Toggle Dark/Light Mode">🌗</button>
-                <button class="toggle-btn" onclick="toggleSidebar()" title="Collapse Sidebar">☰</button>
+                <button type="button" class="theme-toggle" onclick="toggleTheme()" title="Toggle Dark/Light Mode" aria-label="Toggle Dark/Light Mode"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg></button>
+                <button type="button" class="toggle-btn" onclick="toggleSidebar()" title="Collapse Sidebar" aria-label="Collapse Sidebar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
             </div>
         </div>
         <div class="nav-items">
             <div class="nav-section-title">Live Operations</div>
             <a href="/" class="nav-link"><span class="nav-icon">📡</span> <span class="nav-text">Live Warboard</span></a>
             <a href="/chain.html" class="nav-link"><span class="nav-icon">🔗</span> <span class="nav-text">Chain Sentinel</span></a>
-            <a href="/dashboard.html" class="nav-link"><span class="nav-icon">📊</span> <span class="nav-text">Operations Overview</span></a>
-            <a href="/armory.html" class="nav-link"><span class="nav-icon">🛡️</span> <span class="nav-text">Armory &amp; Logistics</span></a>
+            <a href="/dashboard.html" class="nav-link" id="nav-link-overview"><span class="nav-icon">📊</span> <span class="nav-text">Operations Overview</span></a>
+            <a href="/armory.html" class="nav-link" id="nav-link-armory"><span class="nav-icon">🛡️</span> <span class="nav-text">Armory &amp; Logistics</span> <span class="nav-badge" id="nav-armory-badge" style="display:none;"></span></a>
             <a href="/gym-stats.html" class="nav-link"><span class="nav-icon">🏋️</span> <span class="nav-text">Gym &amp; Stat Tracker</span></a>
             <a href="/payout.html" class="nav-link"><span class="nav-icon">💰</span> <span class="nav-text">War Payouts</span></a>
-            <a href="/members.html" class="nav-link"><span class="nav-icon">👥</span> <span class="nav-text">Faction Roster</span></a>
             <a href="/oc.html" class="nav-link"><span class="nav-icon">💼</span> <span class="nav-text">OC Manager</span></a>
 
             <div class="nav-section-title">Tactical Desk</div>
-            <a href="/dashboard.html#sentinel" class="nav-link"><span class="nav-icon">✈️</span> <span class="nav-text">Airspace &amp; War Intel</span></a>
-            <a href="/travel.html" class="nav-link active"><span class="nav-icon">✈️</span> <span class="nav-text">Travel Profit Desk</span></a>
-            <a href="/bazaar.html" class="nav-link"><span class="nav-icon">🛒</span> <span class="nav-text">Market & Bazaar</span></a>
+            <a href="/travel.html" class="nav-link active"><span class="nav-icon">🌍</span> <span class="nav-text">Travel Profit Desk</span></a>
             <a href="/company.html" class="nav-link"><span class="nav-icon">🏢</span> <span class="nav-text">Company Hub</span></a>
             <a href="/gamble.html" class="nav-link"><span class="nav-icon">🎰</span> <span class="nav-text">Casino Analytics</span></a>
-            <a href="/recruit/" class="nav-link" title="Recruit Engine is currently in early development and not usable"><span class="nav-icon">🎯</span> <span class="nav-text">Recruit Engine</span> <span class="nav-badge-dev">Early Dev</span></a>
 
-            <div class="nav-section-title">Intelligence & Alerts</div>
+            <div class="nav-section-title">Intelligence &amp; Alerts</div>
             <a href="/ai-sandbox.html" class="nav-link"><span class="nav-icon">🤖</span> <span class="nav-text">F.R.I.D.A.Y. Intel</span></a>
             <a href="/discord.html" class="nav-link"><span class="nav-icon">📢</span> <span class="nav-text">Discord Sentinel</span></a>
             <a href="/bugs.html" class="nav-link"><span class="nav-icon">🐛</span> <span class="nav-text">Bug Tracker</span></a>
-            <a onclick="openGlobalSettings ? openGlobalSettings() : openSettings()" class="nav-link" style="cursor:pointer; margin-top:4px;"><span class="nav-icon">⚙️</span> <span class="nav-text">Settings</span></a>
-        </div>
-        <div class="sidebar-footer" id="sidebar-user-footer">
-            <div class="sidebar-user-chip" onclick="openGlobalSettings ? openGlobalSettings() : openSettings()" style="cursor:pointer;" title="Account & API Settings">
-                <div class="sidebar-user-avatar" id="nav-user-avatar">🕷️</div>
-                <div class="sidebar-user-info">
-                    <span class="sidebar-user-name" id="nav-user-name">Tactical Operative</span>
-                    <span class="sidebar-user-faction" id="nav-user-sub">Faction Operations</span>
-                </div>
-                <span style="color:var(--text-tertiary); font-size:0.9em;">⚙️</span>
-            </div>
         </div>
     </nav>
     <div class="main-wrapper">
         <header class="app-topbar">
             <div class="topbar-left">
-                <button class="toggle-btn" onclick="toggleSidebar()" title="Toggle Sidebar" id="mobile-nav-toggle" style="display:none;">☰</button>
+                <button class="toggle-btn" onclick="toggleSidebar()" title="Toggle Sidebar" id="mobile-nav-toggle" style="display:none;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
                 <div class="topbar-crumb">
                     <span>TACTICAL DESK</span> / <strong style="color:var(--text-primary);">TRAVEL PROFIT DESK</strong>
                 </div>
@@ -291,7 +327,7 @@
                     <span class="pulse-indicator"></span>
                     <span id="global-ws-status">LIVE WS</span>
                 </div>
-                <button class="btn btn-secondary btn-sm" onclick="loadProfits(true)" title="Refresh Travel Data" style="padding:4px 8px;">⟳</button>
+                <button class="btn btn-secondary btn-sm" onclick="loadProfits(true)" title="Refresh Travel Data" style="padding:4px 8px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></button>
                 <button class="btn btn-secondary btn-sm" onclick="openGlobalSettings ? openGlobalSettings() : openSettings()" title="Settings" style="padding:4px 8px;">⚙️</button>
             </div>
         </header>
@@ -302,7 +338,7 @@
             <div class="page-title">✈️ Travel <span>Profit</span> Calculator</div>
             <div style="display:flex;align-items:center;gap:10px;">
                 <span id="last-updated" style="font-size:0.78em;color:var(--text-dim);"></span>
-                <button class="refresh-btn" onclick="loadProfits(true)" id="refresh-btn">⟳ Refresh</button>
+                <button class="refresh-btn" onclick="loadProfits(true)" id="refresh-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> Refresh</button>
             </div>
         </div>
 
@@ -346,8 +382,17 @@
         <div class="controls-bar">
             <div class="ctrl-group">
                 <label for="capacity">🧳 Capacity</label>
-                <input type="number" id="capacity" class="ctrl-input" value="29" min="1" max="100">
+                <input type="number" id="capacity" class="ctrl-input" value="29" min="1" max="100" onchange="applyCapacity()">
                 <button class="btn-ctrl primary" onclick="applyCapacity()">Apply</button>
+            </div>
+            <div class="ctrl-group">
+                <label for="flight-profile">✈️ Flight</label>
+                <select id="flight-profile" class="ctrl-select" onchange="applyFlightProfile()">
+                    <option value="airstrip" selected>Private Airstrip (PI)</option>
+                    <option value="wlt">WLT Benefit</option>
+                    <option value="bct">Business Class (BCT)</option>
+                    <option value="standard">Standard</option>
+                </select>
             </div>
             <div class="ctrl-group">
                 <label>Sort by</label>
@@ -409,25 +454,12 @@
     </div>
 
 <script>
-// ── Sidebar / Theme ─────────────────────────────────────────────────────────
-function toggleSidebar() {
-    if (window.innerWidth <= 768) {
-        const nav = document.querySelector('.nav-items');
-        if (nav) nav.classList.toggle('mobile-open');
-    } else {
-        const s = document.getElementById('app-sidebar');
-        s.classList.toggle('collapsed');
-        localStorage.setItem('sidebar_collapsed', s.classList.contains('collapsed'));
-    }
-}
-function toggleTheme() {
-    document.body.classList.toggle('light-mode');
-    localStorage.setItem('theme', document.body.classList.contains('light-mode') ? 'light' : 'dark');
-}
+const TRAVEL_REFRESH_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>';
 
 // ── State ────────────────────────────────────────────────────────────────────
 let allItems = [];
 let capacity = parseInt(localStorage.getItem('travelCapacity') || '29');
+let flightProfile = localStorage.getItem('travelFlightProfile') || 'airstrip';
 let currentFilter = 'all';
 let sortKey = 'profitPerHr';
 let sortAsc = false;
@@ -446,16 +478,35 @@ function getCategory(name) {
 }
 
 const COUNTRY_FLAGS = {
-    'Mexico':'🇲🇽','Canada':'🇨🇦','Hawaii':'🇺🇸','UK':'🇬🇧','Argentina':'🇦🇷',
+    'Mexico':'🇲🇽','Canada':'🇨🇦','Hawaii':'🇺🇸','United Kingdom':'🇬🇧','UK':'🇬🇧','Argentina':'🇦🇷',
     'Switzerland':'🇨🇭','Japan':'🇯🇵','China':'🇨🇳','UAE':'🇦🇪','South Africa':'🇿🇦','Cayman Islands':'🇰🇾'
 };
 
+function getTravelMetrics(item) {
+    const minsMap = {
+        standard: Number(item.standardMins || item.flightTimeMins || 30),
+        airstrip: Number(item.airstripMins || item.flightTimeMins || 21),
+        wlt: Number(item.wltMins || item.flightTimeMins || 15),
+        bct: Number(item.bctMins || item.flightTimeMins || 9)
+    };
+    const flightMins = minsMap[flightProfile] || Number(item.flightTimeMins || 21);
+    const maxUnits = item.stock > 0 ? Math.min(capacity, item.stock) : 0;
+    const totalProfit = Number(item.profit || 0) * maxUnits;
+    const profitPerHr = flightMins > 0 ? (totalProfit / (flightMins * 2)) * 60 : 0;
+    return {
+        ...item,
+        flightTimeMins: flightMins,
+        totalProfit,
+        profitPerHr
+    };
+}
+
 // ── Init ─────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
-    const sidebar = document.getElementById('app-sidebar');
-    if (localStorage.getItem('sidebar_collapsed') === 'true') sidebar.classList.add('collapsed');
-    if (localStorage.getItem('theme') === 'light') document.body.classList.add('light-mode');
-    document.getElementById('capacity').value = capacity;
+    const capEl = document.getElementById('capacity');
+    if (capEl) capEl.value = capacity;
+    const profEl = document.getElementById('flight-profile');
+    if (profEl) profEl.value = flightProfile;
     loadProfits();
     setInterval(updateRestockTimer, 1000);
     updateRestockTimer();
@@ -473,56 +524,58 @@ async function loadProfits(showSpin = false) {
             }
         }
     } catch(e) {}
-    const apiKey = localStorage.getItem('warboard_apikey') || localStorage.getItem('tornApiKey');
+    const apiKey = typeof getApiKey === 'function' ? getApiKey() : (localStorage.getItem('warboard_apikey') || '');
+    const hasAccess = (typeof hasTornAccess === 'function' && hasTornAccess()) || Boolean(apiKey);
     const tbody = document.getElementById('profits-tbody');
     const refreshBtn = document.getElementById('refresh-btn');
 
-    if (!apiKey && !localStorage.getItem("sv_session_token")) {
-        tbody.innerHTML = `<tr><td colspan="10" style="padding:30px;text-align:center;color:var(--text-dim);">⚠️ No API Key found. Go to <strong>Settings</strong> on the Live Warboard to set one.</td></tr>`;
+    if (!hasAccess) {
+        tbody.innerHTML = `<tr><td colspan="10" style="padding:30px;text-align:center;color:var(--text-dim);">⚠️ No API Key found. Click Settings (top right) to connect your Torn API key.</td></tr>`;
         return;
     }
 
-    if (showSpin) {
-        refreshBtn.textContent = '⟳ Loading...';
+    if (showSpin && refreshBtn) {
+        refreshBtn.innerHTML = `${TRAVEL_REFRESH_SVG} Loading...`;
         refreshBtn.disabled = true;
     }
 
     try {
-        const res = await fetch('/api/travel-profits', { headers: { 'x-api-key': apiKey } });
+        const headers = apiKey ? { 'x-api-key': apiKey } : {};
+        const res = await fetch('/api/travel-profits', { headers });
         const data = await res.json();
         if (data.error) throw new Error(data.error);
 
-        allItems = data.items;
+        allItems = data.items || [];
         try { sessionStorage.setItem('sv_cache_travel', JSON.stringify(allItems)); } catch(e) {}
         renderTable();
         updateKPIs();
 
         document.getElementById('last-updated').textContent = 'Updated ' + new Date().toLocaleTimeString();
     } catch (err) {
-        tbody.innerHTML = `<tr><td colspan="10" style="padding:30px;text-align:center;color:var(--red);">❌ ${err.message}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="10" style="padding:30px;text-align:center;color:var(--accent-crimson, #ef4444);">❌ ${err.message}</td></tr>`;
     } finally {
-        refreshBtn.textContent = '⟳ Refresh';
-        refreshBtn.disabled = false;
+        if (refreshBtn) {
+            refreshBtn.innerHTML = `${TRAVEL_REFRESH_SVG} Refresh`;
+            refreshBtn.disabled = false;
+        }
     }
 }
 
 // ── KPIs ─────────────────────────────────────────────────────────────────────
 function updateKPIs() {
     if (!allItems.length) return;
-    const withProfit = allItems.filter(i => i.stock > 0 && i.profit > 0);
+    const computed = allItems.map(getTravelMetrics);
+    const withProfit = computed.filter(i => i.stock > 0 && i.profit > 0);
 
     // Best $/hr
-    const bestRate = withProfit.sort((a,b) => b.profitPerHr - a.profitPerHr)[0];
+    const bestRate = [...withProfit].sort((a,b) => b.profitPerHr - a.profitPerHr)[0];
     document.getElementById('kpi-best-rate').textContent = bestRate ? '$' + Math.floor(bestRate.profitPerHr).toLocaleString() : '—';
-    document.getElementById('kpi-best-name').textContent = bestRate ? bestRate.name : '—';
+    document.getElementById('kpi-best-name').textContent = bestRate ? `${bestRate.name} (${bestRate.country})` : '—';
 
     // Best total
-    const withTotal = allItems.filter(i => i.stock > 0 && i.profit > 0).map(i => ({
-        ...i, total: i.profit * Math.min(capacity, i.stock)
-    }));
-    const bestTotal = withTotal.sort((a,b) => b.total - a.total)[0];
-    document.getElementById('kpi-best-total').textContent = bestTotal ? '$' + bestTotal.total.toLocaleString() : '—';
-    document.getElementById('kpi-best-total-name').textContent = bestTotal ? bestTotal.name : '—';
+    const bestTotal = [...withProfit].sort((a,b) => b.totalProfit - a.totalProfit)[0];
+    document.getElementById('kpi-best-total').textContent = bestTotal ? '$' + Math.floor(bestTotal.totalProfit).toLocaleString() : '—';
+    document.getElementById('kpi-best-total-name').textContent = bestTotal ? `${bestTotal.name} (${bestTotal.country})` : '—';
 
     // Stock counts
     const inStock = allItems.filter(i => i.stock > 0).length;
@@ -534,9 +587,8 @@ function updateKPIs() {
 // ── Render ────────────────────────────────────────────────────────────────────
 function renderTable() {
     const tbody = document.getElementById('profits-tbody');
-    let items = [...allItems].map(item => ({
-        ...item,
-        totalProfit: item.profit * Math.min(capacity, item.stock || capacity),
+    let items = allItems.map(item => ({
+        ...getTravelMetrics(item),
         category: getCategory(item.name)
     }));
 
@@ -553,7 +605,7 @@ function renderTable() {
         let bv = b[sortKey] ?? 0;
         if (typeof av === 'string') av = av.toLowerCase();
         if (typeof bv === 'string') bv = bv.toLowerCase();
-        if (sortKey === 'flightTimeMins') return sortAsc ? bv - av : av - bv; // shortest first = ascending natural
+        if (sortKey === 'flightTimeMins') return sortAsc ? bv - av : av - bv;
         return sortAsc ? (av > bv ? 1 : -1) : (bv > av ? 1 : -1);
     });
 
@@ -573,7 +625,7 @@ function renderTable() {
 
     const fmt = n => '$' + Math.max(0, Math.floor(n)).toLocaleString();
     const fmtFlight = mins => {
-        const rt = mins * 2;
+        const rt = Math.round(mins * 2);
         return `${Math.floor(rt/60)}h ${rt%60}m`;
     };
     const fmtStock = (stock, cap) => {
@@ -591,9 +643,9 @@ function renderTable() {
 
     tbody.innerHTML = items.map((item, i) => {
         const cat = item.category;
-        const flag = COUNTRY_FLAGS[item.country] || '🌍';
+        const flag = item.flag || COUNTRY_FLAGS[item.country] || '🌍';
         const rowClass = item.stock === 0 ? 'out-stock' : (item.stock < capacity ? 'low-stock' : 'top-pick');
-        const totalActual = item.profit * Math.min(capacity, item.stock || capacity);
+        const totalActual = item.totalProfit;
 
         return `<tr class="${rowClass}">
             <td>${rankBadge(i)}</td>
@@ -606,14 +658,23 @@ function renderTable() {
             <td>${fmtStock(item.stock, capacity)}</td>
             <td style="color:var(--text-dim);">${fmt(item.cost)}</td>
             <td style="color:var(--text-dim);">${fmt(item.marketPrice)}</td>
-            <td class="${item.profit > 0 ? 'profit-item' : ''}" style="${item.profit <= 0 ? 'color:var(--red)' : ''}">${fmt(item.profit)}</td>
-            <td class="${item.profit > 0 ? 'profit-item' : ''}" style="${item.profit <= 0 ? 'color:var(--red)' : ''}">${fmt(totalActual)}</td>
-            <td class="profit-hr">${item.profit > 0 ? fmt(item.profitPerHr) : '<span style="color:var(--red);">Loss</span>'}</td>
+            <td class="${item.profit > 0 ? 'profit-item' : ''}" style="${item.profit <= 0 ? 'color:var(--accent-crimson, #ef4444)' : ''}">${fmt(item.profit)}</td>
+            <td class="${item.profit > 0 ? 'profit-item' : ''}" style="${item.profit <= 0 ? 'color:var(--accent-crimson, #ef4444)' : ''}">${fmt(totalActual)}</td>
+            <td class="profit-hr">${item.stock === 0 ? '<span style="color:var(--text-tertiary);">$0</span>' : (item.profit > 0 ? fmt(item.profitPerHr) : '<span style="color:var(--accent-crimson, #ef4444);">Loss</span>')}</td>
         </tr>`;
     }).join('');
 }
 
 // ── Controls ──────────────────────────────────────────────────────────────────
+function applyFlightProfile() {
+    const sel = document.getElementById('flight-profile');
+    if (!sel) return;
+    flightProfile = sel.value || 'airstrip';
+    localStorage.setItem('travelFlightProfile', flightProfile);
+    renderTable();
+    updateKPIs();
+}
+
 function applyCapacity() {
     const val = parseInt(document.getElementById('capacity').value);
     if (!val || val < 1) return;
@@ -666,6 +727,5 @@ function updateRestockTimer() {
     pill.className = 'restock-pill' + (isUrgent ? ' urgent' : '');
 }
 </script>
-<script src="/global_settings.js?v=4.0.0"></script>
 </body>
 </html>

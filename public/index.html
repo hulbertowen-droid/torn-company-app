@@ -26,14 +26,14 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/global.css?v=4.0.0">
+    <link rel="stylesheet" href="/global.css?v=4.4.0">
     
     <!-- Scripts & Core Libraries -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="/auth-gate.js?v=4.0.0"></script>
-    <script src="/global_settings.js?v=4.0.0"></script>
-    <script src="/global-topbar.js?v=4.0.0"></script>
-    <script src="/pwa-helper.js?v=1.0.0" defer></script>
+    <script src="/auth-gate.js?v=4.4.0"></script>
+    <script src="/global_settings.js?v=4.4.0"></script>
+    <script src="/global-topbar.js?v=4.4.0"></script>
+    <script src="/pwa-helper.js?v=1.2.0" defer></script>
 
     <style>
     /* ══════════════════════════════════════════════════════════════════════════
@@ -122,8 +122,8 @@
     /* Tug of War Progress Bar */
     .tug-center {
         flex: 1;
-        min-width: 260px;
-        max-width: 520px;
+        min-width: 290px;
+        max-width: 560px;
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -191,9 +191,15 @@
         width: 100%;
         display: flex;
         justify-content: space-between;
-        font-size: 0.74rem;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 4px;
+        font-size: 0.69rem;
         color: var(--text-tertiary);
         font-family: var(--font-mono);
+    }
+    .tug-meta-row > span {
+        white-space: nowrap;
     }
 
     /* War Clock & Target Decay Strip */
@@ -561,6 +567,21 @@
         display: none !important;
     }
 
+    /* 6-Column KPI Grid */
+    .kpi-row {
+        display: grid;
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+        gap: 12px;
+    }
+    .kpi-card { min-width: 0; }
+    .kpi-content { min-width: 0; flex: 1; }
+    @media (max-width: 1279px) {
+        .kpi-row { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    }
+    @media (max-width: 640px) {
+        .kpi-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+
     /* Responsive */
     @media (max-width: 1024px) {
         .tactical-grid { grid-template-columns: 1fr; }
@@ -581,51 +602,36 @@
                 <span class="brand-text">FactionOS</span>
             </div>
             <div class="sidebar-actions">
-                <button class="theme-toggle" onclick="toggleTheme()" title="Toggle Dark/Light Mode">🌓</button>
-                <button class="toggle-btn" onclick="toggleSidebar()" title="Collapse Sidebar">◀</button>
+                <button type="button" class="theme-toggle" onclick="toggleTheme()" title="Toggle Dark/Light Mode" aria-label="Toggle Dark/Light Mode"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg></button>
+                <button type="button" class="toggle-btn" onclick="toggleSidebar()" title="Collapse Sidebar" aria-label="Collapse Sidebar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
             </div>
         </div>
         <div class="nav-items">
             <div class="nav-section-title">Live Operations</div>
             <a href="/" class="nav-link active"><span class="nav-icon">📡</span> <span class="nav-text">Live Warboard</span></a>
             <a href="/chain.html" class="nav-link"><span class="nav-icon">🔗</span> <span class="nav-text">Chain Sentinel</span></a>
-            <a href="/dashboard.html" class="nav-link"><span class="nav-icon">📊</span> <span class="nav-text">Operations Overview</span></a>
-            <a href="/armory.html" class="nav-link"><span class="nav-icon">🛡️</span> <span class="nav-text">Armory &amp; Logistics</span></a>
+            <a href="/dashboard.html" class="nav-link" id="nav-link-overview"><span class="nav-icon">📊</span> <span class="nav-text">Operations Overview</span></a>
+            <a href="/armory.html" class="nav-link" id="nav-link-armory"><span class="nav-icon">🛡️</span> <span class="nav-text">Armory &amp; Logistics</span> <span class="nav-badge" id="nav-armory-badge" style="display:none;"></span></a>
             <a href="/gym-stats.html" class="nav-link"><span class="nav-icon">🏋️</span> <span class="nav-text">Gym &amp; Stat Tracker</span></a>
             <a href="/payout.html" class="nav-link"><span class="nav-icon">💰</span> <span class="nav-text">War Payouts</span></a>
-            <a href="/members.html" class="nav-link"><span class="nav-icon">👥</span> <span class="nav-text">Faction Roster</span></a>
             <a href="/oc.html" class="nav-link"><span class="nav-icon">💼</span> <span class="nav-text">OC Manager</span></a>
 
             <div class="nav-section-title">Tactical Desk</div>
-            <a href="/dashboard.html#sentinel" class="nav-link"><span class="nav-icon">✈️</span> <span class="nav-text">Airspace &amp; War Intel</span></a>
-            <a href="/travel.html" class="nav-link"><span class="nav-icon">✈️</span> <span class="nav-text">Travel Profit Desk</span></a>
-            <a href="/bazaar.html" class="nav-link"><span class="nav-icon">🛒</span> <span class="nav-text">Market & Bazaar</span></a>
+            <a href="/travel.html" class="nav-link"><span class="nav-icon">🌍</span> <span class="nav-text">Travel Profit Desk</span></a>
             <a href="/company.html" class="nav-link"><span class="nav-icon">🏢</span> <span class="nav-text">Company Hub</span></a>
             <a href="/gamble.html" class="nav-link"><span class="nav-icon">🎰</span> <span class="nav-text">Casino Analytics</span></a>
-            <a href="/recruit/" class="nav-link" title="Recruit Engine is currently in early development and not usable"><span class="nav-icon">🎯</span> <span class="nav-text">Recruit Engine</span> <span class="nav-badge-dev">Early Dev</span></a>
 
-            <div class="nav-section-title">Intelligence & Alerts</div>
+            <div class="nav-section-title">Intelligence &amp; Alerts</div>
             <a href="/ai-sandbox.html" class="nav-link"><span class="nav-icon">🤖</span> <span class="nav-text">F.R.I.D.A.Y. Intel</span></a>
             <a href="/discord.html" class="nav-link"><span class="nav-icon">📢</span> <span class="nav-text">Discord Sentinel</span></a>
             <a href="/bugs.html" class="nav-link"><span class="nav-icon">🐛</span> <span class="nav-text">Bug Tracker</span></a>
-            <a onclick="openGlobalSettings ? openGlobalSettings() : openSettings()" class="nav-link" style="cursor:pointer; margin-top:4px;"><span class="nav-icon">⚙️</span> <span class="nav-text">Settings</span></a>
-        </div>
-        <div class="sidebar-footer" id="sidebar-user-footer">
-            <div class="sidebar-user-chip" onclick="openGlobalSettings ? openGlobalSettings() : openSettings()" style="cursor:pointer;" title="Account & API Settings">
-                <div class="sidebar-user-avatar" id="nav-user-avatar">🕷️</div>
-                <div class="sidebar-user-info">
-                    <span class="sidebar-user-name" id="nav-user-name">Tactical Operative</span>
-                    <span class="sidebar-user-faction" id="nav-user-sub">Faction Operations</span>
-                </div>
-                <span style="color:var(--text-tertiary); font-size:0.9em;">⚙️</span>
-            </div>
         </div>
     </nav>
 
     <div class="main-wrapper">
         <header class="app-topbar">
             <div class="topbar-left">
-                <button class="toggle-btn" onclick="toggleSidebar()" title="Toggle Sidebar" id="mobile-nav-toggle" style="display:none;">☰</button>
+                <button class="toggle-btn" onclick="toggleSidebar()" title="Toggle Sidebar" id="mobile-nav-toggle" style="display:none;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
                 <div class="topbar-crumb">
                     <span>OPERATIONS</span> / <strong style="color:var(--text-primary);">LIVE WARBOARD</strong>
                 </div>
@@ -641,7 +647,7 @@
                     <span class="pulse-indicator"></span>
                     <span id="global-ws-status">LIVE WS</span>
                 </div>
-                <button class="btn btn-secondary btn-sm" onclick="fetchWarboard()" title="Refresh Warboard Intel" style="padding:4px 8px;">⟳</button>
+                <button class="btn btn-secondary btn-sm" onclick="fetchWarboard()" title="Refresh Warboard Intel" style="padding:4px 8px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></button>
                 <button class="btn btn-secondary btn-sm" onclick="openGlobalSettings ? openGlobalSettings() : openSettings()" title="Settings" style="padding:4px 8px;">⚙️</button>
             </div>
         </header>
@@ -658,8 +664,8 @@
                             <span id="hud-matchup-title">Spider-Verse vs Enemy</span>
                         </div>
                         <div style="display:flex;gap:6px;align-items:center;">
-                            <button class="hud-btn-exit" onclick="fetchWarboard()" title="Refresh Warboard Intel">🔄 Refresh</button>
-                            <button class="hud-btn-exit" onclick="toggleHudMode()" style="color:var(--war-amber);border-color:rgba(245,158,11,0.4);" title="Exit HUD to Full Board (HotKey: H)">✕ Exit HUD</button>
+                            <button class="hud-btn-exit" onclick="fetchWarboard()" title="Refresh Warboard Intel" style="display:inline-flex;align-items:center;gap:5px;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> Refresh</button>
+                            <button class="hud-btn-exit" onclick="toggleHudMode()" style="color:var(--war-amber);border-color:rgba(245,158,11,0.4);display:inline-flex;align-items:center;gap:5px;" title="Exit HUD to Full Board (HotKey: H)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Exit HUD</button>
                         </div>
                     </div>
                     
@@ -691,7 +697,7 @@
                 <div class="hud-card" id="hud-chain-card" style="padding:10px 14px;display:flex;align-items:center;justify-content:space-between;background:linear-gradient(90deg,#0d1117,#141922);">
                     <div style="display:flex;align-items:center;gap:8px;font-size:0.82em;font-weight:700;">
                         <span>🔗 Chain:</span>
-                        <span id="hud-chain-count" style="color:var(--war-amber);font-weight:900;">0 / 250</span>
+                        <span id="hud-chain-count" style="color:var(--war-amber);font-weight:900;">0 / 0</span>
                     </div>
                     <div style="display:flex;align-items:center;gap:6px;font-size:0.82em;font-weight:800;">
                         <span style="color:var(--text-tertiary);font-size:0.85em;">⏱️</span>
@@ -720,12 +726,9 @@
                     Live Warboard
                 </div>
                 <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-                    <button id="btn-hud-toggle" onclick="toggleHudMode()" class="btn-filter" style="padding:6px 12px;font-size:0.78rem;" title="Toggle Mini HUD Overlay (HotKey: H)">⚡ Mini HUD</button>
                     <button id="btn-sim-mode" onclick="toggleWarSimulation()" class="btn-filter" style="padding:6px 12px;font-size:0.78rem;" title="Preview Active Ranked War HUD">⚔️ Sim War View</button>
                     <span id="last-updated" style="font-size:0.76rem;color:var(--text-tertiary);"></span>
                     <button onclick="openSaveWarModal()" class="btn-filter" style="padding:6px 12px;font-size:0.78rem;">💾 Archive War</button>
-                    <button onclick="fetchWarboard()" class="btn-filter active" style="padding:6px 12px;font-size:0.78rem;">⟳ Refresh</button>
-                    <button onclick="openGlobalSettings ? openGlobalSettings() : openSettings()" class="btn-filter" style="padding:6px 12px;font-size:0.78rem;">⚙ Settings</button>
                 </div>
             </div>
 
@@ -742,7 +745,7 @@
                                 <a id="fac-name-us" href="#" target="_blank">Spider-Verse</a>
                                 <span class="badge" id="fac-rank-us" style="background:rgba(16,185,129,0.15);color:var(--war-green);font-size:0.68rem;padding:2px 6px;">RANKED</span>
                             </div>
-                            <div class="fac-sub" id="fac-id-us">ID: 52355 • 42 Members</div>
+                            <div class="fac-sub" id="fac-id-us">ID: — • — Members</div>
                         </div>
                         <div class="faction-score-box">
                             <div class="fac-score-num friendly" id="cmd-score-us">0</div>
@@ -759,7 +762,7 @@
                         </div>
                         <div class="tug-meta-row">
                             <span>Enemy Lead: <strong id="cmd-pct-them" style="color:var(--war-red);">0%</strong></span>
-                            <span id="cmd-lead-center" style="font-weight:700;">Lead: <strong id="cmd-lead-display" style="color:var(--war-green);">+0</strong> / <span id="cmd-target-val">15,000 pts</span> (<span id="cmd-target-lead-pct">0%</span> of Target)</span>
+                            <span id="cmd-lead-center" style="font-weight:700;white-space:nowrap;">Lead: <strong id="cmd-lead-display" style="color:var(--war-green);">+0</strong> / <span id="cmd-target-val">15,000 pts</span> (<span id="cmd-target-lead-pct">0%</span> of Target)</span>
                             <span>Our Lead: <strong id="cmd-pct-us" style="color:var(--war-green);">0%</strong></span>
                         </div>
                     </div>
@@ -772,9 +775,9 @@
                         <div class="faction-meta">
                             <div class="fac-name">
                                 <span class="badge" id="fac-rank-them" style="background:rgba(239,68,68,0.15);color:var(--war-red);font-size:0.68rem;padding:2px 6px;">RANKED</span>
-                                <a id="fac-name-them" href="#" target="_blank">Run It Industries</a>
+                                <a id="fac-name-them" href="#" target="_blank">Scanning Matchup...</a>
                             </div>
-                            <div class="fac-sub" id="fac-id-them">ID: 55051 • Loading Targets...</div>
+                            <div class="fac-sub" id="fac-id-them">Loading Targets...</div>
                         </div>
                         <div class="faction-flag enemy" id="fac-flag-them">⚔️</div>
                     </div>
@@ -813,14 +816,14 @@
                             <div>
                                 <div style="font-size:0.75rem;color:var(--text-tertiary);text-transform:uppercase;font-weight:800;">Friendly Chain</div>
                                 <div style="font-size:1.15rem;font-weight:900;color:var(--war-green);font-family:var(--font-mono);">
-                                    <span id="chain-hits-us">0</span> / <span id="chain-goal-us">250</span>
+                                    <span id="chain-hits-us">0</span> / <span id="chain-goal-us">0</span>
                                     <span class="ff-pill" id="chain-mult-us" style="font-size:0.68rem;margin-left:6px;">1.00x Mult</span>
                                 </div>
                             </div>
                         </div>
                         <div style="text-align:right;">
                             <div style="font-size:0.75rem;color:var(--text-tertiary);font-weight:700;">Cooldown Timer</div>
-                            <div style="font-size:1.4rem;font-weight:900;font-family:var(--font-mono);" id="chain-timer-us">05:00</div>
+                            <div style="font-size:1.4rem;font-weight:900;font-family:var(--font-mono);" id="chain-timer-us">00:00</div>
                         </div>
                         <div style="display:flex;align-items:center;gap:8px;width:100%;margin-top:4px;border-top:1px solid rgba(255,255,255,0.06);padding-top:6px;">
                             <button id="btn-chain-watch" onclick="toggleChainWatch()" class="btn-filter" style="padding:3px 8px;font-size:0.72rem;">👁️ Watch Chain</button>
@@ -836,7 +839,7 @@
                             <div>
                                 <div style="font-size:0.75rem;color:var(--text-tertiary);text-transform:uppercase;font-weight:800;">Enemy Chain</div>
                                 <div style="font-size:1.15rem;font-weight:900;color:var(--war-red);font-family:var(--font-mono);">
-                                    <span id="chain-hits-them">0</span> / <span id="chain-goal-them">250</span>
+                                    <span id="chain-hits-them">0</span> / <span id="chain-goal-them">0</span>
                                     <span class="ff-pill" id="chain-mult-them" style="font-size:0.68rem;margin-left:6px;">1.00x Mult</span>
                                 </div>
                             </div>
@@ -865,7 +868,7 @@
             <div class="kpi-row" style="margin-bottom: 16px;">
                 <div class="kpi-card">
                     <div class="kpi-icon">🟢</div>
-                    <div>
+                    <div class="kpi-content">
                         <div class="kpi-label">Friendly Online</div>
                         <div class="kpi-value" id="kpi-friendly-online">—</div>
                         <div class="kpi-sub" id="kpi-friendly-total">of — members</div>
@@ -873,7 +876,7 @@
                 </div>
                 <div class="kpi-card">
                     <div class="kpi-icon">🎯</div>
-                    <div>
+                    <div class="kpi-content">
                         <div class="kpi-label">Enemy Online</div>
                         <div class="kpi-value" id="kpi-enemy-online" style="color:var(--war-red);">—</div>
                         <div class="kpi-sub" id="kpi-enemy-total">of — targets</div>
@@ -881,7 +884,7 @@
                 </div>
                 <div class="kpi-card">
                     <div class="kpi-icon">🏥</div>
-                    <div>
+                    <div class="kpi-content">
                         <div class="kpi-label">Enemy In Hosp</div>
                         <div class="kpi-value" id="kpi-enemy-hosp" style="color:var(--war-amber);">—</div>
                         <div class="kpi-sub" id="kpi-hosp-pop-sub">0 popping &lt; 3m</div>
@@ -889,7 +892,7 @@
                 </div>
                 <div class="kpi-card">
                     <div class="kpi-icon">✈️</div>
-                    <div>
+                    <div class="kpi-content">
                         <div class="kpi-label">Enemy Traveling</div>
                         <div class="kpi-value" id="kpi-enemy-flying" style="color:var(--war-blue);">—</div>
                         <div class="kpi-sub" id="kpi-abroad-sub">0 abroad</div>
@@ -897,7 +900,7 @@
                 </div>
                 <div class="kpi-card">
                     <div class="kpi-icon">🎯</div>
-                    <div>
+                    <div class="kpi-content">
                         <div class="kpi-label">Active Claims</div>
                         <div class="kpi-value" id="kpi-claimed" style="color:var(--war-purple);">—</div>
                         <div class="kpi-sub">90s auto-expiring</div>
@@ -905,7 +908,7 @@
                 </div>
                 <div class="kpi-card">
                     <div class="kpi-icon">⚡</div>
-                    <div>
+                    <div class="kpi-content">
                         <div class="kpi-label">Retaliations (1.5x)</div>
                         <div class="kpi-value" id="kpi-retal-count" style="color:var(--war-green);">0</div>
                         <div class="kpi-sub">Active 5m windows</div>
@@ -1258,11 +1261,11 @@
 // FACTIONOS WAR-GRADE LOGIC & ENGINE
 // ══════════════════════════════════════════════════════════════════════════════
 
-let myKey = localStorage.getItem("warboard_apikey") || "";
-let ffKey = localStorage.getItem("warboard_ffkey") || "";
-let tsKey = localStorage.getItem("warboard_tskey") || "";
-let enemyFacId = localStorage.getItem("warboard_enemyId") || localStorage.getItem("factionos_enemy_faction_id") || "55051";
-let myName = localStorage.getItem("warboard_myname") || "Agent";
+let myKey = typeof getApiKey === 'function' ? getApiKey() : (localStorage.getItem("warboard_apikey") || "");
+let ffKey = typeof getFFScouterKey === 'function' ? getFFScouterKey() : (localStorage.getItem("warboard_ffkey") || "");
+let tsKey = typeof getTornStatsKey === 'function' ? getTornStatsKey() : (localStorage.getItem("warboard_tskey") || "");
+let enemyFacId = localStorage.getItem("warboard_enemyId") || localStorage.getItem("factionos_enemy_faction_id") || "";
+let myName = (typeof getUserProfile === 'function' && getUserProfile()?.playerName) || localStorage.getItem("warboard_myname") || "Agent";
 let activeEnemyFilter = 'all';
 let activeFriendlyFilter = 'all';
 let activeFeedFilter = 'all';
@@ -1655,25 +1658,31 @@ function tickCountdowns() {
     // 5. Friendly Chain Cooldown & Audio Alerts
     const chainBoxUs = document.getElementById('friendly-chain-box');
     const timerUsEl = document.getElementById('chain-timer-us');
-    if (timerUsEl && window.currentChainTimeout) {
-        const rem = Math.max(0, window.currentChainTimeout - now);
-        const m = Math.floor(rem / 60);
-        const s = rem % 60;
-        timerUsEl.textContent = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-
-        if (rem <= 60 && rem > 0) {
-            chainBoxUs?.classList.remove('caution');
-            chainBoxUs?.classList.add('panic');
-            timerUsEl.style.color = 'var(--war-red)';
-            if (rem % 10 === 0 || rem <= 15) playSirenSound();
-        } else if (rem <= 90 && rem > 0) {
-            chainBoxUs?.classList.remove('panic');
-            chainBoxUs?.classList.add('caution');
-            timerUsEl.style.color = 'var(--war-amber)';
-            if (rem % 15 === 0) playBeepSound(880, 0.15);
-        } else {
+    if (timerUsEl) {
+        if (!window.currentChainTimeout || window.currentChainTimeout <= 0) {
+            timerUsEl.textContent = '00:00';
             chainBoxUs?.classList.remove('panic', 'caution');
-            timerUsEl.style.color = 'var(--text-primary)';
+            timerUsEl.style.color = 'var(--text-tertiary)';
+        } else {
+            const rem = Math.max(0, window.currentChainTimeout - now);
+            const m = Math.floor(rem / 60);
+            const s = rem % 60;
+            timerUsEl.textContent = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+
+            if (rem <= 60 && rem > 0) {
+                chainBoxUs?.classList.remove('caution');
+                chainBoxUs?.classList.add('panic');
+                timerUsEl.style.color = 'var(--war-red)';
+                if (rem % 10 === 0 || rem <= 15) playSirenSound();
+            } else if (rem <= 90 && rem > 0) {
+                chainBoxUs?.classList.remove('panic');
+                chainBoxUs?.classList.add('caution');
+                timerUsEl.style.color = 'var(--war-amber)';
+                if (rem % 15 === 0) playBeepSound(880, 0.15);
+            } else {
+                chainBoxUs?.classList.remove('panic', 'caution');
+                timerUsEl.style.color = 'var(--text-primary)';
+            }
         }
     }
 
@@ -1716,17 +1725,17 @@ function renderWarboardPayload(data) {
     const isWarActive = isRealWarActive || isWarSimulationActive;
     const war = data.warInfo || {};
     const myFac = war.myFaction || {};
-    const savedEnemyId = localStorage.getItem("warboard_enemyId") || localStorage.getItem("factionos_enemy_faction_id") || "55051";
+    const savedEnemyId = (localStorage.getItem("warboard_enemyId") || localStorage.getItem("factionos_enemy_faction_id") || "").trim();
+    const detectedEnemyId = data.detectedEnemyId || (war.enemyFaction && war.enemyFaction.id) || (war.scoutedEnemy && war.scoutedEnemy.id) || (war.upcomingWar && war.upcomingWar.enemyFaction && war.upcomingWar.enemyFaction.id) || (war.recentWar && war.recentWar.enemyFaction && war.recentWar.enemyFaction.id) || "";
     const enemyFac = war.enemyFaction
         || war.scoutedEnemy
         || (war.upcomingWar && war.upcomingWar.enemyFaction)
         || (war.recentWar && war.recentWar.enemyFaction)
-        || (currentEnemyData.length > 0 && currentEnemyData[0].factionName ? { id: currentEnemyData[0].factionId || savedEnemyId, name: currentEnemyData[0].factionName } : { id: savedEnemyId, name: 'Run It Industries' });
+        || (currentEnemyData.length > 0 && currentEnemyData[0].factionName ? { id: currentEnemyData[0].factionId || detectedEnemyId || savedEnemyId, name: currentEnemyData[0].factionName } : null)
+        || (savedEnemyId ? { id: savedEnemyId, name: 'Scouted Faction' } : { id: '', name: 'No Active War' });
 
-    if (enemyFac && enemyFac.id) {
-        localStorage.setItem("warboard_enemyId", enemyFac.id);
-        localStorage.setItem("factionos_enemy_faction_id", enemyFac.id);
-        enemyFacId = enemyFac.id;
+    if (enemyFac && enemyFac.id && detectedEnemyId) {
+        enemyFacId = String(enemyFac.id);
     }
 
     // 1. Update Tug-of-War Command Header
@@ -1749,10 +1758,22 @@ function renderWarboardPayload(data) {
     let theirScore = isWarSimulationActive ? 5240 : Number(enemyFac.score || 0);
     let targetGoal = isWarSimulationActive ? 15000 : (Number(war.target) || 15000);
 
-    if (facNameUs) facNameUs.textContent = myFac.name || 'Spider-Verse';
-    if (facIdUs) facIdUs.textContent = `ID: ${myFac.id || '52355'} • ${currentFriendlyData.length} Members`;
-    if (facNameThem) facNameThem.textContent = enemyFac.name || (isWarSimulationActive ? 'Hydra Syndicate' : 'Run It Industries');
-    if (facIdThem) facIdThem.textContent = `ID: ${enemyFac.id || enemyFacId || '55051'} • ${currentEnemyData.length} Targets`;
+    const activeMyFacId = myFac.id || getMyCurrentFactionId();
+    if (facNameUs) {
+        facNameUs.textContent = myFac.name || 'Spider-Verse';
+        facNameUs.href = activeMyFacId ? `https://www.torn.com/factions.php?step=profile&ID=${activeMyFacId}` : '#';
+    }
+    if (facIdUs) facIdUs.textContent = `ID: ${activeMyFacId || '—'} • ${currentFriendlyData.length} Members`;
+    if (facNameThem) {
+        facNameThem.textContent = enemyFac.name || (isWarSimulationActive ? 'Hydra Syndicate' : 'No Active War');
+        facNameThem.href = enemyFac.id ? `https://www.torn.com/factions.php?step=profile&ID=${enemyFac.id}` : '#';
+    }
+    if (facIdThem) {
+        const displayEnemyId = enemyFac.id || enemyFacId || '';
+        facIdThem.textContent = displayEnemyId
+            ? `ID: ${displayEnemyId} • ${currentEnemyData.length} Targets`
+            : `Peacetime • ${currentEnemyData.length} Targets`;
+    }
     if (cmdScoreUs) cmdScoreUs.textContent = ourScore.toLocaleString();
     if (cmdScoreThem) cmdScoreThem.textContent = theirScore.toLocaleString();
 
@@ -1868,8 +1889,8 @@ function renderWarboardPayload(data) {
     const enemyChainCount = isWarSimulationActive ? 42 : (enemyFac.chain || 0);
 
     const milestones = [10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000];
-    const nextGoalUs = milestones.find(m => m > friendlyChainCount) || 10000;
-    const nextGoalThem = milestones.find(m => m > enemyChainCount) || 10000;
+    const nextGoalUs = friendlyChainCount > 0 ? (milestones.find(m => m > friendlyChainCount) || 10000) : 0;
+    const nextGoalThem = enemyChainCount > 0 ? (milestones.find(m => m > enemyChainCount) || 10000) : 0;
 
     if (chainHitsUs) chainHitsUs.textContent = friendlyChainCount;
     if (chainGoalUs) chainGoalUs.textContent = nextGoalUs;
@@ -1878,6 +1899,15 @@ function renderWarboardPayload(data) {
 
     let multValUs = friendlyChainCount >= 100 ? '2.00x' : friendlyChainCount >= 50 ? '1.75x' : friendlyChainCount >= 25 ? '1.50x' : friendlyChainCount >= 10 ? '1.25x' : '1.00x';
     if (chainMultUs) chainMultUs.textContent = `${multValUs} Mult`;
+    let multValThem = enemyChainCount >= 100 ? '2.00x' : enemyChainCount >= 50 ? '1.75x' : enemyChainCount >= 25 ? '1.50x' : enemyChainCount >= 10 ? '1.25x' : '1.00x';
+    const chainMultThem = document.getElementById('chain-mult-them');
+    if (chainMultThem) chainMultThem.textContent = `${multValThem} Mult`;
+
+    const timerThemEl = document.getElementById('chain-timer-them');
+    if (timerThemEl) {
+        const eT = Number(enemyFac.chainTimeout || 0);
+        timerThemEl.textContent = eT > 0 ? `${String(Math.floor(eT / 60)).padStart(2, '0')}:${String(eT % 60).padStart(2, '0')}` : '--:--';
+    }
 
     // Bonus hit warning banner
     const bonusBanner = document.getElementById('bonus-milestone-banner');
@@ -1892,8 +1922,8 @@ function renderWarboardPayload(data) {
         }
     }
 
-    // Set cooldown timeout for second-by-second ticker
-    window.currentChainTimeout = myFac.chainTimeout ? (now + myFac.chainTimeout) : (now + 260);
+    // Set cooldown timeout for second-by-second ticker (0 = inactive, never fake 04:20)
+    window.currentChainTimeout = (myFac.chainTimeout && myFac.chainTimeout > 0) ? (now + myFac.chainTimeout) : 0;
 
     // 4. Update KPI Row
     const fOnline = currentFriendlyData.filter(m => m.onlineStatus === 'Online').length;
@@ -2213,7 +2243,9 @@ function renderEnemyTable() {
         return 0;
     });
 
-    document.getElementById('enemy-count').textContent = list.length;
+    document.getElementById('enemy-count').textContent = list.length === currentEnemyData.length
+        ? `${currentEnemyData.length}`
+        : `${list.length} / ${currentEnemyData.length}`;
 
     if (list.length === 0) {
         container.innerHTML = '<div class="empty-state" style="padding:24px;">No enemy targets match current search & filter criteria.</div>';
@@ -2360,7 +2392,9 @@ function renderFriendlyTable() {
         return true;
     });
 
-    document.getElementById('friendly-count').textContent = list.length;
+    document.getElementById('friendly-count').textContent = list.length === currentFriendlyData.length
+        ? `${currentFriendlyData.length}`
+        : `${list.length} / ${currentFriendlyData.length}`;
 
     if (list.length === 0) {
         container.innerHTML = '<div class="empty-state" style="padding:24px;">No friendly members match filter.</div>';
@@ -2836,9 +2870,14 @@ async function fetchWarboard() {
     if (isFetchingWarboard || document.hidden) return;
     isFetchingWarboard = true;
     try {
+        myKey = typeof getApiKey === 'function' ? getApiKey() : (localStorage.getItem("warboard_apikey") || "");
+        ffKey = typeof getFFScouterKey === 'function' ? getFFScouterKey() : (localStorage.getItem("warboard_ffkey") || "");
+        tsKey = typeof getTornStatsKey === 'function' ? getTornStatsKey() : (localStorage.getItem("warboard_tskey") || "");
+        const explicitEnemy = (localStorage.getItem("warboard_enemyId") || localStorage.getItem("factionos_enemy_faction_id") || "").trim();
+
         const reqHeaders = {};
         if (myKey) reqHeaders['x-api-key'] = myKey;
-        if (enemyFacId) reqHeaders['x-enemy-id'] = enemyFacId;
+        if (explicitEnemy) reqHeaders['x-enemy-id'] = explicitEnemy;
         if (ffKey) reqHeaders['x-ff-key'] = ffKey;
         const activeFacId = getMyCurrentFactionId();
         if (activeFacId && activeFacId !== '52355') {
@@ -2854,10 +2893,13 @@ async function fetchWarboard() {
             if (updatedEl) updatedEl.innerText = `Updated ${new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'})}`;
             return;
         }
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const etagHeader = res.headers.get('ETag');
         if (etagHeader) lastWarboardEtag = etagHeader;
         const data = await res.json();
-        renderWarboardPayload(data);
+        if (data && !data.error) {
+            renderWarboardPayload(data);
+        }
     } catch(e) {
         console.error("Warboard fetch error:", e);
     } finally {
@@ -2886,17 +2928,6 @@ function showToast(msg, type = "blue") {
     toast.textContent = msg;
     container.appendChild(toast);
     setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 3200);
-}
-
-function toggleSidebar() {
-    const s = document.getElementById('app-sidebar');
-    if (s) s.classList.toggle('collapsed');
-}
-
-function toggleTheme() {
-    const isLight = document.documentElement.getAttribute('data-theme') === 'light';
-    document.documentElement.setAttribute('data-theme', isLight ? 'dark' : 'light');
-    localStorage.setItem('theme', isLight ? 'dark' : 'light');
 }
 
 function openSettings() {

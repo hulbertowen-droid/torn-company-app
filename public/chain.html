@@ -26,13 +26,13 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/global.css?v=4.0.0">
+    <link rel="stylesheet" href="/global.css?v=4.4.0">
     
     <!-- Scripts & Auth -->
-    <script src="/auth-gate.js?v=4.0.0"></script>
-    <script src="/global_settings.js?v=4.0.0"></script>
-    <script src="/global-topbar.js?v=4.0.0"></script>
-    <script src="/pwa-helper.js?v=1.0.0" defer></script>
+    <script src="/auth-gate.js?v=4.4.0"></script>
+    <script src="/global_settings.js?v=4.4.0"></script>
+    <script src="/global-topbar.js?v=4.4.0"></script>
+    <script src="/pwa-helper.js?v=1.2.0" defer></script>
 
     <style>
     /* ─── Chain Hero Card ─── */
@@ -275,6 +275,8 @@
         outline: none;
         cursor: pointer;
         padding: 2px;
+        width: auto !important;
+        min-width: 68px;
     }
     .hit-time-select option {
         background: var(--bg-surface);
@@ -303,8 +305,21 @@
     .lineup-controls {
         display: flex;
         align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+    .lineup-toolbar-group {
+        display: flex;
+        align-items: center;
         gap: 6px;
         flex-wrap: wrap;
+    }
+    .lineup-toolbar-divider {
+        width: 1px;
+        height: 24px;
+        background: var(--border-default);
+        margin: 0 2px;
+        flex-shrink: 0;
     }
     .lineup-btn {
         background: var(--bg-elevated);
@@ -346,15 +361,31 @@
     }
     .lineup-meta {
         padding: 8px 22px;
-        background: rgba(6, 182, 212, 0.03);
+        background: rgba(6, 182, 212, 0.05);
         border-bottom: 1px solid var(--border-subtle);
-        display: flex;
+        display: none;
         align-items: center;
         justify-content: flex-end;
         gap: 10px;
         font-size: 0.82em;
-        color: var(--text-secondary);
-        min-height: 32px;
+        color: var(--accent-cyan);
+        min-height: 28px;
+    }
+    .lineup-meta.visible {
+        display: flex;
+    }
+    .lineup-drag-handle {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--text-tertiary);
+        cursor: grab;
+        padding: 2px;
+    }
+    .lineup-remove-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
     }
 
     /* ─── Tier 1: Currently Up Card ─── */
@@ -1058,50 +1089,35 @@
                 <span class="brand-text">FactionOS</span>
             </div>
             <div class="sidebar-actions">
-                <button class="theme-toggle" onclick="toggleTheme()" title="Toggle Dark/Light Mode">🌗</button>
-                <button class="toggle-btn" onclick="toggleSidebar()" title="Collapse Sidebar">☰</button>
+                <button type="button" class="theme-toggle" onclick="toggleTheme()" title="Toggle Dark/Light Mode" aria-label="Toggle Dark/Light Mode"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg></button>
+                <button type="button" class="toggle-btn" onclick="toggleSidebar()" title="Collapse Sidebar" aria-label="Collapse Sidebar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
             </div>
         </div>
         <div class="nav-items">
             <div class="nav-section-title">Live Operations</div>
             <a href="/" class="nav-link"><span class="nav-icon">📡</span> <span class="nav-text">Live Warboard</span></a>
             <a href="/chain.html" class="nav-link active"><span class="nav-icon">🔗</span> <span class="nav-text">Chain Sentinel</span></a>
-            <a href="/dashboard.html" class="nav-link"><span class="nav-icon">📊</span> <span class="nav-text">Operations Overview</span></a>
-            <a href="/armory.html" class="nav-link"><span class="nav-icon">🛡️</span> <span class="nav-text">Armory &amp; Logistics</span></a>
+            <a href="/dashboard.html" class="nav-link" id="nav-link-overview"><span class="nav-icon">📊</span> <span class="nav-text">Operations Overview</span></a>
+            <a href="/armory.html" class="nav-link" id="nav-link-armory"><span class="nav-icon">🛡️</span> <span class="nav-text">Armory &amp; Logistics</span> <span class="nav-badge" id="nav-armory-badge" style="display:none;"></span></a>
             <a href="/gym-stats.html" class="nav-link"><span class="nav-icon">🏋️</span> <span class="nav-text">Gym &amp; Stat Tracker</span></a>
             <a href="/payout.html" class="nav-link"><span class="nav-icon">💰</span> <span class="nav-text">War Payouts</span></a>
-            <a href="/members.html" class="nav-link"><span class="nav-icon">👥</span> <span class="nav-text">Faction Roster</span></a>
             <a href="/oc.html" class="nav-link"><span class="nav-icon">💼</span> <span class="nav-text">OC Manager</span></a>
 
             <div class="nav-section-title">Tactical Desk</div>
-            <a href="/dashboard.html#sentinel" class="nav-link"><span class="nav-icon">✈️</span> <span class="nav-text">Airspace &amp; War Intel</span></a>
-            <a href="/travel.html" class="nav-link"><span class="nav-icon">✈️</span> <span class="nav-text">Travel Profit Desk</span></a>
-            <a href="/bazaar.html" class="nav-link"><span class="nav-icon">🛒</span> <span class="nav-text">Market & Bazaar</span></a>
+            <a href="/travel.html" class="nav-link"><span class="nav-icon">🌍</span> <span class="nav-text">Travel Profit Desk</span></a>
             <a href="/company.html" class="nav-link"><span class="nav-icon">🏢</span> <span class="nav-text">Company Hub</span></a>
             <a href="/gamble.html" class="nav-link"><span class="nav-icon">🎰</span> <span class="nav-text">Casino Analytics</span></a>
-            <a href="/recruit/" class="nav-link" title="Recruit Engine is currently in early development and not usable"><span class="nav-icon">🎯</span> <span class="nav-text">Recruit Engine</span> <span class="nav-badge-dev">Early Dev</span></a>
 
-            <div class="nav-section-title">Intelligence & Alerts</div>
+            <div class="nav-section-title">Intelligence &amp; Alerts</div>
             <a href="/ai-sandbox.html" class="nav-link"><span class="nav-icon">🤖</span> <span class="nav-text">F.R.I.D.A.Y. Intel</span></a>
             <a href="/discord.html" class="nav-link"><span class="nav-icon">📢</span> <span class="nav-text">Discord Sentinel</span></a>
             <a href="/bugs.html" class="nav-link"><span class="nav-icon">🐛</span> <span class="nav-text">Bug Tracker</span></a>
-            <a onclick="openGlobalSettings ? openGlobalSettings() : openSettings()" class="nav-link" style="cursor:pointer; margin-top:4px;"><span class="nav-icon">⚙️</span> <span class="nav-text">Settings</span></a>
-        </div>
-        <div class="sidebar-footer" id="sidebar-user-footer">
-            <div class="sidebar-user-chip" onclick="openGlobalSettings ? openGlobalSettings() : openSettings()" style="cursor:pointer;" title="Account & API Settings">
-                <div class="sidebar-user-avatar" id="nav-user-avatar">🕷️</div>
-                <div class="sidebar-user-info">
-                    <span class="sidebar-user-name" id="nav-user-name">Tactical Operative</span>
-                    <span class="sidebar-user-faction" id="nav-user-sub">Faction Operations</span>
-                </div>
-                <span style="color:var(--text-tertiary); font-size:0.9em;">⚙️</span>
-            </div>
         </div>
     </nav>
     <div class="main-wrapper">
         <header class="app-topbar">
             <div class="topbar-left">
-                <button class="toggle-btn" onclick="toggleSidebar()" title="Toggle Sidebar" id="mobile-nav-toggle" style="display:none;">☰</button>
+                <button class="toggle-btn" onclick="toggleSidebar()" title="Toggle Sidebar" id="mobile-nav-toggle" style="display:none;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
                 <div class="topbar-crumb">
                     <span>OPERATIONS</span> / <strong style="color:var(--text-primary);">CHAIN SENTINEL</strong>
                 </div>
@@ -1143,47 +1159,47 @@
             <!-- ── Chain Lineup ─────────────────────────────────────── -->
             <div class="lineup-card">
                 <div class="lineup-header">
-                    <h3 class="lineup-title">Chain Lineup</h3>
-                    <div class="lineup-controls">
+                    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                        <h3 class="lineup-title">Chain Lineup</h3>
                         <span class="lineup-cycle-badge" id="lineup-cycle-badge">Cycle 1</span>
-                        <div class="hit-time-control" title="Target timer to hit during chain (e.g. 3:00)">
-                            <span style="font-size:0.75em; font-weight:800; text-transform:uppercase; color:var(--text-secondary); letter-spacing:0.5px;">Hit At:</span>
-                            <select id="lineup-hit-time" onchange="updateHitTime()" class="hit-time-select">
-                                <option value="">None</option>
-                                <option value="3:30">3:30</option>
-                                <option value="3:00" selected>3:00</option>
-                                <option value="2:30">2:30</option>
-                                <option value="2:00">2:00</option>
-                                <option value="1:30">1:30</option>
-                                <option value="1:00">1:00</option>
-                                <option value="custom">Custom...</option>
-                            </select>
-                            <input id="lineup-hit-time-custom" type="text" placeholder="e.g. 2:15" style="display:none; width:62px; background:var(--bg-elevated); border:1px solid var(--accent-cyan-border); color:var(--text-primary); padding:2px 6px; border-radius:var(--radius-sm); font-size:0.8em; font-family:var(--font-mono); outline:none;" onchange="updateCustomHitTime()" onblur="updateCustomHitTime()" />
+                    </div>
+                    <div class="lineup-controls">
+                        <div class="lineup-toolbar-group" aria-label="Queue Actions">
+                            <button class="lineup-btn" onclick="lineupNext()" title="Manually advance to next person">Next</button>
+                            <button class="lineup-btn active" id="lineup-loop-btn" onclick="lineupToggleLoop()" title="Loop back to start when everyone has hit">Loop</button>
+                            <button class="lineup-btn" onclick="lineupAutoFill()" title="Populate lineup with currently eligible members">Auto-Fill Eligible</button>
+                            <button class="lineup-btn" onclick="lineupImportFromChain()" title="Import from current chain attack log">Import from Chain</button>
+                            <button class="lineup-btn" onclick="lineupReset()" title="Clear hit marks and restart from top">Reset</button>
+                            <button class="lineup-btn danger" onclick="lineupClear()" title="Remove all members">Clear</button>
                         </div>
-                        <button class="lineup-btn" onclick="copyFull()" title="Copy lineup as clean plain text">Copy</button>
-                        <button class="lineup-btn" onclick="copyCompact()" title="Copy compact one-line format">Copy Compact</button>
-                        <a href="/torn-chain-lineup.user.js" class="lineup-btn" style="background:var(--accent-emerald-bg, rgba(46,204,113,0.15)); color:var(--accent-emerald, #2ecc71); border-color:var(--accent-emerald, #2ecc71); text-decoration:none; display:inline-flex; align-items:center; gap:4px;" title="Install Tampermonkey Userscript to view floating HUD on Torn and 1-click post lineup into Faction Chat">⚡ Torn Chat Script</a>
-                        <button class="lineup-btn active" id="lineup-loop-btn" onclick="lineupToggleLoop()" title="Loop back to start when everyone has hit">Loop</button>
-                        <button class="lineup-btn" onclick="lineupNext()" title="Manually advance to next person">Next</button>
-                        <button class="lineup-btn" onclick="lineupReset()" title="Clear hit marks and restart from top">Reset</button>
-                        <button class="lineup-btn danger" onclick="lineupClear()" title="Remove all members">Clear</button>
+                        <span class="lineup-toolbar-divider" aria-hidden="true"></span>
+                        <div class="lineup-toolbar-group" aria-label="Automation and Export">
+                            <div class="hit-time-control" title="Target timer to hit during chain (e.g. 3:00)">
+                                <span style="font-size:0.75em; font-weight:800; text-transform:uppercase; color:var(--text-secondary); letter-spacing:0.5px;">Hit At:</span>
+                                <select id="lineup-hit-time" onchange="updateHitTime()" class="hit-time-select">
+                                    <option value="">None</option>
+                                    <option value="3:30">3:30</option>
+                                    <option value="3:00" selected>3:00</option>
+                                    <option value="2:30">2:30</option>
+                                    <option value="2:00">2:00</option>
+                                    <option value="1:30">1:30</option>
+                                    <option value="1:00">1:00</option>
+                                    <option value="custom">Custom...</option>
+                                </select>
+                                <input id="lineup-hit-time-custom" type="text" placeholder="e.g. 2:15" style="display:none; width:62px; background:var(--bg-elevated); border:1px solid var(--accent-cyan-border); color:var(--text-primary); padding:2px 6px; border-radius:var(--radius-sm); font-size:0.8em; font-family:var(--font-mono); outline:none;" onchange="updateCustomHitTime()" onblur="updateCustomHitTime()" />
+                            </div>
+                            <button class="auto-mode-toggle" id="auto-mode-btn" onclick="toggleAutoMode()" title="Auto Mode: rotate lineup automatically when players hit" style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;">
+                                <span class="auto-indicator" id="auto-indicator"></span>
+                                <span id="auto-mode-label-text">Auto: OFF</span>
+                            </button>
+                            <button class="lineup-btn" onclick="copyFull()" title="Copy lineup as clean plain text">Copy</button>
+                            <button class="lineup-btn" onclick="copyCompact()" title="Copy compact one-line format">Copy Compact</button>
+                            <a href="/torn-chain-lineup.user.js" class="lineup-btn" style="background:var(--accent-emerald-bg, rgba(46,204,113,0.15)); color:var(--accent-emerald, #2ecc71); border-color:var(--accent-emerald, #2ecc71); text-decoration:none; display:inline-flex; align-items:center; gap:4px;" title="Install Tampermonkey Userscript to view floating HUD on Torn and 1-click post lineup into Faction Chat">⚡ Torn Chat Script</a>
+                        </div>
                     </div>
                 </div>
-                <div class="lineup-meta">
+                <div class="lineup-meta" id="lineup-meta">
                     <span id="lineup-status-msg"></span>
-                </div>
-
-                <!-- Auto Mode Bar -->
-                <div class="auto-mode-bar" style="margin: 12px 16px; border-radius: var(--radius-sm);">
-                    <div class="auto-mode-label">
-                        <span class="auto-indicator" id="auto-indicator"></span>
-                        <span id="auto-mode-label-text">Auto Mode: OFF</span>
-                    </div>
-                    <div class="auto-mode-controls">
-                        <button class="lineup-btn" onclick="lineupAutoFill()" title="Populate lineup with currently eligible members">Auto-Fill Eligible</button>
-                        <button class="lineup-btn" onclick="lineupImportFromChain()" title="Import from current chain attack log">Import from Chain</button>
-                        <button class="auto-mode-toggle" id="auto-mode-btn" onclick="toggleAutoMode()">Enable Auto</button>
-                    </div>
                 </div>
 
                 <!-- CURRENTLY UP -->
@@ -1318,16 +1334,10 @@
     </div>
 
 <script>
-document.addEventListener("DOMContentLoaded", function() {
-    const sidebar = document.getElementById('app-sidebar');
-    if (localStorage.getItem('sidebar_collapsed') === 'true') { sidebar.classList.add('collapsed'); }
-});
-function toggleSidebar() {
-    const sidebar = document.getElementById('app-sidebar');
-    sidebar.classList.toggle('collapsed');
-    localStorage.setItem('sidebar_collapsed', sidebar.classList.contains('collapsed'));
+function openSettings() {
+    if (typeof openGlobalSettings === 'function') return openGlobalSettings();
+    window.location.href = "/";
 }
-function openSettings() { window.location.href = "/"; }
 </script>
 
 <script>
@@ -1335,9 +1345,12 @@ function openSettings() { window.location.href = "/"; }
 //  CHAIN SENTINEL — High-Performance Direct & Proxy Engine
 // ══════════════════════════════════════════════════════════════════
 
-// ── API Key resolution ─────────────────────────────────────────────
+// ── API Key & Session resolution ──────────────────────────────────
 function getTornApiKey() {
-    return (localStorage.getItem('warboard_apikey') || '').trim();
+    return (typeof getApiKey === 'function' ? getApiKey() : (localStorage.getItem('warboard_apikey') || '')).trim();
+}
+function hasChainAccess() {
+    return (typeof hasTornAccess === 'function' && hasTornAccess()) || Boolean(getTornApiKey());
 }
 let MY_KEY = getTornApiKey();
 
@@ -1409,25 +1422,27 @@ function startLocalTimer() {
     }, 1000);
 }
 
-// ── Chain status fetch (Direct Torn API with server fallback) ───────
+// ── Chain status fetch (Direct Torn API with server proxy fallback) ─
 async function fetchChainData() {
     MY_KEY = getTornApiKey();
-    if (!MY_KEY) {
-        document.getElementById('waiting-msg').innerText = 'API KEY REQUIRED. GO TO SETTINGS.';
+    if (!hasChainAccess()) {
+        document.getElementById('waiting-msg').innerText = 'API KEY REQUIRED. OPEN SETTINGS (TOP RIGHT).';
         return;
     }
     try {
         let chain = null;
-        // 1. Primary: Direct fetch to Torn API (fastest, 0 server latency, sub-second)
-        try {
-            const res = await fetch(`https://api.torn.com/faction/?selections=chain&key=${MY_KEY}`, {
-                signal: AbortSignal.timeout(4000)
-            });
-            const data = await res.json();
-            if (data && data.chain) chain = data.chain;
-        } catch(e) {
-            // Direct failed (e.g. adblock or CORS), fall back to server proxy
-            const res = await fetch('/api/chain/data', { headers: { 'x-api-key': MY_KEY } });
+        if (MY_KEY) {
+            try {
+                const res = await fetch(`https://api.torn.com/faction/?selections=chain&key=${MY_KEY}`, {
+                    signal: AbortSignal.timeout(4000)
+                });
+                const data = await res.json();
+                if (data && data.chain) chain = data.chain;
+            } catch(e) {}
+        }
+        if (!chain) {
+            const headers = MY_KEY ? { 'x-api-key': MY_KEY } : {};
+            const res = await fetch('/api/chain/data', { headers });
             const data = await res.json();
             if (data && data.chain) chain = data.chain;
         }
@@ -1498,15 +1513,19 @@ async function fetchChainData() {
 // ── Bonus Hit Ledger ───────────────────────────────────────────────
 async function fetchLedger() {
     MY_KEY = getTornApiKey();
-    if (!MY_KEY) return;
+    if (!hasChainAccess()) return;
     try {
         let attacks = null;
-        try {
-            const r = await fetch(`https://api.torn.com/faction/?selections=attacks&key=${MY_KEY}`);
-            const data = await r.json();
-            if (data && data.attacks) attacks = Object.values(data.attacks);
-        } catch(e) {
-            const r = await fetch('/api/chain/attacks', { headers: { 'x-api-key': MY_KEY } });
+        if (MY_KEY) {
+            try {
+                const r = await fetch(`https://api.torn.com/faction/?selections=attacks&key=${MY_KEY}`);
+                const data = await r.json();
+                if (data && data.attacks) attacks = Object.values(data.attacks);
+            } catch(e) {}
+        }
+        if (!attacks) {
+            const headers = MY_KEY ? { 'x-api-key': MY_KEY } : {};
+            const r = await fetch('/api/chain/attacks', { headers });
             const data = await r.json();
             if (data && data.attacks) attacks = data.attacks;
         }
@@ -1530,7 +1549,7 @@ async function fetchLedger() {
 }
 
 // ── Boot chain polling ─────────────────────────────────────────────
-if (MY_KEY) {
+if (hasChainAccess()) {
     fetchChainData();
     fetchLedger();
     startLocalTimer();
@@ -1715,17 +1734,21 @@ function _updateFactionMemberPool(membersObj) {
 // ── Member status polling (every 60s) ──────────────────────────────
 async function pollMemberStatus() {
     MY_KEY = getTornApiKey();
-    if (!MY_KEY) return;
+    if (!hasChainAccess()) return;
     try {
         let members = null;
-        try {
-            const res = await fetch(`https://api.torn.com/faction/?selections=basic&key=${MY_KEY}`, {
-                signal: AbortSignal.timeout(6000)
-            });
-            const data = await res.json();
-            if (data && data.members) members = data.members;
-        } catch(e) {
-            const res = await fetch('/api/chain/members', { headers: { 'x-api-key': MY_KEY } });
+        if (MY_KEY) {
+            try {
+                const res = await fetch(`https://api.torn.com/faction/?selections=basic&key=${MY_KEY}`, {
+                    signal: AbortSignal.timeout(6000)
+                });
+                const data = await res.json();
+                if (data && data.members) members = data.members;
+            } catch(e) {}
+        }
+        if (!members) {
+            const headers = MY_KEY ? { 'x-api-key': MY_KEY } : {};
+            const res = await fetch('/api/chain/members', { headers });
             const data = await res.json();
             if (data && data.members) members = data.members;
         }
@@ -1736,17 +1759,21 @@ async function pollMemberStatus() {
 // ── Attack & Hit Detection (every 3.5s) ────────────────────────────
 async function pollAttacks() {
     MY_KEY = getTornApiKey();
-    if (!MY_KEY || !lineupMembers.length) return;
+    if (!hasChainAccess() || !lineupMembers.length) return;
     try {
         let attacks = null;
-        try {
-            const res = await fetch(`https://api.torn.com/faction/?selections=attacks&key=${MY_KEY}`, {
-                signal: AbortSignal.timeout(4000)
-            });
-            const data = await res.json();
-            if (data && data.attacks) attacks = Object.values(data.attacks);
-        } catch(e) {
-            const res = await fetch('/api/chain/attacks', { headers: { 'x-api-key': MY_KEY } });
+        if (MY_KEY) {
+            try {
+                const res = await fetch(`https://api.torn.com/faction/?selections=attacks&key=${MY_KEY}`, {
+                    signal: AbortSignal.timeout(4000)
+                });
+                const data = await res.json();
+                if (data && data.attacks) attacks = Object.values(data.attacks);
+            } catch(e) {}
+        }
+        if (!attacks) {
+            const headers = MY_KEY ? { 'x-api-key': MY_KEY } : {};
+            const res = await fetch('/api/chain/attacks', { headers });
             const data = await res.json();
             if (data && data.attacks) attacks = data.attacks;
         }
@@ -1951,7 +1978,7 @@ function lineupRender() {
                 ${lineupMembers.length > 1 ? '<button class="tier-action-btn" onclick="lineupMove(0, 1)" title="Move down to Next position">▼ Down</button>' : ''}
                 ${lineupMembers.length > 2 ? '<button class="tier-action-btn" onclick="lineupMove(0, lineupMembers.length - 1)" title="Send to very bottom of queue">⏬ Bottom</button>' : ''}
                 <button class="tier-skip-btn" onclick="lineupSkip(0)" title="Skip this player (moves to bottom)">Skip</button>
-                <button class="lineup-remove-btn" onclick="lineupRemove(0)" title="Remove completely">✕</button>
+                <button class="lineup-remove-btn" onmousedown="event.stopPropagation()" onclick="lineupRemove(0)" title="Remove completely" aria-label="Remove"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
             </div>
         </div>
     </div>`;
@@ -1980,7 +2007,7 @@ function lineupRender() {
                     <button class="promote-btn" onclick="lineupMakeCurrent(1)" title="Make Currently Up (#1)">▲ Make Up</button>
                     ${lineupMembers.length > 2 ? '<button class="tier-action-btn" onclick="lineupMove(1, 2)" title="Move down into Queue">▼ Down</button>' : ''}
                     ${lineupMembers.length > 2 ? '<button class="tier-action-btn" onclick="lineupMove(1, lineupMembers.length - 1)" title="Send to very bottom">⏬ Bottom</button>' : ''}
-                    <button class="lineup-remove-btn" onclick="lineupRemove(1)" title="Remove completely">✕</button>
+                    <button class="lineup-remove-btn" onmousedown="event.stopPropagation()" onclick="lineupRemove(1)" title="Remove completely" aria-label="Remove"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
                 </div>
             </div>
         </div>`;
@@ -2013,18 +2040,18 @@ function lineupRender() {
         li.draggable = true;
 
         li.innerHTML = `
-            <span class="lineup-drag-handle" title="Drag to reorder">⠿</span>
+            <span class="lineup-drag-handle" title="Drag to reorder"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><circle cx="5" cy="3.5" r="1.3"/><circle cx="11" cy="3.5" r="1.3"/><circle cx="5" cy="8" r="1.3"/><circle cx="11" cy="8" r="1.3"/><circle cx="5" cy="12.5" r="1.3"/><circle cx="11" cy="12.5" r="1.3"/></svg></span>
             <span class="lineup-slot lineup-slot-clickable" onclick="lineupPromptMove(${realIdx})" title="Click to jump to custom position">${realIdx + 1}</span>
             <span class="online-dot ${dotCls}"></span>
             <span class="lineup-name">${_esc(m.name)}</span>
             ${m.hit ? '<span class="hit-check" title="Hit completed" style="color:var(--accent-emerald);font-weight:900;font-size:0.75em;">✓ HIT</span>' : ''}
             <span class="status-tag ${pillCls}">${pillLbl}</span>
             <div class="move-btn-group">
-                <button class="move-btn" onclick="lineupMove(${realIdx}, ${realIdx - 1})" title="Move Up 1 slot (moves into Next if at #3)">▲</button>
-                <button class="move-btn" onclick="lineupMove(${realIdx}, ${realIdx + 1})" title="Move Down 1 slot" ${realIdx >= lineupMembers.length - 1 ? 'disabled' : ''}>▼</button>
+                <button class="move-btn" onmousedown="event.stopPropagation()" onclick="lineupMove(${realIdx}, ${realIdx - 1})" title="Move Up 1 slot (moves into Next if at #3)">▲</button>
+                <button class="move-btn" onmousedown="event.stopPropagation()" onclick="lineupMove(${realIdx}, ${realIdx + 1})" title="Move Down 1 slot" ${realIdx >= lineupMembers.length - 1 ? 'disabled' : ''}>▼</button>
             </div>
-            <button class="promote-btn" onclick="lineupMakeCurrent(${realIdx})" title="Promote straight to Currently Up (#1)">▲▲ Up</button>
-            <button class="lineup-remove-btn" onclick="lineupRemove(${realIdx})" title="Remove completely">✕</button>
+            <button class="promote-btn" onmousedown="event.stopPropagation()" onclick="lineupMakeCurrent(${realIdx})" title="Promote straight to Currently Up (#1)">▲▲ Up</button>
+            <button class="lineup-remove-btn" onmousedown="event.stopPropagation()" onclick="lineupRemove(${realIdx})" title="Remove completely" aria-label="Remove"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
         `;
 
         li.addEventListener('dragstart', e => { e.dataTransfer.setData('text/plain', realIdx); li.classList.add('dragging'); });
@@ -2297,9 +2324,16 @@ document.addEventListener('click', e => {
 // ── Status Message ─────────────────────────────────────────────────
 function lineupSetStatus(msg) {
     const el = document.getElementById('lineup-status-msg');
+    const bar = document.getElementById('lineup-meta');
     if (!el) return;
     el.textContent = msg;
-    setTimeout(() => { if (el.textContent === msg) el.textContent = ''; }, 4000);
+    if (bar) bar.classList.toggle('visible', Boolean(msg));
+    setTimeout(() => {
+        if (el.textContent === msg) {
+            el.textContent = '';
+            if (bar) bar.classList.remove('visible');
+        }
+    }, 4000);
 }
 
 // ── Auto Mode Toggle ───────────────────────────────────────────────
@@ -2321,9 +2355,9 @@ function _syncAutoModeUI() {
     const btn = document.getElementById('auto-mode-btn');
     const ind = document.getElementById('auto-indicator');
     const lbl = document.getElementById('auto-mode-label-text');
-    if (btn) { btn.textContent = autoMode ? 'Disable Auto' : 'Enable Auto'; btn.classList.toggle('auto-on', autoMode); }
+    if (btn) btn.classList.toggle('auto-on', autoMode);
     if (ind) ind.classList.toggle('active', autoMode);
-    if (lbl) lbl.textContent = `Auto Mode: ${autoMode ? 'ON' : 'OFF'}`;
+    if (lbl) lbl.textContent = `Auto: ${autoMode ? 'ON' : 'OFF'}`;
 }
 
 // ── Auto-Fill Eligible ─────────────────────────────────────────────
@@ -2334,13 +2368,16 @@ function lineupAutoFill() {
         return;
     }
 
+    const _getMemStatus = (mem) => (mem && mem.id && memberStatuses[String(mem.id)]) || {};
+
     // 1. Purge unavailable members from existing lineup (hospitalized, traveling, abroad, jail, offline)
     const initialCount = lineupMembers.length;
     lineupMembers = lineupMembers.filter(lm => {
         const mem = factionMemberList.find(fm => (lm.id && fm.id === lm.id) || fm.name.toLowerCase() === lm.name.toLowerCase());
         if (!mem) return false;
-        const st = mem.status?.state || mem.state || 'Okay';
-        const on = mem.last_action?.status || mem.online || 'Offline';
+        const stObj = _getMemStatus(mem);
+        const st = stObj.state || mem.state || 'Okay';
+        const on = stObj.online || mem.online || 'Offline';
         return st === 'Okay' && (on === 'Online' || on === 'Idle');
     });
     const purged = initialCount - lineupMembers.length;
@@ -2350,18 +2387,21 @@ function lineupAutoFill() {
 
     // 3. Find and append new eligible members (Online or Idle, and Okay)
     const eligible = factionMemberList.filter(m => {
-        const st = m.status?.state || m.state || 'Okay';
-        const on = m.last_action?.status || m.online || 'Offline';
+        const stObj = _getMemStatus(m);
+        const st = stObj.state || m.state || 'Okay';
+        const on = stObj.online || m.online || 'Offline';
         return st === 'Okay' && (on === 'Online' || on === 'Idle');
     });
 
     eligible.sort((a, b) => {
-        const aOn = (a.last_action?.status || a.online) === 'Online';
-        const bOn = (b.last_action?.status || b.online) === 'Online';
+        const stA = _getMemStatus(a);
+        const stB = _getMemStatus(b);
+        const aOn = (stA.online || a.online) === 'Online';
+        const bOn = (stB.online || b.online) === 'Online';
         if (aOn && !bOn) return -1;
         if (!aOn && bOn) return 1;
-        const aTs = a.last_action?.timestamp || a.lastActionTs || 0;
-        const bTs = b.last_action?.timestamp || b.lastActionTs || 0;
+        const aTs = stA.lastActionTs || a.lastActionTs || 0;
+        const bTs = stB.lastActionTs || b.lastActionTs || 0;
         return bTs - aTs;
     });
 
@@ -2392,16 +2432,20 @@ function lineupAutoFill() {
 // ── Import from chain attacks ──────────────────────────────────────
 async function lineupImportFromChain() {
     MY_KEY = getTornApiKey();
-    if (!MY_KEY) { lineupSetStatus('API key required.'); return; }
+    if (!hasChainAccess()) { lineupSetStatus('API key required.'); return; }
     lineupSetStatus('Scanning chain attacks...');
     try {
         let attacks = null;
-        try {
-            const r = await fetch(`https://api.torn.com/faction/?selections=attacks&key=${MY_KEY}`);
-            const data = await r.json();
-            if (data && data.attacks) attacks = Object.values(data.attacks);
-        } catch(e) {
-            const r = await fetch('/api/chain/attacks', { headers: { 'x-api-key': MY_KEY } });
+        if (MY_KEY) {
+            try {
+                const r = await fetch(`https://api.torn.com/faction/?selections=attacks&key=${MY_KEY}`);
+                const data = await r.json();
+                if (data && data.attacks) attacks = Object.values(data.attacks);
+            } catch(e) {}
+        }
+        if (!attacks) {
+            const headers = MY_KEY ? { 'x-api-key': MY_KEY } : {};
+            const r = await fetch('/api/chain/attacks', { headers });
             const data = await r.json();
             if (data && data.attacks) attacks = data.attacks;
         }
@@ -2555,7 +2599,7 @@ function _escAttr(str) {
 lineupLoad();
 lineupRender();
 
-if (MY_KEY) {
+if (hasChainAccess()) {
     // Initial fetch of members
     pollMemberStatus();
     // Poll attacks every 3.5s for real-time hit detection
@@ -2585,10 +2629,12 @@ let isFetchingQueue = false;
 let lastQueueEtag = '';
 
 async function fetchWarboardQueue() {
-    if (!MY_KEY || isFetchingQueue || document.hidden) return;
+    if (!hasChainAccess() || isFetchingQueue || document.hidden) return;
     isFetchingQueue = true;
     try {
-        const headers = { 'x-api-key': MY_KEY };
+        MY_KEY = getTornApiKey();
+        const headers = {};
+        if (MY_KEY) headers['x-api-key'] = MY_KEY;
         const storedFac = localStorage.getItem("warboard_myFactionId") || (window.currentUser && window.currentUser.factionId);
         if (storedFac && String(storedFac) !== '0') {
             headers['x-faction-id'] = String(storedFac);
@@ -2671,27 +2717,6 @@ document.addEventListener('visibilitychange', () => {
 
 startQueueLoop();
 setInterval(renderQueue, 1000);
-</script>
-
-<script>
-function toggleTheme() {
-    document.body.classList.toggle('light-mode');
-    localStorage.setItem('theme', document.body.classList.contains('light-mode') ? 'light' : 'dark');
-}
-if (localStorage.getItem('theme') === 'light') document.body.classList.add('light-mode');
-
-const originalToggle = typeof toggleSidebar === 'function' ? toggleSidebar : null;
-window.toggleSidebar = function() {
-    if (window.innerWidth <= 768) {
-        const nav = document.querySelector('.nav-items');
-        if (nav) nav.classList.toggle('mobile-open');
-    } else if (originalToggle) {
-        originalToggle();
-    } else {
-        const s = document.querySelector('.sidebar');
-        if (s) s.classList.toggle('collapsed');
-    }
-};
 </script>
 
 </body>

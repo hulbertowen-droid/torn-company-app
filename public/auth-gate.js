@@ -10,25 +10,116 @@
 (function() {
     'use strict';
 
-    // SECURITY ENFORCEMENT: Never retain raw Torn API keys in client localStorage.
-    // Clean up any legacy plaintext keys immediately so they cannot be inspected or leaked.
-    try {
-        localStorage.removeItem('warboard_apikey');
-        localStorage.removeItem('torn_api_key');
-        localStorage.removeItem('tornApiKey');
-    } catch(e) {}
+    const LEGACY_TORN_KEY_NAMES = ['warboard_apikey', 'torn_api_key', 'tornApiKey', 'factionos_api_key', 'apiKey'];
+    const LEGACY_FF_KEY_NAMES = ['warboard_ffkey', 'ffKey', 'ffscouter_key', 'ff_api_key'];
+    const LEGACY_TS_KEY_NAMES = ['warboard_tskey', 'tornStatsKey', 'tsKey', 'tornstats_key', 'ts_api_key'];
+
+    // Normalize companion keys & profile into canonical localStorage keys on startup
+    function syncCanonicalStorage() {
+        try {
+            for (const k of LEGACY_FF_KEY_NAMES) {
+                const v = (localStorage.getItem(k) || '').trim();
+                if (v && v !== 'null' && v !== 'undefined') {
+                    if (!localStorage.getItem('warboard_ffkey')) localStorage.setItem('warboard_ffkey', v);
+                    if (k !== 'warboard_ffkey') localStorage.removeItem(k);
+                }
+            }
+            for (const k of LEGACY_TS_KEY_NAMES) {
+                const v = (localStorage.getItem(k) || '').trim();
+                if (v && v !== 'null' && v !== 'undefined') {
+                    if (!localStorage.getItem('warboard_tskey')) localStorage.setItem('warboard_tskey', v);
+                    if (k !== 'warboard_tskey') localStorage.removeItem(k);
+                }
+            }
+            const storedEnemy = (localStorage.getItem('warboard_enemyId') || localStorage.getItem('factionos_enemy_faction_id') || '').trim();
+            if (storedEnemy && storedEnemy !== 'null' && storedEnemy !== 'undefined') {
+                localStorage.setItem('warboard_enemyId', storedEnemy);
+                localStorage.removeItem('factionos_enemy_faction_id');
+            }
+            const lsUser = localStorage.getItem('sv_user');
+            const ssUser = sessionStorage.getItem('sv_user');
+            if (lsUser && !ssUser) sessionStorage.setItem('sv_user', lsUser);
+            else if (ssUser && !lsUser) localStorage.setItem('sv_user', ssUser);
+        } catch(e) {}
+    }
+
+    function persistCanonicalProfile(user) {
+        if (!user || !user.playerId) return;
+        window.currentUser = user;
+        try {
+            const serialized = JSON.stringify(user);
+            sessionStorage.setItem('sv_user', serialized);
+            localStorage.setItem('sv_user', serialized);
+            localStorage.setItem('warboard_myname', String(user.playerName || 'Operative'));
+            localStorage.setItem('warboard_myPlayerId', String(user.playerId));
+            localStorage.setItem('warboard_my_id', String(user.playerId));
+            if (user.factionId && String(user.factionId) !== '0') {
+                localStorage.setItem('warboard_myFactionId', String(user.factionId));
+                localStorage.setItem('warboard_myFactionName', String(user.factionName || ''));
+            }
+        } catch(e) {}
+    }
+
+    function extractLegacyTornKey() {
+        try {
+            for (const k of LEGACY_TORN_KEY_NAMES) {
+                const v = (localStorage.getItem(k) || '').trim();
+                if (v && v !== 'null' && v !== 'undefined' && v.length >= 16) return v;
+            }
+        } catch(e) {}
+        return '';
+    }
+
+    function scrubLegacyTornKeys() {
+        try {
+            for (const k of LEGACY_TORN_KEY_NAMES) localStorage.removeItem(k);
+        } catch(e) {}
+    }
+
+    syncCanonicalStorage();
+    let inMemoryFallbackKey = extractLegacyTornKey();
+    if (localStorage.getItem('sv_session_token')) {
+        scrubLegacyTornKeys();
+    }
+
+    window.getSessionToken = function() {
+        return (localStorage.getItem('sv_session_token') || '').trim();
+    };
+    window.getApiKey = function() {
+        return inMemoryFallbackKey || '';
+    };
+    window.hasTornAccess = function() {
+        return Boolean(window.getSessionToken() || inMemoryFallbackKey);
+    };
+    window.getFFScouterKey = function() {
+        syncCanonicalStorage();
+        const v = (localStorage.getItem('warboard_ffkey') || '').trim();
+        return (v && v !== 'null' && v !== 'undefined') ? v : '';
+    };
+    window.getTornStatsKey = function() {
+        syncCanonicalStorage();
+        const v = (localStorage.getItem('warboard_tskey') || '').trim();
+        return (v && v !== 'null' && v !== 'undefined') ? v : '';
+    };
+    window.getUserProfile = function() {
+        try {
+            if (window.currentUser && window.currentUser.playerId) return window.currentUser;
+            const raw = sessionStorage.getItem('sv_user') || localStorage.getItem('sv_user');
+            return raw ? JSON.parse(raw) : null;
+        } catch(e) { return null; }
+    };
 
     const SPIDERVERSE_PAGES = [
         '/discord.html'
     ];
 
     // ─────────────────────────────────────────────────────────────
-    // Fetch Interceptor: Automatically injects x-session-token and x-api-key
+    // Fetch Interceptor: Automatically injects x-session-token and x-faction-id
     // ─────────────────────────────────────────────────────────────
     const originalFetch = window.fetch;
     window.fetch = function(url, options = {}) {
         const token = localStorage.getItem('sv_session_token');
-        const apiKey = localStorage.getItem('warboard_apikey');
+        const apiKey = inMemoryFallbackKey || '';
         const facId = localStorage.getItem('warboard_myFactionId');
         if (typeof url === 'string' && (url.startsWith('/api/') || url.startsWith('http://' + window.location.host + '/api/') || url.startsWith('https://' + window.location.host + '/api/'))) {
             options = Object.assign({}, options);
@@ -345,12 +436,35 @@
     async function checkAuth() {
         let token = localStorage.getItem('sv_session_token');
 
+        // Auto-migrate any legacy plaintext key into a secure server session
+        if (!token && inMemoryFallbackKey) {
+            try {
+                const migRes = await originalFetch('/api/auth/connect', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ apiKey: inMemoryFallbackKey })
+                });
+                const migData = await migRes.json();
+                if (migRes.ok && migData.success && migData.sessionToken) {
+                    token = migData.sessionToken;
+                    localStorage.setItem('sv_session_token', token);
+                    inMemoryFallbackKey = '';
+                    scrubLegacyTornKeys();
+                    if (migData.user) {
+                        currentUser = migData.user;
+                        persistCanonicalProfile(currentUser);
+                    }
+                }
+            } catch(e) {}
+        }
+
         // FAST-PATH: If user is already authenticated in this session, authorize immediately (0ms delay)
-        const cachedUserStr = sessionStorage.getItem('sv_user');
+        const cachedUserStr = sessionStorage.getItem('sv_user') || localStorage.getItem('sv_user');
         if (cachedUserStr && token) {
             try {
                 currentUser = JSON.parse(cachedUserStr);
                 if (currentUser && currentUser.playerId) {
+                    persistCanonicalProfile(currentUser);
                     handleAuthenticated(currentUser);
 
                     // Silent non-blocking background verification
@@ -359,11 +473,13 @@
                     }).then(r => r.json()).then(data => {
                         if (data && data.authenticated && data.user) {
                             currentUser = data.user;
-                            sessionStorage.setItem('sv_user', JSON.stringify(currentUser));
+                            persistCanonicalProfile(currentUser);
                             injectUserBadge(currentUser);
                         } else if (data && !data.authenticated) {
                             sessionStorage.removeItem('sv_user');
+                            localStorage.removeItem('sv_user');
                             localStorage.removeItem('sv_session_token');
+                            window.currentUser = null;
                             handleUnauthenticated();
                         }
                     }).catch(() => {});
@@ -385,11 +501,13 @@
 
             if (data && data.authenticated && data.user) {
                 currentUser = data.user;
-                sessionStorage.setItem('sv_user', JSON.stringify(currentUser));
+                persistCanonicalProfile(currentUser);
                 handleAuthenticated(currentUser);
             } else {
                 localStorage.removeItem('sv_session_token');
+                localStorage.removeItem('sv_user');
                 sessionStorage.removeItem('sv_user');
+                window.currentUser = null;
                 handleUnauthenticated();
             }
         } catch(err) {
@@ -399,11 +517,7 @@
     }
 
     function handleAuthenticated(user) {
-        if (user && user.factionId && String(user.factionId) !== '0') {
-            try {
-                localStorage.setItem('warboard_myFactionId', String(user.factionId));
-            } catch(e) {}
-        }
+        persistCanonicalProfile(user);
         injectUserBadge(user);
 
         const isRestricted = isSpiderVerseRestrictedPage();
@@ -411,7 +525,7 @@
         if (isRestricted && !user.isSpiderVerse && !hasFaction) {
             renderRestrictedBanner(user);
         } else {
-            // Authorized! Trigger page initialization functions if present
+            // Authorized! Trigger page initialization functions if present (avoid duplicate calls via __svInitRan flag on handlers if desired)
             if (typeof window.startPolling === 'function') window.startPolling();
             if (typeof window.initPage === 'function') window.initPage();
             if (typeof window.loadAll === 'function') window.loadAll();
@@ -426,13 +540,19 @@
             sessionStorage.removeItem('sv_cache_wars');
             sessionStorage.removeItem('sv_cache_discord_cfg');
             sessionStorage.removeItem('sv_user');
+            localStorage.removeItem('sv_user');
+            localStorage.removeItem('sv_cache_gym_dash_v2');
+            Object.keys(localStorage).forEach(k => {
+                if (k.startsWith('sv_cache_')) localStorage.removeItem(k);
+            });
         } catch(e) {}
+        window.currentUser = null;
 
-        // Inject a clean "Connect Torn Key" button in sidebar/header
+        // Inject a clean "Connect Torn Key" button in header
         injectConnectButton();
 
         const path = getCurrentPath();
-        const requiresAuthPages = ['/dashboard.html', '/armory.html', '/gym-stats.html', '/index.html', '/members.html', '/oc.html', '/payout.html', '/discord.html', '/chain.html', '/company.html'];
+        const requiresAuthPages = ['/dashboard.html', '/armory.html', '/gym-stats.html', '/index.html', '/oc.html', '/payout.html', '/discord.html', '/chain.html', '/company.html'];
         const isAuthRequired = requiresAuthPages.some(rp => path === rp || path.endsWith(rp.replace('/', '')));
 
         // Immediately prompt with the Connect Account modal. For required pages, disallow closing (strict gate).
@@ -467,7 +587,7 @@
             <div class="sv-restricted-actions">
                 <a href="/dashboard.html" class="sv-restricted-btn">📊 Personal Dashboard</a>
                 <a href="/travel.html" class="sv-restricted-btn">✈️ Travel Calculator</a>
-                <a href="/bazaar.html" class="sv-restricted-btn">🏪 Bazaar Tracker</a>
+                <a href="/discord.html#market" class="sv-restricted-btn">🛒 Market &amp; Bazaar Sniper</a>
                 <a href="/gamble.html" class="sv-restricted-btn">🎲 Casino Tools</a>
                 <a href="/company.html" class="sv-restricted-btn">🏢 Company Tools</a>
                 <a href="#" id="sv-banner-switch-btn" class="sv-restricted-btn" style="border-color: rgba(255,107,129,0.5); color: #ff6b81;">🔄 Switch Account / Logout</a>
@@ -490,25 +610,9 @@
     }
 
     function injectUserBadge(user) {
-        // Update bottom sidebar user card if present
-        const nameEl = document.getElementById('nav-user-name');
-        const subEl = document.getElementById('nav-user-sub');
-        if (nameEl) nameEl.textContent = `${user.playerName} [${user.playerId}]`;
-        if (subEl) subEl.textContent = user.factionName ? `${user.factionName} [${user.factionId}]` : 'Factionless';
-
-        // Add a clean logout link in sidebar footer
-        const footer = document.getElementById('sidebar-user-footer');
-        if (footer && !document.getElementById('sidebar-logout-link')) {
-            const logoutDiv = document.createElement('div');
-            logoutDiv.id = 'sidebar-logout-link';
-            logoutDiv.style.cssText = 'text-align: right; padding-top: 4px;';
-            logoutDiv.innerHTML = `<a href="#" style="color: #ff6b81; font-size: 0.72rem; text-decoration: none; padding: 2px 8px; border-radius: 4px; border: 1px solid rgba(255,107,129,0.3); background: rgba(255,107,129,0.08); transition: all 0.2s;">Logout</a>`;
-            logoutDiv.querySelector('a').addEventListener('click', (e) => {
-                e.preventDefault();
-                if (confirm('Log out of FactionOS?')) logout();
-            });
-            footer.appendChild(logoutDiv);
-        }
+        // Keep user callsign badge, connection indicator, Settings gear & Logout strictly in top-right header bar
+        const staleFooter = document.getElementById('sidebar-user-footer');
+        if (staleFooter) staleFooter.remove();
 
         if (document.getElementById('sv-user-badge')) return;
 
@@ -638,14 +742,11 @@
                     throw new Error(data.error || 'Authentication failed');
                 }
 
-                // Success! Store session token ONLY — NEVER store plaintext keys in localStorage!
+                // Success! Store session token + canonical profile metadata (no raw plaintext key in localStorage)
                 localStorage.setItem('sv_session_token', data.sessionToken);
-                try {
-                    localStorage.removeItem('warboard_apikey');
-                    localStorage.removeItem('torn_api_key');
-                    localStorage.removeItem('tornApiKey');
-                } catch(e) {}
-                sessionStorage.setItem('sv_user', JSON.stringify(data.user));
+                inMemoryFallbackKey = '';
+                scrubLegacyTornKeys();
+                persistCanonicalProfile(data.user);
                 currentUser = data.user;
 
                 alertBox.className = 'sv-auth-alert success';
@@ -679,20 +780,30 @@
                 });
             } catch(e) {}
         }
+        inMemoryFallbackKey = '';
         localStorage.removeItem('sv_session_token');
         localStorage.removeItem('sv_session');
-        localStorage.removeItem('warboard_apikey');
-        localStorage.removeItem('torn_api_key');
-        localStorage.removeItem('tornApiKey');
+        localStorage.removeItem('sv_user');
+        localStorage.removeItem('warboard_myname');
+        localStorage.removeItem('warboard_myPlayerId');
+        localStorage.removeItem('warboard_myFactionId');
+        localStorage.removeItem('warboard_myFactionName');
+        scrubLegacyTornKeys();
+        Object.keys(localStorage).forEach(k => {
+            if (k.startsWith('sv_cache_')) localStorage.removeItem(k);
+        });
         sessionStorage.clear();
+        window.currentUser = null;
         window.location.reload();
     }
 
     // Public API
     window.showConnectModal = showConnectModal;
     window.svAuth = {
-        getUser: () => currentUser,
-        getToken: () => localStorage.getItem('sv_session_token'),
+        getUser: () => window.getUserProfile(),
+        getToken: () => window.getSessionToken(),
+        hasAccess: () => window.hasTornAccess(),
+        persistProfile: persistCanonicalProfile,
         openModal: () => showConnectModal(true),
         logout
     };

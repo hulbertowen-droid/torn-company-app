@@ -33,13 +33,13 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/global.css?v=4.3.0">
+    <link rel="stylesheet" href="/global.css?v=4.4.0">
     
     <!-- Scripts & Auth -->
-    <script src="/auth-gate.js?v=4.3.0"></script>
-    <script src="/global_settings.js?v=4.3.0"></script>
-    <script src="/global-topbar.js?v=4.3.0"></script>
-    <script src="/pwa-helper.js?v=1.1.0" defer></script>
+    <script src="/auth-gate.js?v=4.4.0"></script>
+    <script src="/global_settings.js?v=4.4.0"></script>
+    <script src="/global-topbar.js?v=4.4.0"></script>
+    <script src="/pwa-helper.js?v=1.2.0" defer></script>
 
     <style>
     /* ─── Page-Specific Dashboard, Armory & Sentinel Styling ─── */
@@ -155,7 +155,7 @@
         align-items: center;
         gap: 8px;
         padding: 12px 22px;
-        background: var(--bg-card);
+        background: var(--bg-surface);
         border: 1px solid var(--border-default);
         border-bottom: none;
         border-radius: var(--radius-md) var(--radius-md) 0 0;
@@ -174,7 +174,7 @@
     }
     .ops-tab-btn.active {
         color: var(--text-primary);
-        background: linear-gradient(180deg, var(--bg-card) 0%, rgba(59, 130, 246, 0.08) 100%);
+        background: linear-gradient(180deg, var(--bg-surface) 0%, rgba(59, 130, 246, 0.08) 100%);
         border-color: var(--accent-cobalt);
         border-bottom: 2px solid var(--accent-cobalt);
         box-shadow: 0 -2px 10px rgba(59, 130, 246, 0.12);
@@ -329,6 +329,16 @@
         border-bottom: 1px solid var(--border-subtle);
         align-items: center;
     }
+    .low-stock-ticker .stock-pill {
+        white-space: normal;
+        word-break: break-word;
+        line-height: 1.35;
+        text-align: left;
+    }
+    .dash-grid > .card {
+        min-width: 0;
+        overflow: hidden;
+    }
     .stock-pill {
         display: inline-flex;
         align-items: center;
@@ -401,6 +411,7 @@
     }
     .quick-action-bar {
         display: flex;
+        flex-wrap: wrap;
         gap: 8px;
         padding: 12px 16px;
         border-top: 1px solid var(--border-subtle);
@@ -408,7 +419,7 @@
         margin-top: auto;
     }
     .quick-action-btn {
-        flex: 1;
+        flex: 1 1 140px;
         display: inline-flex;
         align-items: center;
         justify-content: center;
@@ -423,6 +434,7 @@
         color: var(--text-secondary);
         transition: all 0.2s ease;
         cursor: pointer;
+        white-space: nowrap;
     }
     .quick-action-btn:hover {
         color: var(--text-primary);
@@ -477,7 +489,7 @@
         .armory-kpis { grid-template-columns: repeat(2, 1fr); }
     }
     .armory-subpanel {
-        background: var(--bg-card);
+        background: var(--bg-surface);
         border: 1px solid var(--border-default);
         border-radius: var(--radius-lg);
         margin-bottom: 20px;
@@ -682,7 +694,7 @@
         flex-wrap: wrap;
         max-width: 100%;
         gap: 4px;
-        background: var(--bg-card);
+        background: var(--bg-surface);
         padding: 2px;
         border-radius: var(--radius-sm);
         border: 1px solid var(--border-subtle);
@@ -1016,7 +1028,7 @@
         margin-bottom: 20px;
     }
     .thresh-input-wrap {
-        background: var(--bg-card);
+        background: var(--bg-surface);
         border: 1px solid var(--border-subtle);
         border-radius: var(--radius-md);
         padding: 12px 14px;
@@ -1086,7 +1098,7 @@
         font-weight: 700;
         border-radius: var(--radius-sm);
         border: 1px solid transparent;
-        background: var(--bg-card);
+        background: var(--bg-surface);
         color: var(--text-secondary);
         cursor: pointer;
         transition: all var(--transition-fast);
@@ -1133,7 +1145,7 @@
         flex-wrap: wrap;
     }
     .date-input-field {
-        background: var(--bg-card);
+        background: var(--bg-surface);
         border: 1px solid var(--border-default);
         border-radius: var(--radius-sm);
         padding: 6px 10px;
@@ -1247,7 +1259,7 @@
         pointer-events: auto;
     }
     .modal-dialog {
-        background: var(--bg-card);
+        background: var(--bg-surface);
         border: 1px solid var(--border-default);
         border-radius: var(--radius-lg);
         width: 100%;
@@ -2277,8 +2289,8 @@
                 <span class="brand-text">FactionOS</span>
             </div>
             <div class="sidebar-actions">
-                <button class="theme-toggle" onclick="toggleTheme()" title="Toggle Dark/Light Mode">🌗</button>
-                <button class="toggle-btn" onclick="toggleSidebar()" title="Collapse Sidebar">☰</button>
+                <button type="button" class="theme-toggle" onclick="toggleTheme()" title="Toggle Dark/Light Mode" aria-label="Toggle Dark/Light Mode"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg></button>
+                <button type="button" class="toggle-btn" onclick="toggleSidebar()" title="Collapse Sidebar" aria-label="Collapse Sidebar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
             </div>
         </div>
         <div class="nav-items">
@@ -2286,49 +2298,27 @@
             <a href="/" class="nav-link"><span class="nav-icon">📡</span> <span class="nav-text">Live Warboard</span></a>
             <a href="/chain.html" class="nav-link"><span class="nav-icon">🔗</span> <span class="nav-text">Chain Sentinel</span></a>
             <a href="/dashboard.html" class="nav-link active" id="nav-link-overview"><span class="nav-icon">📊</span> <span class="nav-text">Operations Overview</span></a>
-            <a href="/armory.html" class="nav-link" id="nav-link-armory">
-                <span class="nav-icon">🛡️</span> 
-                <span class="nav-text">Armory &amp; Logistics</span>
-                <span class="tab-badge" id="nav-armory-badge" style="display:none; margin-left:auto;">0 Low</span>
-            </a>
-            <a href="/gym-stats.html" class="nav-link" id="nav-link-gym"><span class="nav-icon">🏋️</span> <span class="nav-text">Gym &amp; Stat Tracker</span></a>
+            <a href="/armory.html" class="nav-link" id="nav-link-armory"><span class="nav-icon">🛡️</span> <span class="nav-text">Armory &amp; Logistics</span> <span class="nav-badge" id="nav-armory-badge" style="display:none;"></span></a>
+            <a href="/gym-stats.html" class="nav-link"><span class="nav-icon">🏋️</span> <span class="nav-text">Gym &amp; Stat Tracker</span></a>
             <a href="/payout.html" class="nav-link"><span class="nav-icon">💰</span> <span class="nav-text">War Payouts</span></a>
-            <a href="/members.html" class="nav-link"><span class="nav-icon">👥</span> <span class="nav-text">Faction Roster</span></a>
             <a href="/oc.html" class="nav-link"><span class="nav-icon">💼</span> <span class="nav-text">OC Manager</span></a>
 
             <div class="nav-section-title">Tactical Desk</div>
-            <a href="#sentinel" onclick="switchOpsTab('sentinel'); return false;" class="nav-link" id="nav-link-sentinel">
-                <span class="nav-icon">✈️</span> 
-                <span class="nav-text">Airspace &amp; War Intel</span>
-            </a>
-            <a href="/travel.html" class="nav-link"><span class="nav-icon">✈️</span> <span class="nav-text">Travel Profit Desk</span></a>
-            <a href="/bazaar.html" class="nav-link"><span class="nav-icon">🛒</span> <span class="nav-text">Market &amp; Bazaar</span></a>
+            <a href="/travel.html" class="nav-link"><span class="nav-icon">🌍</span> <span class="nav-text">Travel Profit Desk</span></a>
             <a href="/company.html" class="nav-link"><span class="nav-icon">🏢</span> <span class="nav-text">Company Hub</span></a>
             <a href="/gamble.html" class="nav-link"><span class="nav-icon">🎰</span> <span class="nav-text">Casino Analytics</span></a>
-            <a href="/recruit/" class="nav-link" title="Recruit Engine is currently in early development and not usable"><span class="nav-icon">🎯</span> <span class="nav-text">Recruit Engine</span> <span class="nav-badge-dev">Early Dev</span></a>
 
             <div class="nav-section-title">Intelligence &amp; Alerts</div>
             <a href="/ai-sandbox.html" class="nav-link"><span class="nav-icon">🤖</span> <span class="nav-text">F.R.I.D.A.Y. Intel</span></a>
             <a href="/discord.html" class="nav-link"><span class="nav-icon">📢</span> <span class="nav-text">Discord Sentinel</span></a>
             <a href="/bugs.html" class="nav-link"><span class="nav-icon">🐛</span> <span class="nav-text">Bug Tracker</span></a>
-            <a onclick="openGlobalSettings ? openGlobalSettings() : openSettings()" class="nav-link" style="cursor:pointer; margin-top:4px;"><span class="nav-icon">⚙️</span> <span class="nav-text">Settings</span></a>
-        </div>
-        <div class="sidebar-footer" id="sidebar-user-footer">
-            <div class="sidebar-user-chip" onclick="openGlobalSettings ? openGlobalSettings() : openSettings()" style="cursor:pointer;" title="Account &amp; API Settings">
-                <div class="sidebar-user-avatar" id="nav-user-avatar">🕷️</div>
-                <div class="sidebar-user-info">
-                    <span class="sidebar-user-name" id="nav-user-name">Tactical Operative</span>
-                    <span class="sidebar-user-faction" id="nav-user-sub">Faction Operations</span>
-                </div>
-                <span style="color:var(--text-tertiary); font-size:0.9em;">⚙️</span>
-            </div>
         </div>
     </nav>
 
     <div class="main-wrapper">
         <header class="app-topbar">
             <div class="topbar-left">
-                <button class="toggle-btn" onclick="toggleSidebar()" title="Toggle Sidebar" id="mobile-nav-toggle" style="display:none;">☰</button>
+                <button class="toggle-btn" onclick="toggleSidebar()" title="Toggle Sidebar" id="mobile-nav-toggle" style="display:none;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
                 <div class="topbar-crumb" id="topbar-breadcrumb">
                     <span>OPERATIONS</span> / <span>OPERATIONS HUB</span> / <strong id="crumb-active-sub" style="color:var(--text-primary);">OVERVIEW</strong>
                 </div>
@@ -2343,7 +2333,7 @@
                     <span class="pulse-indicator"></span>
                     <span id="global-ws-status">LIVE WS</span>
                 </div>
-                <button class="btn btn-secondary btn-sm" onclick="loadAll(true)" title="Refresh Dashboard Data" style="padding:4px 8px;">⟳</button>
+                <button class="btn btn-secondary btn-sm" onclick="loadAll(true)" title="Refresh Dashboard Data" style="padding:4px 8px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></button>
                 <button class="btn btn-secondary btn-sm" onclick="openGlobalSettings ? openGlobalSettings() : openSettings()" title="Settings" style="padding:4px 8px;">⚙️</button>
             </div>
         </header>
@@ -2353,7 +2343,7 @@
             <div class="page-title">📊 Operations <span>Overview</span></div>
             <div style="display:flex;align-items:center;gap:14px;">
                 <div class="last-updated" id="last-updated">Fetching data...</div>
-                <button class="refresh-btn" onclick="loadAll(true)">↻ Refresh</button>
+                <button class="refresh-btn" onclick="loadAll(true)" style="display:inline-flex;align-items:center;gap:6px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> Refresh</button>
             </div>
         </div>
 
@@ -2629,8 +2619,8 @@
                 </div>
                 <div class="sn-header-actions">
                     <span class="sn-updated" id="radar-updated-label">Waiting for faction feed…</span>
-                    <a href="/gym-stats.html#sentinel" class="sn-btn" title="Open the standalone Airspace &amp; War Intel view">Standalone ↗</a>
-                    <button type="button" class="sn-btn sn-btn-primary" onclick="refreshSentinelAll()" id="btn-refresh-sentinel-all">↻ Sync All</button>
+                    <a href="/dashboard.html?view=sentinel#sentinel" class="sn-btn" title="Open the standalone Airspace &amp; War Intel view" style="display:inline-flex;align-items:center;gap:5px;">Standalone View <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a>
+                    <button type="button" class="sn-btn sn-btn-primary" onclick="refreshSentinelAll()" id="btn-refresh-sentinel-all" style="display:inline-flex;align-items:center;gap:6px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> Sync All</button>
                 </div>
             </section>
 
@@ -2889,7 +2879,7 @@
     </div>
 
 <script>
-let myKey = localStorage.getItem("warboard_apikey") || "";
+let myKey = typeof getApiKey === 'function' ? getApiKey() : (localStorage.getItem("warboard_apikey") || "");
 let dashData = null;
 let currentArmoryData = null;
 let activeOpsTab = 'overview';
@@ -2902,25 +2892,6 @@ function debounce(func, wait = 200) {
         timeout = setTimeout(() => func.apply(this, args), wait);
     };
 }
-
-// ─── Sidebar & Theme Controls ───
-function toggleSidebar() {
-    const s = document.getElementById('app-sidebar');
-    if (window.innerWidth <= 900) {
-        document.querySelector('.nav-items').classList.toggle('mobile-open');
-    } else {
-        s.classList.toggle('collapsed');
-        localStorage.setItem('sidebar_collapsed', s.classList.contains('collapsed'));
-    }
-}
-if (localStorage.getItem('sidebar_collapsed') === 'true' && window.innerWidth > 900) {
-    document.getElementById('app-sidebar').classList.add('collapsed');
-}
-function toggleTheme() {
-    document.body.classList.toggle('light-mode');
-    localStorage.setItem('theme', document.body.classList.contains('light-mode') ? 'light' : 'dark');
-}
-if (localStorage.getItem('theme') === 'light') document.body.classList.add('light-mode');
 
 // ─── Formatters ───
 function fmtNum(n) { return Number(n || 0).toLocaleString(); }
@@ -2983,9 +2954,7 @@ function switchOpsTab(tabId) {
     if (crumbEl) crumbEl.textContent = crumbMap[tabId] || 'OVERVIEW';
 
     const navOverview = document.getElementById('nav-link-overview');
-    const navSentinel = document.getElementById('nav-link-sentinel');
-    if (navOverview) navOverview.classList.toggle('active', tabId === 'overview');
-    if (navSentinel) navSentinel.classList.toggle('active', tabId === 'sentinel');
+    if (navOverview) navOverview.classList.toggle('active', tabId === 'overview' || tabId === 'sentinel');
 
     const mc = document.getElementById('main-content');
     if (mc) {
@@ -3008,9 +2977,10 @@ function switchOpsTab(tabId) {
 
 function handleInitialHash() {
     const hash = window.location.hash.replace('#', '').toLowerCase();
+    const viewParam = new URLSearchParams(window.location.search).get('view') || '';
     if (hash === 'armory') { window.location.replace('/armory.html'); return; }
     if (hash === 'gym' || hash === 'gym-stats') { window.location.replace('/gym-stats.html'); return; }
-    if (hash === 'sentinel' || hash === 'war-audit') {
+    if (hash === 'sentinel' || hash === 'war-audit' || viewParam.toLowerCase() === 'sentinel') {
         switchOpsTab('sentinel');
     } else {
         switchOpsTab('overview');
@@ -3039,9 +3009,10 @@ window.openSettings = function() {
 
 // ─── Main Data Fetch & Render ───
 async function loadAll(forceRefresh = false) {
-    myKey = localStorage.getItem("warboard_apikey") || "";
+    myKey = typeof getApiKey === 'function' ? getApiKey() : (localStorage.getItem("warboard_apikey") || "");
+    const hasAccess = (typeof hasTornAccess === 'function' && hasTornAccess()) || Boolean(myKey);
 
-    if (!myKey && !localStorage.getItem("sv_session_token")) {
+    if (!hasAccess) {
         try {
             sessionStorage.removeItem('sv_cache_dashboard');
             sessionStorage.removeItem('sv_cache_wars');
@@ -3987,9 +3958,10 @@ function ensureRadarTicker() {
 
 async function refreshSentinelAll() {
     const btn = document.getElementById('btn-refresh-sentinel-all');
+    const syncIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>';
     if (btn) {
         btn.disabled = true;
-        btn.textContent = '↻ Syncing…';
+        btn.innerHTML = `${syncIcon} Syncing…`;
     }
     try {
         await Promise.allSettled([
@@ -4000,7 +3972,7 @@ async function refreshSentinelAll() {
     } finally {
         if (btn) {
             btn.disabled = false;
-            btn.textContent = '↻ Sync All';
+            btn.innerHTML = `${syncIcon} Sync All`;
         }
     }
 }

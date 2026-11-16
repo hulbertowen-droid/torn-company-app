@@ -24,8 +24,10 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/global.css?v=4.0.0">
-    <script src="/auth-gate.js?v=4.1.0"></script>
+    <link rel="stylesheet" href="/global.css?v=4.4.0">
+    <script src="/auth-gate.js?v=4.4.0"></script>
+    <script src="/global_settings.js?v=4.4.0"></script>
+    <script src="/global-topbar.js?v=4.4.0"></script>
     <style>
         
         :root {
@@ -1792,9 +1794,9 @@
             backdrop-filter: blur(12px); padding: 8px 0 12px; margin-bottom: 12px; border-bottom: 1px solid var(--border-subtle);
         }
         body.light-mode .deck-subnav-strip { background: rgba(241, 245, 249, 0.95); border-color: rgba(0, 0, 0, 0.08); }
-        .deck-tabs-container { display: flex; align-items: center; gap: 8px; overflow-x: auto; scrollbar-width: none; }
+        .deck-tabs-container { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
         .deck-tab-btn {
-            display: inline-flex; align-items: center; gap: 8px; padding: 9px 16px; font-size: 0.86em; font-weight: 700;
+            display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; font-size: 0.8em; font-weight: 700;
             color: var(--text-muted); background: transparent; border: 1px solid transparent; border-radius: var(--radius-md);
             cursor: pointer; transition: all 0.2s ease; white-space: nowrap;
         }
@@ -1804,6 +1806,75 @@
         .deck-tab-pane { display: none; }
         .deck-tab-pane.active { display: block; animation: fadeInPane 0.2s ease-in-out; }
         @keyframes fadeInPane { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+        .search-icon { display: inline-flex; align-items: center; justify-content: center; }
+
+        /* Tab 6: Market & Bazaar Sniper Scoped Styles */
+        .market-sniper-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 18px; }
+        @media(max-width: 900px) { .market-sniper-grid { grid-template-columns: 1fr; } }
+        .sniper-search-group { position: relative; margin-bottom: 16px; }
+        .sniper-dropdown-menu {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            width: 100%;
+            background: var(--bg-overlay, #141923);
+            border: 1px solid var(--border-strong);
+            border-radius: var(--radius-sm);
+            margin-top: 6px;
+            max-height: 320px;
+            overflow-y: auto;
+            z-index: 1000;
+            box-shadow: 0 12px 36px rgba(0,0,0,0.7);
+        }
+        .sniper-dropdown-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 14px;
+            cursor: pointer;
+            border-bottom: 1px solid var(--border-subtle);
+            transition: background 0.15s;
+        }
+        .sniper-dropdown-item:hover { background: rgba(255,255,255,0.06); }
+        .sniper-item-icon { width: 32px; height: 32px; object-fit: contain; }
+        .sniper-quick-tags { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+        .sniper-quick-tag {
+            background: rgba(255,255,255,0.04);
+            border: 1px solid var(--border-strong);
+            color: var(--text-main);
+            padding: 5px 12px;
+            border-radius: 99px;
+            font-size: 0.78em;
+            cursor: pointer;
+            font-weight: 700;
+            transition: all 0.15s;
+        }
+        .sniper-quick-tag:hover { background: rgba(59,130,246,0.16); color: #60a5fa; border-color: rgba(59,130,246,0.4); }
+        .sniper-selected-box {
+            display: none;
+            background: rgba(59,130,246,0.12);
+            border: 1px solid rgba(59,130,246,0.35);
+            padding: 10px 16px;
+            border-radius: var(--radius-sm);
+            margin-bottom: 14px;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .sniper-target-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            background: rgba(0,0,0,0.22);
+            border: 1px solid var(--border-subtle);
+            border-left: 3px solid var(--spider-red);
+            border-radius: var(--radius-sm);
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        body.light-mode .sniper-target-item { background: #f8fafc; }
+        #market-status-msg { text-align: center; font-weight: 700; font-size: 0.88em; margin-top: 12px; }
 
         /* Studio Split Grid (Tab 2) */
         .studio-split-grid {
@@ -1949,7 +2020,7 @@
         }
     </style>
 
-    <script src="/pwa-helper.js?v=1.0.0" defer></script>
+    <script src="/pwa-helper.js?v=1.2.0" defer></script>
 </head>
 <body>
     <nav class="sidebar" id="app-sidebar">
@@ -1959,51 +2030,36 @@
                 <span class="brand-text">FactionOS</span>
             </div>
             <div class="sidebar-actions">
-                <button class="theme-toggle" onclick="toggleTheme()" title="Toggle Dark/Light Mode">🌗</button>
-                <button class="toggle-btn" onclick="toggleSidebar()" title="Collapse Sidebar">☰</button>
+                <button type="button" class="theme-toggle" onclick="toggleTheme()" title="Toggle Dark/Light Mode" aria-label="Toggle Dark/Light Mode"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg></button>
+                <button type="button" class="toggle-btn" onclick="toggleSidebar()" title="Collapse Sidebar" aria-label="Collapse Sidebar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
             </div>
         </div>
         <div class="nav-items">
             <div class="nav-section-title">Live Operations</div>
             <a href="/" class="nav-link"><span class="nav-icon">📡</span> <span class="nav-text">Live Warboard</span></a>
             <a href="/chain.html" class="nav-link"><span class="nav-icon">🔗</span> <span class="nav-text">Chain Sentinel</span></a>
-            <a href="/dashboard.html" class="nav-link"><span class="nav-icon">📊</span> <span class="nav-text">Operations Overview</span></a>
-            <a href="/armory.html" class="nav-link"><span class="nav-icon">🛡️</span> <span class="nav-text">Armory &amp; Logistics</span></a>
+            <a href="/dashboard.html" class="nav-link" id="nav-link-overview"><span class="nav-icon">📊</span> <span class="nav-text">Operations Overview</span></a>
+            <a href="/armory.html" class="nav-link" id="nav-link-armory"><span class="nav-icon">🛡️</span> <span class="nav-text">Armory &amp; Logistics</span> <span class="nav-badge" id="nav-armory-badge" style="display:none;"></span></a>
             <a href="/gym-stats.html" class="nav-link"><span class="nav-icon">🏋️</span> <span class="nav-text">Gym &amp; Stat Tracker</span></a>
             <a href="/payout.html" class="nav-link"><span class="nav-icon">💰</span> <span class="nav-text">War Payouts</span></a>
-            <a href="/members.html" class="nav-link"><span class="nav-icon">👥</span> <span class="nav-text">Faction Roster</span></a>
             <a href="/oc.html" class="nav-link"><span class="nav-icon">💼</span> <span class="nav-text">OC Manager</span></a>
 
             <div class="nav-section-title">Tactical Desk</div>
-            <a href="/dashboard.html#sentinel" class="nav-link"><span class="nav-icon">✈️</span> <span class="nav-text">Airspace &amp; War Intel</span></a>
-            <a href="/travel.html" class="nav-link"><span class="nav-icon">✈️</span> <span class="nav-text">Travel Profit Desk</span></a>
-            <a href="/bazaar.html" class="nav-link"><span class="nav-icon">🛒</span> <span class="nav-text">Market & Bazaar</span></a>
+            <a href="/travel.html" class="nav-link"><span class="nav-icon">🌍</span> <span class="nav-text">Travel Profit Desk</span></a>
             <a href="/company.html" class="nav-link"><span class="nav-icon">🏢</span> <span class="nav-text">Company Hub</span></a>
             <a href="/gamble.html" class="nav-link"><span class="nav-icon">🎰</span> <span class="nav-text">Casino Analytics</span></a>
-            <a href="/recruit/" class="nav-link" title="Recruit Engine is currently in early development and not usable"><span class="nav-icon">🎯</span> <span class="nav-text">Recruit Engine</span> <span class="nav-badge-dev">Early Dev</span></a>
 
-            <div class="nav-section-title">Intelligence & Alerts</div>
+            <div class="nav-section-title">Intelligence &amp; Alerts</div>
             <a href="/ai-sandbox.html" class="nav-link"><span class="nav-icon">🤖</span> <span class="nav-text">F.R.I.D.A.Y. Intel</span></a>
             <a href="/discord.html" class="nav-link active"><span class="nav-icon">📢</span> <span class="nav-text">Discord Sentinel</span></a>
             <a href="/bugs.html" class="nav-link"><span class="nav-icon">🐛</span> <span class="nav-text">Bug Tracker</span></a>
-            <a onclick="openGlobalSettings ? openGlobalSettings() : openSettings()" class="nav-link" style="cursor:pointer; margin-top:4px;"><span class="nav-icon">⚙️</span> <span class="nav-text">Settings</span></a>
-        </div>
-        <div class="sidebar-footer" id="sidebar-user-footer">
-            <div class="sidebar-user-chip" onclick="openGlobalSettings ? openGlobalSettings() : openSettings()" style="cursor:pointer;" title="Account & API Settings">
-                <div class="sidebar-user-avatar" id="nav-user-avatar">🕷️</div>
-                <div class="sidebar-user-info">
-                    <span class="sidebar-user-name" id="nav-user-name">Tactical Operative</span>
-                    <span class="sidebar-user-faction" id="nav-user-sub">Faction Operations</span>
-                </div>
-                <span style="color:var(--text-tertiary); font-size:0.9em;">⚙️</span>
-            </div>
         </div>
     </nav>
 
     <div class="main-wrapper">
         <header class="app-topbar">
             <div class="topbar-left">
-                <button class="toggle-btn" onclick="toggleSidebar()" title="Toggle Sidebar" id="mobile-nav-toggle" style="display:none;">☰</button>
+                <button class="toggle-btn" onclick="toggleSidebar()" title="Toggle Sidebar" id="mobile-nav-toggle" style="display:none;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
                 <div class="topbar-crumb">
                     <span>INTELLIGENCE & ALERTS</span> / <strong style="color:var(--text-primary);">DISCORD SENTINEL</strong>
                 </div>
@@ -2129,7 +2185,10 @@
                         <span class="deck-tab-badge" id="tab-badge-commands">57</span>
                     </button>
                     <button type="button" class="deck-tab-btn" data-tab="gateway" onclick="switchDeckTab('gateway')">
-                        <span>⚙️ Gateway, Setup & Logs</span>
+                        <span>⚙️ Gateway, Setup &amp; Logs</span>
+                    </button>
+                    <button type="button" class="deck-tab-btn" data-tab="market" onclick="switchDeckTab('market')">
+                        <span>🛒 Market &amp; Bazaar Sniper</span>
                     </button>
                 </div>
             </nav>
@@ -2164,7 +2223,7 @@
                         <button type="button" class="btn-test" onclick="setCategoryTriggers(true)" style="color:var(--green); font-weight:700;">✅ Enable Category</button>
                         <button type="button" class="btn-test" onclick="setCategoryTriggers(false)" style="color:var(--spider-red); font-weight:700;">❌ Disable Category</button>
                         <div class="search-box">
-                            <span class="search-icon">🔍</span>
+                            <span class="search-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span>
                             <input type="text" class="search-input" id="alert-search-input" placeholder="Search triggers (e.g. hospital, lead, sniper)..." oninput="filterAlerts()">
                             <button type="button" onclick="clearSearchFilter()" style="position:absolute; right:10px; top:50%; transform:translateY(-50%); background:none; border:none; color:var(--text-dim); cursor:pointer; font-size:12px;">✕</button>
                         </div>
@@ -3925,7 +3984,7 @@
                         <button type="button" class="btn-action teal" onclick="setEssentialCommands()">🛡️ Essentials Only</button>
                     </div>
                     <div class="search-box">
-                        <span class="search-icon">🔍</span>
+                        <span class="search-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span>
                         <input type="text" class="search-input" id="cmd-search-input" placeholder="Filter commands (e.g. war, payout)..." oninput="filterCommands()">
                     </div>
                 </div>
@@ -4589,6 +4648,102 @@
             </div>
 
             <!-- ========================================================
+                 TAB 6: 🛒 Market & Bazaar Sniper (Consolidated from bazaar.html)
+                 ======================================================== -->
+            <div class="deck-tab-pane" id="tab-pane-market">
+                <div class="market-sniper-grid">
+                    <div class="card">
+                        <div class="card-header">
+                            <div>
+                                <p class="card-title">📣 Trading Post Channel Ping</p>
+                                <span class="card-subtitle">Route Market Sniper &amp; Undercut Discord alerts to your trade channel</span>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div class="form-group">
+                                <label style="display:block;font-size:0.78em;font-weight:700;text-transform:uppercase;color:var(--text-muted);margin-bottom:6px;">Trade Alerts Channel ID</label>
+                                <input type="text" id="trade-webhook" placeholder="Discord Channel ID or Webhook URL for Trade/Sniper Alerts">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <div>
+                                <p class="card-title">📉 Defense: Auto-Undercut Scanner</p>
+                                <span class="card-subtitle">Protect Personal Bazaar Inventory</span>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div style="display:flex;align-items:center;justify-content:space-between;gap:14px;">
+                                <div style="font-size:0.86em;color:var(--text-muted);line-height:1.5;">
+                                    Automatically scans your bazaar listings and alerts you if anyone on the global market undercuts your price.
+                                </div>
+                                <label class="switch-sm" style="flex-shrink:0;"><input type="checkbox" id="auto-defense"><span class="slider"></span></label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <div>
+                            <p class="card-title">🎯 Sniper: Auto-Buy Alerts</p>
+                            <span class="card-subtitle">Search any Torn item and get pinged instantly when listed at or below your target price</span>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-group sniper-search-group">
+                            <label style="display:block;font-size:0.78em;font-weight:700;text-transform:uppercase;color:var(--text-muted);margin-bottom:6px;">Item Name Search</label>
+                            <input type="text" id="item-search" autocomplete="off" placeholder="Search for any item in Torn... (e.g. Plushie, Xanax)">
+                            <div id="search-results" class="sniper-dropdown-menu"></div>
+                        </div>
+
+                        <div id="selected-item-display" class="sniper-selected-box">
+                            <div style="display:flex; align-items:center; gap:10px;">
+                                <img id="sel-icon" src="" alt="" style="width:32px; height:32px; object-fit:contain;">
+                                <div>
+                                    <div id="sel-name" style="color:var(--text-main); font-weight:800;"></div>
+                                    <div id="sel-id" style="color:var(--text-muted); font-size:0.78em; font-family:var(--font-mono);"></div>
+                                </div>
+                            </div>
+                            <div style="text-align:right;">
+                                <div style="color:var(--text-muted); font-size:0.74em; text-transform:uppercase;">Live Market Value</div>
+                                <div id="sel-market" style="color:var(--accent-cobalt, #3b82f6); font-weight:800; font-size:1.08em; font-family:var(--font-mono);"></div>
+                            </div>
+                        </div>
+
+                        <div style="display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap; margin-bottom:14px;">
+                            <div class="form-group" style="flex:1; min-width:200px; margin-bottom:0;">
+                                <label style="display:block;font-size:0.78em;font-weight:700;text-transform:uppercase;color:var(--text-muted);margin-bottom:6px;">Maximum Snipe Price ($)</label>
+                                <input type="number" id="add-price" placeholder="Set your highest buy price...">
+                            </div>
+                            <button type="button" class="btn-action primary" id="btn-add-target" onclick="addSniperTarget()" disabled style="opacity:0.5; cursor:not-allowed; padding:10px 18px;">+ Lock Target</button>
+                        </div>
+
+                        <div style="margin-bottom:18px;">
+                            <span style="color:var(--text-muted); font-size:0.78em; font-weight:800; text-transform:uppercase;">Quick Target Presets:</span>
+                            <div class="sniper-quick-tags">
+                                <button type="button" class="sniper-quick-tag" onclick="quickLoadItem('Xanax', 206)">💊 Xanax</button>
+                                <button type="button" class="sniper-quick-tag" onclick="quickLoadItem('Feathery Hotel Coupon', 283)">🎫 FHC</button>
+                                <button type="button" class="sniper-quick-tag" onclick="quickLoadItem('Donator Pack', 258)">📦 Donator Pack</button>
+                                <button type="button" class="sniper-quick-tag" onclick="quickLoadItem('Erotic DVD', 256)">📀 Erotic DVD</button>
+                            </div>
+                        </div>
+
+                        <div id="sniper-list" style="display:flex; flex-direction:column; gap:10px; margin-bottom:18px;">
+                            <div style="color:var(--text-muted); text-align:center; padding:16px; border:1px dashed var(--border-subtle); border-radius:8px;">No sniper targets configured.</div>
+                        </div>
+
+                        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+                            <button type="button" class="btn-action primary" onclick="saveMarketConfig()" style="padding:10px 20px;">💾 Commit Trading Config</button>
+                            <div id="market-status-msg"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========================================================
                  LAYER C — Floating Glassmorphic Unsaved-Changes Dock
                  ======================================================== -->
             <div class="floating-save-dock" id="sticky-save-bar">
@@ -4924,22 +5079,6 @@ function discardChanges() {
         clearDirty();
         showToast('Changes discarded — restored saved configuration.', 'warning');
     }
-}
-
-function toggleSidebar() {
-    if (window.innerWidth <= 768) {
-        const nav = document.querySelector('.nav-items');
-        if (nav) nav.classList.toggle('mobile-open');
-    } else {
-        const s = document.getElementById('app-sidebar');
-        s.classList.toggle('collapsed');
-        localStorage.setItem('sidebar_collapsed', s.classList.contains('collapsed'));
-    }
-}
-
-function toggleTheme() {
-    document.body.classList.toggle('light-mode');
-    localStorage.setItem('theme', document.body.classList.contains('light-mode') ? 'light' : 'dark');
 }
 
 function toggleGuide() {
@@ -5862,21 +6001,7 @@ function toggleTokenVisibility() {
     if (btn) btn.textContent = isPass ? '🙈 Hide Token' : '👁️ Show Token';
 }
 
-function updateTctClock() {
-    const el = document.getElementById('global-tct-clock');
-    if (!el) return;
-    const now = new Date();
-    const utcHours = String(now.getUTCHours()).padStart(2, '0');
-    const utcMins = String(now.getUTCMinutes()).padStart(2, '0');
-    const utcSecs = String(now.getUTCSeconds()).padStart(2, '0');
-    el.textContent = `${utcHours}:${utcMins}:${utcSecs} TCT`;
-}
-
-
 document.addEventListener('DOMContentLoaded', async () => {
-    updateTctClock();
-    setInterval(updateTctClock, 1000);
-
     // Tab 3 dirty change tracking for all inputs & selects
     document.querySelectorAll('#tab-pane-routing select, #tab-pane-routing input').forEach(el => {
         el.addEventListener('change', trackDirty);
@@ -5884,13 +6009,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     try {
+        const hashTab = (window.location.hash || '').replace('#', '').toLowerCase();
         const savedTab = localStorage.getItem('sv_discord_active_tab') || 'sentinel';
-        switchDeckTab(savedTab);
+        switchDeckTab(['sentinel', 'broadcast', 'routing', 'slash', 'gateway', 'market'].includes(hashTab) ? hashTab : savedTab);
     } catch(e) {}
     fetchOutboundLogs();
-    const sidebar = document.getElementById('app-sidebar');
-    if (localStorage.getItem('sidebar_collapsed') === 'true') sidebar.classList.add('collapsed');
-    if (localStorage.getItem('theme') === 'light') document.body.classList.add('light-mode');
 
     // Instant render from session cache
     try {
@@ -7263,6 +7386,7 @@ function switchDeckTab(tabId) {
     try { localStorage.setItem('sv_discord_active_tab', tabId); } catch(e) {}
     if (tabId === 'broadcast' && typeof updateBroadcastPreview === 'function') updateBroadcastPreview();
     if (tabId === 'gateway' && typeof fetchOutboundLogs === 'function') fetchOutboundLogs();
+    if (tabId === 'market' && typeof initMarketSniperTab === 'function') initMarketSniperTab();
 }
 
 // ── Broadcast Mode Switching ──
@@ -7323,7 +7447,217 @@ function showToast(msg, type = 'info') {
     }, 4000);
 }
 
+// ── Market & Bazaar Sniper (Integrated Sub-Tab) ──
+let tornItemsDatabase = {};
+let activeSelectedMarketItem = null;
+let sniperTargets = [];
+let marketTabInitialized = false;
+
+async function initMarketSniperTab() {
+    if (marketTabInitialized) return;
+    marketTabInitialized = true;
+
+    const searchInput = document.getElementById('item-search');
+    const resultsMenu = document.getElementById('search-results');
+
+    // Load saved server-wide market config immediately
+    try {
+        const res = await fetch('/api/get-market-config');
+        const config = await res.json();
+        const wh = document.getElementById('trade-webhook');
+        const ad = document.getElementById('auto-defense');
+        if (wh) wh.value = config.globalChannelId || localStorage.getItem('market_channelid') || '';
+        if (ad) ad.checked = config.autoDefense === true;
+        sniperTargets = Array.isArray(config.sniperTargets) ? config.sniperTargets : [];
+        renderMarketTargets();
+    } catch (e) { console.warn('Could not fetch market configuration:', e); }
+
+    const hasAccess = (typeof hasTornAccess === 'function' && hasTornAccess()) || Boolean(typeof getApiKey === 'function' ? getApiKey() : '');
+    if (hasAccess && searchInput) {
+        try {
+            searchInput.placeholder = 'Loading live item database from Torn...';
+            const res = await fetch('/api/items');
+            const data = await res.json();
+            if (data.items) {
+                tornItemsDatabase = data.items;
+                searchInput.placeholder = 'Search for any item in Torn... (e.g. Plushie, Xanax)';
+            } else {
+                searchInput.placeholder = 'Failed to load items. Check API key.';
+            }
+        } catch (e) {
+            searchInput.placeholder = 'Search item database unavailable.';
+        }
+    } else if (searchInput) {
+        searchInput.placeholder = 'Connect Torn API key in Settings to enable item search.';
+    }
+
+    if (searchInput && resultsMenu) {
+        searchInput.addEventListener('input', function() {
+            const query = this.value.toLowerCase().trim();
+            resultsMenu.innerHTML = '';
+            if (query.length < 2) {
+                resultsMenu.style.display = 'none';
+                return;
+            }
+            const matches = Object.entries(tornItemsDatabase)
+                .filter(([, item]) => (item.name || '').toLowerCase().includes(query))
+                .slice(0, 12);
+
+            if (matches.length > 0) {
+                matches.forEach(([id, item]) => {
+                    const div = document.createElement('div');
+                    div.className = 'sniper-dropdown-item';
+                    div.innerHTML = `
+                        <div style="display:flex;align-items:center;gap:12px;">
+                            <img class="sniper-item-icon" src="https://www.torn.com/images/items/${id}/large.png" onerror="this.src='https://www.torn.com/images/items/${id}/medium.png'">
+                            <div style="display:flex;flex-direction:column;">
+                                <span style="font-weight:700;color:var(--text-main);">${item.name}</span>
+                                <span style="font-size:0.78em;color:var(--text-muted);text-transform:capitalize;">${item.type || ''}</span>
+                            </div>
+                        </div>
+                        <div style="font-family:var(--font-mono);font-weight:800;color:var(--accent-cobalt,#3b82f6);">$${Number(item.market_value || 0).toLocaleString()}</div>
+                    `;
+                    div.addEventListener('click', () => {
+                        selectMarketItem(id, item);
+                        resultsMenu.style.display = 'none';
+                    });
+                    resultsMenu.appendChild(div);
+                });
+                resultsMenu.style.display = 'block';
+            } else {
+                resultsMenu.style.display = 'none';
+            }
+        });
+
+        document.addEventListener('click', (e) => {
+            if (e.target !== searchInput && !resultsMenu.contains(e.target)) {
+                resultsMenu.style.display = 'none';
+            }
+        });
+    }
+}
+
+function selectMarketItem(id, item) {
+    activeSelectedMarketItem = { id, ...item };
+    const display = document.getElementById('selected-item-display');
+    if (display) display.style.display = 'flex';
+    const icon = document.getElementById('sel-icon');
+    if (icon) icon.src = `https://www.torn.com/images/items/${id}/large.png`;
+    document.getElementById('sel-name').innerText = item.name || 'Item';
+    document.getElementById('sel-id').innerText = `Item ID: ${id}`;
+    document.getElementById('sel-market').innerText = `$${Number(item.market_value || 0).toLocaleString()}`;
+    document.getElementById('add-price').value = Math.floor(Number(item.market_value || 0) * 0.95);
+    const addBtn = document.getElementById('btn-add-target');
+    if (addBtn) {
+        addBtn.disabled = false;
+        addBtn.style.opacity = '1';
+        addBtn.style.cursor = 'pointer';
+    }
+}
+
+function quickLoadItem(name, id) {
+    const item = tornItemsDatabase[id] || { name, market_value: 0, type: 'Preset' };
+    selectMarketItem(id, item);
+}
+
+function addSniperTarget() {
+    if (!activeSelectedMarketItem) return;
+    const price = parseInt(document.getElementById('add-price').value, 10);
+    if (isNaN(price) || price <= 0) {
+        showToast('Please enter a valid target price.', 'warning');
+        return;
+    }
+    const existsIdx = sniperTargets.findIndex(t => String(t.id) === String(activeSelectedMarketItem.id));
+    if (existsIdx !== -1) sniperTargets.splice(existsIdx, 1);
+    sniperTargets.push({
+        name: activeSelectedMarketItem.name,
+        id: parseInt(activeSelectedMarketItem.id, 10),
+        price
+    });
+    activeSelectedMarketItem = null;
+    const si = document.getElementById('item-search');
+    if (si) si.value = '';
+    const disp = document.getElementById('selected-item-display');
+    if (disp) disp.style.display = 'none';
+    document.getElementById('add-price').value = '';
+    const addBtn = document.getElementById('btn-add-target');
+    if (addBtn) {
+        addBtn.disabled = true;
+        addBtn.style.opacity = '0.5';
+        addBtn.style.cursor = 'not-allowed';
+    }
+    renderMarketTargets();
+}
+
+function removeMarketTarget(idx) {
+    sniperTargets.splice(idx, 1);
+    renderMarketTargets();
+}
+
+function renderMarketTargets() {
+    const list = document.getElementById('sniper-list');
+    if (!list) return;
+    if (!sniperTargets.length) {
+        list.innerHTML = `<div style="color:var(--text-muted);text-align:center;padding:16px;border:1px dashed var(--border-subtle);border-radius:8px;">No sniper targets configured.</div>`;
+        return;
+    }
+    list.innerHTML = sniperTargets.map((t, i) => `
+        <div class="sniper-target-item">
+            <div style="display:flex;align-items:center;gap:14px;">
+                <img src="https://www.torn.com/images/items/${t.id}/large.png" style="width:36px;height:36px;object-fit:contain;" onerror="this.style.display='none'">
+                <div>
+                    <div style="font-weight:700;color:var(--text-main);">${t.name} <span style="font-family:var(--font-mono);font-size:0.8em;color:var(--text-muted);">#${t.id}</span></div>
+                    <div style="font-size:0.82em;color:var(--text-muted);">Alert triggers at or below target price</div>
+                </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:16px;">
+                <div style="text-align:right;">
+                    <div style="font-size:0.72em;text-transform:uppercase;color:var(--text-muted);">Target Price</div>
+                    <div style="font-family:var(--font-mono);font-weight:900;color:var(--green);">$${Number(t.price || 0).toLocaleString()}</div>
+                </div>
+                <button type="button" class="btn-test" onclick="removeMarketTarget(${i})" style="color:var(--spider-red);padding:4px 10px;" aria-label="Remove target"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+            </div>
+        </div>
+    `).join('');
+}
+
+async function saveMarketConfig() {
+    const status = document.getElementById('market-status-msg');
+    if (status) {
+        status.style.color = '#3b82f6';
+        status.textContent = 'Transmitting trading protocols to backend...';
+    }
+    const channelId = (document.getElementById('trade-webhook')?.value || '').trim();
+    localStorage.setItem('market_channelid', channelId);
+    const payload = {
+        globalChannelId: channelId,
+        autoDefense: Boolean(document.getElementById('auto-defense')?.checked),
+        sniperTargets
+    };
+    try {
+        const res = await fetch('/api/save-market-config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (data.success) {
+            if (status) {
+                status.style.color = 'var(--green)';
+                status.textContent = '✓ Trading Config Saved.';
+            }
+            showToast('Market & Bazaar Sniper config saved!', 'success');
+        } else {
+            throw new Error(data.error || 'Save failed');
+        }
+    } catch (e) {
+        if (status) {
+            status.style.color = 'var(--spider-red)';
+            status.textContent = '❌ Sync failed: ' + e.message;
+        }
+    }
+}
+
     </script>
-    <script src="/global_settings.js?v=4.0.0"></script>
 </body>
 </html>

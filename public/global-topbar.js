@@ -15,7 +15,10 @@
         
         const clockEls = document.querySelectorAll('#global-tct-clock, #topbar-tct-clock, .tct-clock-val, .topbar-clock');
         clockEls.forEach(el => {
-            if (el.id === 'topbar-tct-clock' || el.classList.contains('topbar-clock')) {
+            if (el.id === 'global-tct-clock') {
+                // Paired inside .tct-clock-chip alongside <span class="tct-label">TCT</span>
+                el.textContent = timeStr;
+            } else if (el.id === 'topbar-tct-clock' || el.classList.contains('topbar-clock')) {
                 el.textContent = `${timeStr} TCT`;
             } else {
                 el.textContent = timeStr;
@@ -101,12 +104,16 @@
 
     // Restore saved sidebar & theme states on load
     document.addEventListener('DOMContentLoaded', () => {
-        if (localStorage.getItem('sv_theme') === 'light') {
+        const savedTheme = localStorage.getItem('sv_theme') || localStorage.getItem('theme') || localStorage.getItem('warboard_theme');
+        if (savedTheme === 'light' || savedTheme === 'light-mode') {
             document.body.classList.add('light-mode');
+            localStorage.setItem('sv_theme', 'light');
         }
-        if (window.innerWidth > 960 && localStorage.getItem('sv_sidebar_collapsed') === '1') {
+        const savedCollapsed = localStorage.getItem('sv_sidebar_collapsed') === '1' || localStorage.getItem('sidebar_collapsed') === 'true';
+        if (window.innerWidth > 960 && savedCollapsed) {
             const sidebar = document.getElementById('app-sidebar') || document.querySelector('.sidebar');
             if (sidebar) sidebar.classList.add('collapsed');
+            localStorage.setItem('sv_sidebar_collapsed', '1');
         }
         syncUserIdentity();
     });
