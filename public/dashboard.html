@@ -2770,7 +2770,7 @@
                             <div>
                                 <div style="font-size:0.7em; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-tertiary); font-weight:700;">Deposited / Inflow</div>
                                 <div id="ledger-kpi-deposited" style="font-size:1.35em; font-weight:900; font-family:var(--font-mono); color:var(--accent-emerald);">+0</div>
-                                <div style="font-size:0.7em; color:var(--text-tertiary);">Donations &amp; Returns</div>
+                                <div id="ledger-kpi-deposited-sub" style="font-size:0.7em; color:var(--text-tertiary);">Donations &amp; Returns</div>
                             </div>
                         </div>
                         <div class="ledger-kpi-card kpi-outflow">
@@ -4587,6 +4587,7 @@ let trackerPreset = '7d';
 let trackerSortCol = 'net';
 let trackerSortAsc = false;
 let trackerSegmentFilter = 'all';
+let filledActionLinkedToSegment = false;
 let currentFilteredMemberList = [];
 
 function mergeArmoryEvents(incomingEvents, { replaceFromTs = 0, replaceToTs = 0 } = {}) {
@@ -4832,10 +4833,40 @@ function isBloodBagFillEvent(entry) {
     return raw.includes('empty blood bag') && raw.includes('filled');
 }
 
+function syncActionPillUI(actionType, explicitBtn = null) {
+    const pills = [...document.querySelectorAll('#action-pills .filter-pill')];
+    pills.forEach(b => b.classList.remove('active'));
+    if (explicitBtn) {
+        explicitBtn.classList.add('active');
+        return;
+    }
+    const target = pills.find(b => (b.getAttribute('onclick') || '').includes(`'${actionType}'`));
+    if (target) target.classList.add('active');
+}
+
 function setTrackerTab(segment, btn) {
     trackerSegmentFilter = segment;
     document.querySelectorAll('#tracker-segment-pills .filter-pill').forEach(b => b.classList.remove('active'));
     if (btn) btn.classList.add('active');
+
+    if (segment === 'bloodfillers') {
+        armoryActionFilter = 'filled';
+        filledActionLinkedToSegment = true;
+        syncActionPillUI('filled');
+        if (trackerSortCol === 'net') {
+            trackerSortCol = 'bloodFilled';
+            trackerSortAsc = false;
+        }
+    } else if (filledActionLinkedToSegment) {
+        filledActionLinkedToSegment = false;
+        armoryActionFilter = 'all';
+        syncActionPillUI('all');
+        if (trackerSortCol === 'bloodFilled') {
+            trackerSortCol = 'net';
+            trackerSortAsc = false;
+        }
+    }
+
     if (segment !== 'all' && activeUsageView !== 'members') {
         setUsageView('members', document.getElementById('btn-view-consumers'));
         return;
@@ -4876,8 +4907,15 @@ function setArmoryTimeFilter(period) {
 
 function setArmoryActionFilter(actionType, btn) {
     armoryActionFilter = actionType;
-    document.querySelectorAll('#action-pills .filter-pill').forEach(b => b.classList.remove('active'));
-    if (btn) btn.classList.add('active');
+    filledActionLinkedToSegment = false;
+    syncActionPillUI(actionType, btn);
+    if (actionType === 'filled' && trackerSortCol === 'net') {
+        trackerSortCol = 'bloodFilled';
+        trackerSortAsc = false;
+    } else if (actionType !== 'filled' && trackerSortCol === 'bloodFilled') {
+        trackerSortCol = 'net';
+        trackerSortAsc = false;
+    }
     renderItemUsageTracker();
 }
 
@@ -4910,6 +4948,11 @@ function resetArmoryFilters() {
     armoryItemFilter = 'all';
     armoryMemberFilter = '';
     trackerSegmentFilter = 'all';
+    filledActionLinkedToSegment = false;
+    if (trackerSortCol === 'bloodFilled') {
+        trackerSortCol = 'net';
+        trackerSortAsc = false;
+    }
     const searchInput = document.getElementById('usage-search');
     if (searchInput) searchInput.value = '';
     const catSelect = document.getElementById('armory-cat-filter');
@@ -5275,10 +5318,14 @@ function renderItemUsageTracker() {
     if (kpiDonor) {
         if (topDonor) {
             kpiDonor.innerHTML = `<a href="https://www.torn.com/profiles.php?XID=${topDonor.id}" target="_blank" style="color:var(--accent-emerald); text-decoration:none;">${escapeHtml(topDonor.name)}</a>`;
-            if (kpiDonorSub) kpiDonorSub.textContent = `+${fmtNum(topDonor.totalDeposited)} items deposited`;
+            if (kpiDonorSub) {
+                kpiDonorSub.textContent = armoryActionFilter === 'filled'
+                    ? `+${fmtNum(topDonor.totalDeposited)} empty bags filled`
+                    : `+${fmtNum(topDonor.totalDeposited)} items deposited`;
+            }
         } else {
             kpiDonor.textContent = '—';
-            if (kpiDonorSub) kpiDonorSub.textContent = '+0 deposited';
+            if (kpiDonorSub) kpiDonorSub.textContent = armoryActionFilter === 'filled' ? '+0 bags filled' : '+0 deposited';
         }
     }
 
@@ -5295,7 +5342,13 @@ function renderItemUsageTracker() {
     }
 
     const kpiDep = document.getElementById('ledger-kpi-deposited');
+    const kpiDepSub = document.getElementById('ledger-kpi-deposited-sub');
     if (kpiDep) kpiDep.textContent = `+${fmtNum(totalDeposited)}`;
+    if (kpiDepSub) {
+        kpiDepSub.textContent = armoryActionFilter === 'filled'
+            ? 'Empty Bags Filled in Armory Only'
+            : 'Donations & Returns';
+    }
 
     const kpiUsed = document.getElementById('ledger-kpi-used');
     if (kpiUsed) kpiUsed.textContent = `-${fmtNum(totalUsed)}`;
