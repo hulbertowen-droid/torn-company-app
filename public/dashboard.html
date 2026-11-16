@@ -2335,7 +2335,7 @@
                     <span class="pulse-indicator"></span>
                     <span id="global-ws-status">LIVE WS</span>
                 </div>
-                <button class="btn btn-secondary btn-sm" onclick="loadAll()" title="Refresh Dashboard Data" style="padding:4px 8px;">⟳</button>
+                <button class="btn btn-secondary btn-sm" onclick="loadAll(true)" title="Refresh Dashboard Data" style="padding:4px 8px;">⟳</button>
                 <button class="btn btn-secondary btn-sm" onclick="openGlobalSettings ? openGlobalSettings() : openSettings()" title="Settings" style="padding:4px 8px;">⚙️</button>
             </div>
         </header>
@@ -2345,7 +2345,7 @@
             <div class="page-title">🛡️ Faction <span>Dashboard</span></div>
             <div style="display:flex;align-items:center;gap:14px;">
                 <div class="last-updated" id="last-updated">Fetching data...</div>
-                <button class="refresh-btn" onclick="loadAll()">↻ Refresh</button>
+                <button class="refresh-btn" onclick="loadAll(true)">↻ Refresh</button>
             </div>
         </div>
 
@@ -3864,7 +3864,11 @@ window.openSettings = function() {
 };
 
 // ─── Main Data Fetch & Render ───
-async function loadAll() {
+async function loadAll(forceRefresh = false) {
+    if (forceRefresh) {
+        armoryInitialRangeSynced = false;
+        armoryForceNextSync = true;
+    }
     myKey = localStorage.getItem("warboard_apikey") || "";
 
     if (!myKey && !localStorage.getItem("sv_session_token")) {
@@ -4513,26 +4517,21 @@ function renderArmory(d) {
 
     // Populate Subpanels & Item Usage Engine
     if (d.armory?.usageStats?.recentLog && d.armory.usageStats.recentLog.length) {
-        if (!loadedArmoryEvents.length) {
-            loadedArmoryEvents = [...d.armory.usageStats.recentLog];
-            populateArmoryItemDropdown(loadedArmoryEvents);
-        } else {
-            const existingKeys = new Set(loadedArmoryEvents.map(e => `${e.timestamp}_${e.id}_${e.itemName}_${e.action}`));
-            d.armory.usageStats.recentLog.forEach(e => {
-                const k = `${e.timestamp}_${e.id}_${e.itemName}_${e.action}`;
-                if (!existingKeys.has(k)) {
-                    loadedArmoryEvents.push(e);
-                    existingKeys.add(k);
-                }
-            });
-            loadedArmoryEvents.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-            populateArmoryItemDropdown(loadedArmoryEvents);
-        }
+        mergeArmoryEvents(d.armory.usageStats.recentLog);
+        populateArmoryItemDropdown(loadedArmoryEvents);
     }
     renderItemUsageTracker();
     filterMeds();
     filterArsenal();
     filterLoans();
+
+    // Auto-hydrate the full selected date range (e.g. full 7-day Torn armorynews beyond the initial 200-event summary)
+    if (!armoryInitialRangeSynced && !isArmoryHistorySyncing && !d.armoryError && !limitedAccess) {
+        const useForce = armoryForceNextSync;
+        armoryInitialRangeSynced = true;
+        armoryForceNextSync = false;
+        fetchConsumptionData({ silent: true, force: useForce });
+    }
 }
 
 // ── HTML Escape Helper ──
@@ -4580,11 +4579,61 @@ let armoryCategoryFilter = 'all'; // 'all', 'Medical', 'Drug', 'Booster', 'Arsen
 let armoryItemFilter = 'all'; // 'all' or specific item name
 let armoryMemberFilter = ''; // member id or name
 let loadedArmoryEvents = [];
+let armoryInitialRangeSynced = false;
+let armoryForceNextSync = false;
+let isArmoryHistorySyncing = false;
+let armoryFetchSeq = 0;
 let trackerPreset = '7d';
 let trackerSortCol = 'net';
 let trackerSortAsc = false;
 let trackerSegmentFilter = 'all';
 let currentFilteredMemberList = [];
+
+function mergeArmoryEvents(incomingEvents, { replaceFromTs = 0, replaceToTs = 0 } = {}) {
+    const incoming = Array.isArray(incomingEvents) ? incomingEvents : [];
+    const baseEvents = (replaceFromTs > 0 && replaceToTs >= replaceFromTs)
+        ? loadedArmoryEvents.filter(e => {
+            const ts = Number(e?.timestamp || 0);
+            return ts < replaceFromTs || ts > replaceToTs;
+        })
+        : [...loadedArmoryEvents];
+
+    const seenKeys = new Set();
+    const batchOccCounts = {};
+    const getEventKey = (e, countPerBatch) => {
+        if (e && e.newsId !== undefined && e.newsId !== null && String(e.newsId) !== '') {
+            return `nid:${String(e.newsId)}`;
+        }
+        const sig = `${e?.timestamp || 0}_${e?.id || ''}_${e?.itemName || ''}_${e?.action || ''}`;
+        if (!countPerBatch) return `fb:${sig}#0`;
+        const idx = batchOccCounts[sig] || 0;
+        batchOccCounts[sig] = idx + 1;
+        return `fb:${sig}#${idx}`;
+    };
+
+    const existingBatchCounts = {};
+    baseEvents.forEach(e => {
+        if (e && e.newsId !== undefined && e.newsId !== null && String(e.newsId) !== '') {
+            seenKeys.add(`nid:${String(e.newsId)}`);
+        } else {
+            const sig = `${e?.timestamp || 0}_${e?.id || ''}_${e?.itemName || ''}_${e?.action || ''}`;
+            const idx = existingBatchCounts[sig] || 0;
+            existingBatchCounts[sig] = idx + 1;
+            seenKeys.add(`fb:${sig}#${idx}`);
+        }
+    });
+
+    incoming.forEach(e => {
+        const key = getEventKey(e, true);
+        if (!seenKeys.has(key)) {
+            baseEvents.push(e);
+            seenKeys.add(key);
+        }
+    });
+
+    baseEvents.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+    loadedArmoryEvents = baseEvents;
+}
 
 function initTrackerDates() {
     const now = new Date();
@@ -4705,14 +4754,16 @@ async function setTrackerPreset(preset, btn) {
     await fetchConsumptionData();
 }
 
-async function fetchConsumptionData() {
+async function fetchConsumptionData(options = {}) {
+    const silent = Boolean(options?.silent);
+    const force = Boolean(options?.force);
     const fromInput = document.getElementById('tracker-date-from')?.value;
     const toInput = document.getElementById('tracker-date-to')?.value;
     const btn = document.getElementById('btn-fetch-tracker');
     const icon = document.getElementById('tracker-fetch-icon');
 
     if (!fromInput || !toInput) {
-        showToast('Please select both Start and End dates', 'warn');
+        if (!silent) showToast('Please select both Start and End dates', 'warn');
         return;
     }
 
@@ -4720,12 +4771,14 @@ async function fetchConsumptionData() {
     const toTs = Math.floor(new Date(toInput + 'T23:59:59Z').getTime() / 1000);
 
     if (fromTs > toTs) {
-        showToast('Start Date cannot be after End Date', 'error');
+        if (!silent) showToast('Start Date cannot be after End Date', 'error');
         return;
     }
 
     const userKey = currentArmoryData?.userKey || localStorage.getItem('torn_api_key') || (typeof myKey !== 'undefined' ? myKey : '') || '';
-    const hasToken = !!localStorage.getItem('sv_session_token');
+    const fetchSeq = ++armoryFetchSeq;
+    isArmoryHistorySyncing = true;
+    renderItemUsageTracker();
 
     if (btn) btn.disabled = true;
     if (icon) icon.textContent = '⏳';
@@ -4736,35 +4789,37 @@ async function fetchConsumptionData() {
         if (tok) h['x-session-token'] = tok;
         if (userKey) h['x-api-key'] = userKey;
 
-        const resp = await fetch(`/api/armory-history?from=${fromTs}&to=${toTs}&pages=8`, Object.keys(h).length ? { headers: h } : {});
+        const resp = await fetch(`/api/armory-history?from=${fromTs}&to=${toTs}&pages=80${force ? '&force=1' : ''}`, Object.keys(h).length ? { headers: h } : {});
         const data = await resp.json();
+        if (fetchSeq !== armoryFetchSeq) return;
         if (data.error) throw new Error(data.error);
 
         if (data.success && data.stats && data.stats.recentLog) {
             const fetched = data.stats.recentLog;
-            const existingKeys = new Set(loadedArmoryEvents.map(e => `${e.timestamp}_${e.id}_${e.itemName}_${e.action}`));
-            fetched.forEach(e => {
-                const k = `${e.timestamp}_${e.id}_${e.itemName}_${e.action}`;
-                if (!existingKeys.has(k)) {
-                    loadedArmoryEvents.push(e);
-                    existingKeys.add(k);
-                }
-            });
-            loadedArmoryEvents.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+            mergeArmoryEvents(fetched, { replaceFromTs: fromTs, replaceToTs: toTs });
 
             // Set time filter to 'all' so all fetched entries render
             armoryTimeFilter = 'all';
+            isArmoryHistorySyncing = false;
 
             populateArmoryItemDropdown(loadedArmoryEvents);
             renderItemUsageTracker();
-            showToast(`Loaded ${fetched.length} events for ${fromInput} → ${toInput}!`, 'success');
-        } else {
+            if (data.truncated) {
+                showToast(`Loaded ${fmtNum(fetched.length)} events (hit 80-page cap — narrow date range for complete older history)`, 'warn');
+            } else if (!silent) {
+                showToast(`Loaded ${fmtNum(fetched.length)} events for ${fromInput} → ${toInput}!`, 'success');
+            }
+        } else if (!silent) {
             showToast('No armory events found for this range.', 'warn');
         }
     } catch (err) {
         console.error('fetchConsumptionData error:', err);
-        showToast(`Failed to fetch ledger: ${err.message}`, 'error');
+        if (!silent) showToast(`Failed to fetch ledger: ${err.message}`, 'error');
     } finally {
+        if (fetchSeq === armoryFetchSeq) {
+            isArmoryHistorySyncing = false;
+            renderItemUsageTracker();
+        }
         if (btn) btn.disabled = false;
         if (icon) icon.textContent = '📥';
     }
@@ -4904,22 +4959,19 @@ async function fetchDeepArmoryHistory() {
         const tok = localStorage.getItem('sv_session_token');
         if (tok) h['x-session-token'] = tok;
         if (userKey) h['x-api-key'] = userKey;
-        const resp = await fetch(`/api/armory-history?days=90&pages=6`, Object.keys(h).length ? { headers: h } : {});
+        const resp = await fetch(`/api/armory-history?days=90&pages=120`, Object.keys(h).length ? { headers: h } : {});
         const data = await resp.json();
         if (data.success && data.stats && data.stats.recentLog) {
-            const existingKeys = new Set(loadedArmoryEvents.map(e => `${e.timestamp}_${e.id}_${e.itemName}_${e.action}`));
-            data.stats.recentLog.forEach(e => {
-                const key = `${e.timestamp}_${e.id}_${e.itemName}_${e.action}`;
-                if (!existingKeys.has(key)) {
-                    loadedArmoryEvents.push(e);
-                    existingKeys.add(key);
-                }
-            });
-            loadedArmoryEvents.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+            mergeArmoryEvents(data.stats.recentLog);
             populateArmoryItemDropdown(loadedArmoryEvents);
             renderItemUsageTracker();
-            if (btn) btn.innerHTML = `<span>✅ 90d Loaded (${loadedArmoryEvents.length} events)</span>`;
-            showToast(`90-day history synchronized (${loadedArmoryEvents.length} total events)`, 'success');
+            if (btn) btn.innerHTML = `<span>✅ 90d Loaded (${fmtNum(loadedArmoryEvents.length)} events)</span>`;
+            showToast(
+                data.truncated
+                    ? `Synchronized ${fmtNum(loadedArmoryEvents.length)} events (hit 120-page API window limit)`
+                    : `90-day history synchronized (${fmtNum(loadedArmoryEvents.length)} total events)`,
+                data.truncated ? 'warn' : 'success'
+            );
         } else {
             if (btn) btn.innerHTML = `<span>⚠️ Could not fetch 90d</span>`;
         }
@@ -5208,7 +5260,7 @@ function renderItemUsageTracker() {
     // 4. Update Header Badge & 5 Top KPI Cards & 4 Flow KPI Cards
     const totalBadge = document.getElementById('usage-total-badge');
     if (totalBadge) {
-        totalBadge.textContent = `${fmtNum(filteredEvents.length)} events • ${fmtNum(totalDeposited)} in / ${fmtNum(totalUsed)} out`;
+        totalBadge.textContent = `${fmtNum(filteredEvents.length)} events • ${fmtNum(totalDeposited)} in / ${fmtNum(totalUsed)} out${isArmoryHistorySyncing ? ' · ⏳ Syncing full range...' : ''}`;
     }
 
     const kpiXanax = document.getElementById('tkpi-xanax');

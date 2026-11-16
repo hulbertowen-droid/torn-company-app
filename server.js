@@ -7618,12 +7618,15 @@ function parseArmoryNews(entries) {
     if (!entries) {
         return { byMember: [], byItem: [], recentLog: [], totalDeposited: 0, totalConsumed: 0, netBalance: 0, activeMembersCount: 0 };
     }
-    const list = Array.isArray(entries) ? entries : Object.values(entries);
+    const pairs = Array.isArray(entries)
+        ? entries.map((e, idx) => [e?.newsId != null ? String(e.newsId) : null, e])
+        : Object.entries(entries);
     const memberMap = {};
     const itemMap = {};
     const parsedEvents = [];
 
-    list.forEach(entry => {
+    pairs.forEach(([rawNewsId, entry]) => {
+        if (!entry) return;
         const text = entry.news || '';
         const pMatch = text.match(/XID=(\d+)[^>]*>([^<]+)<\/a>/i);
         if (!pMatch) return;
@@ -7723,6 +7726,7 @@ function parseArmoryNews(entries) {
         const cleanNews = text.replace(/<[^>]+>/g, '').trim();
 
         parsedEvents.push({
+            newsId: rawNewsId || (entry.newsId != null ? String(entry.newsId) : null),
             id: pId,
             name: pName,
             action,
@@ -8295,13 +8299,90 @@ app.get('/api/dashboard-data', async (req, res) => {
     } catch (err) { res.status(403).json({ error: err.message }); }
 });
 
+// Helper: deep-paginate Torn faction armorynews without dropping same-second boundary entries
+const armoryHistoryCache = new Map();
+
+async function fetchArmoryNewsRange({ initialKey, fallbackKey = null, fromTs, toTs = null, maxPages = 60 }) {
+    const allEntries = {};
+    let activeKey = initialKey;
+    let cursorTo = Number.isFinite(toTs) && toTs > 0 ? toTs : null;
+    let pagesFetched = 0;
+    let truncated = false;
+    let minTsSeen = null;
+    let maxTsSeen = null;
+
+    for (let p = 0; p < maxPages; p++) {
+        let url = `https://api.torn.com/faction/?selections=armorynews&from=${fromTs}&key=${activeKey}`;
+        if (cursorTo) url += `&to=${cursorTo}`;
+
+        let r = await fetch(url).catch(() => null);
+        if (!r) break;
+        let d = await r.json().catch(() => ({}));
+
+        // If user's personal key lacks faction permissions (code 7) or is invalid (code 2), retry with faction key
+        if (d.error && (d.error.code === 7 || d.error.code === 2) && fallbackKey && activeKey !== fallbackKey) {
+            activeKey = fallbackKey;
+            url = `https://api.torn.com/faction/?selections=armorynews&from=${fromTs}&key=${activeKey}`;
+            if (cursorTo) url += `&to=${cursorTo}`;
+            r = await fetch(url).catch(() => null);
+            if (!r) break;
+            d = await r.json().catch(() => ({}));
+        }
+
+        if (d.error || !d.armorynews) break;
+        const pairs = Object.entries(d.armorynews);
+        if (!pairs.length) break;
+
+        pagesFetched++;
+        let newThisPage = 0;
+        let pageMinTs = Infinity;
+        for (const [nid, ev] of pairs) {
+            if (!allEntries[nid]) {
+                allEntries[nid] = ev;
+                newThisPage++;
+            }
+            const ts = Number(ev?.timestamp || 0);
+            if (ts > 0) {
+                if (ts < pageMinTs) pageMinTs = ts;
+                if (minTsSeen === null || ts < minTsSeen) minTsSeen = ts;
+                if (maxTsSeen === null || ts > maxTsSeen) maxTsSeen = ts;
+            }
+        }
+
+        if (pairs.length < 100 || !Number.isFinite(pageMinTs) || pageMinTs <= fromTs) {
+            break;
+        }
+
+        const nextCursorTo = (cursorTo === null || (pageMinTs < cursorTo && newThisPage > 0))
+            ? pageMinTs
+            : (pageMinTs - 1);
+
+        if (nextCursorTo < fromTs) break;
+        if (p + 1 >= maxPages) {
+            truncated = true;
+            break;
+        }
+        cursorTo = nextCursorTo;
+        await new Promise(resolve => setTimeout(resolve, 25));
+    }
+
+    return {
+        allEntries,
+        pagesFetched,
+        truncated,
+        earliestTs: minTsSeen,
+        latestTs: maxTsSeen
+    };
+}
+
 // Dedicated Armory History & Audit Endpoint with custom day ranges and deep pagination
 app.get('/api/armory-history', async (req, res) => {
+    const sessionFacId = req.userSession?.factionId || req.headers['x-faction-id'] || null;
+    const facFallbackKey = (sessionFacId ? getFactionDiscordConfig(sessionFacId)?.apiKey : null) || discordConfig.apiKey;
     let userKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey || req.query.key;
     if (!userKey || userKey === 'null' || userKey.trim() === '') {
-        // Fall back to server's configured faction key if user is in an active session or server key is configured
-        if (req.userSession || req.headers['x-session-token'] || discordConfig.apiKey) {
-            userKey = discordConfig.apiKey;
+        if (req.userSession || req.headers['x-session-token'] || facFallbackKey) {
+            userKey = facFallbackKey;
         } else {
             return res.status(401).json({ error: "Authentication required" });
         }
@@ -8316,44 +8397,47 @@ app.get('/api/armory-history', async (req, res) => {
             days = Math.min(90, Math.max(1, parseInt(req.query.days || '30', 10)));
             fromTs = Math.floor(Date.now() / 1000) - (86400 * days);
         }
-        const maxPages = Math.min(10, Math.max(1, parseInt(req.query.pages || '6', 10)));
+        const maxPages = Math.min(120, Math.max(1, parseInt(req.query.pages || '60', 10)));
+        const keyDigest = crypto.createHash('sha256').update(String(userKey)).digest('hex').slice(0, 12);
+        const cacheKey = `${sessionFacId || 'default'}:${keyDigest}:${fromTs}:${toTs || 'now'}:${maxPages}`;
 
-        let allEntries = {};
-        let activeKey = userKey;
-
-        for (let p = 0; p < maxPages; p++) {
-            let url = `https://api.torn.com/faction/?selections=armorynews&from=${fromTs}&key=${activeKey}`;
-            if (toTs) url += `&to=${toTs}`;
-            let r = await fetch(url).catch(() => null);
-            if (!r) break;
-            let d = await r.json().catch(() => ({}));
-            // If user's personal key lacks faction permissions (code 7) or is invalid (code 2), retry with server faction key
-            if (d.error && (d.error.code === 7 || d.error.code === 2) && discordConfig.apiKey && activeKey !== discordConfig.apiKey) {
-                activeKey = discordConfig.apiKey;
-                url = `https://api.torn.com/faction/?selections=armorynews&from=${fromTs}&key=${activeKey}`;
-                if (toTs) url += `&to=${toTs}`;
-                r = await fetch(url).catch(() => null);
-                if (!r) break;
-                d = await r.json().catch(() => ({}));
+        if (!req.query.force && armoryHistoryCache.has(cacheKey)) {
+            const cached = armoryHistoryCache.get(cacheKey);
+            if ((Date.now() - cached.ts) < 45000) {
+                return res.json(cached.payload);
             }
-            if (d.error || !d.armorynews) break;
-            const entries = Object.values(d.armorynews);
-            if (!entries.length) break;
-            Object.assign(allEntries, d.armorynews);
-            const earliest = entries[entries.length - 1].timestamp;
-            if (entries.length < 100 || earliest <= fromTs) break;
-            toTs = earliest - 1;
+            armoryHistoryCache.delete(cacheKey);
         }
 
+        const { allEntries, pagesFetched, truncated, earliestTs, latestTs } = await fetchArmoryNewsRange({
+            initialKey: userKey,
+            fallbackKey: facFallbackKey,
+            fromTs,
+            toTs,
+            maxPages
+        });
+
         const stats = parseArmoryNews(allEntries);
-        res.json({
+        const payload = {
             success: true,
             days,
             fromTs,
             toTs,
+            pagesFetched,
+            truncated,
+            earliestTs,
+            latestTs,
             eventsCount: (stats.recentLog || []).length,
             stats
-        });
+        };
+
+        armoryHistoryCache.set(cacheKey, { ts: Date.now(), payload });
+        if (armoryHistoryCache.size > 30) {
+            const oldestKey = armoryHistoryCache.keys().next().value;
+            if (oldestKey !== undefined) armoryHistoryCache.delete(oldestKey);
+        }
+
+        res.json(payload);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
