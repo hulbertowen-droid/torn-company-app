@@ -7652,11 +7652,12 @@ function parseArmoryNews(entries) {
                 quantity = parseInt(m[1], 10);
                 itemName = m[2].trim();
             }
-        } else if (text.includes("filled one of the faction's Empty Blood Bags")) {
+        } else if (/filled\s+(?:one|\d+)\s+of\s+the\s+faction's\s+Empty\s+Blood\s+Bags?/i.test(text)) {
             action = 'filled';
             type = 'inflow';
-            quantity = 1;
-            const m = text.match(/create a (.*?)$/i);
+            const qtyMatch = text.match(/filled\s+(\d+)\s+of\s+the\s+faction's\s+Empty\s+Blood\s+Bags?/i);
+            quantity = qtyMatch ? parseInt(qtyMatch[1], 10) : 1;
+            const m = text.match(/create\s+(?:an?\s+)?(.*?)$/i);
             itemName = m ? m[1].trim() : 'Blood Bag';
         } else if (text.includes("deposited")) {
             action = 'deposited';
@@ -7753,6 +7754,7 @@ function parseArmoryNews(entries) {
                 drugsUsed: 0,
                 boostersUsed: 0,
                 arsenalUsed: 0,
+                bloodBagsFilled: 0,
                 depositedItems: {},
                 usedItems: {},
                 lastActionTs: ts,
@@ -7762,6 +7764,7 @@ function parseArmoryNews(entries) {
         const mObj = memberMap[actorId];
         mObj.actionCount++;
         if (ts > (mObj.lastActionTs || 0)) mObj.lastActionTs = ts;
+        if (action === 'filled') mObj.bloodBagsFilled += quantity;
 
         if (type === 'inflow') {
             mObj.totalDeposited += quantity;
@@ -7797,6 +7800,7 @@ function parseArmoryNews(entries) {
                     drugsUsed: 0,
                     boostersUsed: 0,
                     arsenalUsed: 0,
+                    bloodBagsFilled: 0,
                     depositedItems: {},
                     usedItems: {},
                     lastActionTs: ts,

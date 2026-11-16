@@ -659,6 +659,8 @@
         display: inline-flex;
         align-items: center;
         gap: 6px;
+        flex-wrap: wrap;
+        max-width: 100%;
     }
     .filter-label {
         font-size: 0.76em;
@@ -670,6 +672,8 @@
     }
     .filter-pills {
         display: inline-flex;
+        flex-wrap: wrap;
+        max-width: 100%;
         gap: 4px;
         background: var(--bg-card);
         padding: 2px;
@@ -2806,6 +2810,7 @@
                                     <button class="filter-pill" onclick="setTrackerTab('deficit', this)">🔴 Net Consumers (Net &lt; 0)</button>
                                     <button class="filter-pill" onclick="setTrackerTab('donors', this)">🟢 Net Donors (Net &gt; 0)</button>
                                     <button class="filter-pill" onclick="setTrackerTab('xanax', this)">💊 Xanax Users</button>
+                                    <button class="filter-pill" onclick="setTrackerTab('bloodfillers', this)">🩸 Blood Bag Fillers</button>
                                     <button class="filter-pill" onclick="setTrackerTab('freeload', this)">😴 0 Deposited</button>
                                 </div>
                             </div>
@@ -2820,6 +2825,7 @@
                                     <button class="filter-pill active" onclick="setArmoryActionFilter('all', this)">All Activity</button>
                                     <button class="filter-pill" onclick="setArmoryActionFilter('inflow', this)">🟢 Deposits (+)</button>
                                     <button class="filter-pill" onclick="setArmoryActionFilter('outflow', this)">🔴 Used (-)</button>
+                                    <button class="filter-pill" onclick="setArmoryActionFilter('filled', this)">🩸 Filled Blood Bags</button>
                                     <button class="filter-pill" onclick="setArmoryActionFilter('loans', this)">🪖 Loans/Returns</button>
                                 </div>
                             </div>
@@ -2883,13 +2889,14 @@
                                     <th class="sortable-th" onclick="sortUsageMembers('net')">Net Armory Balance <span id="sort-ind-net">↕</span></th>
                                     <th class="sortable-th" onclick="sortUsageMembers('xanax')">Xanax <span id="sort-ind-xanax">↕</span></th>
                                     <th class="sortable-th" onclick="sortUsageMembers('medical')">Medical <span id="sort-ind-medical">↕</span></th>
+                                    <th class="sortable-th" onclick="sortUsageMembers('bloodFilled')">Blood Filled <span id="sort-ind-bloodFilled">↕</span></th>
                                     <th class="sortable-th" onclick="sortUsageMembers('boosters')">Boosters <span id="sort-ind-boosters">↕</span></th>
                                     <th class="sortable-th" onclick="sortUsageMembers('lastActive')" style="text-align:right;">Last Active <span id="sort-ind-lastActive">↕</span></th>
                                     <th style="text-align:center;">Actions</th>
                                 </tr>
                             </thead>
                             <tbody id="usage-members-tbody">
-                                <tr><td colspan="11" style="text-align:center; padding:24px; color:var(--text-tertiary);">Loading member armory ledger...</td></tr>
+                                <tr><td colspan="12" style="text-align:center; padding:24px; color:var(--text-tertiary);">Loading member armory ledger...</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -4568,7 +4575,7 @@ function switchArmorySubTab(tabName, btn) {
 
 // ── Unified Armory Ledger State & Filter Handlers ──
 let armoryTimeFilter = 'all'; // all loaded events by default
-let armoryActionFilter = 'all'; // 'all', 'inflow', 'outflow', 'loans'
+let armoryActionFilter = 'all'; // 'all', 'inflow', 'outflow', 'filled', 'loans'
 let armoryCategoryFilter = 'all'; // 'all', 'Medical', 'Drug', 'Booster', 'Arsenal', 'Other'
 let armoryItemFilter = 'all'; // 'all' or specific item name
 let armoryMemberFilter = ''; // member id or name
@@ -4763,10 +4770,21 @@ async function fetchConsumptionData() {
     }
 }
 
+function isBloodBagFillEvent(entry) {
+    if (!entry) return false;
+    if (entry.action === 'filled') return true;
+    const raw = (entry.rawText || '').toLowerCase();
+    return raw.includes('empty blood bag') && raw.includes('filled');
+}
+
 function setTrackerTab(segment, btn) {
     trackerSegmentFilter = segment;
     document.querySelectorAll('#tracker-segment-pills .filter-pill').forEach(b => b.classList.remove('active'));
     if (btn) btn.classList.add('active');
+    if (segment !== 'all' && activeUsageView !== 'members') {
+        setUsageView('members', document.getElementById('btn-view-consumers'));
+        return;
+    }
     renderItemUsageTracker();
 }
 
@@ -4836,12 +4854,17 @@ function resetArmoryFilters() {
     armoryCategoryFilter = 'all';
     armoryItemFilter = 'all';
     armoryMemberFilter = '';
+    trackerSegmentFilter = 'all';
     const searchInput = document.getElementById('usage-search');
     if (searchInput) searchInput.value = '';
     const catSelect = document.getElementById('armory-cat-filter');
     if (catSelect) catSelect.value = 'all';
     const itemSelect = document.getElementById('armory-item-select');
     if (itemSelect) itemSelect.value = 'all';
+
+    const segmentPills = document.querySelectorAll('#tracker-segment-pills .filter-pill');
+    segmentPills.forEach(b => b.classList.remove('active'));
+    if (segmentPills[0]) segmentPills[0].classList.add('active'); // All Members
 
     const actionPills = document.querySelectorAll('#action-pills .filter-pill');
     actionPills.forEach(b => b.classList.remove('active'));
@@ -5014,6 +5037,8 @@ function renderItemUsageTracker() {
             if (entry.type !== 'inflow') return false;
         } else if (armoryActionFilter === 'outflow') {
             if (entry.type !== 'outflow') return false;
+        } else if (armoryActionFilter === 'filled') {
+            if (!isBloodBagFillEvent(entry)) return false;
         } else if (armoryActionFilter === 'loans') {
             if (entry.action !== 'loaned' && entry.action !== 'returned' && entry.action !== 'retrieved') return false;
         }
@@ -5085,6 +5110,7 @@ function renderItemUsageTracker() {
                 netBalance: 0,
                 xanaxTaken: 0,
                 medsTaken: 0,
+                bloodBagsFilled: 0,
                 boostersTaken: 0,
                 depositedItems: {},
                 usedItems: {},
@@ -5093,6 +5119,7 @@ function renderItemUsageTracker() {
         }
         const m = memberMap[pId];
         if (e.timestamp > (m.lastActionTs || 0)) m.lastActionTs = e.timestamp;
+        if (isBloodBagFillEvent(e)) m.bloodBagsFilled += qty;
         const itemKey = e.itemName || 'Unknown Item';
         if (e.type === 'inflow') {
             m.totalDeposited += qty;
@@ -5120,6 +5147,7 @@ function renderItemUsageTracker() {
                     netBalance: 0,
                     xanaxTaken: 0,
                     medsTaken: 0,
+                    bloodBagsFilled: 0,
                     boostersTaken: 0,
                     depositedItems: {},
                     usedItems: {},
@@ -5253,11 +5281,12 @@ function renderItemUsageTracker() {
             filterChipsEl.style.display = 'flex';
             let chipsHtml = `<span style="font-size:0.75em; color:var(--text-tertiary); font-weight:700;">Active Filters:</span>`;
             if (trackerSegmentFilter !== 'all') {
-                const segMap = { 'deficit': 'Net Consumers', 'donors': 'Net Donors', 'xanax': 'Xanax Users', 'freeload': '0 Deposited' };
+                const segMap = { 'deficit': 'Net Consumers', 'donors': 'Net Donors', 'xanax': 'Xanax Users', 'bloodfillers': 'Blood Bag Fillers', 'freeload': '0 Deposited' };
                 chipsHtml += `<span class="filter-active-chip">Segment: ${segMap[trackerSegmentFilter] || trackerSegmentFilter} <span class="chip-remove" onclick="setTrackerTab('all', document.querySelectorAll('#tracker-segment-pills .filter-pill')[0])">✕</span></span>`;
             }
             if (armoryActionFilter !== 'all') {
-                const actionLabel = armoryActionFilter === 'inflow' ? 'Deposits Only' : (armoryActionFilter === 'outflow' ? 'Usage Only' : 'Loans & Returns');
+                const actionLabelMap = { inflow: 'Deposits Only', outflow: 'Usage Only', filled: 'Filled Blood Bags', loans: 'Loans & Returns' };
+                const actionLabel = actionLabelMap[armoryActionFilter] || armoryActionFilter;
                 chipsHtml += `<span class="filter-active-chip">Action: ${actionLabel} <span class="chip-remove" onclick="setArmoryActionFilter('all', document.querySelectorAll('#action-pills .filter-pill')[0])">✕</span></span>`;
             }
             if (armoryCategoryFilter !== 'all') {
@@ -5278,12 +5307,13 @@ function renderItemUsageTracker() {
         }
     }
 
-    // 6. View 1: Member Ledger Table (11 Columns, Sortable, Segment Filtered)
+    // 6. View 1: Member Ledger Table (12 Columns, Sortable, Segment Filtered)
     const mBody = document.getElementById('usage-members-tbody');
     let displayMembers = memberList.filter(m => {
         if (trackerSegmentFilter === 'deficit') return m.netBalance < 0;
         if (trackerSegmentFilter === 'donors') return m.netBalance > 0;
         if (trackerSegmentFilter === 'xanax') return m.xanaxTaken > 0;
+        if (trackerSegmentFilter === 'bloodfillers') return (m.bloodBagsFilled || 0) > 0;
         if (trackerSegmentFilter === 'freeload') return m.totalUsed > 0 && m.totalDeposited === 0;
         return true;
     });
@@ -5299,6 +5329,7 @@ function renderItemUsageTracker() {
             case 'net': va = a.netBalance; vb = b.netBalance; break;
             case 'xanax': va = a.xanaxTaken; vb = b.xanaxTaken; break;
             case 'medical': va = a.medsTaken; vb = b.medsTaken; break;
+            case 'bloodFilled': va = a.bloodBagsFilled || 0; vb = b.bloodBagsFilled || 0; break;
             case 'boosters': va = a.boostersTaken; vb = b.boostersTaken; break;
             case 'lastActive': va = a.lastActionTs || 0; vb = b.lastActionTs || 0; break;
             default: va = a.netBalance; vb = b.netBalance; break;
@@ -5309,7 +5340,7 @@ function renderItemUsageTracker() {
     currentFilteredMemberList = displayMembers;
 
     // Update Sort Indicators
-    const sortCols = ['name', 'deposited', 'used', 'loaned', 'returned', 'net', 'xanax', 'medical', 'boosters', 'lastActive'];
+    const sortCols = ['name', 'deposited', 'used', 'loaned', 'returned', 'net', 'xanax', 'medical', 'bloodFilled', 'boosters', 'lastActive'];
     sortCols.forEach(col => {
         const ind = document.getElementById(`sort-ind-${col}`);
         if (ind) {
@@ -5325,7 +5356,7 @@ function renderItemUsageTracker() {
 
     if (mBody && activeUsageView === 'members') {
         if (!displayMembers.length) {
-            mBody.innerHTML = `<tr><td colspan="11" style="text-align:center; padding:28px; color:var(--text-tertiary);">No armory records found matching current segment and filters.</td></tr>`;
+            mBody.innerHTML = `<tr><td colspan="12" style="text-align:center; padding:28px; color:var(--text-tertiary);">No armory records found matching current segment and filters.</td></tr>`;
         } else {
             mBody.innerHTML = displayMembers.map(m => {
                 let balanceBadge = `<span class="badge-balance-zero">0</span>`;
@@ -5386,6 +5417,9 @@ function renderItemUsageTracker() {
                         ${medSubChips ? `<div style="margin-top:2px; max-width:140px;">${medSubChips}</div>` : ''}
                     </td>
                     <td style="vertical-align:top;">
+                        <div style="font-family:var(--font-mono); font-weight:700; color:${(m.bloodBagsFilled || 0) > 0 ? 'var(--accent-cyan, #06b6d4)' : 'var(--text-tertiary)'}; font-size:1.05em;">${(m.bloodBagsFilled || 0) > 0 ? '+' + fmtNum(m.bloodBagsFilled) : '0'}</div>
+                    </td>
+                    <td style="vertical-align:top;">
                         <div style="font-family:var(--font-mono); font-weight:700; color:${m.boostersTaken > 0 ? 'var(--accent-amber)' : 'var(--text-tertiary)'}; font-size:1.05em;">${fmtNum(m.boostersTaken || 0)}</div>
                         ${boosterSubChips ? `<div style="margin-top:2px; max-width:140px;">${boosterSubChips}</div>` : ''}
                     </td>
@@ -5402,7 +5436,7 @@ function renderItemUsageTracker() {
                     </td>
                 </tr>
                 <tr id="member-drawer-${m.id}" class="member-detail-drawer" style="display:none; background:rgba(15,23,42,0.85); border-left:3px solid var(--accent-cobalt);">
-                    <td colspan="11" style="padding:14px 20px;">
+                    <td colspan="12" style="padding:14px 20px;">
                         <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:16px;">
                             <div style="background:var(--bg-elevated); border:1px solid var(--border-subtle); border-radius:8px; padding:12px;">
                                 <div style="font-weight:700; color:var(--accent-emerald); font-size:0.85em; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
@@ -5599,7 +5633,7 @@ function exportTrackerCSV() {
         showToast('No member data available to export', 'warn');
         return;
     }
-    const headers = ['Member Name', 'Torn ID', 'Deposited (+)', 'Consumed (-)', 'Items Loaned', 'Items Returned', 'Net Balance', 'Xanax Taken', 'Medical Taken', 'Boosters Taken', 'Last Active UTC'];
+    const headers = ['Member Name', 'Torn ID', 'Deposited (+)', 'Consumed (-)', 'Items Loaned', 'Items Returned', 'Net Balance', 'Xanax Taken', 'Medical Taken', 'Blood Bags Filled', 'Boosters Taken', 'Last Active UTC'];
     const rows = currentFilteredMemberList.map(m => [
         csvSafeCell(m.name || ''),
         m.id,
@@ -5610,6 +5644,7 @@ function exportTrackerCSV() {
         m.netBalance,
         m.xanaxTaken,
         m.medsTaken,
+        m.bloodBagsFilled || 0,
         m.boostersTaken,
         m.lastActionTs ? csvSafeCell(new Date(m.lastActionTs * 1000).toISOString()) : '""'
     ]);
