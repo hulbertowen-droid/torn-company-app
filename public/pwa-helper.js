@@ -170,9 +170,9 @@
             {
                 id: 'nav-armory',
                 label: 'Armory',
-                href: '/dashboard.html#armory',
+                href: '/armory.html',
                 icon: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>',
-                active: path.includes('dashboard')
+                active: path.includes('armory')
             },
             {
                 id: 'nav-gym',
@@ -251,7 +251,11 @@
                         <div class="app-tile-icon" style="background: rgba(255, 152, 0, 0.15); color: #ff9800;">📡</div>
                         <div class="app-tile-name">Warboard</div>
                     </a>
-                    <a href="/dashboard.html#armory" class="mobile-app-tile">
+                    <a href="/dashboard.html" class="mobile-app-tile">
+                        <div class="app-tile-icon" style="background: rgba(59, 130, 246, 0.15); color: #3b82f6;">📊</div>
+                        <div class="app-tile-name">Ops Overview</div>
+                    </a>
+                    <a href="/armory.html" class="mobile-app-tile">
                         <div class="app-tile-icon" style="background: rgba(0, 230, 118, 0.15); color: #00e676;">🛡️</div>
                         <div class="app-tile-name">Armory</div>
                     </a>

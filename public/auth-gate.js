@@ -432,7 +432,7 @@
         injectConnectButton();
 
         const path = getCurrentPath();
-        const requiresAuthPages = ['/dashboard.html', '/index.html', '/members.html', '/oc.html', '/payout.html', '/discord.html', '/chain.html', '/company.html'];
+        const requiresAuthPages = ['/dashboard.html', '/armory.html', '/gym-stats.html', '/index.html', '/members.html', '/oc.html', '/payout.html', '/discord.html', '/chain.html', '/company.html'];
         const isAuthRequired = requiresAuthPages.some(rp => path === rp || path.endsWith(rp.replace('/', '')));
 
         // Immediately prompt with the Connect Account modal. For required pages, disallow closing (strict gate).

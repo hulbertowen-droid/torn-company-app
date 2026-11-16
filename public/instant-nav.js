@@ -64,6 +64,8 @@
             '/oc.html',
             '/members.html',
             '/dashboard.html',
+            '/armory.html',
+            '/gym-stats.html',
             '/payout.html',
             '/company.html',
             '/travel.html',

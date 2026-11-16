@@ -894,13 +894,14 @@ body.light-mode ::-webkit-scrollbar-thumb:hover {
 }
 
 .kpi-value {
-    font-size: 1.55em;
+    font-size: clamp(1.08em, 1.25vw, 1.48em);
     font-weight: 900;
     color: var(--text-primary);
     margin-top: 2px;
-    line-height: 1.1;
+    line-height: 1.15;
     font-family: var(--font-mono);
     font-feature-settings: "tnum" 1;
+    word-break: normal;
 }
 
 .kpi-sub {

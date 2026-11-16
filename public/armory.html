@@ -1,0 +1,3175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#0d1117">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="FactionOS">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="application-name" content="FactionOS">
+    <meta name="format-detection" content="telephone=no">
+
+    <link rel="icon" type="image/svg+xml" href="/icons/icon.svg">
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
+    <link rel="apple-touch-icon" href="/icons/icon-180.png">
+    <link rel="apple-touch-icon" sizes="152x152" href="/icons/icon-152.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-180.png">
+    <title>Armory &amp; Logistics | FactionOS</title>
+    <meta name="description" content="Faction Armory & Logistics command center: usage & deposits ledger, blood bag fill tracking, medical burn rate, loaner gear audit, and low-stock alerts.">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/global.css?v=4.3.0">
+
+    <script src="/auth-gate.js?v=4.3.0"></script>
+    <script src="/global_settings.js?v=4.3.0"></script>
+    <script src="/global-topbar.js?v=4.3.0"></script>
+    <script src="/pwa-helper.js?v=1.1.0" defer></script>
+    <script src="/instant-nav.js?v=1.0.0" defer></script>
+
+    <style>
+    /* ─── Armory & Logistics Standalone Command Styling ─── */
+    .armory-hero {
+        background: linear-gradient(135deg, rgba(18, 24, 36, 0.96) 0%, rgba(12, 16, 23, 0.98) 60%, rgba(16, 28, 38, 0.96) 100%);
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-lg);
+        padding: 18px 24px;
+        margin-bottom: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        flex-wrap: wrap;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+    }
+    .armory-hero-title {
+        margin: 0;
+        font-size: 1.4em;
+        font-weight: 900;
+        letter-spacing: -0.4px;
+        color: var(--text-primary);
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+    .armory-hero-sub {
+        font-size: 0.82em;
+        color: var(--text-secondary);
+        margin-top: 4px;
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+    .armory-hero-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+
+    /* Top Armory KPI Strip */
+    .armory-kpis {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 12px;
+        margin-bottom: 16px;
+    }
+    @media (max-width: 960px) {
+        .armory-kpis { grid-template-columns: repeat(2, 1fr); }
+    }
+    .armory-kpi-clickable {
+        cursor: pointer;
+        transition: transform 0.15s ease, border-color 0.15s ease;
+    }
+    .armory-kpi-clickable:hover {
+        transform: translateY(-2px);
+        border-color: var(--accent-cobalt-border);
+    }
+
+    /* Sub-Tab Bar */
+    .armory-sub-nav {
+        display: flex;
+        gap: 6px;
+        padding-bottom: 12px;
+        border-bottom: 1px solid var(--border-default);
+        margin-bottom: 16px;
+        flex-wrap: wrap;
+    }
+    .armory-sub-tab {
+        padding: 8px 16px;
+        font-size: 0.83em;
+        font-weight: 700;
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--border-subtle);
+        background: var(--bg-card);
+        color: var(--text-secondary);
+        cursor: pointer;
+        transition: all var(--transition-fast);
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        white-space: nowrap;
+        font-family: inherit;
+    }
+    .armory-sub-tab:hover {
+        background: var(--bg-elevated);
+        color: var(--text-primary);
+        border-color: var(--accent-cobalt-border);
+    }
+    .armory-sub-tab.active {
+        background: var(--accent-cobalt-dim);
+        color: var(--accent-cobalt);
+        border-color: var(--accent-cobalt-border);
+    }
+
+    /* Subpanels & Tables */
+    .armory-subpanel {
+        background: var(--bg-card);
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-lg);
+        margin-bottom: 18px;
+        overflow: hidden;
+    }
+    .subpanel-hdr {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 14px 18px;
+        border-bottom: 1px solid var(--border-subtle);
+        background: var(--bg-elevated);
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+    .subpanel-title {
+        font-size: 1em;
+        font-weight: 800;
+        color: var(--text-primary);
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    .armory-section-toolbar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+    .armory-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.84em;
+        text-align: left;
+    }
+    .armory-table th {
+        padding: 10px 14px;
+        color: var(--text-tertiary);
+        font-weight: 800;
+        font-size: 0.74em;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        background: var(--bg-elevated);
+        border-bottom: 1px solid var(--border-default);
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        white-space: nowrap;
+    }
+    .armory-table td {
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--border-subtle);
+        color: var(--text-primary);
+    }
+    .armory-table tr:hover td {
+        background: var(--bg-hover);
+    }
+    .sortable-th {
+        cursor: pointer;
+        user-select: none;
+        transition: color 0.15s;
+    }
+    .sortable-th:hover {
+        color: var(--accent-cobalt) !important;
+    }
+
+    /* Unified 5-Card Usage & Deposits Summary Strip */
+    .armory-ledger-kpis-5 {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(160px, 1fr));
+        gap: 10px;
+        margin: 12px 16px 0;
+    }
+    @media (max-width: 1180px) {
+        .armory-ledger-kpis-5 { grid-template-columns: repeat(3, 1fr); }
+    }
+    @media (max-width: 680px) {
+        .armory-ledger-kpis-5 { grid-template-columns: repeat(2, 1fr); }
+    }
+    .ledger-kpi-card {
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-sm);
+        padding: 10px 13px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        position: relative;
+        overflow: hidden;
+    }
+    .ledger-kpi-card::after {
+        content: '';
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 2px;
+    }
+    .ledger-kpi-card.kpi-inflow::after { background: var(--accent-emerald); }
+    .ledger-kpi-card.kpi-outflow::after { background: var(--accent-crimson); }
+    .ledger-kpi-card.kpi-balance::after { background: var(--accent-cyan); }
+    .ledger-kpi-card.kpi-consumed::after { background: var(--accent-purple); }
+    .ledger-kpi-card.kpi-blood::after { background: #06b6d4; }
+
+    /* Date Bar & Filters */
+    .tracker-date-bar {
+        background: var(--bg-card);
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-md);
+        padding: 11px 15px;
+        margin-bottom: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+    .date-presets {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: wrap;
+    }
+    .date-range-inputs {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+    .date-input-field {
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-sm);
+        padding: 6px 10px;
+        font-size: 0.82em;
+        color: var(--text-primary);
+        font-family: inherit;
+        color-scheme: dark;
+    }
+    .date-input-field:focus {
+        outline: none;
+        border-color: var(--accent-cobalt);
+    }
+
+    .armory-filter-container {
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-sm);
+        padding: 10px 14px;
+        margin: 12px 16px;
+    }
+    .armory-filter-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+    .filter-group {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: wrap;
+        max-width: 100%;
+    }
+    .filter-label {
+        font-size: 0.75em;
+        font-weight: 700;
+        color: var(--text-tertiary);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        white-space: nowrap;
+    }
+    .filter-pills {
+        display: inline-flex;
+        flex-wrap: wrap;
+        max-width: 100%;
+        gap: 4px;
+        background: var(--bg-card);
+        padding: 2px;
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--border-subtle);
+    }
+    .filter-pill {
+        padding: 4px 10px;
+        font-size: 0.75em;
+        font-weight: 700;
+        border-radius: var(--radius-sm);
+        border: none;
+        background: transparent;
+        color: var(--text-secondary);
+        cursor: pointer;
+        transition: all var(--transition-fast);
+        white-space: nowrap;
+        font-family: inherit;
+    }
+    .filter-pill:hover {
+        color: var(--text-primary);
+        background: var(--bg-elevated);
+    }
+    .filter-pill.active {
+        background: var(--accent-cobalt-dim);
+        color: var(--accent-cobalt);
+        border: 1px solid var(--accent-cobalt-border);
+    }
+    .filter-active-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        background: var(--accent-cobalt-dim);
+        border: 1px solid var(--accent-cobalt-border);
+        color: var(--accent-cobalt);
+        padding: 2px 8px;
+        border-radius: var(--radius-sm);
+        font-size: 0.74em;
+        font-weight: 700;
+    }
+    .filter-active-chip .chip-remove {
+        cursor: pointer;
+        font-weight: 900;
+        margin-left: 2px;
+    }
+    .filter-active-chip .chip-remove:hover { color: var(--accent-crimson); }
+
+    /* Blood Bag Inventory Matrix Grid (New Feature) */
+    .blood-grid-layout {
+        display: grid;
+        grid-template-columns: 1.5fr 1fr;
+        gap: 16px;
+        margin-bottom: 18px;
+    }
+    @media (max-width: 980px) {
+        .blood-grid-layout { grid-template-columns: 1fr; }
+    }
+    .blood-types-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+        padding: 16px;
+    }
+    @media (max-width: 640px) {
+        .blood-types-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    .blood-type-tile {
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-md);
+        padding: 10px 12px;
+        cursor: pointer;
+        transition: border-color 0.15s ease, transform 0.12s ease;
+    }
+    .blood-type-tile:hover {
+        border-color: var(--accent-cobalt-border);
+        transform: translateY(-1px);
+    }
+    .blood-type-tile.empty-src {
+        grid-column: 1 / -1;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+        padding: 11px 16px;
+        border-color: rgba(6, 182, 212, 0.4);
+        background: rgba(6, 182, 212, 0.08);
+    }
+    .blood-type-tile.low-blood {
+        border-color: rgba(239, 68, 68, 0.35);
+    }
+    .blood-filler-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 8px 16px;
+        border-bottom: 1px solid var(--border-subtle);
+        font-size: 0.84em;
+    }
+    .blood-filler-row:last-child { border-bottom: none; }
+
+    /* Burn Rate Banner */
+    .burn-rate-banner {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 14px 18px;
+        background: linear-gradient(135deg, rgba(239, 68, 68, 0.08) 0%, rgba(245, 158, 11, 0.05) 100%);
+        border-bottom: 1px solid var(--border-subtle);
+        flex-wrap: wrap;
+    }
+    .burn-rate-banner.peace {
+        background: linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(59, 130, 246, 0.05) 100%);
+    }
+    .burn-stat-group {
+        display: flex;
+        align-items: center;
+        gap: 22px;
+        flex-wrap: wrap;
+    }
+    .burn-stat { display: flex; flex-direction: column; }
+    .burn-stat .b-lbl {
+        font-size: 0.72em;
+        text-transform: uppercase;
+        font-weight: 800;
+        color: var(--text-tertiary);
+        letter-spacing: 0.5px;
+    }
+    .burn-stat .b-val {
+        font-size: 1.35em;
+        font-weight: 900;
+        font-family: var(--font-mono);
+        color: var(--text-primary);
+    }
+
+    /* Item Usage Chips & Badges */
+    .usage-item-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-subtle);
+        padding: 2px 7px;
+        border-radius: var(--radius-sm);
+        font-size: 0.73em;
+        margin: 2px;
+        white-space: nowrap;
+        cursor: pointer;
+    }
+    .usage-item-chip.chip-inflow {
+        background: rgba(16, 185, 129, 0.1);
+        border: 1px solid rgba(16, 185, 129, 0.28);
+        color: var(--accent-emerald);
+    }
+    .usage-item-chip.chip-outflow {
+        background: rgba(239, 68, 68, 0.1);
+        border: 1px solid rgba(239, 68, 68, 0.28);
+        color: var(--accent-crimson);
+    }
+    .badge-balance-pos {
+        background: rgba(16, 185, 129, 0.15);
+        color: var(--accent-emerald);
+        border: 1px solid rgba(16, 185, 129, 0.35);
+        padding: 3px 8px;
+        border-radius: var(--radius-sm);
+        font-weight: 800;
+        font-family: var(--font-mono);
+        font-size: 0.8em;
+        white-space: nowrap;
+    }
+    .badge-balance-neg {
+        background: rgba(239, 68, 68, 0.15);
+        color: var(--accent-crimson);
+        border: 1px solid rgba(239, 68, 68, 0.35);
+        padding: 3px 8px;
+        border-radius: var(--radius-sm);
+        font-weight: 800;
+        font-family: var(--font-mono);
+        font-size: 0.8em;
+        white-space: nowrap;
+    }
+    .badge-balance-zero {
+        background: rgba(148, 163, 184, 0.15);
+        color: var(--text-tertiary);
+        border: 1px solid var(--border-subtle);
+        padding: 3px 8px;
+        border-radius: var(--radius-sm);
+        font-weight: 700;
+        font-family: var(--font-mono);
+        font-size: 0.8em;
+        white-space: nowrap;
+    }
+    .stock-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 3px 10px;
+        border-radius: var(--radius-full);
+        font-size: 0.74em;
+        font-weight: 700;
+        white-space: nowrap;
+    }
+    .stock-pill.neutral {
+        background: rgba(148, 163, 184, 0.12);
+        color: var(--text-tertiary);
+        border: 1px solid var(--border-subtle);
+    }
+    .stock-pill.warning {
+        background: rgba(245, 158, 11, 0.15);
+        color: var(--accent-amber);
+        border: 1px solid var(--accent-amber-border);
+    }
+    .stock-pill.critical {
+        background: rgba(239, 68, 68, 0.16);
+        color: var(--accent-crimson);
+        border: 1px solid rgba(239, 68, 68, 0.35);
+    }
+    .stock-pill.optimal {
+        background: rgba(16, 185, 129, 0.14);
+        color: var(--accent-emerald);
+        border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+    .badge-loan {
+        padding: 2px 8px;
+        border-radius: var(--radius-sm);
+        font-size: 0.74em;
+        font-weight: 800;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+    }
+    .badge-loan.active {
+        background: rgba(16, 185, 129, 0.15);
+        color: var(--accent-emerald);
+        border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+    .badge-loan.inactive {
+        background: rgba(245, 158, 11, 0.15);
+        color: var(--accent-amber);
+        border: 1px solid var(--accent-amber-border);
+    }
+    .badge-loan.overdue {
+        background: rgba(239, 68, 68, 0.16);
+        color: var(--accent-crimson);
+        border: 1px solid rgba(239, 68, 68, 0.35);
+    }
+    .badge-type {
+        display: inline-block;
+        padding: 2px 7px;
+        border-radius: var(--radius-sm);
+        font-size: 0.74em;
+        font-weight: 700;
+        background: rgba(59, 130, 246, 0.12);
+        color: var(--accent-cobalt);
+        border: 1px solid rgba(59, 130, 246, 0.25);
+        white-space: nowrap;
+    }
+    .badge-type.armor {
+        background: rgba(6, 182, 212, 0.12);
+        color: var(--accent-cyan);
+        border-color: rgba(6, 182, 212, 0.28);
+    }
+    .badge-primary {
+        background: rgba(59, 130, 246, 0.15);
+        color: var(--accent-cobalt);
+        border: 1px solid rgba(59, 130, 246, 0.3);
+        padding: 3px 10px;
+        border-radius: var(--radius-full);
+        font-size: 0.72em;
+        font-weight: 700;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+    }
+    .badge-warning {
+        background: rgba(245, 158, 11, 0.15);
+        color: var(--accent-amber);
+        border: 1px solid rgba(245, 158, 11, 0.35);
+        padding: 3px 10px;
+        border-radius: var(--radius-full);
+        font-size: 0.72em;
+        font-weight: 700;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+    }
+    .badge-danger {
+        background: rgba(239, 68, 68, 0.15);
+        color: var(--accent-crimson);
+        border: 1px solid rgba(239, 68, 68, 0.35);
+        padding: 3px 10px;
+        border-radius: var(--radius-full);
+        font-size: 0.72em;
+        font-weight: 700;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+    }
+    .badge-estimated {
+        display: inline-flex;
+        align-items: center;
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 0.72em;
+        font-weight: 800;
+        background: rgba(245, 158, 11, 0.14);
+        color: var(--accent-amber);
+        border: 1px solid rgba(245, 158, 11, 0.35);
+    }
+
+    /* Analyst View Switcher Pills */
+    .analyst-tabs {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+    }
+    .analyst-tab {
+        padding: 5px 12px;
+        border-radius: var(--radius-sm);
+        font-size: 0.76em;
+        font-weight: 700;
+        border: 1px solid var(--border-default);
+        background: var(--bg-card);
+        color: var(--text-secondary);
+        cursor: pointer;
+        transition: all var(--transition-fast);
+        font-family: inherit;
+    }
+    .analyst-tab:hover, .analyst-tab.active {
+        background: var(--accent-cobalt-dim);
+        color: var(--accent-cobalt);
+        border-color: var(--accent-cobalt-border);
+    }
+
+    /* Thresholds Form */
+    .thresh-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+        gap: 14px;
+        margin-bottom: 18px;
+    }
+    .thresh-input-wrap {
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-md);
+        padding: 12px 14px;
+    }
+    .thresh-label {
+        display: block;
+        font-size: 0.74em;
+        font-weight: 800;
+        text-transform: uppercase;
+        color: var(--text-secondary);
+        margin-bottom: 8px;
+    }
+    .thresh-input-group {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .thresh-input {
+        flex: 1;
+        background: var(--bg-card);
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-sm);
+        padding: 6px 10px;
+        font-family: var(--font-mono);
+        font-size: 0.9em;
+        font-weight: 700;
+        color: var(--text-primary);
+    }
+    .thresh-unit {
+        font-size: 0.78em;
+        color: var(--text-tertiary);
+        font-weight: 600;
+    }
+    .thresh-toggle-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 14px;
+        border-top: 1px solid var(--border-subtle);
+        padding-top: 16px;
+    }
+
+    /* Buttons, Inputs, Modal, Toast */
+    .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        font-family: inherit;
+        font-weight: 700;
+        border-radius: var(--radius-sm);
+        border: 1px solid transparent;
+        cursor: pointer;
+        transition: all var(--transition-fast);
+        text-decoration: none;
+        line-height: 1.2;
+        white-space: nowrap;
+    }
+    .btn-xs { padding: 4px 10px; font-size: 0.74em; }
+    .btn-sm { padding: 6px 12px; font-size: 0.78em; }
+    .btn-primary { background: var(--accent-cobalt); color: #fff; border-color: var(--accent-cobalt); }
+    .btn-primary:hover { background: #2563eb; border-color: #2563eb; color: #fff; }
+    .btn-secondary { background: var(--bg-elevated); color: var(--text-primary); border-color: var(--border-default); }
+    .btn-outline { background: transparent; border-color: var(--border-default); color: var(--text-secondary); }
+    .btn-outline:hover { border-color: var(--accent-cobalt-border); color: var(--text-primary); background: var(--bg-hover); }
+    .btn-outline-primary { background: rgba(59, 130, 246, 0.08); border-color: rgba(59, 130, 246, 0.35); color: var(--accent-cobalt); }
+    .btn-outline-warning { background: rgba(245, 158, 11, 0.08); border-color: rgba(245, 158, 11, 0.35); color: var(--accent-amber); }
+    .btn-outline-danger { background: rgba(239, 68, 68, 0.08); border-color: rgba(239, 68, 68, 0.35); color: var(--accent-crimson); }
+    .refresh-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        padding: 6px 12px;
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--border-default);
+        background: var(--bg-elevated);
+        color: var(--text-primary);
+        font-family: inherit;
+        font-size: 0.8em;
+        font-weight: 700;
+        cursor: pointer;
+        white-space: nowrap;
+    }
+    .refresh-btn:hover { border-color: var(--accent-cobalt); color: var(--accent-cobalt); }
+    select.sort-select, input.sort-select {
+        width: auto;
+        min-width: 140px;
+        max-width: 100%;
+        background: var(--bg-card);
+        color: var(--text-primary);
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-sm);
+        padding: 6px 10px;
+        font-size: 0.82em;
+        font-family: inherit;
+    }
+
+    .modal-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.75);
+        backdrop-filter: blur(4px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10000;
+        padding: 20px;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.2s ease;
+    }
+    .modal-backdrop.open { opacity: 1; pointer-events: auto; }
+    .modal-dialog {
+        background: var(--bg-card);
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-lg);
+        width: 100%;
+        max-width: 820px;
+        max-height: 85vh;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+    .modal-header {
+        padding: 14px 18px;
+        border-bottom: 1px solid var(--border-subtle);
+        background: var(--bg-elevated);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+    .modal-title { font-size: 1.02em; font-weight: 800; color: var(--text-primary); }
+    .modal-close {
+        background: transparent;
+        border: none;
+        color: var(--text-tertiary);
+        font-size: 1.2em;
+        cursor: pointer;
+        padding: 4px;
+    }
+    .modal-body { padding: 18px; overflow-y: auto; max-height: calc(85vh - 64px); }
+
+    .toast-container {
+        position: fixed;
+        top: 64px;
+        right: 20px;
+        z-index: 10001;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        max-width: calc(100vw - 24px);
+        pointer-events: none;
+    }
+    @media (max-width: 960px) {
+        .toast-container, #toast-container {
+            top: auto !important;
+            bottom: 82px !important;
+            right: 12px !important;
+            left: 12px !important;
+            max-width: none !important;
+        }
+    }
+    .toast-msg {
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-md);
+        padding: 10px 16px;
+        font-size: 0.85em;
+        font-weight: 600;
+        color: var(--text-primary);
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        pointer-events: auto;
+    }
+    .toast-msg.success { border-color: rgba(16, 185, 129, 0.5); }
+    .toast-msg.warn { border-color: rgba(245, 158, 11, 0.5); color: var(--accent-amber); }
+    .toast-msg.error { border-color: rgba(239, 68, 68, 0.5); color: var(--accent-crimson); }
+
+    /* Light Mode Overrides */
+    body.light-mode .armory-hero {
+        background: linear-gradient(135deg, #f8fafc 0%, #eef2ff 100%);
+        border-color: #cbd5e1;
+        box-shadow: 0 4px 18px rgba(15, 23, 42, 0.08);
+    }
+    body.light-mode .date-input-field { color-scheme: light; }
+    body.light-mode .filter-pill { background: #f1f5f9; color: #334155; border: 1px solid #cbd5e1; }
+    body.light-mode .filter-pill.active { background: rgba(37, 99, 235, 0.14); color: #1d4ed8; border-color: #3b82f6; }
+    body.light-mode .member-detail-drawer { background: #f8fafc !important; }
+    body.light-mode .modal-backdrop { background: rgba(15, 23, 42, 0.45); }
+
+    @media (max-width: 768px) {
+        .armory-hero { padding: 14px 16px; }
+        .main-content { padding: 14px !important; }
+        select.sort-select, input.sort-select { min-width: 0; width: 100%; }
+    }
+    </style>
+</head>
+<body>
+    <nav class="sidebar" id="app-sidebar">
+        <div class="sidebar-header">
+            <div class="sidebar-logo">
+                <span class="brand-icon">🕷️</span>
+                <span class="brand-text">FactionOS</span>
+            </div>
+            <div class="sidebar-actions">
+                <button class="theme-toggle" onclick="toggleTheme()" title="Toggle Dark/Light Mode">🌗</button>
+                <button class="toggle-btn" onclick="toggleSidebar()" title="Collapse Sidebar">☰</button>
+            </div>
+        </div>
+        <div class="nav-items">
+            <div class="nav-section-title">Live Operations</div>
+            <a href="/" class="nav-link"><span class="nav-icon">📡</span> <span class="nav-text">Live Warboard</span></a>
+            <a href="/chain.html" class="nav-link"><span class="nav-icon">🔗</span> <span class="nav-text">Chain Sentinel</span></a>
+            <a href="/dashboard.html" class="nav-link"><span class="nav-icon">📊</span> <span class="nav-text">Operations Overview</span></a>
+            <a href="/armory.html" class="nav-link active" id="nav-link-armory">
+                <span class="nav-icon">🛡️</span>
+                <span class="nav-text">Armory &amp; Logistics</span>
+                <span class="badge-danger" id="nav-armory-badge" style="display:none; margin-left:auto;">0 Low</span>
+            </a>
+            <a href="/gym-stats.html" class="nav-link"><span class="nav-icon">🏋️</span> <span class="nav-text">Gym &amp; Stat Tracker</span></a>
+            <a href="/payout.html" class="nav-link"><span class="nav-icon">💰</span> <span class="nav-text">War Payouts</span></a>
+            <a href="/members.html" class="nav-link"><span class="nav-icon">👥</span> <span class="nav-text">Faction Roster</span></a>
+            <a href="/oc.html" class="nav-link"><span class="nav-icon">💼</span> <span class="nav-text">OC Manager</span></a>
+
+            <div class="nav-section-title">Tactical Desk</div>
+            <a href="/dashboard.html#sentinel" class="nav-link"><span class="nav-icon">✈️</span> <span class="nav-text">Airspace &amp; War Intel</span></a>
+            <a href="/travel.html" class="nav-link"><span class="nav-icon">🌍</span> <span class="nav-text">Travel Profit Desk</span></a>
+            <a href="/bazaar.html" class="nav-link"><span class="nav-icon">🛒</span> <span class="nav-text">Market &amp; Bazaar</span></a>
+            <a href="/company.html" class="nav-link"><span class="nav-icon">🏢</span> <span class="nav-text">Company Hub</span></a>
+            <a href="/gamble.html" class="nav-link"><span class="nav-icon">🎰</span> <span class="nav-text">Casino Analytics</span></a>
+            <a href="/recruit/" class="nav-link" title="Recruit Engine is currently in early development and not usable"><span class="nav-icon">🎯</span> <span class="nav-text">Recruit Engine</span> <span class="nav-badge-dev">Early Dev</span></a>
+
+            <div class="nav-section-title">Intelligence &amp; Alerts</div>
+            <a href="/ai-sandbox.html" class="nav-link"><span class="nav-icon">🤖</span> <span class="nav-text">F.R.I.D.A.Y. Intel</span></a>
+            <a href="/discord.html" class="nav-link"><span class="nav-icon">📢</span> <span class="nav-text">Discord Sentinel</span></a>
+            <a href="/bugs.html" class="nav-link"><span class="nav-icon">🐛</span> <span class="nav-text">Bug Tracker</span></a>
+            <a onclick="openGlobalSettings ? openGlobalSettings() : openSettings()" class="nav-link" style="cursor:pointer; margin-top:4px;"><span class="nav-icon">⚙️</span> <span class="nav-text">Settings</span></a>
+        </div>
+        <div class="sidebar-footer" id="sidebar-user-footer">
+            <div class="sidebar-user-chip" onclick="openGlobalSettings ? openGlobalSettings() : openSettings()" style="cursor:pointer;" title="Account &amp; API Settings">
+                <div class="sidebar-user-avatar" id="nav-user-avatar">🕷️</div>
+                <div class="sidebar-user-info">
+                    <span class="sidebar-user-name" id="nav-user-name">Tactical Operative</span>
+                    <span class="sidebar-user-faction" id="nav-user-sub">Faction Operations</span>
+                </div>
+                <span style="color:var(--text-tertiary); font-size:0.9em;">⚙️</span>
+            </div>
+        </div>
+    </nav>
+
+    <div class="main-wrapper">
+        <header class="app-topbar">
+            <div class="topbar-left">
+                <button class="toggle-btn" onclick="toggleSidebar()" title="Toggle Sidebar" id="mobile-nav-toggle" style="display:none;">☰</button>
+                <div class="topbar-crumb" id="topbar-breadcrumb">
+                    <span>OPERATIONS</span> / <span>ARMORY &amp; LOGISTICS</span> / <strong id="crumb-active-sub" style="color:var(--text-primary);">USAGE &amp; DEPOSITS</strong>
+                </div>
+            </div>
+            <div class="topbar-right">
+                <div class="tct-clock-chip" title="Torn City Time (TCT)">
+                    <span class="tct-label">TCT</span>
+                    <span id="global-tct-clock">--:--:--</span>
+                </div>
+                <div class="telemetry-chip live-ws" id="global-ws-badge" title="Data Feed Status">
+                    <span class="pulse-indicator"></span>
+                    <span id="global-ws-status">LIVE</span>
+                </div>
+                <button class="btn btn-secondary btn-sm" onclick="loadArmoryAll(true)" title="Refresh Armory Data" style="padding:4px 8px;">⟳</button>
+                <button class="btn btn-secondary btn-sm" onclick="openGlobalSettings ? openGlobalSettings() : openSettings()" title="Settings" style="padding:4px 8px;">⚙️</button>
+            </div>
+        </header>
+
+        <main class="main-content" id="main-content" style="padding: 20px 24px;">
+            <!-- HERO COMMAND HEADER -->
+            <div class="armory-hero">
+                <div>
+                    <h1 class="armory-hero-title">
+                        <span>🛡️ Armory &amp; Logistics Command</span>
+                        <span id="armory-hero-health-pill" class="stock-pill neutral">⏳ Syncing...</span>
+                    </h1>
+                    <div class="armory-hero-sub">
+                        <span id="armory-hero-faction">Faction Supply Ledger • Exact In-Armory Blood Bag Fill Tracking</span>
+                        <span style="color:var(--text-tertiary);">•</span>
+                        <span id="last-updated" style="font-family:var(--font-mono); color:var(--text-tertiary);">Fetching armory data...</span>
+                    </div>
+                </div>
+                <div class="armory-hero-actions">
+                    <a href="https://www.torn.com/factions.php?step=your#/tab=armoury&sub=donator" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-primary">
+                        <span>📦</span> Donate Supplies ↗
+                    </a>
+                    <a href="https://www.torn.com/factions.php?step=your#/tab=armoury" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline">
+                        <span>🔫</span> Torn Armory ↗
+                    </a>
+                    <button class="btn btn-sm btn-primary" onclick="loadArmoryAll(true)" id="btn-refresh-armory">
+                        <span>↻</span> Refresh All
+                    </button>
+                </div>
+            </div>
+
+            <!-- RESTRICTED KEY BANNER -->
+            <div id="armory-limited-banner" style="display:none; background:rgba(245,158,11,0.1); border:1px solid rgba(245,158,11,0.35); border-radius:10px; padding:12px 16px; margin-bottom:16px; font-size:0.84em; color:var(--text-primary); align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+                <div>
+                    <strong style="color:var(--accent-amber);">🔐 Restricted Faction Armory Key:</strong>
+                    <span>Your API key only accesses Weapons, Armor &amp; Active Loans. Medical Stock, Drugs, Boosters, Vault Cash &amp; Armory Logs require Faction API Access permissions.</span>
+                </div>
+                <span class="badge-estimated">Gear &amp; Loans Only</span>
+            </div>
+
+            <!-- 4-CARD ARMORY KPI STRIP (Interactive) -->
+            <div class="armory-kpis">
+                <div class="kpi-card kpi-emerald armory-kpi-clickable" onclick="switchArmorySubTab('usage')" title="View Ledger Flow">
+                    <div class="kpi-icon">🏦</div>
+                    <div class="kpi-content">
+                        <div class="kpi-label">Vault Cash &amp; Points</div>
+                        <div class="kpi-value" id="armory-kpi-cash" style="color:var(--accent-emerald);">$0</div>
+                        <div class="kpi-sub" id="armory-kpi-points">0 Faction Points</div>
+                    </div>
+                </div>
+                <div class="kpi-card kpi-cyan armory-kpi-clickable" onclick="switchArmorySubTab('stock')" title="Inspect Medical Stock &amp; Blood Bag Matrix">
+                    <div class="kpi-icon">🩸</div>
+                    <div class="kpi-content">
+                        <div class="kpi-label">Medical &amp; Blood Stock</div>
+                        <div class="kpi-value" id="armory-kpi-meds">0</div>
+                        <div class="kpi-sub" id="armory-kpi-blood-sub">Blood bags &amp; kits</div>
+                    </div>
+                </div>
+                <div class="kpi-card kpi-amber armory-kpi-clickable" onclick="switchArmorySubTab('arsenal')" title="Jump to Loaned Weapons &amp; Armor">
+                    <div class="kpi-icon">🪖</div>
+                    <div class="kpi-content">
+                        <div class="kpi-label">Active Member Loans</div>
+                        <div class="kpi-value" id="armory-kpi-loans" style="color:var(--accent-amber);">0</div>
+                        <div class="kpi-sub" id="armory-kpi-loans-sub">0 Overdue</div>
+                    </div>
+                </div>
+                <div class="kpi-card kpi-crimson armory-kpi-clickable" onclick="switchArmorySubTab('stock', 'low')" title="Jump to Low-Stock Reserves">
+                    <div class="kpi-icon">🚨</div>
+                    <div class="kpi-content">
+                        <div class="kpi-label">Low-Stock Warnings</div>
+                        <div class="kpi-value" id="armory-kpi-low" style="color:var(--accent-crimson);">0</div>
+                        <div class="kpi-sub" id="armory-kpi-health">Syncing...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ARMORY SUB-TAB NAVIGATION -->
+            <div class="armory-sub-nav" id="armory-sub-nav">
+                <button class="armory-sub-tab active" id="asub-tab-usage" onclick="switchArmorySubTab('usage')">
+                    <span>📊</span> Usage &amp; Deposits
+                </button>
+                <button class="armory-sub-tab" id="asub-tab-stock" onclick="switchArmorySubTab('stock')">
+                    <span>💊</span> Stock, Burn Rate &amp; Blood Bags
+                </button>
+                <button class="armory-sub-tab" id="asub-tab-arsenal" onclick="switchArmorySubTab('arsenal')">
+                    <span>🔫</span> Weapons, Armor &amp; Loans
+                </button>
+                <button class="armory-sub-tab" id="asub-tab-thresholds" onclick="switchArmorySubTab('thresholds')">
+                    <span>⚙️</span> Safety Thresholds &amp; Alerts
+                </button>
+            </div>
+
+            <!-- SUB-PANE 1: USAGE & DEPOSITS -->
+            <div class="armory-sub-pane" id="asub-pane-usage">
+                <!-- DATE RANGE SELECTOR & QUICK PRESETS -->
+                <div class="tracker-date-bar">
+                    <div class="date-presets">
+                        <button class="filter-pill" data-preset="today" onclick="setTrackerPreset('today', this)">📅 Today</button>
+                        <button class="filter-pill" data-preset="3d" onclick="setTrackerPreset('3d', this)">📅 Last 3 Days</button>
+                        <button class="filter-pill active" data-preset="7d" onclick="setTrackerPreset('7d', this)">📅 Last 7 Days</button>
+                        <button class="filter-pill" data-preset="month" onclick="setTrackerPreset('month', this)">📅 Current Month</button>
+                        <button class="filter-pill" data-preset="lastwar" onclick="setTrackerPreset('lastwar', this)">⚔️ Last Ranked War</button>
+                    </div>
+                    <div class="date-range-inputs">
+                        <span id="tracker-active-war-badge" style="display:none; font-size:0.78em; padding:4px 10px; border-radius:6px; background:rgba(59,130,246,0.18); color:var(--accent-cobalt); border:1px solid rgba(59,130,246,0.35); font-weight:700; align-items:center; gap:5px;"></span>
+                        <input type="date" id="tracker-date-from" class="date-input-field" title="Start Date (TCT)">
+                        <span style="color:var(--text-tertiary); font-weight:700;">→</span>
+                        <input type="date" id="tracker-date-to" class="date-input-field" title="End Date (TCT)">
+                        <button class="btn btn-sm btn-primary" id="btn-fetch-tracker" onclick="fetchConsumptionData({ force: true })">
+                            <span id="tracker-fetch-icon">📥</span> Query Ledger
+                        </button>
+                    </div>
+                </div>
+
+                <!-- UNIFIED LEDGER SUBPANEL -->
+                <div class="armory-subpanel">
+                    <div class="subpanel-hdr">
+                        <div class="subpanel-title">
+                            <span>👥 Member Consumption &amp; Deposit Ledger</span>
+                            <span id="usage-total-badge" class="badge-primary">Syncing activity...</span>
+                        </div>
+                        <div class="armory-section-toolbar">
+                            <div class="analyst-tabs">
+                                <button class="analyst-tab active" id="btn-view-consumers" onclick="setUsageView('members', this)">👥 By Member</button>
+                                <button class="analyst-tab" id="btn-view-items" onclick="setUsageView('items', this)">📦 By Item</button>
+                                <button class="analyst-tab" id="btn-view-feed" onclick="setUsageView('feed', this)">⏱️ Transaction Feed</button>
+                            </div>
+                            <button class="btn btn-sm btn-outline" id="btn-fetch-deep-history" onclick="fetchDeepArmoryHistory()" title="Fetch up to 90 days of armory logs from Torn API">
+                                <span>📥 Deep History (90d)</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- CLEAN 5-CARD UNIFIED FLOW & CATEGORY STRIP -->
+                    <div class="armory-ledger-kpis-5">
+                        <div class="ledger-kpi-card kpi-inflow">
+                            <div style="font-size:1.5em;">🟢</div>
+                            <div style="min-width:0;">
+                                <div style="font-size:0.68em; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-tertiary); font-weight:700;">Deposited / Inflow</div>
+                                <div id="ledger-kpi-deposited" style="font-size:1.25em; font-weight:900; font-family:var(--font-mono); color:var(--accent-emerald);">+0</div>
+                                <div id="ledger-kpi-deposited-sub" style="font-size:0.7em; color:var(--text-tertiary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Donations &amp; Returns</div>
+                            </div>
+                        </div>
+                        <div class="ledger-kpi-card kpi-outflow">
+                            <div style="font-size:1.5em;">🔴</div>
+                            <div style="min-width:0;">
+                                <div style="font-size:0.68em; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-tertiary); font-weight:700;">Used / Outflow</div>
+                                <div id="ledger-kpi-used" style="font-size:1.25em; font-weight:900; font-family:var(--font-mono); color:var(--accent-crimson);">-0</div>
+                                <div id="ledger-kpi-used-sub" style="font-size:0.7em; color:var(--text-tertiary);">Consumed &amp; Loaned</div>
+                            </div>
+                        </div>
+                        <div class="ledger-kpi-card kpi-balance">
+                            <div style="font-size:1.5em;">⚖️</div>
+                            <div style="min-width:0;">
+                                <div style="font-size:0.68em; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-tertiary); font-weight:700;">Net Delta &amp; Active</div>
+                                <div id="ledger-kpi-net" style="font-size:1.25em; font-weight:900; font-family:var(--font-mono); color:var(--accent-cyan);">0</div>
+                                <div id="ledger-kpi-net-sub" style="font-size:0.7em; color:var(--text-tertiary);">0 active members</div>
+                            </div>
+                        </div>
+                        <div class="ledger-kpi-card kpi-consumed">
+                            <div style="font-size:1.5em;">💊</div>
+                            <div style="min-width:0; width:100%;">
+                                <div style="font-size:0.68em; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-tertiary); font-weight:700;">Used Breakdown</div>
+                                <div style="font-size:0.86em; font-weight:800; font-family:var(--font-mono); display:flex; gap:8px; flex-wrap:wrap; margin-top:2px;">
+                                    <span title="Xanax / Drugs Used" style="color:var(--accent-purple);">💊 <span id="tkpi-xanax">0</span></span>
+                                    <span title="Medical Items Used" style="color:var(--accent-cobalt);">🩹 <span id="tkpi-medical">0</span></span>
+                                    <span title="Boosters / Cans Used" style="color:var(--accent-amber);">🥫 <span id="tkpi-boosters">0</span></span>
+                                </div>
+                                <div id="tkpi-top-summary" style="font-size:0.68em; color:var(--text-tertiary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:2px;">Top: —</div>
+                            </div>
+                        </div>
+                        <div class="ledger-kpi-card kpi-blood" style="cursor:pointer;" onclick="setTrackerTab('bloodfillers', document.querySelector('#tracker-segment-pills .filter-pill:nth-child(5)'))" title="Filter to members filling faction Empty Blood Bags">
+                            <div style="font-size:1.5em;">🩸</div>
+                            <div style="min-width:0;">
+                                <div style="font-size:0.68em; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-tertiary); font-weight:700;">Empty Bags Filled</div>
+                                <div id="ledger-kpi-blood-filled" style="font-size:1.25em; font-weight:900; font-family:var(--font-mono); color:#06b6d4;">0</div>
+                                <div id="ledger-kpi-blood-sub" style="font-size:0.7em; color:var(--text-tertiary);">0 fillers in armory</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- FILTER CONTROLS & EXPORT BAR -->
+                    <div class="armory-filter-container">
+                        <div class="armory-filter-row" style="margin-bottom:8px;">
+                            <div class="filter-group">
+                                <span class="filter-label">👥 Member Segment:</span>
+                                <div class="filter-pills" id="tracker-segment-pills">
+                                    <button class="filter-pill active" onclick="setTrackerTab('all', this)">All Members</button>
+                                    <button class="filter-pill" onclick="setTrackerTab('deficit', this)">🔴 Net Consumers (Net &lt; 0)</button>
+                                    <button class="filter-pill" onclick="setTrackerTab('donors', this)">🟢 Net Donors (Net &gt; 0)</button>
+                                    <button class="filter-pill" onclick="setTrackerTab('xanax', this)">💊 Xanax Users</button>
+                                    <button class="filter-pill" onclick="setTrackerTab('bloodfillers', this)">🩸 Blood Bag Fillers</button>
+                                    <button class="filter-pill" onclick="setTrackerTab('freeload', this)">😴 0 Deposited</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="armory-filter-row">
+                            <div class="filter-group">
+                                <span class="filter-label">⚡ Action:</span>
+                                <div class="filter-pills" id="action-pills">
+                                    <button class="filter-pill active" onclick="setArmoryActionFilter('all', this)">All Activity</button>
+                                    <button class="filter-pill" onclick="setArmoryActionFilter('inflow', this)">🟢 Deposits (+)</button>
+                                    <button class="filter-pill" onclick="setArmoryActionFilter('outflow', this)">🔴 Used (-)</button>
+                                    <button class="filter-pill" onclick="setArmoryActionFilter('filled', this)">🩸 Filled Blood Bags</button>
+                                    <button class="filter-pill" onclick="setArmoryActionFilter('loans', this)">🪖 Loans/Returns</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="armory-filter-row" style="margin-top:8px;">
+                            <div class="filter-group">
+                                <span class="filter-label">🏷️ Category:</span>
+                                <select id="armory-cat-filter" class="sort-select" onchange="setArmoryCategoryFilter(this.value)" style="padding:5px 10px; font-size:0.8em;">
+                                    <option value="all">All Categories</option>
+                                    <option value="Medical">💊 Medical</option>
+                                    <option value="Drug">💉 Drugs</option>
+                                    <option value="Booster">🥫 Boosters</option>
+                                    <option value="Arsenal">🔫 Arsenal (Weapons/Armor)</option>
+                                    <option value="Other">📦 Other Items</option>
+                                </select>
+                            </div>
+                            <div class="filter-group">
+                                <span class="filter-label">📦 Item:</span>
+                                <select id="armory-item-select" class="sort-select" onchange="setArmoryItemFilter(this.value)" style="padding:5px 10px; font-size:0.8em; max-width:190px;">
+                                    <option value="all">All Items</option>
+                                </select>
+                            </div>
+                            <div class="filter-group" style="flex-grow:1;">
+                                <input type="text" id="usage-search" placeholder="🔍 Search member name, ID, or item..." class="sort-select" style="width:100%; min-width:180px; padding:5px 12px; font-size:0.82em;" oninput="filterUsageDebounced()">
+                            </div>
+                            <div class="filter-group" style="margin-left:auto; gap:6px;">
+                                <button class="btn btn-sm btn-outline" id="btn-copy-tracker-discord" onclick="copyTrackerDiscord()" title="Copy clean list of empty blood bags filled per member and faction total for Discord">
+                                    <span>💬</span> Copy Discord Summary
+                                </button>
+                                <button class="btn btn-sm btn-outline" onclick="exportTrackerCSV()" title="Download CSV ledger of member armory usage">
+                                    <span>📊</span> Export CSV
+                                </button>
+                                <button class="reset-filter-btn" id="btn-reset-armory-filters" onclick="resetArmoryFilters()" style="display:none; padding:5px 12px; font-size:0.78em; border-radius:var(--radius-sm); border:1px solid var(--accent-crimson-border); background:rgba(239,68,68,0.12); color:var(--accent-crimson); font-weight:700; cursor:pointer;">
+                                    ✕ Reset Filters
+                                </button>
+                            </div>
+                        </div>
+
+                        <div id="armory-active-filter-chips" style="display:none; margin-top:8px; flex-wrap:wrap; gap:6px; align-items:center;"></div>
+                    </div>
+
+                    <!-- USAGE VIEW 1: BY MEMBER -->
+                    <div id="usage-view-members" class="scrollable" style="max-height:520px; overflow-x:auto;">
+                        <table class="armory-table" id="tracker-member-table">
+                            <thead>
+                                <tr>
+                                    <th class="sortable-th" onclick="sortUsageMembers('name')">Member <span id="sort-ind-name">↕</span></th>
+                                    <th class="sortable-th" onclick="sortUsageMembers('deposited')" style="min-width:170px;">Deposited (+) <span id="sort-ind-deposited">↕</span></th>
+                                    <th class="sortable-th" onclick="sortUsageMembers('used')" style="min-width:170px;">Used (-) <span id="sort-ind-used">↕</span></th>
+                                    <th class="sortable-th" onclick="sortUsageMembers('loaned')">Loaned Out <span id="sort-ind-loaned">↕</span></th>
+                                    <th class="sortable-th" onclick="sortUsageMembers('returned')">Returned <span id="sort-ind-returned">↕</span></th>
+                                    <th class="sortable-th" onclick="sortUsageMembers('net')">Net Balance <span id="sort-ind-net">↕</span></th>
+                                    <th class="sortable-th" onclick="sortUsageMembers('xanax')">Xanax <span id="sort-ind-xanax">↕</span></th>
+                                    <th class="sortable-th" onclick="sortUsageMembers('medical')">Medical <span id="sort-ind-medical">↕</span></th>
+                                    <th class="sortable-th" onclick="sortUsageMembers('bloodFilled')">Blood Filled <span id="sort-ind-bloodFilled">↕</span></th>
+                                    <th class="sortable-th" onclick="sortUsageMembers('boosters')">Boosters <span id="sort-ind-boosters">↕</span></th>
+                                    <th class="sortable-th" onclick="sortUsageMembers('lastActive')" style="text-align:right;">Last Active <span id="sort-ind-lastActive">↕</span></th>
+                                    <th style="text-align:center;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="usage-members-tbody">
+                                <tr><td colspan="12" style="text-align:center; padding:24px; color:var(--text-tertiary);">Loading member armory ledger...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- USAGE VIEW 2: BY ITEM -->
+                    <div id="usage-view-items" class="scrollable" style="max-height:520px; overflow-x:auto; display:none;">
+                        <table class="armory-table">
+                            <thead>
+                                <tr>
+                                    <th>Item Name</th>
+                                    <th>Category</th>
+                                    <th>Deposited (+)</th>
+                                    <th>Used (-)</th>
+                                    <th>Net Flow</th>
+                                    <th>Top Contributors</th>
+                                    <th>Top Consumers</th>
+                                </tr>
+                            </thead>
+                            <tbody id="usage-items-tbody">
+                                <tr><td colspan="7" style="text-align:center; padding:24px; color:var(--text-tertiary);">Loading item utilization breakdown...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- USAGE VIEW 3: TRANSACTION AUDIT FEED -->
+                    <div id="usage-view-feed" class="scrollable" style="max-height:520px; overflow-x:auto; display:none;">
+                        <table class="armory-table">
+                            <thead>
+                                <tr>
+                                    <th>Time (TCT)</th>
+                                    <th>Member</th>
+                                    <th>Action</th>
+                                    <th>Qty</th>
+                                    <th>Item Name</th>
+                                    <th>Category</th>
+                                    <th>Transaction Detail</th>
+                                </tr>
+                            </thead>
+                            <tbody id="usage-feed-tbody">
+                                <tr><td colspan="7" style="text-align:center; padding:24px; color:var(--text-tertiary);">Loading chronological armory transaction feed...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SUB-PANE 2: STOCK, BURN RATE & BLOOD BAG PREP MATRIX -->
+            <div class="armory-sub-pane" id="asub-pane-stock" style="display:none;">
+                <!-- NEW: BLOOD BAG MATRIX & DRIVE LEADERBOARD -->
+                <div class="blood-grid-layout">
+                    <div class="armory-subpanel" style="margin-bottom:0;">
+                        <div class="subpanel-hdr">
+                            <div class="subpanel-title">
+                                <span>🩸 Blood Bag Vault Matrix</span>
+                                <span id="blood-matrix-total-badge" class="badge-primary">0 total</span>
+                            </div>
+                            <span id="blood-empty-ready-pill" class="stock-pill neutral">Empty: 0</span>
+                        </div>
+                        <div class="blood-types-grid" id="blood-types-grid">
+                            <div style="grid-column:1/-1; text-align:center; padding:18px; color:var(--text-tertiary);">Syncing blood bag reserves...</div>
+                        </div>
+                    </div>
+
+                    <div class="armory-subpanel" style="margin-bottom:0;">
+                        <div class="subpanel-hdr">
+                            <div class="subpanel-title">
+                                <span>🏆 Top Blood Fillers</span>
+                            </div>
+                            <button class="btn btn-xs btn-outline-primary" onclick="copyTrackerDiscord()" title="Copy Blood Bag Fill Summary for Discord">
+                                <span>💬</span> Discord Summary
+                            </button>
+                        </div>
+                        <div id="blood-drive-leaderboard" style="padding:4px 0;">
+                            <div style="padding:24px; text-align:center; color:var(--text-tertiary); font-size:0.84em;">Loading blood bag fillers...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- MEDICAL SUPPLIES & DRUGS STOCK WITH BURN RATE -->
+                <div class="armory-subpanel">
+                    <div class="subpanel-hdr">
+                        <div class="subpanel-title">
+                            <span>💊 Medical Supplies &amp; Drugs Ledger</span>
+                            <span id="meds-count-badge" class="badge-primary">0 items</span>
+                        </div>
+                        <div class="armory-section-toolbar">
+                            <input type="text" id="meds-search" placeholder="🔍 Search medical / drugs..." class="sort-select" style="min-width:170px; padding:6px 12px; font-size:0.82em;" oninput="filterMedsDebounced()">
+                            <select id="meds-cat-filter" class="sort-select" onchange="filterMeds()" style="padding:6px 10px; font-size:0.82em;">
+                                <option value="all">All Supplies</option>
+                                <option value="medical">Medical Only</option>
+                                <option value="drugs">Drugs Only</option>
+                                <option value="boosters">Boosters &amp; Cans</option>
+                                <option value="low">⚠️ Low Reserves Only</option>
+                            </select>
+                            <button class="btn btn-sm btn-outline-warning" onclick="copyLowStockDiscordAlert()" title="Copy low-stock restock checklist for Discord">
+                                <span>📋</span> Copy Restock Alert
+                            </button>
+                            <a href="https://www.torn.com/factions.php?step=your#/tab=armoury&sub=donator" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-primary">
+                                <span>📦</span> Deposit Supplies
+                            </a>
+                        </div>
+                    </div>
+
+                    <div class="burn-rate-banner" id="burn-rate-banner">
+                        <div class="burn-stat-group">
+                            <div class="burn-stat">
+                                <span class="b-lbl">⚡ War Burn Rate</span>
+                                <span class="b-val" id="burn-rate-val">~0 meds/hr</span>
+                            </div>
+                            <div class="burn-stat">
+                                <span class="b-lbl">⏳ Estimated Reserves</span>
+                                <span class="b-val" id="burn-hours-val" style="color:var(--accent-emerald);">Optimal</span>
+                            </div>
+                            <div class="burn-stat">
+                                <span class="b-lbl">🎯 Combat Pacing</span>
+                                <span class="b-val" id="burn-pacing-val" style="font-size:1.05em; font-weight:700;">Peacetime Mode</span>
+                            </div>
+                        </div>
+                        <div style="font-size:0.82em; color:var(--text-secondary); max-width:400px;" id="burn-desc">
+                            Calculates hours of medical stock remaining based on live combat hits and hospital turnaround rate.
+                        </div>
+                    </div>
+
+                    <div class="scrollable" style="max-height:460px; overflow-x:auto;">
+                        <table class="armory-table">
+                            <thead>
+                                <tr>
+                                    <th>Item Name</th>
+                                    <th>Category</th>
+                                    <th>In Stock</th>
+                                    <th>Reserve Minimum</th>
+                                    <th>Status</th>
+                                    <th style="text-align:right;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="meds-table-body">
+                                <tr><td colspan="6" style="text-align:center; padding:20px; color:var(--text-tertiary);">Loading medical &amp; drug reserves...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SUB-PANE 3: WEAPONS, ARMOR & LOANS -->
+            <div class="armory-sub-pane" id="asub-pane-arsenal" style="display:none;">
+                <div class="armory-subpanel">
+                    <div class="subpanel-hdr">
+                        <div class="subpanel-title">
+                            <span>🔫 Weapons &amp; Defensive Armor Arsenal</span>
+                            <span id="arsenal-count-badge" class="badge-warning">0 pieces</span>
+                        </div>
+                        <div class="armory-section-toolbar">
+                            <input type="text" id="arsenal-search" placeholder="🔍 Search arsenal gear..." class="sort-select" style="min-width:170px; padding:6px 12px; font-size:0.82em;" oninput="filterArsenalDebounced()">
+                            <select id="arsenal-cat-filter" class="sort-select" onchange="filterArsenal()" style="padding:6px 10px; font-size:0.82em;">
+                                <option value="all">All Arsenal</option>
+                                <option value="weapons">Weapons Only</option>
+                                <option value="armor">Defensive Armor</option>
+                                <option value="temporary">Temporary / Grenades</option>
+                                <option value="loaned">Currently Loaned Out</option>
+                                <option value="available">Available in Vault</option>
+                            </select>
+                            <a href="https://www.torn.com/factions.php?step=your#/tab=armoury&sub=weapons" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-warning">
+                                <span>➕</span> Issue Loan on Torn
+                            </a>
+                        </div>
+                    </div>
+                    <div class="scrollable" style="max-height:380px; overflow-x:auto;">
+                        <table class="armory-table">
+                            <thead>
+                                <tr>
+                                    <th>Equipment Name</th>
+                                    <th>Category / Class</th>
+                                    <th>Available in Vault</th>
+                                    <th>Loaned Out</th>
+                                    <th>Total Owned</th>
+                                    <th>Circulation</th>
+                                    <th style="text-align:right;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="arsenal-table-body">
+                                <tr><td colspan="7" style="text-align:center; padding:20px; color:var(--text-tertiary);">Loading weapons and armor inventory...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="armory-subpanel">
+                    <div class="subpanel-hdr">
+                        <div class="subpanel-title">
+                            <span>🪖 Member Loaner Gear Ledger</span>
+                            <span id="loaner-count-badge" class="badge-danger">0 Active Loans</span>
+                        </div>
+                        <div class="armory-section-toolbar">
+                            <input type="text" id="loans-search" placeholder="🔍 Search borrower or item..." class="sort-select" style="min-width:170px; padding:6px 12px; font-size:0.82em;" oninput="filterLoansDebounced()">
+                            <select id="loans-status-filter" class="sort-select" onchange="filterLoans()" style="padding:6px 10px; font-size:0.82em;">
+                                <option value="all">All Loans</option>
+                                <option value="active">Active Members</option>
+                                <option value="inactive">⚠️ Inactive (&gt;24h)</option>
+                                <option value="overdue">🚨 Overdue (&gt;3d)</option>
+                            </select>
+                            <button class="btn btn-sm btn-outline-warning" onclick="copyOverdueLoanPings()" title="Copy overdue and inactive gear borrowers list for Discord">
+                                <span>📋</span> Copy Overdue Pings
+                            </button>
+                            <a href="https://www.torn.com/factions.php?step=your#/tab=armoury" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-danger">
+                                <span>🪖</span> Manage on Torn
+                            </a>
+                        </div>
+                    </div>
+                    <div class="scrollable" style="max-height:380px; overflow-x:auto;">
+                        <table class="armory-table">
+                            <thead>
+                                <tr>
+                                    <th>Borrower</th>
+                                    <th>Item Name</th>
+                                    <th>Category</th>
+                                    <th>Borrower Activity</th>
+                                    <th>Loan Status</th>
+                                    <th style="text-align:right;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="loans-table-body">
+                                <tr><td colspan="6" style="text-align:center; padding:20px; color:var(--text-tertiary);">Loading member loan records...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SUB-PANE 4: SAFETY THRESHOLDS & ALERTS -->
+            <div class="armory-sub-pane" id="asub-pane-thresholds" style="display:none;">
+                <div class="armory-subpanel">
+                    <div class="subpanel-hdr">
+                        <div class="subpanel-title">
+                            <span>⚙️ Low-Stock Reserves &amp; Alert Rules</span>
+                        </div>
+                        <div style="font-size:0.8em; color:var(--text-tertiary);">Configure minimum inventory safety thresholds</div>
+                    </div>
+                    <div style="padding:20px;">
+                        <div class="thresh-grid">
+                            <div class="thresh-input-wrap">
+                                <label class="thresh-label">💊 Xanax Minimum</label>
+                                <div class="thresh-input-group">
+                                    <input type="number" id="cfg-thresh-xanax" value="50" min="0" class="thresh-input">
+                                    <span class="thresh-unit">units</span>
+                                </div>
+                            </div>
+                            <div class="thresh-input-wrap">
+                                <label class="thresh-label">🩹 Small First Aid Minimum</label>
+                                <div class="thresh-input-group">
+                                    <input type="number" id="cfg-thresh-sfak" value="40" min="0" class="thresh-input">
+                                    <span class="thresh-unit">units</span>
+                                </div>
+                            </div>
+                            <div class="thresh-input-wrap">
+                                <label class="thresh-label">📦 First Aid Kit Minimum</label>
+                                <div class="thresh-input-group">
+                                    <input type="number" id="cfg-thresh-fak" value="60" min="0" class="thresh-input">
+                                    <span class="thresh-unit">units</span>
+                                </div>
+                            </div>
+                            <div class="thresh-input-wrap">
+                                <label class="thresh-label">💉 Morphine Minimum</label>
+                                <div class="thresh-input-group">
+                                    <input type="number" id="cfg-thresh-morph" value="40" min="0" class="thresh-input">
+                                    <span class="thresh-unit">units</span>
+                                </div>
+                            </div>
+                            <div class="thresh-input-wrap">
+                                <label class="thresh-label">🩸 Blood Bags Total Min</label>
+                                <div class="thresh-input-group">
+                                    <input type="number" id="cfg-thresh-blood" value="100" min="0" class="thresh-input">
+                                    <span class="thresh-unit">units</span>
+                                </div>
+                            </div>
+                            <div class="thresh-input-wrap">
+                                <label class="thresh-label">🥫 Energy Cans Total Min</label>
+                                <div class="thresh-input-group">
+                                    <input type="number" id="cfg-thresh-cans" value="30" min="0" class="thresh-input">
+                                    <span class="thresh-unit">units</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="thresh-toggle-row">
+                            <div style="display:flex; align-items:center; gap:10px;">
+                                <input type="checkbox" id="cfg-discord-dispatch" checked style="accent-color:var(--accent-cobalt); width:18px; height:18px; cursor:pointer;">
+                                <label for="cfg-discord-dispatch" style="font-size:0.85em; color:var(--text-secondary); cursor:pointer;">
+                                    Automatically dispatch Discord Sentinel alert when any reserve dips below emergency levels
+                                </label>
+                            </div>
+                            <div style="display:flex; align-items:center; gap:8px;">
+                                <button class="btn btn-sm btn-outline" onclick="resetArmoryThresholds()" style="padding:8px 16px;">↩ Reset Defaults</button>
+                                <button class="btn btn-sm btn-primary" onclick="saveArmoryThresholds()" style="padding:8px 20px;">💾 Save &amp; Apply Thresholds</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Member Transaction History Modal -->
+    <div id="member-log-modal" class="modal-backdrop" onclick="if (event.target.id === 'member-log-modal') closeMemberLogModal();">
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <div class="modal-title" id="modal-title">📋 Member Armory Log</div>
+                <button class="modal-close" onclick="closeMemberLogModal()" title="Close (Esc)">✕</button>
+            </div>
+            <div class="modal-body" id="modal-body"></div>
+        </div>
+    </div>
+
+    <div id="toast-container" class="toast-container"></div>
+
+<script>
+let myKey = localStorage.getItem('warboard_apikey') || '';
+let dashData = null;
+let currentArmoryData = null;
+let activeArmorySubTab = 'usage';
+let activeUsageView = 'members';
+
+let armoryTimeFilter = 'all';
+let armoryActionFilter = 'all';
+let armoryCategoryFilter = 'all';
+let armoryItemFilter = 'all';
+let armoryMemberFilter = '';
+let loadedArmoryEvents = [];
+let armoryInitialRangeSynced = false;
+let armoryForceNextSync = false;
+let isArmoryHistorySyncing = false;
+let armoryFetchSeq = 0;
+let trackerPreset = '7d';
+let trackerSortCol = 'net';
+let trackerSortAsc = false;
+let trackerSegmentFilter = 'all';
+let filledActionLinkedToSegment = false;
+let currentFilteredMemberList = [];
+
+function debounce(func, wait = 200) {
+    let timeout;
+    return function(...args) {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => func.apply(this, args), wait);
+    };
+}
+
+function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function fmtNum(n) { return Number(n || 0).toLocaleString(); }
+function fmtMoney(n) {
+    n = Number(n || 0);
+    if (n >= 1e9) return '$' + (n / 1e9).toFixed(2) + 'B';
+    if (n >= 1e6) return '$' + (n / 1e6).toFixed(1) + 'M';
+    if (n >= 1e3) return '$' + (n / 1e3).toFixed(0) + 'K';
+    return '$' + fmtNum(n);
+}
+function timeSince(ts) {
+    if (!ts) return '—';
+    const s = Math.floor(Date.now() / 1000) - ts;
+    if (s < 60) return s + 's ago';
+    if (s < 3600) return Math.floor(s / 60) + 'm ago';
+    if (s < 86400) return Math.floor(s / 3600) + 'h ago';
+    return Math.floor(s / 86400) + 'd ago';
+}
+
+function showToast(msg, type = 'success') {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+    const toast = document.createElement('div');
+    toast.className = `toast-msg ${type}`;
+    const icon = type === 'success' ? '✅' : (type === 'error' ? '🚨' : '⚠️');
+    toast.innerHTML = `<span>${icon}</span> <span>${escapeHtml(msg)}</span>`;
+    container.appendChild(toast);
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(10px) scale(0.95)';
+        setTimeout(() => toast.remove(), 250);
+    }, 3500);
+}
+
+window.openSettings = function() {
+    if (typeof openGlobalSettings === 'function') {
+        openGlobalSettings();
+    } else {
+        const key = prompt('Enter your Torn API Key:', localStorage.getItem('warboard_apikey') || '');
+        if (key !== null) {
+            localStorage.setItem('warboard_apikey', key.trim());
+            loadArmoryAll(true);
+        }
+    }
+};
+
+// ── Sub-Tab Routing ──
+const ARMORY_CRUMBS = {
+    usage: 'USAGE & DEPOSITS',
+    stock: 'STOCK, BURN RATE & BLOOD BAGS',
+    arsenal: 'WEAPONS, ARMOR & LOANS',
+    thresholds: 'SAFETY THRESHOLDS & ALERTS'
+};
+
+function switchArmorySubTab(tabName, stockSubFilter = null, updateHash = true) {
+    const tabs = ['usage', 'stock', 'arsenal', 'thresholds'];
+    const safeTab = tabs.includes(tabName) ? tabName : 'usage';
+    activeArmorySubTab = safeTab;
+
+    tabs.forEach(t => {
+        const pane = document.getElementById(`asub-pane-${t}`);
+        if (pane) pane.style.display = (t === safeTab) ? 'block' : 'none';
+        const btn = document.getElementById(`asub-tab-${t}`);
+        if (btn) btn.classList.toggle('active', t === safeTab);
+    });
+
+    const crumbEl = document.getElementById('crumb-active-sub');
+    if (crumbEl) crumbEl.textContent = ARMORY_CRUMBS[safeTab] || 'USAGE & DEPOSITS';
+
+    if (updateHash && window.location.hash !== `#${safeTab}`) {
+        try { window.history.replaceState(null, '', `#${safeTab}`); } catch (_) {}
+    }
+
+    if (safeTab === 'stock') {
+        if (stockSubFilter) {
+            const sel = document.getElementById('meds-cat-filter');
+            if (sel) sel.value = stockSubFilter;
+        }
+        renderBloodBagMatrix();
+        filterMeds();
+    } else if (safeTab === 'arsenal') {
+        filterArsenal();
+        filterLoans();
+    }
+}
+
+function initArmoryHash() {
+    const raw = (window.location.hash || '').replace('#', '').toLowerCase();
+    if (raw === 'stock' || raw === 'arsenal' || raw === 'thresholds' || raw === 'usage') {
+        switchArmorySubTab(raw, null, false);
+    } else {
+        switchArmorySubTab('usage', null, false);
+    }
+}
+
+window.addEventListener('hashchange', initArmoryHash);
+
+// ── Main Data Fetch & Render ──
+async function loadArmoryAll(forceRefresh = false) {
+    myKey = localStorage.getItem('warboard_apikey') || '';
+    if (forceRefresh) {
+        armoryInitialRangeSynced = false;
+        armoryForceNextSync = true;
+    }
+
+    if (!myKey && !localStorage.getItem('sv_session_token')) {
+        const lu = document.getElementById('last-updated');
+        if (lu) lu.textContent = 'Connect API key to load armory data';
+        return;
+    }
+
+    const lu = document.getElementById('last-updated');
+    if (lu) lu.textContent = 'Syncing armory...';
+
+    // Instant warm render from session cache when available and not forcing refresh
+    if (!forceRefresh) {
+        try {
+            const cachedDashStr = sessionStorage.getItem('sv_cache_dashboard');
+            const cachedWarsStr = sessionStorage.getItem('sv_cache_wars');
+            if (cachedDashStr) {
+                const cachedDash = JSON.parse(cachedDashStr);
+                const cachedWars = cachedWarsStr ? JSON.parse(cachedWarsStr) : { wars: [] };
+                if (cachedDash && !cachedDash.error) {
+                    dashData = { dash: cachedDash, wars: cachedWars };
+                    renderArmory(cachedDash);
+                }
+            }
+        } catch (_) {}
+    }
+
+    try {
+        const reqHeaders = {};
+        if (myKey) reqHeaders['x-api-key'] = myKey;
+        const tok = localStorage.getItem('sv_session_token');
+        if (tok) reqHeaders['x-session-token'] = tok;
+
+        const [dashRes, warRes] = await Promise.all([
+            fetch(`/api/dashboard-data${forceRefresh ? '?force=1' : ''}`, Object.keys(reqHeaders).length ? { headers: reqHeaders } : {}),
+            fetch(`/api/war-list`, Object.keys(reqHeaders).length ? { headers: reqHeaders } : {}).catch(() => null)
+        ]);
+        const dash = await dashRes.json();
+        const wars = warRes && warRes.ok ? await warRes.json().catch(() => ({ wars: [] })) : { wars: [] };
+
+        if (dash.error) {
+            if (lu) lu.textContent = 'Sync error';
+            showToast(dash.error, 'error');
+            return;
+        }
+
+        dashData = { dash, wars };
+        try {
+            sessionStorage.setItem('sv_cache_dashboard', JSON.stringify(dash));
+            sessionStorage.setItem('sv_cache_wars', JSON.stringify(wars));
+        } catch (_) {}
+
+        renderArmory(dash);
+        if (lu) lu.textContent = 'Updated ' + new Date().toLocaleTimeString();
+    } catch (err) {
+        console.error('loadArmoryAll error:', err);
+        if (lu) lu.textContent = 'Connection error';
+    }
+}
+
+function renderArmory(d) {
+    currentArmoryData = d;
+    const armory = d.armory || {};
+    const loans = d.loans || [];
+    const faction = d.faction || {};
+    const limitedAccess = Boolean(armory.limitedAccess);
+    const lowStock = limitedAccess ? [] : (armory.lowStockItems || []);
+    const lowCount = lowStock.length;
+    const isDataLoaded = Boolean(d.success && d.armory);
+    const totalMeds = (armory.totalMedicalItems || 0) + (armory.totalDrugs || 0);
+    const hasGearData = (armory.totalWeapons || 0) > 0 || (armory.totalArmor || 0) > 0 || loans.length > 0;
+
+    const limitedBanner = document.getElementById('armory-limited-banner');
+    if (limitedBanner) limitedBanner.style.display = limitedAccess ? 'flex' : 'none';
+
+    const heroFaction = document.getElementById('armory-hero-faction');
+    if (heroFaction) {
+        const tag = faction.tag ? `[${faction.tag}] ` : '';
+        heroFaction.textContent = `${tag}${faction.name || 'Faction'} Supply Ledger • Exact In-Armory Blood Bag Fill Tracking`;
+    }
+
+    const heroPill = document.getElementById('armory-hero-health-pill');
+    const navBadge = document.getElementById('nav-armory-badge');
+    if (heroPill) {
+        if (!isDataLoaded) {
+            heroPill.className = 'stock-pill neutral';
+            heroPill.textContent = '⏳ Syncing...';
+        } else if (limitedAccess) {
+            heroPill.className = 'stock-pill warning';
+            heroPill.textContent = '🔐 Gear Access Only';
+        } else if (lowCount > 0) {
+            heroPill.className = 'stock-pill critical';
+            heroPill.textContent = `🚨 ${lowCount} Low Stock`;
+        } else {
+            heroPill.className = 'stock-pill optimal';
+            heroPill.textContent = '🟢 100% Stocked';
+        }
+    }
+    if (navBadge) {
+        if (!isDataLoaded || limitedAccess || (!totalMeds && !hasGearData) || lowCount === 0) {
+            navBadge.style.display = 'none';
+        } else {
+            navBadge.style.display = 'inline-block';
+            navBadge.textContent = `${lowCount} Low`;
+        }
+    }
+
+    // Top 4 Armory KPIs
+    const kpiCash = document.getElementById('armory-kpi-cash');
+    const kpiPoints = document.getElementById('armory-kpi-points');
+    const kpiMeds = document.getElementById('armory-kpi-meds');
+    const kpiBloodSub = document.getElementById('armory-kpi-blood-sub');
+    const kpiLoans = document.getElementById('armory-kpi-loans');
+    const kpiLoansSub = document.getElementById('armory-kpi-loans-sub');
+    const kpiLow = document.getElementById('armory-kpi-low');
+    const kpiHealth = document.getElementById('armory-kpi-health');
+
+    const medArr = armory.medical || [];
+    const emptyBloodItem = medArr.find(m => (m.name || '').toLowerCase() === 'empty blood bag');
+    const totalBloodStock = medArr
+        .filter(m => (m.name || '').toLowerCase().includes('blood bag'))
+        .reduce((s, m) => s + Number(m.quantity || 0), 0);
+
+    if (limitedAccess) {
+        if (kpiCash) kpiCash.textContent = 'Restricted';
+        if (kpiPoints) kpiPoints.textContent = 'Vault requires Faction API';
+        if (kpiMeds) kpiMeds.textContent = 'Restricted';
+        if (kpiBloodSub) kpiBloodSub.textContent = 'Medical logs locked';
+    } else {
+        if (kpiCash) kpiCash.textContent = fmtMoney(armory.vaultCash || 0);
+        if (kpiPoints) kpiPoints.textContent = `${fmtNum(armory.vaultPoints || 0)} Faction Points`;
+        if (kpiMeds) kpiMeds.textContent = fmtNum(armory.totalMedicalItems || 0);
+        if (kpiBloodSub) {
+            kpiBloodSub.textContent = `🩸 ${fmtNum(totalBloodStock)} blood bags (${fmtNum(emptyBloodItem?.quantity || 0)} empty)`;
+        }
+    }
+
+    const overdueCount = loans.filter(l => l.loanStatus === 'overdue').length;
+    if (kpiLoans) kpiLoans.textContent = fmtNum(loans.length);
+    if (kpiLoansSub) kpiLoansSub.textContent = overdueCount > 0 ? `${overdueCount} Overdue (>3d)` : 'All borrowers active';
+    if (kpiLow) kpiLow.textContent = limitedAccess ? '—' : lowCount;
+    if (kpiHealth) {
+        if (!isDataLoaded) kpiHealth.textContent = '⏳ Syncing...';
+        else if (limitedAccess) kpiHealth.textContent = 'Gear & Loans Active';
+        else if (lowCount === 0) kpiHealth.textContent = '100% Stocked (Optimal)';
+        else kpiHealth.textContent = `${lowCount} Low-Stock Warnings`;
+    }
+
+    // Burn Rate Banner
+    const burnBanner = document.getElementById('burn-rate-banner');
+    const burnRateVal = document.getElementById('burn-rate-val');
+    const burnHoursVal = document.getElementById('burn-hours-val');
+    const burnPacingVal = document.getElementById('burn-pacing-val');
+    const burnDesc = document.getElementById('burn-desc');
+
+    if (limitedAccess && burnRateVal && burnHoursVal && burnPacingVal) {
+        burnBanner?.classList.add('peace');
+        burnRateVal.textContent = 'Restricted';
+        burnHoursVal.textContent = 'Faction API Needed';
+        burnHoursVal.style.color = 'var(--accent-amber)';
+        burnPacingVal.textContent = 'Gear & Loans Only';
+        if (burnDesc) burnDesc.textContent = 'Medical supply burn calculations require Faction API medical permissions.';
+    } else if (armory.burnRate && burnRateVal && burnHoursVal && burnPacingVal) {
+        const br = armory.burnRate;
+        if (br.warActive) {
+            burnBanner?.classList.remove('peace');
+            burnRateVal.textContent = `~${br.hourlyMedicalBurn} meds/hr`;
+            burnHoursVal.textContent = `${br.hoursRemaining}h remaining`;
+            burnHoursVal.style.color = br.hoursRemaining < 24 ? 'var(--accent-crimson)' : 'var(--accent-emerald)';
+            burnPacingVal.textContent = 'Ranked War Pacing';
+            if (burnDesc) burnDesc.textContent = `Active war consumption estimate. Sustained reserves for ~${br.hoursRemaining} hours.`;
+        } else {
+            burnBanner?.classList.add('peace');
+            burnRateVal.textContent = `~${br.hourlyMedicalBurn} meds/hr`;
+            burnHoursVal.textContent = '200h+ (Optimal)';
+            burnHoursVal.style.color = 'var(--accent-emerald)';
+            burnPacingVal.textContent = 'Peacetime Mode';
+            if (burnDesc) burnDesc.textContent = 'Faction is currently at peace. Medical burn is minimal; reserves are ready for war.';
+        }
+    }
+
+    if (d.armory?.usageStats?.recentLog?.length) {
+        mergeArmoryEvents(d.armory.usageStats.recentLog);
+        populateArmoryItemDropdown(loadedArmoryEvents);
+    }
+
+    renderItemUsageTracker();
+    renderBloodBagMatrix();
+    filterMeds();
+    filterArsenal();
+    filterLoans();
+
+    if (!armoryInitialRangeSynced && !isArmoryHistorySyncing && !d.armoryError && !limitedAccess) {
+        const useForce = armoryForceNextSync;
+        armoryInitialRangeSynced = true;
+        armoryForceNextSync = false;
+        fetchConsumptionData({ silent: true, force: useForce });
+    }
+}
+
+// ── Blood Bag Vault Matrix & Leaderboard (New Feature) ──
+function renderBloodBagMatrix() {
+    const grid = document.getElementById('blood-types-grid');
+    const totalBadge = document.getElementById('blood-matrix-total-badge');
+    const emptyPill = document.getElementById('blood-empty-ready-pill');
+    const armory = currentArmoryData?.armory || {};
+    const medList = armory.medical || [];
+
+    if (!grid) return;
+    if (armory.limitedAccess) {
+        grid.innerHTML = `<div style="grid-column:1/-1; text-align:center; padding:18px; color:var(--accent-amber);">🔐 Blood bag inventory requires Faction API Medical permissions.</div>`;
+        return;
+    }
+
+    const bloodOrder = [
+        'Empty Blood Bag',
+        'Blood Bag : O-',
+        'Blood Bag : O+',
+        'Blood Bag : A-',
+        'Blood Bag : A+',
+        'Blood Bag : B-',
+        'Blood Bag : B+',
+        'Blood Bag : AB-',
+        'Blood Bag : AB+'
+    ];
+    const stockLookup = {};
+    medList.forEach(item => {
+        if ((item.name || '').toLowerCase().includes('blood bag')) {
+            stockLookup[item.name.toLowerCase()] = Number(item.quantity || 0);
+        }
+    });
+
+    const savedThresh = getSavedArmoryThresholds();
+    const minPerType = Math.max(10, Math.round(savedThresh.blood / 8));
+    let totalFilledInStock = 0;
+
+    grid.innerHTML = bloodOrder.map(fullName => {
+        const qty = stockLookup[fullName.toLowerCase()] || 0;
+        const isEmptySrc = fullName === 'Empty Blood Bag';
+        if (!isEmptySrc) totalFilledInStock += qty;
+        const shortLabel = isEmptySrc ? 'Empty Bags' : fullName.replace('Blood Bag :', '').trim();
+        const isLow = qty < minPerType;
+        const color = isEmptySrc
+            ? '#06b6d4'
+            : (qty === 0 ? 'var(--accent-crimson)' : (isLow ? 'var(--accent-amber)' : 'var(--accent-emerald)'));
+        const statusText = isEmptySrc
+            ? (qty > 0 ? 'Ready to fill' : 'Out of empty bags')
+            : (fullName.endsWith('O-') ? 'Universal Donor' : (qty === 0 ? 'Out of stock' : (isLow ? 'Low stock' : 'Stocked')));
+
+        if (isEmptySrc) {
+            return `<div class="blood-type-tile empty-src" onclick="jumpToBloodBagItem('${escapeHtml(fullName)}')" title="Click to inspect ${escapeHtml(fullName)} history in Usage & Deposits">
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <span style="font-size:1.15em;">🧪</span>
+                    <div>
+                        <div style="font-size:0.78em; font-weight:800; color:var(--text-primary); text-transform:uppercase; letter-spacing:0.04em;">Empty Blood Bags (Source Reserve)</div>
+                        <div style="font-size:0.72em; color:var(--text-secondary);">${statusText} · Click to inspect fill &amp; deposit log</div>
+                    </div>
+                </div>
+                <div style="font-family:var(--font-mono); font-size:1.45em; font-weight:900; color:${color};">${fmtNum(qty)}</div>
+            </div>`;
+        }
+        return `<div class="blood-type-tile ${isLow ? 'low-blood' : ''}" onclick="jumpToBloodBagItem('${escapeHtml(fullName)}')" title="Click to inspect ${escapeHtml(fullName)} history in Usage & Deposits">
+            <div style="font-size:0.74em; font-weight:800; color:var(--text-tertiary); text-transform:uppercase;">${escapeHtml(shortLabel)}</div>
+            <div style="font-family:var(--font-mono); font-size:1.35em; font-weight:900; color:${color}; margin:3px 0;">${fmtNum(qty)}</div>
+            <div style="font-size:0.7em; color:var(--text-secondary);">${statusText}</div>
+        </div>`;
+    }).join('');
+
+    if (totalBadge) totalBadge.textContent = `${fmtNum(totalFilledInStock)} filled in stock`;
+    if (emptyPill) {
+        const emptyQty = stockLookup['empty blood bag'] || 0;
+        emptyPill.className = `stock-pill ${emptyQty >= 20 ? 'optimal' : (emptyQty > 0 ? 'warning' : 'critical')}`;
+        emptyPill.textContent = `Empty: ${fmtNum(emptyQty)}`;
+    }
+}
+
+function renderBloodDriveLeaderboard(memberList) {
+    const board = document.getElementById('blood-drive-leaderboard');
+    if (!board) return;
+    const topFillers = [...(memberList || [])]
+        .filter(m => Number(m.bloodBagsFilled || 0) > 0)
+        .sort((a, b) => Number(b.bloodBagsFilled) - Number(a.bloodBagsFilled))
+        .slice(0, 6);
+
+    if (!topFillers.length) {
+        board.innerHTML = `<div style="padding:22px; text-align:center; color:var(--text-tertiary); font-size:0.84em;">No empty blood bags filled in the selected window yet.</div>`;
+        return;
+    }
+
+    const total = topFillers.reduce((s, m) => s + Number(m.bloodBagsFilled || 0), 0);
+    board.innerHTML = topFillers.map((m, i) => `
+        <div class="blood-filler-row">
+            <div style="display:flex; align-items:center; gap:8px;">
+                <span style="font-family:var(--font-mono); font-weight:800; color:${i === 0 ? 'var(--accent-amber)' : 'var(--text-tertiary)'}; width:20px;">#${i + 1}</span>
+                <a href="https://www.torn.com/profiles.php?XID=${encodeURIComponent(m.id)}" target="_blank" rel="noopener noreferrer" style="color:var(--text-primary); text-decoration:none; font-weight:700;">${escapeHtml(m.name)}</a>
+            </div>
+            <span style="font-family:var(--font-mono); font-weight:800; color:#06b6d4;">🩸 +${fmtNum(m.bloodBagsFilled)}</span>
+        </div>
+    `).join('') + `<div style="padding:8px 16px; background:var(--bg-elevated); font-size:0.74em; color:var(--text-tertiary); display:flex; justify-content:space-between;">
+        <span>Top ${topFillers.length} fillers shown</span>
+        <strong>${fmtNum(total)} bags</strong>
+    </div>`;
+}
+
+function jumpToBloodBagItem(itemName) {
+    switchArmorySubTab('usage');
+    setArmoryItemFilter(itemName);
+}
+
+// ── Ledger State & History Engine ──
+function mergeArmoryEvents(incomingEvents, { replaceFromTs = 0, replaceToTs = 0 } = {}) {
+    const incoming = Array.isArray(incomingEvents) ? incomingEvents : [];
+    const baseEvents = (replaceFromTs > 0 && replaceToTs >= replaceFromTs)
+        ? loadedArmoryEvents.filter(e => {
+            const ts = Number(e?.timestamp || 0);
+            return ts < replaceFromTs || ts > replaceToTs;
+        })
+        : [...loadedArmoryEvents];
+
+    const seenKeys = new Set();
+    const existingBatchCounts = {};
+    baseEvents.forEach(e => {
+        if (e && e.newsId !== undefined && e.newsId !== null && String(e.newsId) !== '') {
+            seenKeys.add(`nid:${String(e.newsId)}`);
+        } else {
+            const sig = `${e?.timestamp || 0}_${e?.id || ''}_${e?.itemName || ''}_${e?.action || ''}`;
+            const idx = existingBatchCounts[sig] || 0;
+            existingBatchCounts[sig] = idx + 1;
+            seenKeys.add(`fb:${sig}#${idx}`);
+        }
+    });
+
+    const incomingBatchCounts = {};
+    incoming.forEach(e => {
+        let key;
+        if (e && e.newsId !== undefined && e.newsId !== null && String(e.newsId) !== '') {
+            key = `nid:${String(e.newsId)}`;
+        } else {
+            const sig = `${e?.timestamp || 0}_${e?.id || ''}_${e?.itemName || ''}_${e?.action || ''}`;
+            const idx = incomingBatchCounts[sig] || 0;
+            incomingBatchCounts[sig] = idx + 1;
+            key = `fb:${sig}#${idx}`;
+        }
+        if (!seenKeys.has(key)) {
+            baseEvents.push(e);
+            seenKeys.add(key);
+        }
+    });
+
+    baseEvents.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+    loadedArmoryEvents = baseEvents;
+}
+
+function initTrackerDates() {
+    const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
+    const weekAgoStr = new Date(now.getTime() - (86400000 * 7)).toISOString().split('T')[0];
+    const fromInput = document.getElementById('tracker-date-from');
+    const toInput = document.getElementById('tracker-date-to');
+    if (fromInput && !fromInput.value) fromInput.value = weekAgoStr;
+    if (toInput && !toInput.value) toInput.value = todayStr;
+}
+
+async function setTrackerPreset(preset, btn) {
+    trackerPreset = preset;
+    document.querySelectorAll('.date-presets .filter-pill').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+
+    const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
+    let fromStr = todayStr;
+    let toStr = todayStr;
+    let warLabel = '';
+
+    if (preset === 'today') {
+        fromStr = todayStr;
+    } else if (preset === '3d') {
+        fromStr = new Date(now.getTime() - (86400000 * 3)).toISOString().split('T')[0];
+    } else if (preset === '7d') {
+        fromStr = new Date(now.getTime() - (86400000 * 7)).toISOString().split('T')[0];
+    } else if (preset === 'month') {
+        fromStr = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+    } else if (preset === 'lastwar') {
+        let warsList = dashData?.wars?.wars || (Array.isArray(dashData?.wars) ? dashData.wars : []);
+        if (!warsList.length) {
+            try {
+                const cachedWars = JSON.parse(sessionStorage.getItem('sv_cache_wars') || '{}');
+                if (Array.isArray(cachedWars.wars)) warsList = cachedWars.wars;
+            } catch (_) {}
+        }
+        if (!warsList.length) {
+            try {
+                const h = {};
+                const tok = localStorage.getItem('sv_session_token');
+                if (tok) h['x-session-token'] = tok;
+                if (myKey) h['x-api-key'] = myKey;
+                const res = await fetch('/api/war-list', Object.keys(h).length ? { headers: h } : {});
+                const wd = await res.json();
+                if (wd && Array.isArray(wd.wars)) warsList = wd.wars;
+            } catch (_) {}
+        }
+        const sortedWars = [...warsList].sort((a, b) => Number(b.start || b.war?.start || 0) - Number(a.start || a.war?.start || 0));
+        const targetWar = sortedWars.find(w => !w.isOngoing && Number(w.end || w.war?.end || 0) > 0) || sortedWars[0];
+        const wStart = Number(targetWar?.start || targetWar?.war?.start || 0);
+        const wEnd = Number(targetWar?.end || targetWar?.war?.end || 0);
+        if (targetWar && wStart > 0) {
+            fromStr = new Date(wStart * 1000).toISOString().split('T')[0];
+            toStr = (wEnd > 0 && !targetWar.isOngoing) ? new Date(wEnd * 1000).toISOString().split('T')[0] : todayStr;
+            warLabel = `⚔️ Ranked War vs ${targetWar.enemy || targetWar.enemyFaction || 'Enemy'}: ${fromStr} → ${toStr}`;
+            showToast(warLabel, 'success');
+        } else {
+            fromStr = new Date(now.getTime() - (86400000 * 7)).toISOString().split('T')[0];
+            showToast('No ranked war found, defaulting to 7 days', 'warn');
+        }
+    }
+
+    const warBadge = document.getElementById('tracker-active-war-badge');
+    if (warBadge) {
+        if (warLabel) {
+            warBadge.textContent = warLabel;
+            warBadge.style.display = 'inline-flex';
+        } else {
+            warBadge.style.display = 'none';
+        }
+    }
+
+    const fromInput = document.getElementById('tracker-date-from');
+    const toInput = document.getElementById('tracker-date-to');
+    if (fromInput) fromInput.value = fromStr;
+    if (toInput) toInput.value = toStr;
+    await fetchConsumptionData({ force: false });
+}
+
+async function fetchConsumptionData(options = {}) {
+    const silent = Boolean(options?.silent);
+    const force = Boolean(options?.force);
+    const fromInput = document.getElementById('tracker-date-from')?.value;
+    const toInput = document.getElementById('tracker-date-to')?.value;
+    const btn = document.getElementById('btn-fetch-tracker');
+    const icon = document.getElementById('tracker-fetch-icon');
+
+    if (!fromInput || !toInput) {
+        if (!silent) showToast('Please select both Start and End dates', 'warn');
+        return;
+    }
+
+    const fromTs = Math.floor(new Date(fromInput + 'T00:00:00Z').getTime() / 1000);
+    const toTs = Math.floor(new Date(toInput + 'T23:59:59Z').getTime() / 1000);
+    if (fromTs > toTs) {
+        if (!silent) showToast('Start Date cannot be after End Date', 'error');
+        return;
+    }
+
+    const userKey = currentArmoryData?.userKey || localStorage.getItem('torn_api_key') || myKey || '';
+    const fetchSeq = ++armoryFetchSeq;
+    isArmoryHistorySyncing = true;
+    renderItemUsageTracker();
+
+    if (btn) btn.disabled = true;
+    if (icon) icon.textContent = '⏳';
+
+    try {
+        const h = {};
+        const tok = localStorage.getItem('sv_session_token');
+        if (tok) h['x-session-token'] = tok;
+        if (userKey) h['x-api-key'] = userKey;
+
+        const resp = await fetch(`/api/armory-history?from=${fromTs}&to=${toTs}&pages=80${force ? '&force=1' : ''}`, Object.keys(h).length ? { headers: h } : {});
+        const data = await resp.json();
+        if (fetchSeq !== armoryFetchSeq) return;
+        if (data.error) throw new Error(data.error);
+
+        if (data.success && data.stats && data.stats.recentLog) {
+            const fetched = data.stats.recentLog;
+            mergeArmoryEvents(fetched, { replaceFromTs: fromTs, replaceToTs: toTs });
+            armoryTimeFilter = 'all';
+            isArmoryHistorySyncing = false;
+
+            populateArmoryItemDropdown(loadedArmoryEvents);
+            renderItemUsageTracker();
+            if (data.truncated) {
+                showToast(`Loaded ${fmtNum(fetched.length)} events (hit 80-page cap — narrow date range for complete older history)`, 'warn');
+            } else if (!silent) {
+                showToast(`Loaded ${fmtNum(fetched.length)} events for ${fromInput} → ${toInput}!`, 'success');
+            }
+        } else if (!silent) {
+            showToast('No armory events found for this range.', 'warn');
+        }
+    } catch (err) {
+        console.error('fetchConsumptionData error:', err);
+        if (!silent) showToast(`Failed to fetch ledger: ${err.message}`, 'error');
+    } finally {
+        if (fetchSeq === armoryFetchSeq) {
+            isArmoryHistorySyncing = false;
+            renderItemUsageTracker();
+        }
+        if (btn) btn.disabled = false;
+        if (icon) icon.textContent = '📥';
+    }
+}
+
+async function fetchDeepArmoryHistory() {
+    const btn = document.getElementById('btn-fetch-deep-history');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span>⏳ Fetching 90d...</span>';
+    }
+    try {
+        const userKey = currentArmoryData?.userKey || localStorage.getItem('torn_api_key') || myKey || '';
+        const h = {};
+        const tok = localStorage.getItem('sv_session_token');
+        if (tok) h['x-session-token'] = tok;
+        if (userKey) h['x-api-key'] = userKey;
+        const resp = await fetch(`/api/armory-history?days=90&pages=120`, Object.keys(h).length ? { headers: h } : {});
+        const data = await resp.json();
+        if (data.success && data.stats && data.stats.recentLog) {
+            mergeArmoryEvents(data.stats.recentLog);
+            populateArmoryItemDropdown(loadedArmoryEvents);
+            renderItemUsageTracker();
+            if (btn) btn.innerHTML = `<span>✅ ${fmtNum(loadedArmoryEvents.length)} Loaded</span>`;
+            showToast(
+                data.truncated
+                    ? `Synchronized ${fmtNum(loadedArmoryEvents.length)} events (hit 120-page API limit)`
+                    : `90-day history synchronized (${fmtNum(loadedArmoryEvents.length)} total events)`,
+                data.truncated ? 'warn' : 'success'
+            );
+        } else if (btn) {
+            btn.innerHTML = '<span>⚠️ Sync failed</span>';
+        }
+    } catch (err) {
+        console.error('fetchDeepArmoryHistory error:', err);
+        if (btn) btn.innerHTML = '<span>⚠️ Fetch Failed</span>';
+    } finally {
+        setTimeout(() => {
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<span>📥 Deep History (90d)</span>';
+            }
+        }, 4000);
+    }
+}
+
+function isBloodBagFillEvent(entry) {
+    if (!entry) return false;
+    if (entry.action) return entry.action === 'filled';
+    const raw = (entry.rawText || '').toLowerCase();
+    return raw.includes('empty blood bag') && raw.includes('filled');
+}
+
+function syncActionPillUI(actionType, explicitBtn = null) {
+    const pills = [...document.querySelectorAll('#action-pills .filter-pill')];
+    pills.forEach(b => b.classList.remove('active'));
+    if (explicitBtn) {
+        explicitBtn.classList.add('active');
+        return;
+    }
+    const target = pills.find(b => (b.getAttribute('onclick') || '').includes(`'${actionType}'`));
+    if (target) target.classList.add('active');
+}
+
+function setTrackerTab(segment, btn) {
+    trackerSegmentFilter = segment;
+    document.querySelectorAll('#tracker-segment-pills .filter-pill').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+
+    if (segment === 'bloodfillers') {
+        armoryActionFilter = 'filled';
+        filledActionLinkedToSegment = true;
+        syncActionPillUI('filled');
+        if (trackerSortCol === 'net') {
+            trackerSortCol = 'bloodFilled';
+            trackerSortAsc = false;
+        }
+    } else if (filledActionLinkedToSegment) {
+        filledActionLinkedToSegment = false;
+        armoryActionFilter = 'all';
+        syncActionPillUI('all');
+        if (trackerSortCol === 'bloodFilled') {
+            trackerSortCol = 'net';
+            trackerSortAsc = false;
+        }
+    }
+
+    if (segment !== 'all' && activeUsageView !== 'members') {
+        setUsageView('members', document.getElementById('btn-view-consumers'));
+        return;
+    }
+    renderItemUsageTracker();
+}
+
+function sortUsageMembers(col) {
+    if (trackerSortCol === col) {
+        trackerSortAsc = !trackerSortAsc;
+    } else {
+        trackerSortCol = col;
+        trackerSortAsc = (col === 'name');
+    }
+    renderItemUsageTracker();
+}
+
+function setUsageView(viewMode, btn) {
+    activeUsageView = viewMode;
+    document.querySelectorAll('.armory-section-toolbar .analyst-tab').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+    const vMembers = document.getElementById('usage-view-members');
+    const vItems = document.getElementById('usage-view-items');
+    const vFeed = document.getElementById('usage-view-feed');
+    if (vMembers) vMembers.style.display = viewMode === 'members' ? 'block' : 'none';
+    if (vItems) vItems.style.display = viewMode === 'items' ? 'block' : 'none';
+    if (vFeed) vFeed.style.display = viewMode === 'feed' ? 'block' : 'none';
+    renderItemUsageTracker();
+}
+
+function setArmoryActionFilter(actionType, btn) {
+    armoryActionFilter = actionType;
+    filledActionLinkedToSegment = false;
+    syncActionPillUI(actionType, btn);
+    if (actionType === 'filled' && trackerSortCol === 'net') {
+        trackerSortCol = 'bloodFilled';
+        trackerSortAsc = false;
+    } else if (actionType !== 'filled' && trackerSortCol === 'bloodFilled') {
+        trackerSortCol = 'net';
+        trackerSortAsc = false;
+    }
+    renderItemUsageTracker();
+}
+
+function setArmoryCategoryFilter(cat) {
+    armoryCategoryFilter = cat;
+    renderItemUsageTracker();
+}
+
+function setArmoryItemFilter(itemName) {
+    armoryItemFilter = itemName;
+    const select = document.getElementById('armory-item-select');
+    if (select && select.value !== itemName) select.value = itemName;
+    renderItemUsageTracker();
+}
+
+function setArmoryMemberFilter(memberId, memberName) {
+    armoryMemberFilter = String(memberId || memberName || '');
+    renderItemUsageTracker();
+}
+
+function clearArmoryMemberFilter() {
+    armoryMemberFilter = '';
+    renderItemUsageTracker();
+}
+
+function resetArmoryFilters() {
+    armoryTimeFilter = 'all';
+    armoryActionFilter = 'all';
+    armoryCategoryFilter = 'all';
+    armoryItemFilter = 'all';
+    armoryMemberFilter = '';
+    trackerSegmentFilter = 'all';
+    filledActionLinkedToSegment = false;
+    if (trackerSortCol === 'bloodFilled') {
+        trackerSortCol = 'net';
+        trackerSortAsc = false;
+    }
+    const searchInput = document.getElementById('usage-search');
+    if (searchInput) searchInput.value = '';
+    const catSelect = document.getElementById('armory-cat-filter');
+    if (catSelect) catSelect.value = 'all';
+    const itemSelect = document.getElementById('armory-item-select');
+    if (itemSelect) itemSelect.value = 'all';
+
+    document.querySelectorAll('#tracker-segment-pills .filter-pill').forEach((b, idx) => b.classList.toggle('active', idx === 0));
+    syncActionPillUI('all');
+    renderItemUsageTracker();
+}
+
+function populateArmoryItemDropdown(events) {
+    const itemSelect = document.getElementById('armory-item-select');
+    if (!itemSelect) return;
+    const currentVal = itemSelect.value;
+    const itemCounts = {};
+    events.forEach(e => {
+        if (e.itemName) itemCounts[e.itemName] = (itemCounts[e.itemName] || 0) + 1;
+    });
+    const sortedItems = Object.keys(itemCounts).sort((a, b) => a.localeCompare(b));
+    let html = `<option value="all">📦 All Items (${sortedItems.length})</option>`;
+    sortedItems.forEach(item => {
+        const selected = item === currentVal ? 'selected' : '';
+        html += `<option value="${escapeHtml(item)}" ${selected}>${escapeHtml(item)} (${itemCounts[item]})</option>`;
+    });
+    itemSelect.innerHTML = html;
+}
+
+function formatMemberItemChips(itemsMap, type, fallbackCounts = null) {
+    let entries = (itemsMap && typeof itemsMap === 'object')
+        ? Object.entries(itemsMap).filter(([_, qty]) => qty > 0).sort((a, b) => b[1] - a[1])
+        : [];
+    if (!entries.length && fallbackCounts) {
+        entries = Object.entries(fallbackCounts).filter(([_, qty]) => qty > 0);
+    }
+    if (!entries.length) return '<span style="color:var(--text-tertiary); font-size:0.75em;">—</span>';
+
+    const cls = type === 'inflow' ? 'chip-inflow' : 'chip-outflow';
+    const sign = type === 'inflow' ? '+' : '-';
+    const shown = entries.slice(0, 6);
+    const extra = entries.length - 6;
+
+    let html = '<div style="display:flex; flex-wrap:wrap; gap:3px; margin-top:4px; max-width:250px;">';
+    html += shown.map(([name, qty]) => `<span class="usage-item-chip ${cls}" onclick="setArmoryItemFilter('${escapeHtml(name)}')" title="Filter table to ${escapeHtml(name)}">${escapeHtml(name)}: <strong>${sign}${fmtNum(qty)}</strong></span>`).join('');
+    if (extra > 0) {
+        html += `<span class="usage-item-chip" title="${escapeHtml(entries.slice(6).map(([n, q]) => `${n} (${sign}${q})`).join(', '))}" style="font-size:0.72em; color:var(--text-tertiary);">+${extra} more</span>`;
+    }
+    html += '</div>';
+    return html;
+}
+
+function renderDrawerItemPills(itemsMap, type) {
+    if (!itemsMap || typeof itemsMap !== 'object') return '<span style="color:var(--text-tertiary); font-size:0.8em;">No items recorded</span>';
+    const entries = Object.entries(itemsMap).filter(([_, q]) => q > 0).sort((a, b) => b[1] - a[1]);
+    if (!entries.length) return '<span style="color:var(--text-tertiary); font-size:0.8em;">No items recorded</span>';
+    const sign = type === 'inflow' ? '+' : '-';
+    const color = type === 'inflow' ? 'var(--accent-emerald)' : 'var(--accent-crimson)';
+    const bg = type === 'inflow' ? 'rgba(46,213,115,0.12)' : 'rgba(255,71,87,0.12)';
+    const bdr = type === 'inflow' ? 'rgba(46,213,115,0.3)' : 'rgba(255,71,87,0.3)';
+    return entries.map(([name, qty]) => `
+        <span class="usage-item-chip" onclick="setArmoryItemFilter('${escapeHtml(name)}')" style="background:${bg}; color:${color}; border:1px solid ${bdr}; font-family:var(--font-mono);">
+            <span>${escapeHtml(name)}:</span> <strong>${sign}${fmtNum(qty)}</strong>
+        </span>
+    `).join('');
+}
+
+function toggleMemberRowDrawer(id) {
+    const el = document.getElementById('member-drawer-' + id);
+    const btn = document.getElementById('btn-drawer-' + id);
+    if (!el) return;
+    const isHidden = el.style.display === 'none';
+    el.style.display = isHidden ? 'table-row' : 'none';
+    if (btn) btn.innerHTML = isHidden ? '<span>▲</span> Hide' : '<span>▼</span> Items';
+}
+
+function renderItemUsageTracker() {
+    if (!currentArmoryData?.armory?.usageStats && !loadedArmoryEvents.length) return;
+    const initialStats = currentArmoryData?.armory?.usageStats || {};
+    if (!loadedArmoryEvents.length && initialStats.recentLog?.length) {
+        mergeArmoryEvents(initialStats.recentLog);
+        populateArmoryItemDropdown(loadedArmoryEvents);
+    }
+
+    const query = (document.getElementById('usage-search')?.value || '').toLowerCase().trim();
+    const nowSec = Math.floor(Date.now() / 1000);
+    let cutoffSec = 0;
+    if (armoryTimeFilter === '24h') cutoffSec = nowSec - 86400;
+    else if (armoryTimeFilter === '3d') cutoffSec = nowSec - (86400 * 3);
+    else if (armoryTimeFilter === '7d') cutoffSec = nowSec - (86400 * 7);
+    else if (armoryTimeFilter === '30d') cutoffSec = nowSec - (86400 * 30);
+
+    const fromInputVal = document.getElementById('tracker-date-from')?.value;
+    const toInputVal = document.getElementById('tracker-date-to')?.value;
+    const rangeFromTs = fromInputVal ? Math.floor(new Date(fromInputVal + 'T00:00:00Z').getTime() / 1000) : 0;
+    const rangeToTs = toInputVal ? Math.floor(new Date(toInputVal + 'T23:59:59Z').getTime() / 1000) : 0;
+
+    // 1. Date/Search scoped events (also used for Blood Bag Leaderboard)
+    const filteredEvents = loadedArmoryEvents.filter(entry => {
+        if (cutoffSec > 0 && (entry.timestamp || 0) < cutoffSec) return false;
+        if (rangeFromTs > 0 && (entry.timestamp || 0) < rangeFromTs) return false;
+        if (rangeToTs > 0 && (entry.timestamp || 0) > rangeToTs) return false;
+
+        if (armoryActionFilter === 'inflow' && entry.type !== 'inflow') return false;
+        if (armoryActionFilter === 'outflow' && entry.type !== 'outflow') return false;
+        if (armoryActionFilter === 'filled' && !isBloodBagFillEvent(entry)) return false;
+        if (armoryActionFilter === 'loans' && entry.action !== 'loaned' && entry.action !== 'returned' && entry.action !== 'retrieved') return false;
+
+        if (armoryCategoryFilter !== 'all' && entry.category !== armoryCategoryFilter) return false;
+        if (armoryItemFilter !== 'all' && entry.itemName !== armoryItemFilter) return false;
+
+        if (armoryMemberFilter) {
+            const matchesActor = String(entry.id) === armoryMemberFilter || (entry.name && entry.name.toLowerCase() === armoryMemberFilter.toLowerCase());
+            const matchesTarget = entry.targetId && (String(entry.targetId) === armoryMemberFilter || (entry.targetName && entry.targetName.toLowerCase() === armoryMemberFilter.toLowerCase()));
+            if (!matchesActor && !matchesTarget) return false;
+        }
+
+        if (query) {
+            const hay = `${entry.name || ''} ${entry.id || ''} ${entry.itemName || ''} ${entry.action || ''} ${entry.rawText || ''} ${entry.targetName || ''}`.toLowerCase();
+            if (!hay.includes(query)) return false;
+        }
+        return true;
+    });
+
+    let totalDeposited = 0;
+    let totalUsed = 0;
+    let globalXanaxUsed = 0;
+    let globalMedsUsed = 0;
+    let globalBoostersUsed = 0;
+    let totalBloodFilled = 0;
+
+    const memberMap = {};
+    const itemMap = {};
+    const uniqueMembers = new Set();
+
+    filteredEvents.forEach(e => {
+        const pId = e.id;
+        const pName = e.name || dashData?.dash?.members?.[pId]?.name || `ID ${pId}`;
+        const qty = e.quantity || 1;
+        const nameLower = (e.itemName || '').toLowerCase();
+        const isFill = isBloodBagFillEvent(e);
+
+        uniqueMembers.add(pId);
+        if (e.targetId) uniqueMembers.add(e.targetId);
+
+        if (isFill) totalBloodFilled += qty;
+        if (e.type === 'inflow') {
+            totalDeposited += qty;
+        } else {
+            totalUsed += qty;
+            if (nameLower.includes('xanax') || e.category === 'Drug') globalXanaxUsed += qty;
+            if (e.category === 'Medical') globalMedsUsed += qty;
+            if (e.category === 'Booster') globalBoostersUsed += qty;
+        }
+
+        if (!memberMap[pId]) {
+            memberMap[pId] = {
+                id: pId,
+                name: pName,
+                totalDeposited: 0,
+                totalUsed: 0,
+                itemsLoaned: 0,
+                itemsReturned: 0,
+                netBalance: 0,
+                xanaxTaken: 0,
+                medsTaken: 0,
+                bloodBagsFilled: 0,
+                boostersTaken: 0,
+                depositedItems: {},
+                usedItems: {},
+                lastActionTs: e.timestamp
+            };
+        }
+        const m = memberMap[pId];
+        if (e.timestamp > (m.lastActionTs || 0)) m.lastActionTs = e.timestamp;
+        if (isFill) m.bloodBagsFilled += qty;
+
+        const itemKey = e.itemName || 'Unknown Item';
+        if (e.type === 'inflow') {
+            m.totalDeposited += qty;
+            m.depositedItems[itemKey] = (m.depositedItems[itemKey] || 0) + qty;
+            if (e.action === 'returned' || e.action === 'retrieved') m.itemsReturned += qty;
+        } else {
+            m.totalUsed += qty;
+            m.usedItems[itemKey] = (m.usedItems[itemKey] || 0) + qty;
+            if (e.action === 'loaned') m.itemsLoaned += qty;
+            if (nameLower.includes('xanax') || e.category === 'Drug') m.xanaxTaken += qty;
+            if (e.category === 'Medical') m.medsTaken += qty;
+            if (e.category === 'Booster') m.boostersTaken += qty;
+        }
+        m.netBalance = m.totalDeposited - m.totalUsed;
+
+        if (e.action === 'loaned' && e.targetId && e.targetId !== pId) {
+            if (!memberMap[e.targetId]) {
+                memberMap[e.targetId] = {
+                    id: e.targetId,
+                    name: e.targetName || `Player [${e.targetId}]`,
+                    totalDeposited: 0, totalUsed: 0, itemsLoaned: 0, itemsReturned: 0, netBalance: 0,
+                    xanaxTaken: 0, medsTaken: 0, bloodBagsFilled: 0, boostersTaken: 0,
+                    depositedItems: {}, usedItems: {}, lastActionTs: e.timestamp
+                };
+            }
+            const t = memberMap[e.targetId];
+            t.totalUsed += qty;
+            t.itemsLoaned += qty;
+            t.usedItems[e.itemName] = (t.usedItems[e.itemName] || 0) + qty;
+            t.netBalance = t.totalDeposited - t.totalUsed;
+            if (e.timestamp > (t.lastActionTs || 0)) t.lastActionTs = e.timestamp;
+        }
+
+        if (!itemMap[e.itemName]) {
+            itemMap[e.itemName] = { name: e.itemName, category: e.category, totalDeposited: 0, totalUsed: 0, netDelta: 0, depositorMap: {}, userMap: {}, lastActionTs: e.timestamp };
+        }
+        const it = itemMap[e.itemName];
+        if (e.timestamp > (it.lastActionTs || 0)) it.lastActionTs = e.timestamp;
+        if (e.type === 'inflow') {
+            it.totalDeposited += qty;
+            it.depositorMap[pId] = it.depositorMap[pId] || { id: pId, name: pName, count: 0 };
+            it.depositorMap[pId].count += qty;
+        } else {
+            it.totalUsed += qty;
+            const borrowerId = (e.action === 'loaned' && e.targetId) ? e.targetId : pId;
+            const borrowerName = (e.action === 'loaned' && e.targetName) ? e.targetName : pName;
+            it.userMap[borrowerId] = it.userMap[borrowerId] || { id: borrowerId, name: borrowerName, count: 0 };
+            it.userMap[borrowerId].count += qty;
+        }
+        it.netDelta = it.totalDeposited - it.totalUsed;
+    });
+
+    const netBalance = totalDeposited - totalUsed;
+    const memberList = Object.values(memberMap);
+    const itemList = Object.values(itemMap).map(i => ({
+        ...i,
+        topDepositors: Object.values(i.depositorMap).sort((a, b) => b.count - a.count).slice(0, 5),
+        topConsumers: Object.values(i.userMap).sort((a, b) => b.count - a.count).slice(0, 5)
+    })).sort((a, b) => (b.totalDeposited + b.totalUsed) - (a.totalDeposited + a.totalUsed));
+
+    renderBloodDriveLeaderboard(memberList);
+
+    const topDonor = [...memberList].sort((a, b) => b.totalDeposited - a.totalDeposited)[0];
+    const totalBadge = document.getElementById('usage-total-badge');
+    if (totalBadge) {
+        totalBadge.textContent = `${fmtNum(filteredEvents.length)} events • ${fmtNum(totalDeposited)} in / ${fmtNum(totalUsed)} out${isArmoryHistorySyncing ? ' · ⏳ Syncing full range...' : ''}`;
+    }
+
+    const kpiXanax = document.getElementById('tkpi-xanax');
+    const kpiMeds = document.getElementById('tkpi-medical');
+    const kpiBoost = document.getElementById('tkpi-boosters');
+    const kpiTopSummary = document.getElementById('tkpi-top-summary');
+    if (kpiXanax) kpiXanax.textContent = fmtNum(globalXanaxUsed);
+    if (kpiMeds) kpiMeds.textContent = fmtNum(globalMedsUsed);
+    if (kpiBoost) kpiBoost.textContent = fmtNum(globalBoostersUsed);
+    if (kpiTopSummary) {
+        kpiTopSummary.textContent = (topDonor && topDonor.totalDeposited > 0)
+            ? (armoryActionFilter === 'filled'
+                ? `Top Filler: ${topDonor.name} (+${fmtNum(topDonor.totalDeposited)})`
+                : `Top Donor: ${topDonor.name} (+${fmtNum(topDonor.totalDeposited)})`)
+            : 'Top: —';
+    }
+
+    const kpiDep = document.getElementById('ledger-kpi-deposited');
+    const kpiDepSub = document.getElementById('ledger-kpi-deposited-sub');
+    if (kpiDep) kpiDep.textContent = `+${fmtNum(totalDeposited)}`;
+    if (kpiDepSub) {
+        kpiDepSub.textContent = armoryActionFilter === 'filled'
+            ? 'In-Armory Empty Bag Fills'
+            : 'Donations & Returns';
+    }
+
+    const kpiUsed = document.getElementById('ledger-kpi-used');
+    if (kpiUsed) kpiUsed.textContent = `-${fmtNum(totalUsed)}`;
+
+    const kpiNet = document.getElementById('ledger-kpi-net');
+    const kpiNetSub = document.getElementById('ledger-kpi-net-sub');
+    if (kpiNet) {
+        kpiNet.textContent = netBalance > 0 ? `+${fmtNum(netBalance)}` : (netBalance < 0 ? `-${fmtNum(Math.abs(netBalance))}` : '0');
+        kpiNet.style.color = netBalance > 0 ? 'var(--accent-emerald)' : (netBalance < 0 ? 'var(--accent-crimson)' : 'var(--text-secondary)');
+    }
+    if (kpiNetSub) kpiNetSub.textContent = `${fmtNum(uniqueMembers.size)} active member${uniqueMembers.size === 1 ? '' : 's'}`;
+
+    const kpiBlood = document.getElementById('ledger-kpi-blood-filled');
+    const kpiBloodSub = document.getElementById('ledger-kpi-blood-sub');
+    const fillersCount = memberList.filter(m => m.bloodBagsFilled > 0).length;
+    if (kpiBlood) kpiBlood.textContent = fmtNum(totalBloodFilled);
+    if (kpiBloodSub) kpiBloodSub.textContent = `${fillersCount} member${fillersCount === 1 ? '' : 's'} filled empty bags`;
+
+    // Breadcrumbs & Reset Button
+    const filterChipsEl = document.getElementById('armory-active-filter-chips');
+    const resetBtn = document.getElementById('btn-reset-armory-filters');
+    const hasActiveFilters = armoryActionFilter !== 'all' || armoryCategoryFilter !== 'all' || armoryItemFilter !== 'all' || armoryMemberFilter !== '' || query !== '' || trackerSegmentFilter !== 'all';
+    if (resetBtn) resetBtn.style.display = hasActiveFilters ? 'inline-block' : 'none';
+    if (filterChipsEl) {
+        if (hasActiveFilters) {
+            filterChipsEl.style.display = 'flex';
+            let chipsHtml = '<span style="font-size:0.75em; color:var(--text-tertiary); font-weight:700;">Active Filters:</span>';
+            if (trackerSegmentFilter !== 'all') {
+                const segMap = { deficit: 'Net Consumers', donors: 'Net Donors', xanax: 'Xanax Users', bloodfillers: 'Blood Bag Fillers', freeload: '0 Deposited' };
+                chipsHtml += `<span class="filter-active-chip">Segment: ${segMap[trackerSegmentFilter] || trackerSegmentFilter} <span class="chip-remove" onclick="setTrackerTab('all', document.querySelectorAll('#tracker-segment-pills .filter-pill')[0])">✕</span></span>`;
+            }
+            if (armoryActionFilter !== 'all') {
+                const actMap = { inflow: 'Deposits Only', outflow: 'Usage Only', filled: 'Filled Blood Bags', loans: 'Loans & Returns' };
+                chipsHtml += `<span class="filter-active-chip">Action: ${actMap[armoryActionFilter] || armoryActionFilter} <span class="chip-remove" onclick="setArmoryActionFilter('all', document.querySelectorAll('#action-pills .filter-pill')[0])">✕</span></span>`;
+            }
+            if (armoryCategoryFilter !== 'all') {
+                chipsHtml += `<span class="filter-active-chip">Cat: ${armoryCategoryFilter} <span class="chip-remove" onclick="setArmoryCategoryFilter('all')">✕</span></span>`;
+            }
+            if (armoryItemFilter !== 'all') {
+                chipsHtml += `<span class="filter-active-chip">Item: ${escapeHtml(armoryItemFilter)} <span class="chip-remove" onclick="setArmoryItemFilter('all')">✕</span></span>`;
+            }
+            if (armoryMemberFilter) {
+                chipsHtml += `<span class="filter-active-chip">Member: ${escapeHtml(armoryMemberFilter)} <span class="chip-remove" onclick="clearArmoryMemberFilter()">✕</span></span>`;
+            }
+            if (query) {
+                chipsHtml += `<span class="filter-active-chip">Search: "${escapeHtml(query)}" <span class="chip-remove" onclick="document.getElementById('usage-search').value=''; renderItemUsageTracker();">✕</span></span>`;
+            }
+            filterChipsEl.innerHTML = chipsHtml;
+        } else {
+            filterChipsEl.style.display = 'none';
+        }
+    }
+
+    // By Member Table
+    let displayMembers = memberList.filter(m => {
+        if (trackerSegmentFilter === 'deficit') return m.netBalance < 0;
+        if (trackerSegmentFilter === 'donors') return m.netBalance > 0;
+        if (trackerSegmentFilter === 'xanax') return m.xanaxTaken > 0;
+        if (trackerSegmentFilter === 'bloodfillers') return (m.bloodBagsFilled || 0) > 0;
+        if (trackerSegmentFilter === 'freeload') return m.totalUsed > 0 && m.totalDeposited === 0;
+        return true;
+    });
+
+    displayMembers.sort((a, b) => {
+        let va = 0, vb = 0;
+        switch (trackerSortCol) {
+            case 'name': return trackerSortAsc ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name);
+            case 'deposited': va = a.totalDeposited; vb = b.totalDeposited; break;
+            case 'used': va = a.totalUsed; vb = b.totalUsed; break;
+            case 'loaned': va = a.itemsLoaned; vb = b.itemsLoaned; break;
+            case 'returned': va = a.itemsReturned; vb = b.itemsReturned; break;
+            case 'net': va = a.netBalance; vb = b.netBalance; break;
+            case 'xanax': va = a.xanaxTaken; vb = b.xanaxTaken; break;
+            case 'medical': va = a.medsTaken; vb = b.medsTaken; break;
+            case 'bloodFilled': va = a.bloodBagsFilled || 0; vb = b.bloodBagsFilled || 0; break;
+            case 'boosters': va = a.boostersTaken; vb = b.boostersTaken; break;
+            case 'lastActive': va = a.lastActionTs || 0; vb = b.lastActionTs || 0; break;
+            default: va = a.netBalance; vb = b.netBalance; break;
+        }
+        return trackerSortAsc ? (va - vb) : (vb - va);
+    });
+
+    currentFilteredMemberList = displayMembers;
+
+    const sortCols = ['name', 'deposited', 'used', 'loaned', 'returned', 'net', 'xanax', 'medical', 'bloodFilled', 'boosters', 'lastActive'];
+    sortCols.forEach(col => {
+        const ind = document.getElementById(`sort-ind-${col}`);
+        if (ind) {
+            ind.textContent = trackerSortCol === col ? (trackerSortAsc ? '↑' : '↓') : '↕';
+            ind.style.color = trackerSortCol === col ? 'var(--accent-cobalt)' : 'var(--text-tertiary)';
+        }
+    });
+
+    const mBody = document.getElementById('usage-members-tbody');
+    if (mBody && activeUsageView === 'members') {
+        if (!displayMembers.length) {
+            mBody.innerHTML = '<tr><td colspan="12" style="text-align:center; padding:28px; color:var(--text-tertiary);">No armory records match current segment and filters.</td></tr>';
+        } else {
+            mBody.innerHTML = displayMembers.map(m => {
+                let balanceBadge = '<span class="badge-balance-zero">0</span>';
+                if (m.netBalance > 0) balanceBadge = `<span class="badge-balance-pos">+${fmtNum(m.netBalance)}</span>`;
+                else if (m.netBalance < 0) balanceBadge = `<span class="badge-balance-neg">-${fmtNum(Math.abs(m.netBalance))}</span>`;
+
+                const depChips = formatMemberItemChips(m.depositedItems, 'inflow');
+                const usedChips = formatMemberItemChips(m.usedItems, 'outflow');
+
+                return `<tr>
+                    <td style="vertical-align:top;">
+                        <div style="font-weight:700;">
+                            <a href="https://www.torn.com/profiles.php?XID=${m.id}" target="_blank" rel="noopener noreferrer" style="color:var(--text-primary); text-decoration:none;">${escapeHtml(m.name)}</a>
+                            <span style="cursor:pointer; font-size:0.78em; margin-left:4px;" onclick="setArmoryMemberFilter('${m.id}', '${escapeHtml(m.name)}')" title="Filter table to this member">🔍</span>
+                        </div>
+                        <div style="font-size:0.74em; color:var(--text-tertiary);">[${m.id}]</div>
+                    </td>
+                    <td style="vertical-align:top;">
+                        <div style="font-family:var(--font-mono); font-weight:800; color:var(--accent-emerald); font-size:1.05em;">+${fmtNum(m.totalDeposited)}</div>
+                        ${depChips}
+                    </td>
+                    <td style="vertical-align:top;">
+                        <div style="font-family:var(--font-mono); font-weight:800; color:var(--accent-crimson); font-size:1.05em;">-${fmtNum(m.totalUsed)}</div>
+                        ${usedChips}
+                    </td>
+                    <td style="vertical-align:top; font-family:var(--font-mono); font-weight:700; color:var(--accent-amber);">${fmtNum(m.itemsLoaned || 0)}</td>
+                    <td style="vertical-align:top; font-family:var(--font-mono); font-weight:700; color:var(--accent-cyan);">${fmtNum(m.itemsReturned || 0)}</td>
+                    <td style="vertical-align:top;">${balanceBadge}</td>
+                    <td style="vertical-align:top; font-family:var(--font-mono); font-weight:700; color:${m.xanaxTaken > 0 ? 'var(--accent-purple)' : 'var(--text-tertiary)'};">${fmtNum(m.xanaxTaken || 0)}</td>
+                    <td style="vertical-align:top; font-family:var(--font-mono); font-weight:700; color:${m.medsTaken > 0 ? 'var(--accent-cobalt)' : 'var(--text-tertiary)'};">${fmtNum(m.medsTaken || 0)}</td>
+                    <td style="vertical-align:top; font-family:var(--font-mono); font-weight:800; color:${(m.bloodBagsFilled || 0) > 0 ? '#06b6d4' : 'var(--text-tertiary)'};">${(m.bloodBagsFilled || 0) > 0 ? '+' + fmtNum(m.bloodBagsFilled) : '0'}</td>
+                    <td style="vertical-align:top; font-family:var(--font-mono); font-weight:700; color:${m.boostersTaken > 0 ? 'var(--accent-amber)' : 'var(--text-tertiary)'};">${fmtNum(m.boostersTaken || 0)}</td>
+                    <td style="vertical-align:top; text-align:right; font-size:0.82em; color:var(--text-tertiary);" title="${m.lastActionTs ? new Date(m.lastActionTs * 1000).toUTCString() : ''}">${timeSince(m.lastActionTs)}</td>
+                    <td style="vertical-align:top; text-align:center;">
+                        <div style="display:flex; flex-direction:column; gap:4px; align-items:center;">
+                            <button class="btn btn-xs btn-outline" id="btn-drawer-${m.id}" onclick="toggleMemberRowDrawer('${m.id}')" style="min-width:64px;">▼ Items</button>
+                            <button class="btn btn-xs btn-secondary" onclick="openMemberLogModal('${m.id}', '${escapeHtml(m.name)}')" style="min-width:64px;">📋 Log</button>
+                        </div>
+                    </td>
+                </tr>
+                <tr id="member-drawer-${m.id}" class="member-detail-drawer" style="display:none; background:rgba(15,23,42,0.85); border-left:3px solid var(--accent-cobalt);">
+                    <td colspan="12" style="padding:14px 20px;">
+                        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:14px;">
+                            <div style="background:var(--bg-elevated); border:1px solid var(--border-subtle); border-radius:8px; padding:12px;">
+                                <div style="font-weight:700; color:var(--accent-emerald); font-size:0.85em; margin-bottom:8px; display:flex; justify-content:space-between;">
+                                    <span>🟢 Items Deposited / Filled by ${escapeHtml(m.name)}</span>
+                                    <span style="font-family:var(--font-mono); font-weight:800;">+${fmtNum(m.totalDeposited)} total</span>
+                                </div>
+                                <div style="display:flex; flex-wrap:wrap; gap:4px;">${renderDrawerItemPills(m.depositedItems, 'inflow')}</div>
+                            </div>
+                            <div style="background:var(--bg-elevated); border:1px solid var(--border-subtle); border-radius:8px; padding:12px;">
+                                <div style="font-weight:700; color:var(--accent-crimson); font-size:0.85em; margin-bottom:8px; display:flex; justify-content:space-between;">
+                                    <span>🔴 Items Used &amp; Loaned by ${escapeHtml(m.name)}</span>
+                                    <span style="font-family:var(--font-mono); font-weight:800;">-${fmtNum(m.totalUsed)} total</span>
+                                </div>
+                                <div style="display:flex; flex-wrap:wrap; gap:4px;">${renderDrawerItemPills(m.usedItems, 'outflow')}</div>
+                            </div>
+                        </div>
+                    </td>
+                </tr>`;
+            }).join('');
+        }
+    }
+
+    const iBody = document.getElementById('usage-items-tbody');
+    if (iBody && activeUsageView === 'items') {
+        if (!itemList.length) {
+            iBody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:24px; color:var(--text-tertiary);">No item records matching current filters.</td></tr>';
+        } else {
+            iBody.innerHTML = itemList.map(item => {
+                const depChips = (item.topDepositors || []).map(u => `<span class="usage-item-chip chip-inflow" onclick="setArmoryMemberFilter('${u.id}', '${escapeHtml(u.name)}')">${escapeHtml(u.name)}: <strong>+${u.count}</strong></span>`).join('');
+                const userChips = (item.topConsumers || []).map(u => `<span class="usage-item-chip chip-outflow" onclick="setArmoryMemberFilter('${u.id}', '${escapeHtml(u.name)}')">${escapeHtml(u.name)}: <strong>-${u.count}</strong></span>`).join('');
+                let flowBadge = '<span class="badge-balance-zero">0 Balanced</span>';
+                if (item.netDelta > 0) flowBadge = `<span class="badge-balance-pos">+${fmtNum(item.netDelta)} Surplus</span>`;
+                else if (item.netDelta < 0) flowBadge = `<span class="badge-balance-neg">-${fmtNum(Math.abs(item.netDelta))} Deficit</span>`;
+
+                return `<tr>
+                    <td><div style="font-weight:700; color:var(--accent-amber); cursor:pointer;" onclick="setArmoryItemFilter('${escapeHtml(item.name)}')">${escapeHtml(item.name)} <span style="font-size:0.75em;">🔍</span></div></td>
+                    <td><span class="badge-type">${escapeHtml(item.category)}</span></td>
+                    <td style="font-family:var(--font-mono); font-weight:800; color:var(--accent-emerald);">+${fmtNum(item.totalDeposited)}</td>
+                    <td style="font-family:var(--font-mono); font-weight:800; color:var(--accent-crimson);">-${fmtNum(item.totalUsed)}</td>
+                    <td>${flowBadge}</td>
+                    <td><div style="display:flex; flex-wrap:wrap; gap:2px;">${depChips || '<span style="color:var(--text-tertiary);">—</span>'}</div></td>
+                    <td><div style="display:flex; flex-wrap:wrap; gap:2px;">${userChips || '<span style="color:var(--text-tertiary);">—</span>'}</div></td>
+                </tr>`;
+            }).join('');
+        }
+    }
+
+    const fBody = document.getElementById('usage-feed-tbody');
+    if (fBody && activeUsageView === 'feed') {
+        if (!filteredEvents.length) {
+            fBody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:24px; color:var(--text-tertiary);">No armory transactions found in this window.</td></tr>';
+        } else {
+            fBody.innerHTML = filteredEvents.slice(0, 200).map(entry => {
+                let actionBadge = `<span class="badge-type">${escapeHtml(entry.action)}</span>`;
+                if (entry.action === 'deposited') actionBadge = '<span class="badge-loan active">🟢 Deposited</span>';
+                else if (entry.action === 'used') actionBadge = '<span class="badge-loan overdue">🔴 Used</span>';
+                else if (entry.action === 'filled') actionBadge = '<span class="badge-loan" style="background:rgba(6,182,212,0.18); color:#06b6d4; border:1px solid rgba(6,182,212,0.35);">🩸 Filled Bag</span>';
+                else if (entry.action === 'returned') actionBadge = '<span class="badge-loan" style="background:rgba(59,130,246,0.18); color:var(--accent-cobalt);">🔄 Returned</span>';
+                else if (entry.action === 'loaned') actionBadge = '<span class="badge-loan inactive">🪖 Loaned</span>';
+                else if (entry.action === 'retrieved') actionBadge = '<span class="badge-loan" style="background:rgba(168,85,247,0.18); color:#a855f7;">📦 Retrieved</span>';
+
+                const flowSymbol = entry.type === 'inflow' ? `+${entry.quantity}` : `-${entry.quantity}`;
+                const flowColor = entry.type === 'inflow' ? 'var(--accent-emerald)' : 'var(--accent-crimson)';
+                const tctTime = new Date(entry.timestamp * 1000).toISOString().replace('T', ' ').substring(0, 19) + ' TCT';
+
+                return `<tr>
+                    <td style="white-space:nowrap;">
+                        <div style="font-weight:600; font-size:0.85em; font-family:var(--font-mono);">${timeSince(entry.timestamp)}</div>
+                        <div style="font-size:0.72em; color:var(--text-tertiary);">${tctTime}</div>
+                    </td>
+                    <td>
+                        <div style="font-weight:700;">
+                            <a href="https://www.torn.com/profiles.php?XID=${entry.id}" target="_blank" rel="noopener noreferrer" style="color:var(--text-primary); text-decoration:none;">${escapeHtml(entry.name)}</a>
+                            <span style="cursor:pointer; font-size:0.75em; margin-left:3px;" onclick="setArmoryMemberFilter('${entry.id}', '${escapeHtml(entry.name)}')">🔍</span>
+                        </div>
+                    </td>
+                    <td>${actionBadge}</td>
+                    <td style="font-family:var(--font-mono); font-weight:800; color:${flowColor};">${flowSymbol}</td>
+                    <td><span style="font-weight:700; color:var(--accent-amber); cursor:pointer;" onclick="setArmoryItemFilter('${escapeHtml(entry.itemName)}')">${escapeHtml(entry.itemName)}</span></td>
+                    <td><span class="badge-type">${escapeHtml(entry.category)}</span></td>
+                    <td style="font-size:0.84em; color:var(--text-secondary); max-width:340px;">${escapeHtml(entry.rawText || '')}</td>
+                </tr>`;
+            }).join('');
+        }
+    }
+}
+const filterUsageDebounced = debounce(renderItemUsageTracker, 200);
+
+// ── Member Log Modal ──
+function openMemberLogModal(memberId, memberName) {
+    const mIdStr = String(memberId);
+    const events = loadedArmoryEvents.filter(e => String(e.id) === mIdStr || (e.targetId && String(e.targetId) === mIdStr));
+    const modal = document.getElementById('member-log-modal');
+    const title = document.getElementById('modal-title');
+    const body = document.getElementById('modal-body');
+    if (!modal || !body) return;
+
+    title.innerHTML = `📋 <strong>${escapeHtml(memberName || 'Member')}</strong> [${memberId}] — Transaction History (${events.length} records)`;
+    body.innerHTML = !events.length
+        ? '<div style="text-align:center; padding:36px; color:var(--text-tertiary);">No transactions recorded for this member in the current window.</div>'
+        : `<div class="scrollable" style="max-height:60vh; overflow-x:auto;">
+            <table class="armory-table">
+                <thead><tr><th>Time (TCT)</th><th>Action</th><th>Qty</th><th>Item</th><th>Category</th><th>Detail</th></tr></thead>
+                <tbody>
+                    ${events.map(e => `<tr>
+                        <td style="font-family:var(--font-mono); font-size:0.8em; color:var(--text-tertiary); white-space:nowrap;">${new Date((e.timestamp || 0) * 1000).toISOString().replace('T', ' ').substring(0, 19)}</td>
+                        <td><span class="badge-type">${escapeHtml(e.action)}</span></td>
+                        <td style="font-family:var(--font-mono); font-weight:800; color:${e.type === 'inflow' ? 'var(--accent-emerald)' : 'var(--accent-crimson)'};">${e.type === 'inflow' ? '+' : '-'}${e.quantity || 1}</td>
+                        <td style="font-weight:700;">${escapeHtml(e.itemName)}</td>
+                        <td><span class="badge-type">${escapeHtml(e.category || 'Other')}</span></td>
+                        <td style="font-size:0.82em; color:var(--text-secondary);">${escapeHtml(e.rawText || '')}</td>
+                    </tr>`).join('')}
+                </tbody>
+            </table>
+        </div>`;
+    modal.classList.add('open');
+}
+
+function closeMemberLogModal() {
+    document.getElementById('member-log-modal')?.classList.remove('open');
+}
+
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeMemberLogModal();
+});
+
+// ── Exports & Discord Summaries ──
+function csvSafeCell(val) {
+    const str = String(val ?? '');
+    const neutralized = /^[=+\-@\t\r]/.test(str) ? `'${str}` : str;
+    return `"${neutralized.replace(/"/g, '""')}"`;
+}
+
+function exportTrackerCSV() {
+    if (!currentFilteredMemberList?.length) {
+        showToast('No member data available to export', 'warn');
+        return;
+    }
+    const headers = ['Member Name', 'Torn ID', 'Deposited (+)', 'Consumed (-)', 'Items Loaned', 'Items Returned', 'Net Balance', 'Xanax Taken', 'Medical Taken', 'Blood Bags Filled', 'Boosters Taken', 'Last Active UTC'];
+    const rows = currentFilteredMemberList.map(m => [
+        csvSafeCell(m.name || ''),
+        m.id,
+        m.totalDeposited,
+        m.totalUsed,
+        m.itemsLoaned,
+        m.itemsReturned,
+        m.netBalance,
+        m.xanaxTaken,
+        m.medsTaken,
+        m.bloodBagsFilled || 0,
+        m.boostersTaken,
+        m.lastActionTs ? csvSafeCell(new Date(m.lastActionTs * 1000).toISOString()) : '""'
+    ]);
+    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `faction_armory_ledger_${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    showToast('Exported armory ledger to CSV!', 'success');
+}
+
+function buildTrackerDiscordSummary() {
+    const fillers = [...(currentFilteredMemberList || [])]
+        .filter(m => Number(m.bloodBagsFilled || 0) > 0)
+        .sort((a, b) => (Number(b.bloodBagsFilled || 0) - Number(a.bloodBagsFilled || 0)) || (a.name || '').localeCompare(b.name || ''));
+
+    if (!fillers.length) return null;
+
+    const fromVal = document.getElementById('tracker-date-from')?.value || '';
+    const toVal = document.getElementById('tracker-date-to')?.value || '';
+    const presetLabel = (document.querySelector('.date-presets .filter-pill.active')?.textContent || '').replace(/^[^\w]+/, '').trim();
+    const warBadgeEl = document.getElementById('tracker-active-war-badge');
+    const warText = (warBadgeEl && warBadgeEl.style.display !== 'none') ? warBadgeEl.textContent.trim() : '';
+    const periodStr = warText || (fromVal && toVal ? `${presetLabel ? presetLabel + ' · ' : ''}${fromVal} → ${toVal}` : (presetLabel || 'Loaded Window'));
+
+    const totalFilled = fillers.reduce((sum, m) => sum + Number(m.bloodBagsFilled || 0), 0);
+    let md = `🩸 **Faction Blood Bags Filled**\n*${periodStr}*\n\n`;
+    fillers.forEach((m, idx) => {
+        const count = Number(m.bloodBagsFilled || 0);
+        md += `${idx + 1}. **${(m.name || `ID ${m.id}`).trim()}** — ${fmtNum(count)} ${count === 1 ? 'bag' : 'bags'}\n`;
+    });
+    md += `\n**Total Filled:** ${fmtNum(totalFilled)} blood ${totalFilled === 1 ? 'bag' : 'bags'} (${fillers.length} ${fillers.length === 1 ? 'member' : 'members'})`;
+    return { md, totalFilled, memberCount: fillers.length };
+}
+
+function copyTrackerDiscord() {
+    const summary = buildTrackerDiscordSummary();
+    if (!summary) {
+        showToast('No members filled faction empty blood bags in this period', 'warn');
+        return;
+    }
+    navigator.clipboard.writeText(summary.md).then(() => {
+        showToast(`Copied blood bag summary (${fmtNum(summary.totalFilled)} bags across ${summary.memberCount} members) for Discord!`, 'success');
+    }).catch(() => showToast('Failed to copy to clipboard', 'error'));
+}
+
+function copyLowStockDiscordAlert() {
+    const low = currentArmoryData?.armory?.lowStockItems || [];
+    if (!low.length) {
+        showToast('All monitored armory reserves are currently stocked!', 'success');
+        return;
+    }
+    let md = '🚨 **Faction Armory Restock Needed**\n\n';
+    low.forEach(item => {
+        const tag = item.severity === 'critical' ? '🚨' : '⚠️';
+        const curQty = item.current ?? item.quantity ?? 0;
+        const minQty = item.min ?? item.threshold ?? 0;
+        md += `${tag} **${item.name}** — ${fmtNum(curQty)} in stock (Min: ${fmtNum(minQty)})\n`;
+    });
+    navigator.clipboard.writeText(md).then(() => {
+        showToast(`Copied ${low.length} low-stock alerts for Discord!`, 'success');
+    }).catch(() => showToast('Failed to copy restock alert', 'error'));
+}
+
+function copyOverdueLoanPings() {
+    const loans = (currentArmoryData?.loans || []).filter(l => l.loanStatus === 'overdue' || l.loanStatus === 'inactive');
+    if (!loans.length) {
+        showToast('All loaned gear holders are currently active!', 'success');
+        return;
+    }
+    let md = '🪖 **Inactive / Overdue Loaner Gear Audit**\n\n';
+    loans.forEach(l => {
+        const tag = l.loanStatus === 'overdue' ? '🚨 Overdue (>3d)' : '⚠️ Inactive (>24h)';
+        md += `• **${l.borrowerName}** [${l.borrowerId}] — **${l.name || l.item || 'Loaned Item'}** (${tag})\n`;
+    });
+    navigator.clipboard.writeText(md).then(() => {
+        showToast(`Copied ${loans.length} overdue/inactive loan alerts for Discord!`, 'success');
+    }).catch(() => showToast('Failed to copy loan pings', 'error'));
+}
+
+// ── Stock, Arsenal, Loans & Thresholds ──
+function getSavedArmoryThresholds() {
+    const defaults = { xanax: 50, sfak: 40, fak: 60, morphine: 40, blood: 100, cans: 30, dispatchDiscord: true };
+    try {
+        const raw = localStorage.getItem('faction_armory_thresholds');
+        if (!raw) return defaults;
+        const parsed = JSON.parse(raw);
+        return {
+            xanax: Number.isFinite(Number(parsed.xanax)) ? Number(parsed.xanax) : defaults.xanax,
+            sfak: Number.isFinite(Number(parsed.sfak)) ? Number(parsed.sfak) : defaults.sfak,
+            fak: Number.isFinite(Number(parsed.fak)) ? Number(parsed.fak) : defaults.fak,
+            morphine: Number.isFinite(Number(parsed.morphine)) ? Number(parsed.morphine) : defaults.morphine,
+            blood: Number.isFinite(Number(parsed.blood)) ? Number(parsed.blood) : defaults.blood,
+            cans: Number.isFinite(Number(parsed.cans)) ? Number(parsed.cans) : defaults.cans,
+            dispatchDiscord: parsed.dispatchDiscord !== undefined ? Boolean(parsed.dispatchDiscord) : true
+        };
+    } catch (_) { return defaults; }
+}
+
+function hydrateArmoryThresholdInputs() {
+    const t = getSavedArmoryThresholds();
+    const map = { 'cfg-thresh-xanax': t.xanax, 'cfg-thresh-sfak': t.sfak, 'cfg-thresh-fak': t.fak, 'cfg-thresh-morph': t.morphine, 'cfg-thresh-blood': t.blood, 'cfg-thresh-cans': t.cans };
+    for (const [id, val] of Object.entries(map)) {
+        const el = document.getElementById(id);
+        if (el) el.value = val;
+    }
+    const toggle = document.getElementById('cfg-discord-dispatch');
+    if (toggle) toggle.checked = t.dispatchDiscord;
+}
+
+function resetArmoryThresholds() {
+    const defaults = { 'cfg-thresh-xanax': 50, 'cfg-thresh-sfak': 40, 'cfg-thresh-fak': 60, 'cfg-thresh-morph': 40, 'cfg-thresh-blood': 100, 'cfg-thresh-cans': 30 };
+    for (const [id, val] of Object.entries(defaults)) {
+        const el = document.getElementById(id);
+        if (el) el.value = val;
+    }
+    const toggle = document.getElementById('cfg-discord-dispatch');
+    if (toggle) toggle.checked = true;
+    showToast('Thresholds reset to factory defaults (click Save to apply)', 'warn');
+}
+
+function saveArmoryThresholds() {
+    const thresholds = {
+        xanax: Number(document.getElementById('cfg-thresh-xanax')?.value || 50),
+        sfak: Number(document.getElementById('cfg-thresh-sfak')?.value || 40),
+        fak: Number(document.getElementById('cfg-thresh-fak')?.value || 60),
+        morphine: Number(document.getElementById('cfg-thresh-morph')?.value || 40),
+        blood: Number(document.getElementById('cfg-thresh-blood')?.value || 100),
+        cans: Number(document.getElementById('cfg-thresh-cans')?.value || 30),
+        dispatchDiscord: document.getElementById('cfg-discord-dispatch')?.checked || false
+    };
+    localStorage.setItem('faction_armory_thresholds', JSON.stringify(thresholds));
+    showToast('Armory safety thresholds saved!', 'success');
+    renderBloodBagMatrix();
+    filterMeds();
+}
+
+function filterMeds() {
+    if (!currentArmoryData) return;
+    const tbody = document.getElementById('meds-table-body');
+    const badge = document.getElementById('meds-count-badge');
+    const query = (document.getElementById('meds-search')?.value || '').toLowerCase().trim();
+    const cat = document.getElementById('meds-cat-filter')?.value || 'all';
+    const armory = currentArmoryData.armory || {};
+
+    if (armory.limitedAccess) {
+        if (badge) badge.textContent = 'Restricted Key';
+        if (tbody) tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:24px; color:var(--accent-amber);">🔐 Medical, Drug, and Booster reserves require Faction API Access permissions.</td></tr>';
+        return;
+    }
+
+    let list = [];
+    if (cat === 'all' || cat === 'medical' || cat === 'low') (armory.medical || []).forEach(m => list.push({ ...m, itemCat: 'Medical' }));
+    if (cat === 'all' || cat === 'drugs' || cat === 'low') (armory.drugs || []).forEach(d => list.push({ ...d, itemCat: 'Drug' }));
+    if (cat === 'all' || cat === 'boosters' || cat === 'low') (armory.boosters || []).forEach(b => list.push({ ...b, itemCat: 'Booster' }));
+
+    const savedThresh = getSavedArmoryThresholds();
+    const threshMap = { 'xanax': savedThresh.xanax, 'small first aid kit': savedThresh.sfak, 'first aid kit': savedThresh.fak, 'morphine': savedThresh.morphine };
+
+    list = list.filter(item => {
+        const nameLower = item.name.toLowerCase();
+        let minThresh = threshMap[nameLower] ?? 25;
+        if (nameLower.includes('blood bag')) minThresh = Math.max(10, Math.round(savedThresh.blood / 8));
+        if (nameLower.startsWith('can of')) minThresh = Math.max(5, Math.round(savedThresh.cans / 2));
+        item.minThresh = minThresh;
+        item.isLow = item.quantity < minThresh;
+        if (cat === 'low' && !item.isLow) return false;
+        if (query && !nameLower.includes(query)) return false;
+        return true;
+    });
+
+    if (badge) badge.textContent = `${list.length} items`;
+    if (!tbody) return;
+    if (!list.length) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:20px; color:var(--text-tertiary);">No supplies match the current filters.</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = list.map(item => {
+        const statusBadge = item.quantity === 0
+            ? '<span class="stock-pill critical">🚨 Empty</span>'
+            : (item.isLow ? '<span class="stock-pill warning">⚠️ Low Stock</span>' : '<span class="stock-pill optimal">🟢 Stocked</span>');
+        return `<tr>
+            <td style="font-weight:700;">${escapeHtml(item.name)}</td>
+            <td><span class="badge-type">${escapeHtml(item.itemCat || item.type)}</span></td>
+            <td style="font-family:var(--font-mono); font-weight:800; color:${item.isLow ? 'var(--accent-amber)' : 'var(--text-primary)'};">${fmtNum(item.quantity)}</td>
+            <td style="font-family:var(--font-mono); color:var(--text-tertiary);">${item.minThresh}</td>
+            <td>${statusBadge}</td>
+            <td style="text-align:right;"><a href="https://www.torn.com/factions.php?step=your#/tab=armoury&sub=donator" target="_blank" rel="noopener noreferrer" class="refresh-btn" style="text-decoration:none; padding:4px 10px; font-size:0.75em;">Deposit</a></td>
+        </tr>`;
+    }).join('');
+}
+const filterMedsDebounced = debounce(filterMeds, 200);
+
+function filterArsenal() {
+    if (!currentArmoryData) return;
+    const tbody = document.getElementById('arsenal-table-body');
+    const badge = document.getElementById('arsenal-count-badge');
+    const query = (document.getElementById('arsenal-search')?.value || '').toLowerCase().trim();
+    const cat = document.getElementById('arsenal-cat-filter')?.value || 'all';
+    const armory = currentArmoryData.armory || {};
+
+    let list = [];
+    if (cat === 'all' || cat === 'weapons' || cat === 'loaned' || cat === 'available') (armory.weapons || []).forEach(w => list.push({ ...w, itemCat: 'Weapon' }));
+    if (cat === 'all' || cat === 'armor' || cat === 'loaned' || cat === 'available') (armory.armor || []).forEach(a => list.push({ ...a, itemCat: 'Armor' }));
+    if (cat === 'all' || cat === 'temporary' || cat === 'loaned' || cat === 'available') (armory.temporary || []).forEach(t => list.push({ ...t, itemCat: 'Temporary' }));
+
+    list = list.filter(item => {
+        if (cat === 'loaned' && (item.loaned || 0) === 0) return false;
+        if (cat === 'available' && (item.available || 0) === 0) return false;
+        if (query && !item.name.toLowerCase().includes(query) && !(item.type || '').toLowerCase().includes(query)) return false;
+        return true;
+    });
+
+    if (badge) badge.textContent = `${list.length} pieces`;
+    if (!tbody) return;
+    if (!list.length) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:20px; color:var(--text-tertiary);">No arsenal equipment matches the filter.</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = list.map(item => {
+        const total = item.quantity || ((item.available || 0) + (item.loaned || 0)) || 1;
+        const pct = Math.min(100, Math.round(((item.loaned || 0) / total) * 100));
+        return `<tr>
+            <td style="font-weight:700;">${escapeHtml(item.name)}</td>
+            <td><span class="badge-type ${item.itemCat === 'Armor' ? 'armor' : ''}">${escapeHtml(item.type || item.itemCat)}</span></td>
+            <td style="font-family:var(--font-mono); color:var(--accent-emerald); font-weight:800;">${fmtNum(item.available || 0)}</td>
+            <td style="font-family:var(--font-mono); color:var(--accent-amber); font-weight:800;">${fmtNum(item.loaned || 0)}</td>
+            <td style="font-family:var(--font-mono);">${fmtNum(total)}</td>
+            <td style="min-width:110px;">
+                <div style="font-size:0.75em; color:var(--text-tertiary); margin-bottom:2px;">${pct}% in field</div>
+                <div style="height:4px; background:var(--bg-elevated); border-radius:2px; overflow:hidden;"><div style="width:${pct}%; height:100%; background:var(--accent-cobalt);"></div></div>
+            </td>
+            <td style="text-align:right;"><a href="https://www.torn.com/factions.php?step=your#/tab=armoury&sub=weapons" target="_blank" rel="noopener noreferrer" class="refresh-btn" style="text-decoration:none; padding:4px 10px; font-size:0.75em;">Issue</a></td>
+        </tr>`;
+    }).join('');
+}
+const filterArsenalDebounced = debounce(filterArsenal, 200);
+
+function filterLoans() {
+    if (!currentArmoryData) return;
+    const tbody = document.getElementById('loans-table-body');
+    const badge = document.getElementById('loaner-count-badge');
+    const query = (document.getElementById('loans-search')?.value || '').toLowerCase().trim();
+    const statusFilter = document.getElementById('loans-status-filter')?.value || 'all';
+    const loans = currentArmoryData.loans || [];
+
+    const list = loans.filter(l => {
+        if (statusFilter === 'active' && l.loanStatus !== 'active') return false;
+        if (statusFilter === 'inactive' && l.loanStatus !== 'inactive') return false;
+        if (statusFilter === 'overdue' && l.loanStatus !== 'overdue') return false;
+        if (query) {
+            const hay = `${l.borrowerName || ''} ${l.name || ''} ${l.borrowerId || ''}`.toLowerCase();
+            if (!hay.includes(query)) return false;
+        }
+        return true;
+    });
+
+    if (badge) badge.textContent = `${list.length} Loans`;
+    if (!tbody) return;
+    if (!list.length) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:20px; color:var(--text-tertiary);">No loans match the selected filter.</td></tr>';
+        return;
+    }
+
+    const statusMap = {
+        active: '<span class="badge-loan active">🟢 Active</span>',
+        inactive: '<span class="badge-loan inactive">⚠️ Inactive (&gt;24h)</span>',
+        overdue: '<span class="badge-loan overdue">🚨 Overdue (&gt;3d)</span>'
+    };
+
+    tbody.innerHTML = list.map(l => `<tr>
+        <td>
+            <div style="font-weight:700;"><a href="https://www.torn.com/profiles.php?XID=${l.borrowerId}" target="_blank" rel="noopener noreferrer" style="color:var(--text-primary); text-decoration:none;">${escapeHtml(l.borrowerName)}</a></div>
+            <div style="font-size:0.75em; color:var(--text-tertiary);">[${l.borrowerId}]</div>
+        </td>
+        <td style="font-weight:700; color:var(--accent-amber);">${escapeHtml(l.name)}</td>
+        <td><span class="badge-type ${l.type === 'Armor' ? 'armor' : ''}">${escapeHtml(l.itemCategory || l.type)}</span></td>
+        <td>
+            <div style="font-size:0.85em;">${escapeHtml(l.borrowerStatus || 'Offline')}</div>
+            <div style="font-size:0.72em; color:var(--text-tertiary);">${l.lastActionTs ? timeSince(l.lastActionTs) : 'Unknown'}</div>
+        </td>
+        <td>${statusMap[l.loanStatus] || statusMap.active}</td>
+        <td style="text-align:right;">
+            <div style="display:flex; justify-content:flex-end; gap:6px;">
+                <a href="https://www.torn.com/messages.php#/p=compose&XID=${l.borrowerId}" target="_blank" rel="noopener noreferrer" class="refresh-btn" style="text-decoration:none; padding:4px 8px; font-size:0.75em;">💬 Remind</a>
+                <a href="https://www.torn.com/factions.php?step=your#/tab=armoury" target="_blank" rel="noopener noreferrer" class="refresh-btn" style="text-decoration:none; padding:4px 8px; font-size:0.75em;">🔄 Return</a>
+            </div>
+        </td>
+    </tr>`).join('');
+}
+const filterLoansDebounced = debounce(filterLoans, 200);
+
+document.addEventListener('DOMContentLoaded', () => {
+    hydrateArmoryThresholdInputs();
+    initTrackerDates();
+    initArmoryHash();
+    loadArmoryAll(false);
+});
+</script>
+</body>
+</html>

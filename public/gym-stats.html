@@ -370,48 +370,6 @@
         color: #ffffff !important;
     }
 
-    /* Top Operations Hub Navigation Tabs — Exact Parity with dashboard.html */
-    .ops-nav-tabs {
-        display: flex;
-        gap: 8px;
-        margin-bottom: 18px;
-        border-bottom: 1px solid var(--border-default);
-        padding-bottom: 0px;
-        overflow-x: auto;
-        scrollbar-width: thin;
-    }
-    .ops-tab-btn {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        padding: 12px 22px;
-        background: var(--bg-surface) !important;
-        border: 1px solid var(--border-default) !important;
-        border-bottom: none !important;
-        border-radius: var(--radius-md, 8px) var(--radius-md, 8px) 0 0 !important;
-        color: var(--text-secondary) !important;
-        font-weight: 700;
-        font-size: 0.88em;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        white-space: nowrap;
-        user-select: none;
-        text-decoration: none;
-    }
-    .ops-tab-btn:hover {
-        color: var(--text-primary) !important;
-        background: var(--bg-hover) !important;
-        border-color: rgba(59, 130, 246, 0.45) !important;
-        transform: translateY(-1px);
-    }
-    .ops-tab-btn.active {
-        color: var(--text-primary) !important;
-        background: linear-gradient(180deg, var(--bg-surface) 0%, rgba(59, 130, 246, 0.14) 100%) !important;
-        border-color: var(--accent-cobalt) !important;
-        border-bottom: 2px solid var(--accent-cobalt) !important;
-        box-shadow: 0 -2px 10px rgba(59, 130, 246, 0.14) !important;
-    }
-
     /* Full Gym Desk Internal Sub-Navigation Pills */
     .gym-subnav {
         display: flex;
@@ -534,7 +492,66 @@
         background: linear-gradient(135deg, rgba(59, 130, 246, 0.08) 0%, #ffffff 100%);
     }
 
+    /* Readiness & Daily Leaders Overview Grid */
+    .gym-readiness-grid {
+        display: grid;
+        grid-template-columns: 1.2fr 1fr;
+        gap: 20px;
+        margin-bottom: 20px;
+    }
+    .readiness-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 9px 12px;
+        border-bottom: 1px solid var(--border-subtle);
+        font-size: 0.84em;
+    }
+    .readiness-row:last-child { border-bottom: none; }
+    .readiness-row:hover { background: var(--bg-hover); }
+
     /* Mobile Responsive & Sticky First Column */
+    /* Toast Notification Cards */
+    .toast-container {
+        position: fixed;
+        top: 64px;
+        right: 20px;
+        z-index: 10001;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        max-width: calc(100vw - 24px);
+        pointer-events: none;
+    }
+    .toast-msg {
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-md);
+        padding: 10px 16px;
+        font-size: 0.85em;
+        font-weight: 600;
+        color: var(--text-primary);
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        pointer-events: auto;
+        transition: opacity 0.25s ease, transform 0.25s ease;
+    }
+    .toast-msg.success { border-color: rgba(16, 185, 129, 0.5); }
+    .toast-msg.warn { border-color: rgba(245, 158, 11, 0.5); }
+    .toast-msg.error { border-color: rgba(239, 68, 68, 0.5); }
+    @media (max-width: 960px) {
+        .gym-readiness-grid { grid-template-columns: 1fr !important; }
+        .toast-container, #toast-container {
+            top: auto !important;
+            bottom: 82px !important;
+            right: 12px !important;
+            left: 12px !important;
+            max-width: none !important;
+        }
+    }
     @media (max-width: 768px) {
         .sticky-col {
             position: sticky;
@@ -543,30 +560,8 @@
             z-index: 2;
             box-shadow: 2px 0 6px rgba(0, 0, 0, 0.25);
         }
-        .gym-overview-grid, .war-grid {
+        .gym-overview-grid, .war-grid, .gym-readiness-grid {
             grid-template-columns: 1fr !important;
-        }
-        .ops-nav-tabs {
-            display: grid !important;
-            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-            gap: 6px !important;
-            border-bottom: none !important;
-            padding-bottom: 2px !important;
-            overflow: visible !important;
-        }
-        .ops-tab-btn {
-            justify-content: center !important;
-            text-align: center !important;
-            padding: 9px 10px !important;
-            font-size: 0.78em !important;
-            white-space: normal !important;
-            line-height: 1.25 !important;
-            border-radius: var(--radius-sm, 6px) !important;
-            border: 1px solid var(--border-default) !important;
-        }
-        .ops-tab-btn.active {
-            border-color: var(--accent-cobalt) !important;
-            border-bottom-width: 2px !important;
         }
         .roster-controls {
             width: 100%;
@@ -593,17 +588,17 @@
         <div class="nav-items">
             <div class="nav-section-title">Live Operations</div>
             <a href="/" class="nav-link"><span class="nav-icon">📡</span> <span class="nav-text">Live Warboard</span></a>
-            <a href="/dashboard.html" class="nav-link"><span class="nav-icon">📊</span> <span class="nav-text">Operations Hub</span></a>
             <a href="/chain.html" class="nav-link"><span class="nav-icon">🔗</span> <span class="nav-text">Chain Sentinel</span></a>
-            <a href="/dashboard.html#armory" class="nav-link"><span class="nav-icon">🛡️</span> <span class="nav-text">Armory Tracker</span></a>
+            <a href="/dashboard.html" class="nav-link"><span class="nav-icon">📊</span> <span class="nav-text">Operations Overview</span></a>
+            <a href="/armory.html" class="nav-link"><span class="nav-icon">🛡️</span> <span class="nav-text">Armory &amp; Logistics</span></a>
+            <a href="/gym-stats.html" class="nav-link active"><span class="nav-icon">🏋️</span> <span class="nav-text">Gym &amp; Stat Tracker</span></a>
             <a href="/payout.html" class="nav-link"><span class="nav-icon">💰</span> <span class="nav-text">War Payouts</span></a>
             <a href="/members.html" class="nav-link"><span class="nav-icon">👥</span> <span class="nav-text">Faction Roster</span></a>
-            <a href="/gym-stats.html" class="nav-link active"><span class="nav-icon">🏋️</span> <span class="nav-text">Gym &amp; Stat Tracker</span></a>
             <a href="/oc.html" class="nav-link"><span class="nav-icon">💼</span> <span class="nav-text">OC Manager</span></a>
 
             <div class="nav-section-title">Tactical Desk</div>
             <a href="/dashboard.html#sentinel" class="nav-link"><span class="nav-icon">✈️</span> <span class="nav-text">Airspace &amp; War Intel</span></a>
-            <a href="/travel.html" class="nav-link"><span class="nav-icon">✈️</span> <span class="nav-text">Travel Profit Desk</span></a>
+            <a href="/travel.html" class="nav-link"><span class="nav-icon">🌍</span> <span class="nav-text">Travel Profit Desk</span></a>
             <a href="/bazaar.html" class="nav-link"><span class="nav-icon">🛒</span> <span class="nav-text">Market &amp; Bazaar</span></a>
             <a href="/company.html" class="nav-link"><span class="nav-icon">🏢</span> <span class="nav-text">Company Hub</span></a>
             <a href="/gamble.html" class="nav-link"><span class="nav-icon">🎰</span> <span class="nav-text">Casino Analytics</span></a>
@@ -634,7 +629,7 @@
             <div class="topbar-left">
                 <button class="toggle-btn" onclick="toggleSidebar()" title="Toggle Sidebar" id="mobile-nav-toggle" style="display:none;">☰</button>
                 <div class="topbar-crumb" id="topbar-breadcrumb">
-                    <span>OPERATIONS</span> / <a href="/dashboard.html#gym" style="color:var(--text-secondary); text-decoration:none;">FACTION DASHBOARD</a> / <strong id="gym-crumb-sub" style="color:var(--text-primary);">GYM COMMAND • OVERVIEW</strong>
+                    <span>OPERATIONS</span> / <span>GYM &amp; STAT TRACKER</span> / <strong id="gym-crumb-sub" style="color:var(--text-primary);">OVERVIEW</strong>
                 </div>
             </div>
             <div class="topbar-right">
@@ -652,40 +647,21 @@
         </header>
 
         <!-- APP CONTENT -->
-        <main class="content-area" style="padding: 24px;">
-            <!-- UNIFIED OPERATIONS HUB NAVIGATION -->
-            <div class="ops-nav-tabs">
-                <a href="/dashboard.html#overview" class="ops-tab-btn">
-                    <span>📊</span> Operations Overview
-                </a>
-                <a href="/dashboard.html#armory" class="ops-tab-btn">
-                    <span>🪖</span> Armory &amp; Logistics
-                </a>
-                <a href="/dashboard.html#sentinel" class="ops-tab-btn">
-                    <span>✈️</span> Airspace &amp; War Intel
-                </a>
-                <a href="/dashboard.html#gym" class="ops-tab-btn active" title="Switch back to Operations Hub Gym Summary or stay in Full Gym Desk">
-                    <span>🏋️</span> Gym &amp; Stat Tracker
-                </a>
-            </div>
-
+        <main class="content-area" style="padding: 20px 24px;">
             <!-- EXECUTIVE GYM HERO -->
             <div class="gym-hero">
                 <div>
                     <div style="display:flex; align-items:center; flex-wrap:wrap; gap:10px;">
-                        <h1 style="margin:0; font-size:1.5em; font-weight:900; letter-spacing:-0.4px; color:var(--text-primary); display:flex; align-items:center; gap:8px;">
+                        <h1 style="margin:0; font-size:1.45em; font-weight:900; letter-spacing:-0.4px; color:var(--text-primary); display:flex; align-items:center; gap:8px;">
                             <span>🏋️ Faction Gym &amp; Battle Stat Command</span>
                         </h1>
-                        <span class="badge" style="background:rgba(59,130,246,0.14); color:var(--accent-cobalt); border:1px solid rgba(59,130,246,0.32); font-weight:700;">Full Tactical Desk</span>
+                        <span class="badge" style="background:rgba(59,130,246,0.14); color:var(--accent-cobalt); border:1px solid rgba(59,130,246,0.32); font-weight:700;">Live Telemetry</span>
                     </div>
                     <div style="font-size:0.84em; color:var(--text-secondary); margin-top:5px; max-width:720px; line-height:1.4;">
                         Exact Xanax intake since 00:00 TCT, drug cooldown inactive hours, battle stat velocity, Steadfast perks, and Fair Fight readiness.
                     </div>
                 </div>
                 <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-                    <a href="/dashboard.html#gym" class="btn btn-sm btn-outline" style="text-decoration:none; font-weight:700;" title="Return to Regular Gym Summary in Operations Hub">
-                        <span>←</span> Regular Summary
-                    </a>
                     <button class="btn btn-sm btn-outline btn-outline-amber" id="btn-privacy" onclick="openPrivacySettingsModal()" title="Manage Battle Stat Privacy Tiers">
                         <span>🔒</span> Privacy Tiers
                     </button>
@@ -778,8 +754,8 @@
                 </div>
             </div>
 
-            <!-- FULL GYM DESK SUB-VIEWS -->
-            <div class="gym-subnav" role="tablist" aria-label="Full Gym Desk Sections">
+            <!-- GYM DESK SUB-VIEWS -->
+            <div class="gym-subnav" role="tablist" aria-label="Gym &amp; Stat Tracker Sections">
                 <button class="gym-subtab-btn active" id="tab-overview" onclick="switchTrackerView('overview')">
                     <span>📊</span> Faction Overview
                 </button>
@@ -791,9 +767,6 @@
                 </button>
                 <button class="gym-subtab-btn" id="tab-war" onclick="switchTrackerView('war')">
                     <span>⚔️</span> War Room &amp; Fair Fight
-                </button>
-                <button class="gym-subtab-btn" id="tab-sentinel" onclick="switchTrackerView('sentinel')">
-                    <span>✈️</span> Airspace &amp; War Intel
                 </button>
             </div>
 
@@ -850,6 +823,38 @@
                     </div>
                     <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:14px;" id="spotlight-gainers-grid">
                         <!-- Injected Top 3 Gainers -->
+                    </div>
+                </div>
+
+                <!-- NEW: Drug Cooldown Readiness & Daily 24h/Xanax Leaders -->
+                <div class="gym-readiness-grid">
+                    <div class="card" style="background:var(--bg-surface); border:1px solid var(--border-subtle); overflow:hidden;">
+                        <div style="padding:14px 18px; border-bottom:1px solid var(--border-subtle); background:var(--bg-elevated); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+                            <div>
+                                <h3 style="margin:0; font-size:1em; font-weight:800; color:var(--text-primary);">💊 Drug Cooldown &amp; Xanax Readiness</h3>
+                                <div style="font-size:0.74em; color:var(--text-tertiary); margin-top:2px;" id="cd-readiness-summary">Members off Drug CD (idle hours risking wasted Xanax / happy jumps)</div>
+                            </div>
+                            <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                                <button class="btn btn-xs btn-outline" onclick="copyDrugCdDiscordPings()" title="Copy off-CD reminder list for Discord">📋 Discord Pings</button>
+                                <button class="btn btn-xs btn-primary" onclick="switchTrackerView('roster', 'cd_idle')">Filter Off-CD →</button>
+                            </div>
+                        </div>
+                        <div id="overview-cd-readiness-list" style="max-height:290px; overflow-y:auto;">
+                            <div style="padding:20px; text-align:center; color:var(--text-tertiary); font-size:0.84em;">Loading live drug cooldowns...</div>
+                        </div>
+                    </div>
+
+                    <div class="card" style="background:var(--bg-surface); border:1px solid var(--border-subtle); overflow:hidden;">
+                        <div style="padding:14px 18px; border-bottom:1px solid var(--border-subtle); background:var(--bg-elevated); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+                            <div>
+                                <h3 style="margin:0; font-size:1em; font-weight:800; color:var(--text-primary);">⚡ Today's 24h Gains &amp; 00:00 TCT Xanax</h3>
+                                <div style="font-size:0.74em; color:var(--text-tertiary); margin-top:2px;">Click any member to inspect full progression dossier</div>
+                            </div>
+                            <button class="btn btn-xs btn-outline" onclick="switchTrackerView('roster')">Full Roster →</button>
+                        </div>
+                        <div id="overview-daily-leaders-list" style="max-height:290px; overflow-y:auto;">
+                            <div style="padding:20px; text-align:center; color:var(--text-tertiary); font-size:0.84em;">Loading daily gain &amp; Xanax leaders...</div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1086,85 +1091,6 @@
                                 </tbody>
                             </table>
                         </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- ══════════════════════════════════════════════════════════ -->
-            <!-- VIEW 5: AIRSPACE & WAR INTEL INTEGRATION                  -->
-            <!-- ══════════════════════════════════════════════════════════ -->
-            <div class="tracker-tab-pane" id="pane-sentinel">
-                <div class="card" style="padding:22px; background:var(--bg-surface); border:1px solid rgba(0,206,201,0.25); border-radius:12px; margin-bottom:20px;">
-                    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:14px; margin-bottom:18px;">
-                        <div>
-                            <div style="display:flex; align-items:center; gap:8px;">
-                                <h2 style="margin:0; font-size:1.35em; font-weight:900; color:var(--teal, #00cec9); display:flex; align-items:center; gap:8px;">
-                                    <span>✈️ Airspace &amp; War Intel Command</span>
-                                </h2>
-                                <span class="badge" style="background:rgba(0,206,201,0.12); color:var(--teal, #00cec9); border:1px solid rgba(0,206,201,0.3); font-weight:700;">Airtime &amp; Gym Velocity</span>
-                            </div>
-                            <div style="font-size:0.82em; color:var(--text-tertiary); margin-top:4px;">
-                                Monitor overseas flight schedules alongside battle stat training velocity, energy preservation, and defense readiness.
-                            </div>
-                        </div>
-                        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-                            <a href="/dashboard.html#sentinel" class="btn btn-sm btn-primary" style="font-weight:800; text-decoration:none;">
-                                <span>✈️</span> Full War Flight Audit →
-                            </a>
-                            <button class="btn btn-sm btn-outline" onclick="loadSentinelFlightData(true)" id="btn-refresh-sentinel-gym">
-                                <span>🔄</span> Refresh Status
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- 4 High Impact Flight & Training KPI Tiles -->
-                    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(190px, 1fr)); gap:12px; margin-bottom:20px;">
-                        <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border-default); border-radius:8px; padding:14px; text-align:center;">
-                            <div style="font-size:0.72em; text-transform:uppercase; font-weight:700; color:var(--text-tertiary);">Active Travelers Abroad</div>
-                            <div class="font-mono" style="font-size:1.6em; font-weight:900; color:var(--teal, #00cec9); margin-top:2px;" id="sentinel-stat-travelers">0</div>
-                            <div style="font-size:0.72em; color:var(--text-tertiary);" id="sentinel-stat-travelers-sub">In flight or abroad</div>
-                        </div>
-                        <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border-default); border-radius:8px; padding:14px; text-align:center;">
-                            <div style="font-size:0.72em; text-transform:uppercase; font-weight:700; color:var(--text-tertiary);">Combat Defenders at Home</div>
-                            <div class="font-mono" style="font-size:1.6em; font-weight:900; color:var(--accent-amber);" id="sentinel-stat-defenders">0</div>
-                            <div style="font-size:0.72em; color:var(--text-tertiary);">In Torn City</div>
-                        </div>
-                        <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border-default); border-radius:8px; padding:14px; text-align:center;">
-                            <div style="font-size:0.72em; text-transform:uppercase; font-weight:700; color:var(--text-tertiary);">Active Gym Gainers Abroad</div>
-                            <div class="font-mono" style="font-size:1.6em; font-weight:900; color:var(--accent-emerald);" id="sentinel-travel-gainers">0</div>
-                            <div style="font-size:0.72em; color:var(--text-tertiary);">Flying while maintaining stats</div>
-                        </div>
-                        <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border-default); border-radius:8px; padding:14px; text-align:center;">
-                            <div style="font-size:0.72em; text-transform:uppercase; font-weight:700; color:var(--text-tertiary);">Total Faction Verified TBS</div>
-                            <div class="font-mono" style="font-size:1.6em; font-weight:900; color:var(--accent-cyan);" id="sentinel-verified-tbs">—</div>
-                            <div style="font-size:0.72em; color:var(--text-tertiary);">Tracked battle stats</div>
-                        </div>
-                    </div>
-
-                    <!-- Traveling Roster Grid -->
-                    <div style="margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
-                        <h4 style="margin:0; font-size:0.92em; font-weight:800; color:var(--text-primary); display:flex; align-items:center; gap:6px;">
-                            <span>🌐 Faction Members Currently Traveling / Abroad</span>
-                        </h4>
-                        <span style="font-size:0.76em; color:var(--text-tertiary);" id="sentinel-travel-count">0 members</span>
-                    </div>
-                    <div class="scrollable" style="max-height:360px; overflow-x:auto; border:1px solid var(--border-default); border-radius:8px;">
-                        <table class="tracker-table" style="width:100%; border-collapse:collapse; min-width:800px;">
-                            <thead style="background:var(--bg-elevated); position:sticky; top:0; z-index:2; border-bottom:1px solid var(--border-default);">
-                                <tr style="color:var(--text-tertiary); font-size:0.86em; text-transform:uppercase; letter-spacing:0.5px;">
-                                    <th style="padding:10px 14px;">Member</th>
-                                    <th style="padding:10px 12px;">Travel Status</th>
-                                    <th style="padding:10px 12px;">Destination / State</th>
-                                    <th style="padding:10px 12px;">Total Battle Stats</th>
-                                    <th style="padding:10px 12px;">7d Gain Velocity</th>
-                                    <th style="padding:10px 12px;">Training Status</th>
-                                    <th style="padding:10px 14px; text-align:center;">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="sentinel-travel-tbody">
-                                <tr><td colspan="7" style="text-align:center; padding:24px; color:var(--text-tertiary);">Loading traveling members and flight telemetry...</td></tr>
-                            </tbody>
-                        </table>
                     </div>
                 </div>
             </div>
@@ -1616,7 +1542,7 @@
         if (!c) return;
         const t = document.createElement('div');
         t.className = `toast-msg ${type}`;
-        t.innerHTML = `<span>${type === 'success' ? '✅' : (type === 'warn' ? '⚠️' : '❌')}</span> <span>${msg}</span>`;
+        t.innerHTML = `<span>${type === 'success' ? '✅' : (type === 'warn' ? '⚠️' : '❌')}</span> <span>${escapeHtml(msg)}</span>`;
         c.appendChild(t);
         setTimeout(() => {
             t.style.opacity = '0';
@@ -1627,11 +1553,10 @@
 
     // ─── Tab Switching & Hash Routing ───
     const GYM_VIEW_LABELS = {
-        overview: 'GYM COMMAND • OVERVIEW',
-        roster: 'GYM COMMAND • ROSTER & COOLDOWNS',
-        contests: 'GYM COMMAND • CONTESTS',
-        war: 'GYM COMMAND • WAR & FAIR FIGHT',
-        sentinel: 'GYM COMMAND • AIRSPACE & WAR INTEL'
+        overview: 'OVERVIEW',
+        roster: 'ROSTER & COOLDOWNS',
+        contests: 'CONTESTS',
+        war: 'WAR & FAIR FIGHT'
     };
 
     function getRequestedTrackerHash() {
@@ -1651,7 +1576,7 @@
         document.querySelectorAll('.tracker-tab-pane').forEach(p => p.classList.toggle('active', p.id === `pane-${safeView}`));
 
         const crumb = document.getElementById('gym-crumb-sub');
-        if (crumb) crumb.textContent = GYM_VIEW_LABELS[safeView] || 'GYM COMMAND';
+        if (crumb) crumb.textContent = GYM_VIEW_LABELS[safeView] || 'OVERVIEW';
 
         if (updateHash && window.location.hash !== `#${safeView}`) {
             try { window.history.replaceState(null, '', `#${safeView}`); } catch (_) {}
@@ -1674,111 +1599,7 @@
             loadCompetitions();
         } else if (safeView === 'war') {
             loadWarReadiness();
-        } else if (safeView === 'sentinel') {
-            loadSentinelFlightData();
         }
-    }
-
-    // ─── Airspace & War Intel Integration Loader ───
-    async function loadSentinelFlightData(force = false) {
-        const tbody = document.getElementById('sentinel-travel-tbody');
-        if (!tbody) return;
-        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:24px; color:var(--text-tertiary);"><span class="loading-spinner"></span> Refreshing travel & flight telemetry...</td></tr>`;
-
-        // Ensure roster data is loaded
-        if (!currentRoster || currentRoster.length === 0 || force) {
-            await loadRoster(force);
-        }
-
-        const members = currentRoster || [];
-        const travelers = members.filter(m => {
-            const state = m.status?.state || '';
-            return state === 'Traveling' || state === 'Abroad';
-        });
-
-        const defenders = members.filter(m => {
-            const state = m.status?.state || '';
-            return state !== 'Traveling' && state !== 'Abroad' && state !== 'Hospital' && state !== 'Jail' && state !== 'Federal';
-        });
-
-        const travelingGainers = travelers.filter(m => (m.gains?.gain7d?.total || 0) > 0);
-
-        // Update KPIs
-        const elTrav = document.getElementById('sentinel-stat-travelers');
-        const elTravSub = document.getElementById('sentinel-stat-travelers-sub');
-        const elDef = document.getElementById('sentinel-stat-defenders');
-        const elGainers = document.getElementById('sentinel-travel-gainers');
-        const elTbs = document.getElementById('sentinel-verified-tbs');
-        const elCount = document.getElementById('sentinel-travel-count');
-
-        if (elTrav) elTrav.textContent = travelers.length;
-        if (elTravSub) elTravSub.textContent = `${travelers.length} of ${members.length} members away`;
-        if (elDef) elDef.textContent = defenders.length;
-        if (elGainers) elGainers.textContent = travelingGainers.length;
-        if (elCount) elCount.textContent = `${travelers.length} members away`;
-
-        if (currentDashboard && currentDashboard.kpis) {
-            if (elTbs) elTbs.textContent = fmt(currentDashboard.kpis.totalBattleStats || 0);
-        }
-
-        if (travelers.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:28px; color:var(--text-tertiary);">✈️ No faction members currently overseas or traveling. All members in Torn City or local status.</td></tr>`;
-            return;
-        }
-
-        // Render traveling members
-        tbody.innerHTML = travelers.map(m => {
-            const state = m.status?.state || 'Unknown';
-            const desc = m.status?.description || state;
-            const totalStats = m.stats?.total || 0;
-            const tbsVal = m.stats?.masked ? '🔒 Masked' : (totalStats > 0 ? fmt(totalStats) : '—');
-            const g7d = m.gains?.gain7d?.total || 0;
-            const gClass = g7d > 0 ? 'text-green' : 'text-dim';
-            const gStr = g7d > 0 ? `+${fmt(g7d)}` : (g7d < 0 ? fmt(g7d) : '0');
-            const sourceBadge = m.isConfirmed
-                ? `<span class="badge" style="background:rgba(16,185,129,0.14); color:#6ee7b7; border:1px solid rgba(16,185,129,0.3); font-size:0.68em; margin-left:4px;">${m.hasApiKey ? '✓ API Key' : '✓ Confirmed'}</span>`
-                : `<span class="badge" style="background:rgba(245,158,11,0.14); color:#fcd34d; border:1px solid rgba(245,158,11,0.3); font-size:0.68em; margin-left:4px;">~ Estimated</span>`;
-            const trainingStatus = g7d > 0 
-                ? `<span class="badge" style="background:rgba(16,185,129,0.12); color:#6ee7b7; border:1px solid rgba(16,185,129,0.3);">Active Gainer</span>`
-                : `<span class="badge" style="background:rgba(239,68,68,0.1); color:#fca5a5; border:1px solid rgba(239,68,68,0.25);">No 7d Gain</span>`;
-
-            return `
-                <tr style="border-bottom:1px solid var(--border-subtle);">
-                    <td style="padding:10px 14px;">
-                        <div style="font-weight:700; color:var(--text-primary); display:flex; align-items:center; flex-wrap:wrap; gap:4px;">
-                            <a href="https://www.torn.com/profiles.php?XID=${m.playerId}" target="_blank" rel="noopener noreferrer" style="color:var(--text-primary); text-decoration:none;">
-                                ${escapeHtml(m.playerName)}
-                            </a>
-                            <span style="font-size:0.8em; color:var(--text-tertiary); font-family:var(--font-mono);">[${m.playerId}]</span>
-                            ${sourceBadge}
-                        </div>
-                        <div style="font-size:0.75em; color:var(--text-tertiary);">Lv ${m.level || 1} • ${m.archetype || 'Balanced'}</div>
-                    </td>
-                    <td style="padding:10px 12px;">
-                        <span class="badge" style="background:rgba(0,206,201,0.15); color:var(--teal, #00cec9); border:1px solid rgba(0,206,201,0.3); font-weight:700;">
-                            ✈️ ${escapeHtml(state)}
-                        </span>
-                    </td>
-                    <td style="padding:10px 12px; font-size:0.82em; color:var(--text-secondary);">
-                        ${escapeHtml(desc)}
-                    </td>
-                    <td style="padding:10px 12px; font-family:var(--font-mono); font-weight:700; color:var(--accent-amber);">
-                        ${tbsVal}
-                    </td>
-                    <td style="padding:10px 12px; font-family:var(--font-mono); font-weight:700;" class="${gClass}">
-                        ${gStr}
-                    </td>
-                    <td style="padding:10px 12px;">
-                        ${trainingStatus}
-                    </td>
-                    <td style="padding:10px 14px; text-align:center;">
-                        <button class="btn btn-xs btn-outline" onclick="openMemberDrawer('${m.playerId}')" style="font-size:0.74em; padding:3px 8px;">
-                            Inspect
-                        </button>
-                    </td>
-                </tr>
-            `;
-        }).join('');
     }
 
     // ─── Load Dashboard Data ───
@@ -1963,6 +1784,7 @@
             if (data && data.success) {
                 currentRoster = data.members || [];
                 renderSpotlightGainers(currentRoster);
+                renderOverviewReadinessAndLeaders(currentRoster);
                 filterRoster();
             }
         } catch(e) {
@@ -1992,6 +1814,103 @@
                 </div>
             `;
         }).join('');
+    }
+
+    function renderOverviewReadinessAndLeaders(roster) {
+        const cdListEl = document.getElementById('overview-cd-readiness-list');
+        const cdSumEl = document.getElementById('cd-readiness-summary');
+        const leadersEl = document.getElementById('overview-daily-leaders-list');
+        const members = Array.isArray(roster) ? roster : [];
+
+        if (cdListEl) {
+            const tracked = members.map(m => ({ m, live: getLiveDrugCooldownState(m.drugCooldown) })).filter(x => x.live.tracked);
+            const idleList = tracked.filter(x => !x.live.active).sort((a, b) => (b.live.inactiveHours || 0) - (a.live.inactiveHours || 0));
+            const activeCnt = tracked.length - idleList.length;
+
+            if (cdSumEl) {
+                cdSumEl.textContent = `${activeCnt} on active Drug CD • ${idleList.length} off Drug CD • ${members.length - tracked.length} unlinked`;
+            }
+
+            if (!tracked.length) {
+                cdListEl.innerHTML = '<div style="padding:20px; text-align:center; color:var(--text-tertiary); font-size:0.84em;">🔑 Connect member API keys to monitor live drug cooldown windows.</div>';
+            } else if (!idleList.length) {
+                cdListEl.innerHTML = '<div style="padding:22px; text-align:center; color:var(--accent-emerald); font-weight:700; font-size:0.86em;">🟢 All connected members currently have active drug cooldowns!</div>';
+            } else {
+                cdListEl.innerHTML = idleList.slice(0, 10).map(({ m, live }) => {
+                    const hrs = Number(live.inactiveHours || 0);
+                    const missed = Math.floor(hrs / 7);
+                    const color = hrs >= 6 ? 'var(--accent-crimson)' : (hrs >= 1 ? 'var(--accent-amber)' : 'var(--accent-cyan)');
+                    const durText = hrs < 1 ? `${Math.max(1, Math.round(hrs * 60))}m` : `${hrs.toFixed(1)}h`;
+                    return `<div class="readiness-row" style="cursor:pointer;" onclick="openMemberDrawer('${escapeHtml(String(m.playerId))}')">
+                        <div>
+                            <div style="font-weight:700; color:var(--text-primary);">${escapeHtml(m.playerName)} <span style="font-size:0.78em; color:var(--text-tertiary);">[${escapeHtml(String(m.playerId))}]</span></div>
+                            <div style="font-size:0.74em; color:var(--text-tertiary);">${missed >= 1 ? `~${missed} Xanax / jump window${missed > 1 ? 's' : ''} uncooled` : 'Ready for Xanax or jump'}</div>
+                        </div>
+                        <span style="font-family:var(--font-mono); font-weight:800; color:${color}; white-space:nowrap;">⏱️ ${durText} off CD</span>
+                    </div>`;
+                }).join('');
+            }
+        }
+
+        if (leadersEl) {
+            const gain24 = [...members]
+                .filter(m => !m.stats?.masked && Number(m.gains?.gain24h?.total || 0) > 0)
+                .sort((a, b) => Number(b.gains?.gain24h?.total || 0) - Number(a.gains?.gain24h?.total || 0))
+                .slice(0, 5);
+            const xanLeaders = [...members]
+                .filter(m => m.xanax?.hasExactTotal && Number(m.xanax?.takenTodayTct || 0) > 0)
+                .sort((a, b) => (Number(b.xanax?.takenTodayTct || 0) - Number(a.xanax?.takenTodayTct || 0)) || (Number(b.xanax?.exactTotal || 0) - Number(a.xanax?.exactTotal || 0)))
+                .slice(0, 5);
+
+            if (!gain24.length && !xanLeaders.length) {
+                leadersEl.innerHTML = '<div style="padding:20px; text-align:center; color:var(--text-tertiary); font-size:0.84em;">Sync snapshots to populate 24h stat gainers and 00:00 TCT Xanax leaders.</div>';
+            } else {
+                const gainHtml = gain24.length
+                    ? gain24.map((m, i) => `<div class="readiness-row" style="cursor:pointer;" onclick="openMemberDrawer('${escapeHtml(String(m.playerId))}')">
+                        <span><strong>#${i + 1}</strong> ${escapeHtml(m.playerName)}</span>
+                        <span class="font-mono" style="color:var(--accent-emerald); font-weight:800;">+${fmt(m.gains?.gain24h?.total || 0)}</span>
+                    </div>`).join('')
+                    : '<div style="padding:10px 12px; color:var(--text-tertiary); font-size:0.8em;">No 24h gain deltas yet</div>';
+
+                const xanHtml = xanLeaders.length
+                    ? xanLeaders.map((m, i) => `<div class="readiness-row" style="cursor:pointer;" onclick="openMemberDrawer('${escapeHtml(String(m.playerId))}')">
+                        <span><strong>#${i + 1}</strong> ${escapeHtml(m.playerName)}</span>
+                        <span class="font-mono" style="color:var(--accent-purple); font-weight:800;">+${fmt(m.xanax?.takenTodayTct || 0)} TCT <span style="color:var(--text-tertiary); font-weight:600; font-size:0.85em;">(${fmt(m.xanax?.exactTotal || 0)})</span></span>
+                    </div>`).join('')
+                    : '<div style="padding:10px 12px; color:var(--text-tertiary); font-size:0.8em;">No 00:00 TCT Xanax logged yet</div>';
+
+                leadersEl.innerHTML = `
+                    <div style="padding:7px 12px; font-size:0.72em; font-weight:800; text-transform:uppercase; color:var(--accent-emerald); background:rgba(16,185,129,0.06); border-bottom:1px solid var(--border-subtle);">📈 Top 24h Gains</div>
+                    ${gainHtml}
+                    <div style="padding:7px 12px; font-size:0.72em; font-weight:800; text-transform:uppercase; color:var(--accent-purple); background:rgba(139,92,246,0.06); border-top:1px solid var(--border-subtle); border-bottom:1px solid var(--border-subtle);">💊 Top Xanax Since 00:00 TCT</div>
+                    ${xanHtml}
+                `;
+            }
+        }
+    }
+
+    function copyDrugCdDiscordPings() {
+        const idle = (currentRoster || [])
+            .map(m => ({ m, live: getLiveDrugCooldownState(m.drugCooldown) }))
+            .filter(x => x.live.tracked && !x.live.active)
+            .sort((a, b) => (b.live.inactiveHours || 0) - (a.live.inactiveHours || 0));
+
+        if (!idle.length) {
+            showToast('All connected members currently have active drug cooldowns!', 'success');
+            return;
+        }
+
+        let md = '💊 **Off Drug Cooldown — Xanax / Happy Jump Ready**\n\n';
+        idle.forEach((x, idx) => {
+            const hrs = Number(x.live.inactiveHours || 0);
+            const durText = hrs < 1 ? `${Math.max(1, Math.round(hrs * 60))}m` : `${hrs.toFixed(1)}h`;
+            md += `${idx + 1}. **${x.m.playerName}** — ${durText} off CD\n`;
+        });
+        md += `\n**Total Ready / Uncooled:** ${idle.length} member${idle.length === 1 ? '' : 's'}`;
+
+        navigator.clipboard.writeText(md).then(() => {
+            showToast(`Copied ${idle.length} off-CD reminder entries for Discord!`, 'success');
+        }).catch(() => showToast('Clipboard copy blocked', 'error'));
     }
 
     function setRosterTimeframe(tf, btn) {

@@ -69,10 +69,10 @@
       "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
     },
     {
-      "name": "Armory Tracker",
+      "name": "Armory & Logistics",
       "short_name": "Armory",
-      "description": "Monitor faction supplies, usage, and member ledger",
-      "url": "/dashboard.html#armory",
+      "description": "Monitor faction supplies, blood bag fills, usage, and member ledger",
+      "url": "/armory.html?source=shortcut",
       "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
     },
     {
