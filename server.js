@@ -7905,11 +7905,80 @@ function parseArmoryNews(entries) {
 const dashboardDataCache = {};
 global.dashboardDataCache = dashboardDataCache;
 
+// Track working Faction AA keys and temporarily exhausted (code 14 / 5 / 7 / 18) keys per faction
+const lastWorkingArmoryKeyByFac = new Map();
+const exhaustedArmoryKeysUntil = new Map();
+
+function markArmoryKeyExhausted(key, errorCode) {
+    if (!key) return;
+    const k = String(key).trim();
+    // code 14 = Daily read limit reached (cool down 30m), code 5 = rate limit (1m), code 2/7/16/18 = invalid/no-AA/paused (60m)
+    const ttlMs = errorCode === 5 ? 60 * 1000 : (errorCode === 14 ? 30 * 60 * 1000 : 60 * 60 * 1000);
+    exhaustedArmoryKeysUntil.set(k, Date.now() + ttlMs);
+    for (const [facId, savedKey] of lastWorkingArmoryKeyByFac.entries()) {
+        if (savedKey === k) lastWorkingArmoryKeyByFac.delete(facId);
+    }
+}
+
+function markArmoryKeyWorking(targetFacId, key) {
+    if (!targetFacId || !key) return;
+    const facStr = String(targetFacId).trim();
+    const k = String(key).trim();
+    if (facStr && facStr !== '0' && k.length >= 10) {
+        lastWorkingArmoryKeyByFac.set(facStr, k);
+        exhaustedArmoryKeysUntil.delete(k);
+    }
+}
+
+function getFactionArmoryCandidateKeys(targetFacId, primaryKey = null) {
+    const facStr = String(targetFacId || '').trim();
+    const hostFacStr = String(discordConfig.factionId || dynamicFactionId || '52355').trim();
+    const isHostFac = Boolean(!facStr || (hostFacStr && facStr === hostFacStr));
+
+    const rawCandidates = [];
+    const lastGood = facStr ? lastWorkingArmoryKeyByFac.get(facStr) : lastWorkingArmoryKeyByFac.get(hostFacStr);
+    if (lastGood) rawCandidates.push(lastGood);
+    if (primaryKey) rawCandidates.push(primaryKey);
+    if (facStr) {
+        const facCfgKey = getFactionDiscordConfig(facStr)?.apiKey;
+        if (facCfgKey) rawCandidates.push(facCfgKey);
+    }
+    if (isHostFac) {
+        if (Array.isArray(apiPoolConfig?.keys)) {
+            for (const pk of apiPoolConfig.keys) {
+                const k = typeof pk === 'string' ? pk : pk?.key;
+                if (k) rawCandidates.push(k);
+            }
+        }
+        if (discordConfig?.apiKey) rawCandidates.push(discordConfig.apiKey);
+        if (typeof TORN_API_KEY !== 'undefined' && TORN_API_KEY) rawCandidates.push(TORN_API_KEY);
+    }
+
+    const now = Date.now();
+    const available = [];
+    const allUnique = [];
+    const seen = new Set();
+    for (const raw of rawCandidates) {
+        if (!raw || typeof raw !== 'string') continue;
+        const k = raw.trim();
+        if (k.length < 10 || k === 'null' || k === 'undefined') continue;
+        if (seen.has(k)) continue;
+        seen.add(k);
+        allUnique.push(k);
+        const blockedUntil = exhaustedArmoryKeysUntil.get(k) || 0;
+        if (blockedUntil <= now) {
+            available.push(k);
+        }
+    }
+    return available.length > 0 ? available : allUnique;
+}
+
 app.get('/api/dashboard-data', async (req, res) => {
     let userKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey;
     if (!userKey || userKey === 'null' || userKey === 'undefined' || userKey.trim() === '') {
         if (req.userSession) {
-            userKey = discordConfig.apiKey;
+            const initCandidates = getFactionArmoryCandidateKeys(req.userSession.factionId, discordConfig.apiKey);
+            userKey = initCandidates[0] || discordConfig.apiKey;
         } else {
             return res.status(401).json({ error: "Authentication required" });
         }
@@ -7946,10 +8015,14 @@ app.get('/api/dashboard-data', async (req, res) => {
             targetFacId = discordConfig.factionId || dynamicFactionId || "";
         }
 
-        const keyScopeDigest = crypto.createHash('sha256').update(String(userKey)).digest('hex').slice(0, 8);
-        const cacheKey = `${targetFacId || 'default'}_${isPremium ? 'prem' : 'free'}_${keyScopeDigest}`;
+        const candidateKeys = getFactionArmoryCandidateKeys(targetFacId, userKey);
+        const primaryArmoryKey = candidateKeys[0] || userKey;
+        const cacheKey = `${targetFacId || 'default'}_${isPremium ? 'prem' : 'free'}_armory`;
         if (!req.query.force && dashboardDataCache[cacheKey] && (Date.now() - dashboardDataCache[cacheKey].timestamp) < 15000) {
-            return res.json(dashboardDataCache[cacheKey].data);
+            const cachedPayload = dashboardDataCache[cacheKey].data;
+            if (cachedPayload && !cachedPayload.armoryError && !cachedPayload.armory?.limitedAccess) {
+                return res.json(cachedPayload);
+            }
         }
 
         const nowSec = Math.floor(Date.now() / 1000);
@@ -7957,17 +8030,17 @@ app.get('/api/dashboard-data', async (req, res) => {
 
         // Fetch basic, armory (including medical, drugs, boosters, donations, armorynews with 30-day history), and chain/rankedwars in parallel for maximum speed
         const facSegment = targetFacId ? `/${targetFacId}` : '';
-        const basicUrl = `https://api.torn.com/faction${facSegment}?selections=basic&key=${userKey}`;
-        const armoryUrl = `https://api.torn.com/faction${facSegment}?selections=armor,weapons,temporary,medical,drugs,boosters,donations,armorynews&from=${thirtyDaysAgo}&key=${userKey}`;
+        const basicUrl = `https://api.torn.com/faction${facSegment}?selections=basic&key=${primaryArmoryKey}`;
+        const armoryUrl = `https://api.torn.com/faction${facSegment}?selections=armor,weapons,temporary,medical,drugs,boosters,donations,armorynews&from=${thirtyDaysAgo}&key=${primaryArmoryKey}`;
         const [basicResp, armoryResp, chainResp] = await Promise.all([
             fetch(basicUrl).catch(e => null),
             fetch(armoryUrl).catch(e => null),
-            fetch(`https://api.torn.com/faction${facSegment}?selections=chain,rankedwars&key=${userKey}`).catch(e => null)
+            fetch(`https://api.torn.com/faction${facSegment}?selections=chain,rankedwars&key=${primaryArmoryKey}`).catch(e => null)
         ]);
 
         let basicData = basicResp ? await basicResp.json().catch(() => ({})) : {};
         if (basicData.error && basicData.error.code === 6) {
-            const retryResp = await fetch(`https://api.torn.com/faction/?selections=basic&key=${userKey}`).catch(e => null);
+            const retryResp = await fetch(`https://api.torn.com/faction/?selections=basic&key=${primaryArmoryKey}`).catch(e => null);
             if (retryResp) basicData = await retryResp.json().catch(() => ({}));
         }
         if (basicData.error) return res.status(400).json({ error: basicData.error.error });
@@ -7983,26 +8056,50 @@ app.get('/api/dashboard-data', async (req, res) => {
         let loans = [];
         let armoryError = false;
         let isLimitedArmoryAccess = false;
-        let armoryQueryKey = userKey;
+        let armoryQueryKey = primaryArmoryKey;
         let armoryData = armoryResp ? await armoryResp.json().catch(() => ({ error: true })) : { error: true };
 
-        // Fallback to server/faction key ONLY if caller belongs to that same configured faction (strict multi-faction isolation)
-        const hostFacStr = String(discordConfig.factionId || dynamicFactionId || '');
-        const isCallerHostFac = Boolean(hostFacStr && targetFacId && String(targetFacId) === hostFacStr);
-        const factionApiKeyFallback = (targetFacId ? getFactionDiscordConfig(targetFacId)?.apiKey : null)
-            || (isCallerHostFac ? discordConfig.apiKey : null);
-        if (armoryData.error && factionApiKeyFallback && userKey !== factionApiKeyFallback) {
-            try {
-                const fallbackResp = await fetch(`https://api.torn.com/faction${facSegment}?selections=armor,weapons,temporary,medical,drugs,boosters,donations,armorynews&from=${thirtyDaysAgo}&key=${factionApiKeyFallback}`).catch(e => null);
-                if (fallbackResp) {
-                    const fallbackParsed = await fallbackResp.json().catch(() => ({ error: true }));
-                    if (!fallbackParsed.error) {
-                        armoryData = fallbackParsed;
-                        armoryQueryKey = factionApiKeyFallback;
+        if (!armoryData.error) {
+            markArmoryKeyWorking(targetFacId, primaryArmoryKey);
+        } else {
+            if (armoryData.error.code) markArmoryKeyExhausted(primaryArmoryKey, armoryData.error.code);
+            // Rotate through remaining candidate keys in the faction pool (handles code 14 Daily read limit reached, code 7 no-AA, code 18 paused)
+            for (const candKey of candidateKeys) {
+                if (candKey === primaryArmoryKey) continue;
+                try {
+                    const fallbackResp = await fetch(`https://api.torn.com/faction${facSegment}?selections=armor,weapons,temporary,medical,drugs,boosters,donations,armorynews&from=${thirtyDaysAgo}&key=${candKey}`).catch(() => null);
+                    if (fallbackResp) {
+                        const fallbackParsed = await fallbackResp.json().catch(() => ({ error: true }));
+                        if (!fallbackParsed.error) {
+                            armoryData = fallbackParsed;
+                            armoryQueryKey = candKey;
+                            markArmoryKeyWorking(targetFacId, candKey);
+                            break;
+                        } else if (fallbackParsed.error?.code) {
+                            markArmoryKeyExhausted(candKey, fallbackParsed.error.code);
+                        }
                     }
-                }
-            } catch(e) {}
+                } catch (e) {}
+            }
         }
+
+        // If all keys hit code 14 (Daily read limit reached on armorynews log selection), still load full medical/drugs/boosters/donations inventory without armorynews!
+        if (armoryData.error) {
+            for (const candKey of candidateKeys) {
+                try {
+                    const invResp = await fetch(`https://api.torn.com/faction${facSegment}?selections=armor,weapons,temporary,medical,drugs,boosters,donations&key=${candKey}`).catch(() => null);
+                    if (invResp) {
+                        const invParsed = await invResp.json().catch(() => ({ error: true }));
+                        if (!invParsed.error) {
+                            armoryData = invParsed;
+                            armoryQueryKey = candKey;
+                            break;
+                        }
+                    }
+                } catch (e) {}
+            }
+        }
+
         if (armoryData.error) {
             try {
                 const fallbackResp = await fetch(`https://api.torn.com/faction${facSegment}?selections=armor,weapons,temporary&key=${userKey}`).catch(e => null);
@@ -8334,9 +8431,16 @@ app.get('/api/dashboard-data', async (req, res) => {
 // Helper: deep-paginate Torn faction armorynews without dropping same-second boundary entries
 const armoryHistoryCache = new Map();
 
-async function fetchArmoryNewsRange({ initialKey, fallbackKey = null, factionId = null, fromTs, toTs = null, maxPages = 60 }) {
+async function fetchArmoryNewsRange({ initialKey, fallbackKey = null, candidateKeys = [], factionId = null, fromTs, toTs = null, maxPages = 60 }) {
     const allEntries = {};
-    let activeKey = initialKey;
+    const keyPool = [...new Set([
+        ...(Array.isArray(candidateKeys) ? candidateKeys : []),
+        initialKey,
+        fallbackKey
+    ].filter(k => k && typeof k === 'string' && k.trim().length >= 10))];
+
+    let keyIdx = 0;
+    let activeKey = keyPool[0] || initialKey;
     let cursorTo = Number.isFinite(toTs) && toTs > 0 ? toTs : null;
     let pagesFetched = 0;
     let truncated = false;
@@ -8345,24 +8449,31 @@ async function fetchArmoryNewsRange({ initialKey, fallbackKey = null, factionId 
     const facSeg = (factionId && String(factionId) !== '0') ? `/${factionId}` : '';
 
     for (let p = 0; p < maxPages; p++) {
-        let url = `https://api.torn.com/faction${facSeg}?selections=armorynews&from=${fromTs}&key=${activeKey}`;
-        if (cursorTo) url += `&to=${cursorTo}`;
-
-        let r = await fetch(url).catch(() => null);
-        if (!r) break;
-        let d = await r.json().catch(() => ({}));
-
-        // If user's personal key lacks faction permissions (code 7) or is invalid (code 2), retry with faction key
-        if (d.error && (d.error.code === 7 || d.error.code === 2) && fallbackKey && activeKey !== fallbackKey) {
-            activeKey = fallbackKey;
-            url = `https://api.torn.com/faction${facSeg}?selections=armorynews&from=${fromTs}&key=${activeKey}`;
+        let d = null;
+        // Try activeKey, and if it hits an API error (e.g. code 14 Daily read limit reached, code 7 no-AA, code 5 rate limit, code 18 paused), rotate through keyPool
+        while (keyIdx < keyPool.length) {
+            activeKey = keyPool[keyIdx];
+            let url = `https://api.torn.com/faction${facSeg}?selections=armorynews&from=${fromTs}&key=${activeKey}`;
             if (cursorTo) url += `&to=${cursorTo}`;
-            r = await fetch(url).catch(() => null);
-            if (!r) break;
-            d = await r.json().catch(() => ({}));
+
+            const r = await fetch(url).catch(() => null);
+            if (!r) {
+                keyIdx++;
+                continue;
+            }
+            const parsed = await r.json().catch(() => ({}));
+            if (parsed && !parsed.error && parsed.armorynews) {
+                d = parsed;
+                markArmoryKeyWorking(factionId || discordConfig.factionId || '52355', activeKey);
+                break;
+            }
+            if (parsed && parsed.error) {
+                markArmoryKeyExhausted(activeKey, parsed.error.code);
+            }
+            keyIdx++;
         }
 
-        if (d.error || !d.armorynews) break;
+        if (!d || d.error || !d.armorynews) break;
         const pairs = Object.entries(d.armorynews);
         if (!pairs.length) break;
 
@@ -8410,18 +8521,26 @@ async function fetchArmoryNewsRange({ initialKey, fallbackKey = null, factionId 
 
 // Dedicated Armory History & Audit Endpoint with custom day ranges and deep pagination
 app.get('/api/armory-history', async (req, res) => {
-    const sessionFacId = req.userSession?.factionId || req.headers['x-faction-id'] || null;
-    const hostFacIdStr = String(discordConfig.factionId || dynamicFactionId || '');
-    const isHostFac = Boolean(sessionFacId && hostFacIdStr && String(sessionFacId) === hostFacIdStr);
-    const facFallbackKey = (sessionFacId ? getFactionDiscordConfig(sessionFacId)?.apiKey : null)
-        || (isHostFac ? discordConfig.apiKey : null);
+    let sessionFacId = req.userSession?.factionId || req.headers['x-faction-id'] || req.query.factionId || null;
+    const hostFacIdStr = String(discordConfig.factionId || dynamicFactionId || '52355');
     let userKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey || req.query.key;
-    if (!userKey || userKey === 'null' || userKey === 'undefined' || userKey.trim() === '') {
-        if (req.userSession && facFallbackKey) {
-            userKey = facFallbackKey;
-        } else {
-            return res.status(401).json({ error: "Authentication required" });
-        }
+
+    if (!sessionFacId && userKey && userKey !== 'null' && userKey !== 'undefined') {
+        try {
+            const uInfo = await getUserFactionInfo(userKey);
+            if (uInfo?.facId) sessionFacId = String(uInfo.facId);
+        } catch (_) {}
+    }
+    if (!sessionFacId && req.userSession?.isSpiderVerse) {
+        sessionFacId = hostFacIdStr;
+    }
+
+    const candidateKeys = getFactionArmoryCandidateKeys(sessionFacId || hostFacIdStr, userKey);
+    if ((!userKey || userKey === 'null' || userKey === 'undefined' || userKey.trim() === '') && candidateKeys.length > 0 && req.userSession) {
+        userKey = candidateKeys[0];
+    }
+    if (!userKey && candidateKeys.length === 0) {
+        return res.status(401).json({ error: "Authentication required" });
     }
     try {
         let fromTs, toTs = null;
@@ -8434,21 +8553,20 @@ app.get('/api/armory-history', async (req, res) => {
             fromTs = Math.floor(Date.now() / 1000) - (86400 * days);
         }
         const maxPages = Math.min(120, Math.max(1, parseInt(req.query.pages || '60', 10)));
-        const keyDigest = crypto.createHash('sha256').update(String(userKey)).digest('hex').slice(0, 12);
-        const cacheKey = `${sessionFacId || 'default'}:${keyDigest}:${fromTs}:${toTs || 'now'}:${maxPages}`;
+        const cacheKey = `${sessionFacId || hostFacIdStr}:${fromTs}:${toTs || 'now'}:${maxPages}`;
 
         if (!req.query.force && armoryHistoryCache.has(cacheKey)) {
             const cached = armoryHistoryCache.get(cacheKey);
-            if ((Date.now() - cached.ts) < 45000) {
+            if ((Date.now() - cached.ts) < 45000 && cached.payload && cached.payload.eventsCount > 0) {
                 return res.json(cached.payload);
             }
             armoryHistoryCache.delete(cacheKey);
         }
 
         const { allEntries, pagesFetched, truncated, earliestTs, latestTs } = await fetchArmoryNewsRange({
-            initialKey: userKey,
-            fallbackKey: facFallbackKey,
-            factionId: sessionFacId,
+            initialKey: candidateKeys[0] || userKey,
+            candidateKeys,
+            factionId: sessionFacId || hostFacIdStr,
             fromTs,
             toTs,
             maxPages
@@ -8468,10 +8586,12 @@ app.get('/api/armory-history', async (req, res) => {
             stats
         };
 
-        armoryHistoryCache.set(cacheKey, { ts: Date.now(), payload });
-        if (armoryHistoryCache.size > 30) {
-            const oldestKey = armoryHistoryCache.keys().next().value;
-            if (oldestKey !== undefined) armoryHistoryCache.delete(oldestKey);
+        if (payload.eventsCount > 0) {
+            armoryHistoryCache.set(cacheKey, { ts: Date.now(), payload });
+            if (armoryHistoryCache.size > 30) {
+                const oldestKey = armoryHistoryCache.keys().next().value;
+                if (oldestKey !== undefined) armoryHistoryCache.delete(oldestKey);
+            }
         }
 
         res.json(payload);

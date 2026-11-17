@@ -1652,9 +1652,11 @@ async function loadArmoryAll(forceRefresh = false) {
             if (cachedDashStr) {
                 const cachedDash = JSON.parse(cachedDashStr);
                 const cachedWars = cachedWarsStr ? JSON.parse(cachedWarsStr) : { wars: [] };
-                if (cachedDash && !cachedDash.error) {
+                if (cachedDash && !cachedDash.error && !cachedDash.armoryError && !cachedDash.armory?.limitedAccess) {
                     dashData = { dash: cachedDash, wars: cachedWars };
                     renderArmory(cachedDash);
+                } else {
+                    sessionStorage.removeItem('sv_cache_dashboard');
                 }
             }
         } catch (_) {}
@@ -1665,6 +1667,8 @@ async function loadArmoryAll(forceRefresh = false) {
         if (myKey) reqHeaders['x-api-key'] = myKey;
         const tok = localStorage.getItem('sv_session_token');
         if (tok) reqHeaders['x-session-token'] = tok;
+        const fid = localStorage.getItem('warboard_myFactionId');
+        if (fid) reqHeaders['x-faction-id'] = fid;
 
         const [dashRes, warRes] = await Promise.all([
             fetch(`/api/dashboard-data${forceRefresh ? '?force=1' : ''}`, Object.keys(reqHeaders).length ? { headers: reqHeaders } : {}),
@@ -1681,7 +1685,11 @@ async function loadArmoryAll(forceRefresh = false) {
 
         dashData = { dash, wars };
         try {
-            sessionStorage.setItem('sv_cache_dashboard', JSON.stringify(dash));
+            if (!dash.armoryError && !dash.armory?.limitedAccess) {
+                sessionStorage.setItem('sv_cache_dashboard', JSON.stringify(dash));
+            } else {
+                sessionStorage.removeItem('sv_cache_dashboard');
+            }
             sessionStorage.setItem('sv_cache_wars', JSON.stringify(wars));
         } catch (_) {}
 
@@ -2105,6 +2113,8 @@ async function fetchConsumptionData(options = {}) {
         const tok = localStorage.getItem('sv_session_token');
         if (tok) h['x-session-token'] = tok;
         if (userKey) h['x-api-key'] = userKey;
+        const fid = currentArmoryData?.faction?.ID || localStorage.getItem('warboard_myFactionId');
+        if (fid) h['x-faction-id'] = String(fid);
 
         const resp = await fetch(`/api/armory-history?from=${fromTs}&to=${toTs}&pages=80${force ? '&force=1' : ''}`, Object.keys(h).length ? { headers: h } : {});
         const data = await resp.json();
@@ -2122,7 +2132,11 @@ async function fetchConsumptionData(options = {}) {
             if (data.truncated) {
                 showToast(`Loaded ${fmtNum(fetched.length)} events (hit 80-page cap — narrow date range for complete older history)`, 'warn');
             } else if (!silent) {
-                showToast(`Loaded ${fmtNum(fetched.length)} events for ${fromInput} → ${toInput}!`, 'success');
+                if (fetched.length > 0) {
+                    showToast(`Loaded ${fmtNum(fetched.length)} events for ${fromInput} → ${toInput}!`, 'success');
+                } else {
+                    showToast(`No armory events found for ${fromInput} → ${toInput}.`, 'warn');
+                }
             }
         } else if (!silent) {
             showToast('No armory events found for this range.', 'warn');
