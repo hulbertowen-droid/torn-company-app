@@ -586,6 +586,254 @@ function sanitizeErrorMessage(msg) {
 }
 
 /**
+ * Torn City Energy -> Xanax inference helper.
+ * Natural regen stops at >= maximum (100 / 150 / 250). Each Xanax adds +250e up to 1,000e cap.
+ * Minimum Xanax needed to sit at `current` energy (starting from <= maximum) is Math.ceil((current - maximum) / 250).
+ */
+function computeEnergyXanaxInference(energyObj, boosterCooldownSec = null, refillUsed = null) {
+    if (!energyObj || typeof energyObj.current !== 'number' || typeof energyObj.maximum !== 'number') {
+        return {
+            tracked: false,
+            current: null,
+            maximum: null,
+            pct: null,
+            excessEnergy: null,
+            minXanaxFromEnergy: null,
+            exactBaseE: null,
+            isStacked: false,
+            atHardCap: false,
+            boosterActive: false,
+            boosterCdSec: null,
+            refillUsed: null,
+            fulltimeSeconds: null,
+            isFull: false,
+            status: energyObj?.status || 'untracked',
+            keyAccessLevel: energyObj?.keyAccessLevel || null,
+            reasoning: energyObj?.errorReason || 'Link a Torn API key via Discord to read exact live energy',
+            lastCheckedAt: energyObj?.lastCheckedAt || null
+        };
+    }
+
+    const current = Math.max(0, Number(energyObj.current));
+    const maximum = Math.max(50, Number(energyObj.maximum) || 150);
+    const excessEnergy = Math.max(0, current - maximum);
+    const pct = Math.round((current / maximum) * 100);
+    const isStacked = current > maximum;
+    const atHardCap = current >= 1000;
+    const minXanaxFromEnergy = isStacked ? Math.ceil(excessEnergy / 250) : 0;
+    const exactBaseE = isStacked ? Math.max(0, current - (minXanaxFromEnergy * 250)) : current;
+
+    const effBoost = typeof boosterCooldownSec === 'number'
+        ? boosterCooldownSec
+        : (typeof energyObj.boosterCooldownSec === 'number' ? energyObj.boosterCooldownSec : null);
+    const boosterActive = typeof effBoost === 'number' && effBoost > 0;
+    const effRefill = typeof refillUsed === 'boolean'
+        ? refillUsed
+        : (typeof energyObj.refillUsed === 'boolean' ? energyObj.refillUsed : null);
+
+    let reasoning = '';
+    if (!isStacked) {
+        reasoning = `At ${current.toLocaleString()}/${maximum}e (within natural bar cap — 0 Xanax needed for current E)`;
+    } else if (atHardCap) {
+        reasoning = `${current.toLocaleString()}/${maximum}e hard cap (+${excessEnergy}e over ${maximum}e cap). 3 Xanax maxes at ${maximum + 750}e, so reaching ${current.toLocaleString()}e requires ${minXanaxFromEnergy} Xanax${boosterActive ? ' (booster CD also active)' : ''}.`;
+    } else {
+        const maxWithOneLess = maximum + ((minXanaxFromEnergy - 1) * 250);
+        reasoning = `${current.toLocaleString()}/${maximum}e (+${excessEnergy}e over ${maximum}e cap). ${minXanaxFromEnergy - 1} Xanax maxes at ${maxWithOneLess}e → requires at least ${minXanaxFromEnergy} Xanax (≈ ${exactBaseE}e + ${minXanaxFromEnergy}×250e)${boosterActive ? ' • Booster CD active' : ''}.`;
+    }
+
+    return {
+        tracked: true,
+        current,
+        maximum,
+        pct,
+        excessEnergy,
+        minXanaxFromEnergy,
+        exactBaseE,
+        isStacked,
+        atHardCap,
+        boosterActive,
+        boosterCdSec: effBoost,
+        refillUsed: effRefill,
+        fulltimeSeconds: typeof energyObj.fulltimeSeconds === 'number'
+            ? energyObj.fulltimeSeconds
+            : (typeof energyObj.fulltime === 'number' ? energyObj.fulltime : null),
+        isFull: Boolean(energyObj.isFull ?? (current >= maximum)),
+        status: energyObj.status || 'ok',
+        keyAccessLevel: energyObj.keyAccessLevel || null,
+        reasoning,
+        lastCheckedAt: energyObj.lastCheckedAt || null
+    };
+}
+
+/**
+ * Fetch lightweight bars + cooldowns + profile for Minimal / Restricted Torn API keys.
+ */
+async function fetchUserMinimalBars(apiKey) {
+    if (!apiKey) return { ok: false, data: null, errorCode: 2, errorText: 'Missing key' };
+    const cacheKey = crypto.createHash('sha256').update(`${apiKey}_minimal_bars`).digest('hex');
+    const now = Date.now();
+    if (userStatsCache.has(cacheKey)) {
+        const cached = userStatsCache.get(cacheKey);
+        if (now - cached.timestamp < STATS_CACHE_TTL_MS) {
+            return cached.payload;
+        }
+    }
+    try {
+        const url = `${TORN_BASE}/user/?selections=profile,bars,cooldowns&key=${apiKey}`;
+        const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+        const raw = await res.json();
+        if (raw.error || !raw.player_id) {
+            const payload = { ok: false, data: null, errorCode: raw.error?.code || 0, errorText: raw.error?.error || 'Unknown error' };
+            return payload;
+        }
+        const e = raw.energy || {};
+        const n = raw.nerve || {};
+        const h = raw.happy || {};
+        const lf = raw.life || {};
+        const c = raw.cooldowns || {};
+        const p = raw.status || {};
+        const energyCur = e.current ?? 0;
+        const energyMax = e.maximum ?? 100;
+        const energyFullSec = e.fulltime ?? 0;
+        const data = {
+            playerId: raw.player_id,
+            playerName: raw.name,
+            level: raw.level ?? 1,
+            keyAccessLevel: 'minimal',
+            energy: {
+                current: energyCur,
+                maximum: energyMax,
+                isFull: energyFullSec === 0 && energyCur >= energyMax,
+                fulltimeSeconds: energyFullSec,
+                fulltimeMinutes: Math.ceil(energyFullSec / 60)
+            },
+            nerve: {
+                current: n.current ?? 0,
+                maximum: n.maximum ?? 15,
+                isFull: (n.current ?? 0) >= (n.maximum ?? 15),
+                fulltimeSeconds: n.fulltime ?? 0,
+                fulltimeMinutes: Math.ceil((n.fulltime ?? 0) / 60)
+            },
+            happy: { current: h.current ?? 0, maximum: h.maximum ?? 100 },
+            life: { current: lf.current ?? 0, maximum: lf.maximum ?? 100 },
+            cooldowns: {
+                drug: c.drug ?? 0,
+                drugMinutes: Math.ceil((c.drug ?? 0) / 60),
+                booster: c.booster ?? 0,
+                boosterMinutes: Math.ceil((c.booster ?? 0) / 60),
+                medical: c.medical ?? 0,
+                medicalMinutes: Math.ceil((c.medical ?? 0) / 60)
+            },
+            status: { state: p.state || 'Okay', description: p.description || 'Okay' },
+            battlestats: null,
+            personalstats: null,
+            refills: null
+        };
+        const payload = { ok: true, data, errorCode: null, errorText: null, keyAccessLevel: 'minimal' };
+        userStatsCache.set(cacheKey, { payload, timestamp: now });
+        return payload;
+    } catch (err) {
+        return { ok: false, data: null, errorCode: -1, errorText: err.message };
+    }
+}
+
+/**
+ * Fetch live stats and preserve Torn API error code if access is minimal/paused/inactive.
+ */
+async function fetchUserBarsOrFull(apiKey, selections = 'profile,bars,cooldowns,battlestats,personalstats,refills') {
+    if (!apiKey) return { ok: false, data: null, errorCode: 2, errorText: 'Missing key' };
+    const cacheKey = crypto.createHash('sha256').update(`${apiKey}_barsorfull_${selections}`).digest('hex');
+    const now = Date.now();
+    if (userStatsCache.has(cacheKey)) {
+        const cached = userStatsCache.get(cacheKey);
+        if (now - cached.timestamp < STATS_CACHE_TTL_MS) {
+            return cached.payload;
+        }
+    }
+    try {
+        const url = `${TORN_BASE}/user/?selections=${selections}&key=${apiKey}`;
+        const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+        const raw = await res.json();
+        if (raw.error || !raw.player_id) {
+            const code = raw.error?.code || 0;
+            if (code === 16 || code === 7) {
+                const minRes = await fetchUserMinimalBars(apiKey);
+                if (minRes.ok) {
+                    userStatsCache.set(cacheKey, { payload: minRes, timestamp: now });
+                }
+                return minRes;
+            }
+            return { ok: false, data: null, errorCode: code, errorText: raw.error?.error || 'Torn API error' };
+        }
+        const e = raw.energy || {};
+        const n = raw.nerve || {};
+        const h = raw.happy || {};
+        const lf = raw.life || {};
+        const c = raw.cooldowns || {};
+        const p = raw.status || {};
+        const energyCur = e.current ?? 0;
+        const energyMax = e.maximum ?? 100;
+        const energyFullSec = e.fulltime ?? 0;
+        const data = {
+            playerId: raw.player_id,
+            playerName: raw.name,
+            level: raw.level ?? 1,
+            keyAccessLevel: 'full',
+            energy: {
+                current: energyCur,
+                maximum: energyMax,
+                isFull: energyFullSec === 0 && energyCur >= energyMax,
+                fulltimeSeconds: energyFullSec,
+                fulltimeMinutes: Math.ceil(energyFullSec / 60)
+            },
+            nerve: {
+                current: n.current ?? 0,
+                maximum: n.maximum ?? 15,
+                isFull: (n.current ?? 0) >= (n.maximum ?? 15),
+                fulltimeSeconds: n.fulltime ?? 0,
+                fulltimeMinutes: Math.ceil((n.fulltime ?? 0) / 60)
+            },
+            happy: { current: h.current ?? 0, maximum: h.maximum ?? 100 },
+            life: { current: lf.current ?? 0, maximum: lf.maximum ?? 100 },
+            cooldowns: {
+                drug: c.drug ?? 0,
+                drugMinutes: Math.ceil((c.drug ?? 0) / 60),
+                booster: c.booster ?? 0,
+                boosterMinutes: Math.ceil((c.booster ?? 0) / 60),
+                medical: c.medical ?? 0,
+                medicalMinutes: Math.ceil((c.medical ?? 0) / 60)
+            },
+            status: { state: p.state || 'Okay', description: p.description || 'Okay' },
+            battlestats: (raw.total !== undefined || raw.strength !== undefined) ? {
+                strength: raw.strength ?? 0,
+                defense: raw.defense ?? 0,
+                speed: raw.speed ?? 0,
+                dexterity: raw.dexterity ?? 0,
+                total: raw.total ?? 0,
+                modifiers: {
+                    strength: raw.strength_modifier ?? 0,
+                    defense: raw.defense_modifier ?? 0,
+                    speed: raw.speed_modifier ?? 0,
+                    dexterity: raw.dexterity_modifier ?? 0
+                }
+            } : null,
+            refills: raw.refills ? {
+                energy_refill_used: !!raw.refills.energy_refill_used,
+                nerve_refill_used: !!raw.refills.nerve_refill_used,
+                token_refill_used: !!raw.refills.token_refill_used,
+                special_refills_available: raw.refills.special_refills_available ?? 0
+            } : null,
+            personalstats: raw.personalstats || null
+        };
+        const payload = { ok: true, data, errorCode: null, errorText: null, keyAccessLevel: 'full' };
+        userStatsCache.set(cacheKey, { payload, timestamp: now });
+        return payload;
+    } catch (err) {
+        return { ok: false, data: null, errorCode: -1, errorText: err.message };
+    }
+}
+
+/**
  * Fetch live real-time user stats from Torn API with caching.
  * Supports all user selections: profile, bars, cooldowns, travel, merits, perks,
  * battlestats, workstats, money, refills, education, personalstats, crimes, inventory.
@@ -626,6 +874,12 @@ async function fetchUserLiveStats(apiKey, userQuery = "") {
         const raw = await res.json();
 
         if (raw.error || !raw.player_id) {
+            if (raw.error?.code === 16 || raw.error?.code === 7) {
+                const fallback = await fetchUserMinimalBars(apiKey);
+                if (fallback.ok && fallback.data) {
+                    return fallback.data;
+                }
+            }
             console.warn(`[UserKeys] Error fetching live stats:`, sanitizeErrorMessage(JSON.stringify(raw.error)));
             return null;
         }
@@ -1102,6 +1356,9 @@ module.exports = {
     getAllLinkedDiscordIds,
     getAllConnectedMembers,
     sanitizeErrorMessage,
+    computeEnergyXanaxInference,
+    fetchUserMinimalBars,
+    fetchUserBarsOrFull,
     fetchUserLiveStats,
     detectUserAccountIntent,
     formatDeterministicStatsReply,

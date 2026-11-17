@@ -981,6 +981,9 @@
                             <button class="btn btn-sm btn-outline" id="btn-toggle-cd-idle" onclick="toggleCdIdleFilter()" style="font-size:0.78em; padding:6px 10px;" title="Show connected members with no active drug cooldown (0s)">
                                 <span>💊</span> Off Drug CD
                             </button>
+                            <button class="btn btn-sm btn-outline" id="btn-toggle-stacked-e" onclick="toggleStackedEFilter()" style="font-size:0.78em; padding:6px 10px;" title="Show connected members currently stacking Energy above their bar maximum">
+                                <span>⚡</span> Stacked E (&gt;Max)
+                            </button>
                             <button class="btn btn-sm btn-outline" id="btn-copy-off-cd-roster" onclick="copyDrugCdDiscordPings(6)" style="font-size:0.78em; padding:6px 10px; border-color:rgba(139,92,246,0.45) !important; color:var(--accent-purple) !important; font-weight:700;" title="Copy Discord mentions for members whose Drug Cooldown has been 00:00 for over 6 hours">
                                 <span>💊</span> Copy Off-CD Pings
                             </button>
@@ -1011,12 +1014,13 @@
                                     <th onclick="sortRoster('dex')" data-sort="dex" style="cursor:pointer; min-width:98px;"><span style="color:var(--stat-dex);">🎯 Dexterity</span> <span class="sort-ind" id="sind-dex">↕</span></th>
                                     <th onclick="sortRoster('total')" data-sort="total" class="sort-th-active" style="cursor:pointer; min-width:128px;">Total / Gain (Δ) <span class="sort-ind" id="sind-total">↓</span></th>
                                     <th onclick="sortRoster('energy')" data-sort="energy" style="cursor:pointer; min-width:100px;" title="Estimated energy spent for the active window (0e when net gain is 0)">Est. Energy <span class="sort-ind" id="sind-energy">↕</span></th>
+                                    <th onclick="sortRoster('livee')" data-sort="livee" style="cursor:pointer; min-width:138px;" title="Exact live Torn Energy from linked Discord key and minimum Xanax needed to reach that E">⚡ Live E / Xan <span class="sort-ind" id="sind-livee">↕</span></th>
                                     <th onclick="sortRoster('xanax')" data-sort="xanax" style="cursor:pointer; min-width:126px;" title="Exact personalstats.xantaken total and count taken since 00:00 TCT">Exact Xanax (00:00 TCT) <span class="sort-ind" id="sind-xanax">↕</span></th>
                                     <th onclick="sortRoster('drugcd')" data-sort="drugcd" style="cursor:pointer; min-width:132px;" title="Hours since Torn Drug Cooldown expired (0 = currently active)">Drug CD Off <span class="sort-ind" id="sind-drugcd">↕</span></th>
                                 </tr>
                             </thead>
                             <tbody id="roster-tbody">
-                                <tr><td colspan="10" style="text-align:center; padding:32px; color:var(--text-tertiary);">Click Sync Live Stats to load faction roster.</td></tr>
+                                <tr><td colspan="11" style="text-align:center; padding:32px; color:var(--text-tertiary);">Click Sync Live Stats to load faction roster.</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -1250,6 +1254,11 @@
                         <div class="font-mono" style="font-size:1.25em; font-weight:900; color:var(--text-primary); margin-top:4px;" id="dos-cd-val">—</div>
                         <div style="font-size:0.72em; color:var(--text-tertiary); margin-top:3px;" id="dos-cd-sub">Continuous hours without an active drug cooldown</div>
                     </div>
+                    <div class="card drawer-card" style="padding:12px;">
+                        <div style="font-size:0.72em; text-transform:uppercase; font-weight:700; color:var(--accent-amber);">⚡ Live Energy &amp; Xanax Req</div>
+                        <div class="font-mono" style="font-size:1.25em; font-weight:900; color:var(--text-primary); margin-top:4px;" id="dos-live-e-val">—</div>
+                        <div style="font-size:0.72em; color:var(--text-tertiary); margin-top:3px;" id="dos-live-e-sub">Live Torn energy bar &amp; Xanax required to stack</div>
+                    </div>
                 </div>
 
                 <!-- Personal Milestone Goal -->
@@ -1479,6 +1488,7 @@
     let rosterSortAsc = false;
     let showSlackersOnly = false;
     let showCdIdleOnly = false;
+    let showStackedEOnly = false;
     let selectedPrivacyTier = 'full';
     let contestCountdownInterval = null;
     let lastMemberDrawerData = null;
@@ -1648,6 +1658,49 @@
         </div>`;
     }
 
+    function formatLiveEnergyHtml(m) {
+        if (m.stats?.masked) return '<span style="color:var(--text-tertiary);">🔒 Private</span>';
+        const le = m.liveEnergy;
+        if (!le || le.status === 'untracked') {
+            return '<span style="color:var(--text-tertiary); font-size:0.82em;" title="Link a Torn API key via Discord to read exact live energy">🔑 Key Req</span>';
+        }
+        if (le.status === 'key_paused' || le.status === 'key_inactive' || le.status === 'key_invalid') {
+            const label = le.status === 'key_paused' ? 'Key Paused' : (le.status === 'key_inactive' ? 'Key Inactive' : 'Key Invalid');
+            return `<div style="display:flex; flex-direction:column; gap:2px; align-items:flex-start;" title="${escapeHtml(le.reasoning || 'Torn API key error')}">
+                <span class="badge" style="font-size:0.74em; font-weight:700; padding:2px 7px; background:rgba(245,158,11,0.12); border:1px solid rgba(245,158,11,0.35); color:#f59e0b; white-space:nowrap;">⚠️ ${label}</span>
+                <span style="font-size:0.7em; color:var(--text-tertiary); white-space:nowrap;">Relink in Discord</span>
+            </div>`;
+        }
+        if (!le.tracked || typeof le.current !== 'number') {
+            return '<span style="color:var(--text-tertiary); font-size:0.82em;">🔑 Key Req</span>';
+        }
+        const cur = Number(le.current);
+        const max = Number(le.maximum || 150);
+        const xanReq = Number(le.minXanaxFromEnergy || 0);
+        const isStacked = Boolean(le.isStacked && xanReq > 0);
+        const atCap = Boolean(le.atHardCap || cur >= 1000);
+        const eColor = atCap ? '#f59e0b' : (isStacked ? '#c4b5fd' : (le.isFull ? 'var(--accent-emerald)' : 'var(--text-primary)'));
+        const checkedAgo = le.lastCheckedAt ? formatRelativeTime(le.lastCheckedAt) : '';
+        const titleTxt = `${le.reasoning || ''}${checkedAgo ? ` • Checked ${checkedAgo}` : ''}`;
+
+        if (isStacked) {
+            const bg = atCap ? 'rgba(245,158,11,0.16)' : 'rgba(139,92,246,0.16)';
+            const border = atCap ? 'rgba(245,158,11,0.45)' : 'rgba(139,92,246,0.45)';
+            const badgeColor = atCap ? '#fbbf24' : '#c4b5fd';
+            const boostNote = le.boosterActive ? ' • Boost' : '';
+            return `<div style="display:flex; flex-direction:column; gap:2px; align-items:flex-start;" title="${escapeHtml(titleTxt)}">
+                <span class="font-mono" style="font-weight:800; color:${eColor}; white-space:nowrap;">⚡ ${fmt(cur)} / ${fmt(max)}e</span>
+                <span class="font-mono" style="font-size:0.72em; font-weight:800; color:${badgeColor}; background:${bg}; border:1px solid ${border}; padding:1px 7px; border-radius:999px; white-space:nowrap;">${xanReq} Xan Req${boostNote}</span>
+            </div>`;
+        }
+
+        const baseHint = le.isFull ? 'Bar full • 0 Xan' : 'Natural bar • 0 Xan';
+        return `<div style="display:flex; flex-direction:column; gap:2px; align-items:flex-start;" title="${escapeHtml(titleTxt)}">
+            <span class="font-mono" style="font-weight:700; color:${eColor}; white-space:nowrap;">${fmt(cur)} / ${fmt(max)}e</span>
+            <span style="font-size:0.71em; color:var(--text-tertiary); white-space:nowrap;">${baseHint}</span>
+        </div>`;
+    }
+
     // Chart instances
     let velocityChartInstance = null;
     let factionRadarChartInstance = null;
@@ -1726,17 +1779,26 @@
             if (subFilter === 'slacker') {
                 showSlackersOnly = true;
                 showCdIdleOnly = false;
+                showStackedEOnly = false;
             } else if (subFilter === 'cd_idle') {
                 showCdIdleOnly = true;
                 showSlackersOnly = false;
+                showStackedEOnly = false;
+            } else if (subFilter === 'stacked_e') {
+                showStackedEOnly = true;
+                showSlackersOnly = false;
+                showCdIdleOnly = false;
             } else {
                 showSlackersOnly = false;
                 showCdIdleOnly = false;
+                showStackedEOnly = false;
             }
             const btnSlack = document.getElementById('btn-toggle-slackers');
             if (btnSlack) btnSlack.classList.toggle('active-filter', showSlackersOnly);
             const btnCd = document.getElementById('btn-toggle-cd-idle');
             if (btnCd) btnCd.classList.toggle('active-filter', showCdIdleOnly);
+            const btnStack = document.getElementById('btn-toggle-stacked-e');
+            if (btnStack) btnStack.classList.toggle('active-filter', showStackedEOnly);
             filterRoster();
         } else if (safeView === 'contests') {
             loadCompetitions();
@@ -1810,7 +1872,10 @@
             const avgRoster = Number(kpis.avgXanaxTodayTctRoster ?? (totalMemCnt > 0 ? (todayTctCnt / totalMemCnt) : 0)).toFixed(2);
             const idleCnt = kpis.drugCooldownIdleCount || 0;
             const maxOff = kpis.maxDrugCooldownOffHours || 0;
-            xanSubEl.textContent = `Avg ${avgTracked} / tracked (${tctTrackedCnt}) • ${avgRoster} / roster (${totalMemCnt}) • ${fmt(cumXan)} total • ${idleCnt} off CD (max ${maxOff}h)`;
+            const stackedCnt = kpis.stackedEnergyMembersCount || 0;
+            const barsCnt = kpis.liveEnergyTrackedCount || 0;
+            const stackNote = stackedCnt > 0 ? ` • ${stackedCnt} stacking E (${barsCnt} live)` : (barsCnt > 0 ? ` • ${barsCnt} live bars` : '');
+            xanSubEl.textContent = `Avg ${avgTracked} / tracked (${tctTrackedCnt}) • ${avgRoster} / roster (${totalMemCnt}) • ${fmt(cumXan)} total • ${idleCnt} off CD (max ${maxOff}h)${stackNote}`;
         }
 
         // Slacker Banner
@@ -2142,6 +2207,10 @@
                 if (!dc.tracked || dc.active) return false;
             }
 
+            if (showStackedEOnly) {
+                if (!(m.liveEnergy?.tracked && m.liveEnergy?.isStacked)) return false;
+            }
+
             if (archetype !== 'all' && m.archetype !== archetype) return false;
 
             const t = typeof m.stats?.total === 'number' ? m.stats.total : (m.rawStats?.total || 0);
@@ -2180,6 +2249,14 @@
                 const ea = getMemberEnergyForWindow(a).energySpentEst;
                 const eb = getMemberEnergyForWindow(b).energySpentEst;
                 return rosterSortAsc ? (ea - eb) : (eb - ea);
+            }
+            if (rosterSortCol === 'livee') {
+                const ea = (a.liveEnergy?.tracked && typeof a.liveEnergy?.current === 'number') ? a.liveEnergy.current : -1;
+                const eb = (b.liveEnergy?.tracked && typeof b.liveEnergy?.current === 'number') ? b.liveEnergy.current : -1;
+                if (ea !== eb) return rosterSortAsc ? (ea - eb) : (eb - ea);
+                const xa = a.liveEnergy?.minXanaxFromEnergy ?? -1;
+                const xb = b.liveEnergy?.minXanaxFromEnergy ?? -1;
+                return rosterSortAsc ? (xa - xb) : (xb - xa);
             }
             if (rosterSortCol === 'xanax') {
                 const xaToday = a.xanax?.takenTodayTct ?? -1;
@@ -2260,6 +2337,13 @@
         filterRoster();
     }
 
+    function toggleStackedEFilter() {
+        showStackedEOnly = !showStackedEOnly;
+        const btn = document.getElementById('btn-toggle-stacked-e');
+        if (btn) btn.classList.toggle('active-filter', showStackedEOnly);
+        filterRoster();
+    }
+
     function renderCompactStatusBadge(m) {
         const state = (m.status?.state || '').trim();
         const desc = (m.status?.description || '').trim();
@@ -2302,7 +2386,7 @@
             const msg = (!rosterLoadedOnce && currentRoster.length === 0)
                 ? 'Click Sync Live Stats to load faction roster.'
                 : 'No members matching the current filters.';
-            tbody.innerHTML = `<tr><td colspan="10" style="text-align:center; padding:32px; color:var(--text-tertiary);">${msg}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="11" style="text-align:center; padding:32px; color:var(--text-tertiary);">${msg}</td></tr>`;
             return;
         }
 
@@ -2350,6 +2434,7 @@
                 ? 'var(--text-tertiary)'
                 : (winEnergy.efficiencyScore >= 70 ? 'var(--status-active)' : 'var(--status-warning)');
             const exactXanaxHtml = formatExactXanaxHtml(m);
+            const liveEnergyHtml = formatLiveEnergyHtml(m);
             const drugCdOffHtml = formatDrugCooldownOffHtml(m);
 
             const statusDot = m.onlineStatus === 'online' ? '🟢' : (m.onlineStatus === 'idle' ? '🟡' : '⚪');
@@ -2378,6 +2463,9 @@
                     <td style="white-space:nowrap;">
                         <div class="font-mono" style="color:${winEnergy.energySpentEst <= 0 ? 'var(--text-tertiary)' : 'var(--text-primary)'}; font-weight:700;">${fmt(winEnergy.energySpentEst)}e</div>
                         <div style="font-size:0.71em; color:${effColor}; font-weight:700;">${winEnergy.efficiencyScore}% Eff.</div>
+                    </td>
+                    <td>
+                        ${liveEnergyHtml}
                     </td>
                     <td>
                         ${exactXanaxHtml}
@@ -2475,6 +2563,26 @@
                 dosCdSub.textContent = missed >= 1
                     ? `~${missed} Xanax / happy jump window${missed > 1 ? 's' : ''} lost${liveDc.inactiveHoursTodayTct > 0.05 ? ` • ${liveDc.inactiveHoursTodayTct.toFixed(1)}h idle today (TCT)` : ''}`
                     : (liveDc.inactiveHoursTodayTct > 0.05 ? `${liveDc.inactiveHoursTodayTct.toFixed(1)}h idle today (TCT)` : 'Ready for next Xanax / happy jump');
+            }
+        }
+
+        const dosLiveEVal = document.getElementById('dos-live-e-val');
+        const dosLiveESub = document.getElementById('dos-live-e-sub');
+        const le = m.liveEnergy || {};
+        if (dosLiveEVal && dosLiveESub) {
+            if (s.masked) {
+                dosLiveEVal.textContent = '🔒 Private';
+                dosLiveESub.textContent = 'Protected by player privacy tier';
+            } else if (le.status === 'key_paused' || le.status === 'key_inactive' || le.status === 'key_invalid') {
+                dosLiveEVal.textContent = le.status === 'key_paused' ? '⚠️ Key Paused' : (le.status === 'key_inactive' ? '⚠️ Key Inactive' : '⚠️ Key Invalid');
+                dosLiveESub.textContent = le.reasoning || 'Reconnect API key in Discord to read live energy';
+            } else if (le.tracked && typeof le.current === 'number') {
+                const xanText = le.minXanaxFromEnergy > 0 ? ` • ${le.minXanaxFromEnergy} Xan req` : ' • 0 Xan needed';
+                dosLiveEVal.textContent = `${fmt(le.current)} / ${fmt(le.maximum || 150)}e${xanText}`;
+                dosLiveESub.textContent = le.reasoning || 'Exact live Torn energy from linked Discord API key';
+            } else {
+                dosLiveEVal.textContent = '🔑 Key Req';
+                dosLiveESub.textContent = le.reasoning || 'Link a Torn API key via Discord to read exact live energy';
             }
         }
 
@@ -2974,7 +3082,7 @@
 
     function exportRosterCSV() {
         if (!currentFilteredRoster.length) return;
-        const headers = ["Player ID", "Name", "Level", "Role", "Strength", "Speed", "Defense", "Dexterity", "Total Stats", "7d Gain", "Exact Xanax Total", "Xanax Since 00:00 TCT", "Drug CD Off (Hours)", "Est Energy", "Efficiency"];
+        const headers = ["Player ID", "Name", "Level", "Role", "Strength", "Speed", "Defense", "Dexterity", "Total Stats", "7d Gain", "Live Energy", "Max Energy", "Xanax Needed For E", "Exact Xanax Total", "Xanax Since 00:00 TCT", "Drug CD Off (Hours)", "Est Energy", "Efficiency"];
 
         function sanitizeCSVCell(val) {
             if (val === null || val === undefined) return '""';
@@ -3001,6 +3109,9 @@
                 typeof m.stats.dexterity === 'number' ? m.stats.dexterity : 0,
                 typeof m.stats.total === 'number' ? m.stats.total : 0,
                 m.gains.gain7d.total,
+                (m.liveEnergy?.tracked && typeof m.liveEnergy?.current === 'number') ? m.liveEnergy.current : '',
+                (m.liveEnergy?.tracked && typeof m.liveEnergy?.maximum === 'number') ? m.liveEnergy.maximum : '',
+                (m.liveEnergy?.tracked && typeof m.liveEnergy?.minXanaxFromEnergy === 'number') ? m.liveEnergy.minXanaxFromEnergy : '',
                 m.xanax?.exactTotal ?? '',
                 m.xanax?.takenTodayTct ?? '',
                 cdHoursCell,

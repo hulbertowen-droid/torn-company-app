@@ -4513,6 +4513,7 @@ app.get('/api/faction/stat-gains', async (req, res) => {
             }
 
             const drugCdView = computeLiveDrugCooldownView(bRec, now);
+            const liveEnergyView = computeLiveEnergyView(bRec, now);
 
             if (curStats.total > 0) {
                 totalFactionStats += curStats.total;
@@ -4569,6 +4570,28 @@ app.get('/api/faction/stat-gains', async (req, res) => {
                 masked: true
             };
 
+            const exposedLiveEnergy = canViewStats ? liveEnergyView : {
+                tracked: false,
+                current: null,
+                maximum: null,
+                pct: null,
+                excessEnergy: null,
+                minXanaxFromEnergy: null,
+                exactBaseE: null,
+                isStacked: false,
+                atHardCap: false,
+                boosterActive: false,
+                boosterCdSec: null,
+                refillUsed: null,
+                fulltimeSeconds: null,
+                isFull: false,
+                status: 'masked',
+                keyAccessLevel: null,
+                reasoning: 'Hidden by member privacy settings',
+                lastCheckedAt: null,
+                masked: true
+            };
+
             membersResult.push({
                 playerId: pId,
                 playerName: info.name,
@@ -4587,6 +4610,7 @@ app.get('/api/faction/stat-gains', async (req, res) => {
                 momentum: { xanax: canViewStats ? xanax : 0, refills: canViewStats ? refills : 0 },
                 xanax: exposedXanax,
                 drugCooldown: exposedDrugCooldown,
+                liveEnergy: exposedLiveEnergy,
                 privacy,
                 masked: !canViewStats,
                 hasApiKey,
@@ -4738,6 +4762,73 @@ function computeLiveDrugCooldownView(bRec, now = Date.now()) {
 }
 global.computeLiveDrugCooldownView = computeLiveDrugCooldownView;
 
+// Helper: compute live energy + minimum Xanax inference from persisted bRec.liveEnergy
+function computeLiveEnergyView(bRec, now = Date.now()) {
+    const le = bRec?.liveEnergy || null;
+    const inferFn = (typeof userKeys !== 'undefined' && typeof userKeys.computeEnergyXanaxInference === 'function')
+        ? userKeys.computeEnergyXanaxInference
+        : null;
+    if (!le) {
+        return inferFn ? inferFn(null) : {
+            tracked: false, current: null, maximum: null, pct: null, excessEnergy: null,
+            minXanaxFromEnergy: null, exactBaseE: null, isStacked: false, atHardCap: false,
+            boosterActive: false, boosterCdSec: null, refillUsed: null, fulltimeSeconds: null,
+            isFull: false, status: 'untracked', keyAccessLevel: null,
+            reasoning: 'Link a Torn API key via Discord to read exact live energy', lastCheckedAt: null
+        };
+    }
+    if (le.status && le.status !== 'ok') {
+        const errPayload = {
+            status: le.status,
+            errorCode: le.errorCode || null,
+            errorReason: le.errorReason || 'Torn API key unavailable',
+            keyAccessLevel: le.keyAccessLevel || null,
+            lastCheckedAt: le.lastCheckedAt || null
+        };
+        const view = inferFn ? inferFn(errPayload) : {
+            tracked: false, current: null, maximum: null, pct: null, excessEnergy: null,
+            minXanaxFromEnergy: null, exactBaseE: null, isStacked: false, atHardCap: false,
+            boosterActive: false, boosterCdSec: null, refillUsed: null, fulltimeSeconds: null,
+            isFull: false, ...errPayload, reasoning: errPayload.errorReason
+        };
+        view.errorCode = le.errorCode || null;
+        view.isStale = true;
+        return view;
+    }
+    const boostCdRemaining = (typeof le.boosterCooldownEndsAt === 'number' && le.boosterCooldownEndsAt > now)
+        ? Math.max(1, Math.ceil((le.boosterCooldownEndsAt - now) / 1000))
+        : (typeof le.boosterCooldownSec === 'number' && le.boosterCooldownEndsAt === null ? 0 : (typeof le.boosterCooldownSec === 'number' ? 0 : null));
+    const effBoost = (typeof le.boosterCooldownEndsAt === 'number')
+        ? boostCdRemaining
+        : (typeof le.boosterCooldownSec === 'number' ? le.boosterCooldownSec : null);
+    const view = inferFn
+        ? inferFn(le, effBoost, typeof le.refillUsed === 'boolean' ? le.refillUsed : null)
+        : {
+            tracked: typeof le.current === 'number',
+            current: le.current ?? null,
+            maximum: le.maximum ?? null,
+            pct: null,
+            excessEnergy: null,
+            minXanaxFromEnergy: null,
+            exactBaseE: null,
+            isStacked: false,
+            atHardCap: false,
+            boosterActive: Boolean(effBoost && effBoost > 0),
+            boosterCdSec: effBoost,
+            refillUsed: le.refillUsed ?? null,
+            fulltimeSeconds: le.fulltimeSeconds ?? null,
+            isFull: Boolean(le.isFull),
+            status: 'ok',
+            keyAccessLevel: le.keyAccessLevel || null,
+            reasoning: '',
+            lastCheckedAt: le.lastCheckedAt || null
+        };
+    view.errorCode = null;
+    view.isStale = le.lastCheckedAt ? (now - le.lastCheckedAt) > (10 * 60 * 1000) : true;
+    return view;
+}
+global.computeLiveEnergyView = computeLiveEnergyView;
+
 // Helper: persist exact xantaken (with 00:00 TCT baseline) and drug cooldown idle tracking onto battleStatsHistory record
 function updatePlayerXanaxAndCooldownState(bRec, uData, now = Date.now()) {
     if (!bRec || !uData) return false;
@@ -4875,92 +4966,174 @@ function updatePlayerXanaxAndCooldownState(bRec, uData, now = Date.now()) {
         mutated = true;
     }
 
+    // 3. Exact live energy & Xanax inference state (works for both Full/Limited and Minimal keys)
+    const rawEnergy = uData.energy;
+    if (rawEnergy && typeof rawEnergy.current === 'number' && typeof rawEnergy.maximum === 'number') {
+        const boostCd = (uData.cooldowns && typeof uData.cooldowns.booster === 'number')
+            ? Math.max(0, Number(uData.cooldowns.booster))
+            : null;
+        const refillUsedFlag = (uData.refills && typeof uData.refills.energy_refill_used === 'boolean')
+            ? uData.refills.energy_refill_used
+            : (bRec.liveEnergy && typeof bRec.liveEnergy.refillUsed === 'boolean' ? bRec.liveEnergy.refillUsed : null);
+        bRec.liveEnergy = {
+            current: Number(rawEnergy.current),
+            maximum: Number(rawEnergy.maximum) || 150,
+            isFull: Boolean(rawEnergy.isFull ?? (Number(rawEnergy.current) >= (Number(rawEnergy.maximum) || 150))),
+            fulltimeSeconds: typeof rawEnergy.fulltimeSeconds === 'number'
+                ? rawEnergy.fulltimeSeconds
+                : (typeof rawEnergy.fulltime === 'number' ? rawEnergy.fulltime : null),
+            boosterCooldownSec: boostCd,
+            boosterCooldownEndsAt: (boostCd !== null && boostCd > 0) ? (now + boostCd * 1000) : null,
+            refillUsed: refillUsedFlag,
+            keyAccessLevel: uData.keyAccessLevel || bRec.liveEnergy?.keyAccessLevel || 'full',
+            status: 'ok',
+            errorCode: null,
+            errorReason: null,
+            lastCheckedAt: now
+        };
+        mutated = true;
+    }
+
     return mutated;
 }
 
-// Core battlestats snapshot worker function
+// Map explicit Torn API auth/key errors so paused/inactive/invalid keys never show stale energy numbers
+function mapLiveEnergyKeyError(errorCode, errorText) {
+    if (errorCode === 13) {
+        return { status: 'key_inactive', errorReason: 'Torn API key inactive (player inactive)' };
+    }
+    if (errorCode === 18) {
+        return { status: 'key_paused', errorReason: 'Torn API key paused by owner' };
+    }
+    if (errorCode === 2 || errorCode === 7) {
+        return { status: 'key_invalid', errorReason: errorText || 'Torn API key invalid or revoked' };
+    }
+    return null;
+}
+
+// Core battlestats snapshot worker function (concurrent batches + Minimal-key liveEnergy fallback)
 async function performBattleStatsSnapshot() {
     let updatedCount = 0;
     const now = Date.now();
 
     if (typeof userKeys !== 'undefined' && userKeys.getAllConnectedMembers) {
         const connected = userKeys.getAllConnectedMembers();
-        for (const member of connected) {
-            try {
-                const uData = await userKeys.fetchUserLiveStats(member.key, 'battlestats,personalstats,cooldowns');
-                if (uData && uData.battlestats && uData.battlestats.total > 0) {
+        const BATCH_SIZE = 5;
+        for (let i = 0; i < connected.length; i += BATCH_SIZE) {
+            const batch = connected.slice(i, i + BATCH_SIZE);
+            await Promise.allSettled(batch.map(async (member) => {
+                try {
+                    const res = typeof userKeys.fetchUserBarsOrFull === 'function'
+                        ? await userKeys.fetchUserBarsOrFull(member.key, 'profile,bars,cooldowns,battlestats,personalstats,refills')
+                        : { ok: false, data: await userKeys.fetchUserLiveStats(member.key, 'profile,bars,cooldowns,battlestats,personalstats,refills') };
+                    const uData = res?.ok ? res.data : (res?.data || null);
                     const recKey = String(member.tornId);
-                    if (!battleStatsHistory[recKey]) {
-                        battleStatsHistory[recKey] = {
-                            playerId: member.tornId,
-                            playerName: member.playerName || uData.playerName,
-                            history: [],
-                            stats: {},
-                            lastUpdated: now
-                        };
-                    }
-                    const bRec = battleStatsHistory[recKey];
-                    if (!Array.isArray(bRec.history)) bRec.history = [];
 
-                    const prevTotal = Number(bRec.stats?.total || 0);
-                    const curTotal = Number(uData.battlestats.total || 0);
-                    const prevStr = Number(bRec.stats?.strength || 0);
-                    const prevDef = Number(bRec.stats?.defense || 0);
-                    const prevSpd = Number(bRec.stats?.speed || 0);
-                    const prevDex = Number(bRec.stats?.dexterity || 0);
-
-                    const exactXanax = Number(uData.personalstats?.xantaken ?? bRec.personalStats?.xantaken ?? 0);
-                    const exactRefills = Number(uData.personalstats?.refills ?? bRec.personalStats?.refills ?? 0);
-                    const exactEnergyDrinks = Number(uData.personalstats?.energydrinkused ?? bRec.personalStats?.energydrinkused ?? 0);
-
-                    bRec.history.unshift({
-                        timestamp: now,
-                        isManual: false,
-                        source: 'automated_snapshot',
-                        strength: Number(uData.battlestats.strength || 0),
-                        defense: Number(uData.battlestats.defense || 0),
-                        speed: Number(uData.battlestats.speed || 0),
-                        dexterity: Number(uData.battlestats.dexterity || 0),
-                        total: curTotal,
-                        xantaken: exactXanax,
-                        refills: exactRefills,
-                        energydrinkused: exactEnergyDrinks,
-                        gains: {
-                            strength: prevStr > 0 ? (Number(uData.battlestats.strength || 0) - prevStr) : 0,
-                            defense: prevDef > 0 ? (Number(uData.battlestats.defense || 0) - prevDef) : 0,
-                            speed: prevSpd > 0 ? (Number(uData.battlestats.speed || 0) - prevSpd) : 0,
-                            dexterity: prevDex > 0 ? (Number(uData.battlestats.dexterity || 0) - prevDex) : 0,
-                            total: prevTotal > 0 ? (curTotal - prevTotal) : 0
+                    if (uData) {
+                        if (!battleStatsHistory[recKey]) {
+                            battleStatsHistory[recKey] = {
+                                playerId: member.tornId,
+                                playerName: member.playerName || uData.playerName,
+                                history: [],
+                                stats: {},
+                                lastUpdated: now
+                            };
                         }
-                    });
+                        const bRec = battleStatsHistory[recKey];
+                        if (!Array.isArray(bRec.history)) bRec.history = [];
 
-                    if (bRec.history.length > 60) bRec.history = bRec.history.slice(0, 60);
+                        if (uData.battlestats && uData.battlestats.total > 0) {
+                            const prevTotal = Number(bRec.stats?.total || 0);
+                            const curTotal = Number(uData.battlestats.total || 0);
+                            const prevStr = Number(bRec.stats?.strength || 0);
+                            const prevDef = Number(bRec.stats?.defense || 0);
+                            const prevSpd = Number(bRec.stats?.speed || 0);
+                            const prevDex = Number(bRec.stats?.dexterity || 0);
 
-                    // Update live / current stats for web dashboards without overwriting user's manual Discord /bs baseline
-                    bRec.stats = {
-                        strength: Number(uData.battlestats.strength || 0),
-                        defense: Number(uData.battlestats.defense || 0),
-                        speed: Number(uData.battlestats.speed || 0),
-                        dexterity: Number(uData.battlestats.dexterity || 0),
-                        total: curTotal,
-                        modifiers: uData.battlestats.modifiers || { strength: 0, defense: 0, speed: 0, dexterity: 0 }
-                    };
-                    bRec.liveStats = { ...bRec.stats };
-                    bRec.lastBackgroundSync = now;
-                    updatePlayerXanaxAndCooldownState(bRec, uData, now);
-                    if (uData.level) bRec.level = Number(uData.level);
-                    bRec.playerName = member.playerName || uData.playerName;
-                    // Note: do NOT overwrite bRec.lastManualUpdate or bRec.manualStats here!
-                    // If no manual baseline exists yet, initialize bRec.lastUpdated but don't clobber future baselines
-                    bRec.lastUpdated = now;
-                    updatedCount++;
+                            const exactXanax = Number(uData.personalstats?.xantaken ?? bRec.personalStats?.xantaken ?? 0);
+                            const exactRefills = Number(uData.personalstats?.refills ?? bRec.personalStats?.refills ?? 0);
+                            const exactEnergyDrinks = Number(uData.personalstats?.energydrinkused ?? bRec.personalStats?.energydrinkused ?? 0);
+
+                            bRec.history.unshift({
+                                timestamp: now,
+                                isManual: false,
+                                source: 'automated_snapshot',
+                                strength: Number(uData.battlestats.strength || 0),
+                                defense: Number(uData.battlestats.defense || 0),
+                                speed: Number(uData.battlestats.speed || 0),
+                                dexterity: Number(uData.battlestats.dexterity || 0),
+                                total: curTotal,
+                                xantaken: exactXanax,
+                                refills: exactRefills,
+                                energydrinkused: exactEnergyDrinks,
+                                gains: {
+                                    strength: prevStr > 0 ? (Number(uData.battlestats.strength || 0) - prevStr) : 0,
+                                    defense: prevDef > 0 ? (Number(uData.battlestats.defense || 0) - prevDef) : 0,
+                                    speed: prevSpd > 0 ? (Number(uData.battlestats.speed || 0) - prevSpd) : 0,
+                                    dexterity: prevDex > 0 ? (Number(uData.battlestats.dexterity || 0) - prevDex) : 0,
+                                    total: prevTotal > 0 ? (curTotal - prevTotal) : 0
+                                }
+                            });
+
+                            if (bRec.history.length > 60) bRec.history = bRec.history.slice(0, 60);
+
+                            // Update live / current stats for web dashboards without overwriting user's manual Discord /bs baseline
+                            bRec.stats = {
+                                strength: Number(uData.battlestats.strength || 0),
+                                defense: Number(uData.battlestats.defense || 0),
+                                speed: Number(uData.battlestats.speed || 0),
+                                dexterity: Number(uData.battlestats.dexterity || 0),
+                                total: curTotal,
+                                modifiers: uData.battlestats.modifiers || { strength: 0, defense: 0, speed: 0, dexterity: 0 }
+                            };
+                            bRec.liveStats = { ...bRec.stats };
+                            bRec.lastUpdated = now;
+                        }
+                        bRec.lastBackgroundSync = now;
+                        updatePlayerXanaxAndCooldownState(bRec, uData, now);
+                        if (uData.level) bRec.level = Number(uData.level);
+                        if (member.playerName || uData.playerName) bRec.playerName = member.playerName || uData.playerName;
+                        updatedCount++;
+                    } else if (res && res.errorCode) {
+                        const errInfo = mapLiveEnergyKeyError(res.errorCode, res.errorText);
+                        if (errInfo) {
+                            if (!battleStatsHistory[recKey]) {
+                                battleStatsHistory[recKey] = {
+                                    playerId: member.tornId,
+                                    playerName: member.playerName || `Player [${member.tornId}]`,
+                                    history: [],
+                                    stats: {},
+                                    lastUpdated: now
+                                };
+                            }
+                            battleStatsHistory[recKey].liveEnergy = {
+                                current: null,
+                                maximum: null,
+                                isFull: false,
+                                fulltimeSeconds: null,
+                                boosterCooldownSec: null,
+                                boosterCooldownEndsAt: null,
+                                refillUsed: null,
+                                keyAccessLevel: battleStatsHistory[recKey].liveEnergy?.keyAccessLevel || null,
+                                status: errInfo.status,
+                                errorCode: res.errorCode,
+                                errorReason: errInfo.errorReason,
+                                lastCheckedAt: now
+                            };
+                            updatedCount++;
+                        }
+                    }
+                } catch(e) {
+                    console.warn(`[StatGains Snapshot] Failed snapshot for member ${member.tornId}:`, e.message);
                 }
-            } catch(e) {
-                console.warn(`[StatGains Snapshot] Failed snapshot for member ${member.tornId}:`, e.message);
+            }));
+            if (i + BATCH_SIZE < connected.length) {
+                await new Promise(r => setTimeout(r, 80));
             }
         }
     }
 
+    lastConnectedBarsPollAt = Date.now();
     if (updatedCount > 0) {
         saveBattleStatsHistory();
     }
@@ -4996,66 +5169,156 @@ setInterval(async () => {
     }
 }, 60000);
 
-// Lightweight background tracker keeping exact xantaken (00:00 TCT delta) and drug cooldown idle hours fresh 24/7
+// Lightweight background tracker keeping live energy, exact xantaken (00:00 TCT delta) and drug cooldown idle hours fresh 24/7
 let isXanaxCooldownPollRunning = false;
-async function pollConnectedXanaxAndCooldowns() {
-    if (isXanaxCooldownPollRunning) return;
-    if (typeof userKeys === 'undefined' || !userKeys.getAllConnectedMembers) return;
+let lastConnectedBarsPollAt = 0;
+let activeXanaxCooldownPollPromise = null;
+
+function applyConnectedMemberPollResult(member, res, now) {
+    const recKey = String(member.tornId);
+    if (res && res.ok && res.data) {
+        const uData = res.data;
+        if (!battleStatsHistory[recKey]) {
+            battleStatsHistory[recKey] = {
+                playerId: member.tornId,
+                playerName: member.playerName || uData.playerName,
+                history: [],
+                stats: {},
+                lastUpdated: now
+            };
+        }
+        const bRec = battleStatsHistory[recKey];
+        if (uData.battlestats && Number(uData.battlestats.total || 0) > 0) {
+            bRec.stats = {
+                strength: Number(uData.battlestats.strength || 0),
+                defense: Number(uData.battlestats.defense || 0),
+                speed: Number(uData.battlestats.speed || 0),
+                dexterity: Number(uData.battlestats.dexterity || 0),
+                total: Number(uData.battlestats.total || 0),
+                modifiers: uData.battlestats.modifiers || bRec.stats?.modifiers || { strength: 0, defense: 0, speed: 0, dexterity: 0 }
+            };
+            bRec.liveStats = { ...bRec.stats };
+            bRec.lastUpdated = now;
+        }
+        if (uData.level) bRec.level = Number(uData.level);
+        if (member.playerName || uData.playerName) bRec.playerName = member.playerName || uData.playerName;
+        bRec.lastBackgroundSync = now;
+        return updatePlayerXanaxAndCooldownState(bRec, uData, now);
+    }
+    if (res && res.errorCode) {
+        const errInfo = mapLiveEnergyKeyError(res.errorCode, res.errorText);
+        if (errInfo) {
+            if (!battleStatsHistory[recKey]) {
+                battleStatsHistory[recKey] = {
+                    playerId: member.tornId,
+                    playerName: member.playerName || `Player [${member.tornId}]`,
+                    history: [],
+                    stats: {},
+                    lastUpdated: now
+                };
+            }
+            const bRec = battleStatsHistory[recKey];
+            bRec.liveEnergy = {
+                current: null,
+                maximum: null,
+                isFull: false,
+                fulltimeSeconds: null,
+                boosterCooldownSec: null,
+                boosterCooldownEndsAt: null,
+                refillUsed: null,
+                keyAccessLevel: bRec.liveEnergy?.keyAccessLevel || null,
+                status: errInfo.status,
+                errorCode: res.errorCode,
+                errorReason: errInfo.errorReason,
+                lastCheckedAt: now
+            };
+            return true;
+        }
+    }
+    return false;
+}
+
+async function pollConnectedXanaxAndCooldowns(options = {}) {
+    const maxAgeMs = Number(options.maxAgeMs || 0);
+    if (!options.force && maxAgeMs > 0 && lastConnectedBarsPollAt > 0 && (Date.now() - lastConnectedBarsPollAt) < maxAgeMs) {
+        return { skipped: true, updatedCount: 0, lastPolledAt: lastConnectedBarsPollAt };
+    }
+    if (isXanaxCooldownPollRunning && activeXanaxCooldownPollPromise) {
+        return activeXanaxCooldownPollPromise;
+    }
+    if (typeof userKeys === 'undefined' || !userKeys.getAllConnectedMembers) {
+        return { skipped: true, updatedCount: 0, lastPolledAt: lastConnectedBarsPollAt };
+    }
+
     isXanaxCooldownPollRunning = true;
-    let updatedCount = 0;
-    try {
-        const connected = userKeys.getAllConnectedMembers();
-        for (const member of connected) {
-            try {
-                const now = Date.now();
-                const uData = await userKeys.fetchUserLiveStats(member.key, 'battlestats,personalstats,cooldowns');
-                if (uData && !uData.error) {
-                    const recKey = String(member.tornId);
-                    if (!battleStatsHistory[recKey]) {
-                        battleStatsHistory[recKey] = {
-                            playerId: member.tornId,
-                            playerName: member.playerName || uData.playerName,
-                            history: [],
-                            stats: {},
-                            lastUpdated: now
-                        };
-                    }
-                    const bRec = battleStatsHistory[recKey];
-                    if (uData.battlestats && Number(uData.battlestats.total || 0) > 0) {
-                        bRec.stats = {
-                            strength: Number(uData.battlestats.strength || 0),
-                            defense: Number(uData.battlestats.defense || 0),
-                            speed: Number(uData.battlestats.speed || 0),
-                            dexterity: Number(uData.battlestats.dexterity || 0),
-                            total: Number(uData.battlestats.total || 0),
-                            modifiers: uData.battlestats.modifiers || bRec.stats?.modifiers || { strength: 0, defense: 0, speed: 0, dexterity: 0 }
-                        };
-                        bRec.liveStats = { ...bRec.stats };
-                        bRec.lastUpdated = now;
-                    }
-                    if (uData.level) bRec.level = Number(uData.level);
-                    if (member.playerName || uData.playerName) bRec.playerName = member.playerName || uData.playerName;
-                    bRec.lastBackgroundSync = now;
-                    if (updatePlayerXanaxAndCooldownState(bRec, uData, now)) {
-                        updatedCount++;
+    activeXanaxCooldownPollPromise = (async () => {
+        let updatedCount = 0;
+        try {
+            const connected = userKeys.getAllConnectedMembers();
+            const BATCH_SIZE = 5;
+            for (let i = 0; i < connected.length; i += BATCH_SIZE) {
+                const batch = connected.slice(i, i + BATCH_SIZE);
+                const results = await Promise.allSettled(batch.map(async (member) => {
+                    const now = Date.now();
+                    const res = typeof userKeys.fetchUserBarsOrFull === 'function'
+                        ? await userKeys.fetchUserBarsOrFull(member.key, 'profile,bars,cooldowns,battlestats,personalstats,refills')
+                        : { ok: false, data: await userKeys.fetchUserLiveStats(member.key, 'profile,bars,cooldowns,battlestats,personalstats,refills') };
+                    return { member, res, now };
+                }));
+                for (const outcome of results) {
+                    if (outcome.status === 'fulfilled' && outcome.value) {
+                        const { member, res, now } = outcome.value;
+                        if (applyConnectedMemberPollResult(member, res, now)) {
+                            updatedCount++;
+                        }
                     }
                 }
-            } catch (e) {
-                // Non-fatal per-member fetch error
+                if (i + BATCH_SIZE < connected.length) {
+                    await new Promise(r => setTimeout(r, 80));
+                }
             }
-            await new Promise(r => setTimeout(r, 160));
+            lastConnectedBarsPollAt = Date.now();
+            if (updatedCount > 0) {
+                saveBattleStatsHistory();
+            }
+            return { skipped: false, updatedCount, lastPolledAt: lastConnectedBarsPollAt };
+        } catch (e) {
+            console.warn('[Xanax & LiveEnergy Poller] Error:', e.message);
+            return { skipped: false, updatedCount, error: e.message, lastPolledAt: lastConnectedBarsPollAt };
+        } finally {
+            isXanaxCooldownPollRunning = false;
+            activeXanaxCooldownPollPromise = null;
         }
-        if (updatedCount > 0) {
-            saveBattleStatsHistory();
-        }
-    } catch (e) {
-        console.warn('[Xanax & DrugCD Poller] Error:', e.message);
-    } finally {
-        isXanaxCooldownPollRunning = false;
-    }
+    })();
+
+    return activeXanaxCooldownPollPromise;
 }
-setTimeout(() => { pollConnectedXanaxAndCooldowns().catch(() => {}); }, 25000);
-setInterval(() => { pollConnectedXanaxAndCooldowns().catch(() => {}); }, 4 * 60 * 1000);
+
+async function refreshConnectedMemberBars(tornId, maxAgeMs = 15000) {
+    if (!tornId || typeof userKeys === 'undefined' || !userKeys.getAllConnectedMembers) return false;
+    const targetId = Number(tornId);
+    const recKey = String(targetId);
+    const existingCheckedAt = battleStatsHistory[recKey]?.liveEnergy?.lastCheckedAt || 0;
+    if (maxAgeMs > 0 && existingCheckedAt > 0 && (Date.now() - existingCheckedAt) < maxAgeMs) {
+        return false;
+    }
+    const connected = userKeys.getAllConnectedMembers();
+    const member = connected.find(m => Number(m.tornId) === targetId);
+    if (!member || !member.key) return false;
+    const now = Date.now();
+    const res = typeof userKeys.fetchUserBarsOrFull === 'function'
+        ? await userKeys.fetchUserBarsOrFull(member.key, 'profile,bars,cooldowns,battlestats,personalstats,refills')
+        : { ok: false, data: await userKeys.fetchUserLiveStats(member.key, 'profile,bars,cooldowns,battlestats,personalstats,refills') };
+    const mutated = applyConnectedMemberPollResult(member, res, now);
+    if (mutated) saveBattleStatsHistory();
+    return mutated;
+}
+
+global.pollConnectedXanaxAndCooldowns = pollConnectedXanaxAndCooldowns;
+global.refreshConnectedMemberBars = refreshConnectedMemberBars;
+
+setTimeout(() => { pollConnectedXanaxAndCooldowns().catch(() => {}); }, 5000);
+setInterval(() => { pollConnectedXanaxAndCooldowns().catch(() => {}); }, 3 * 60 * 1000);
 
 // Single player stats timeline and projection endpoint
 app.get('/api/faction/player-stats/:playerId', async (req, res) => {
@@ -5216,6 +5479,7 @@ app.get('/api/faction/player-stats/:playerId', async (req, res) => {
                     };
                 })(),
                 drugCooldown: masked ? { tracked: false, active: false, remainingSec: null, inactiveHours: null, masked: true } : computeLiveDrugCooldownView(bRec),
+                liveEnergy: masked ? { tracked: false, current: null, maximum: null, minXanaxFromEnergy: null, isStacked: false, status: 'masked', masked: true } : computeLiveEnergyView(bRec),
                 velocity: masked ? {
                     dailyGain: 0,
                     projected30d: 0,
@@ -11626,7 +11890,19 @@ function resolveSiteHelperIntent(rawMsg, currentPage = '/') {
             action: { type: 'gym_action', page: '/gym-stats.html', view: 'roster', timeframe: tf, label: `Set Gym Window to ${tf.toUpperCase()}` }
         };
     }
-    if (/\bsort\b.*\b(xanax|energy|strength|speed|defense|dexterity)\b/.test(q)) {
+    if (/\b(stack(ed|ing)?\s*e(nergy)?|over\s*max\s*e(nergy)?|live\s*energy|xan(ax)?\s*(needed|required|for\s*e(nergy)?))\b/.test(q)) {
+        return {
+            reply: "I've opened **Gym & Stat Tracker → Member Roster** filtered to members **⚡ Stacking Energy (> Max)** with live Discord-key energy & Xanax requirements.",
+            action: { type: 'gym_action', page: '/gym-stats.html', view: 'roster', subFilter: 'stacked_e', sortCol: 'livee', label: 'Filter to Stacked Energy' }
+        };
+    }
+    if (/\bsort\b.*\b(live\s*e|live\s*energy|xanax|energy|strength|speed|defense|dexterity)\b/.test(q)) {
+        if (/live\s*e/.test(q)) {
+            return {
+                reply: "I've sorted the **Gym & Stat Tracker Roster** by **⚡ Live Energy & Xanax Needed**.",
+                action: { type: 'gym_action', page: '/gym-stats.html', view: 'roster', sortCol: 'livee', label: 'Sort Roster by Live Energy' }
+            };
+        }
         const colMap = { xanax: 'xanax', energy: 'energy', strength: 'str', speed: 'spd', defense: 'def', dexterity: 'dex' };
         const found = Object.keys(colMap).find(k => q.includes(k)) || 'total';
         return {

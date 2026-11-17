@@ -320,6 +320,7 @@
                         const scrollEl = (action.scrollId && document.getElementById(action.scrollId))
                             || (action.subFilter === 'slacker' ? document.getElementById('btn-toggle-slackers') : null)
                             || (action.subFilter === 'cd_idle' ? document.getElementById('btn-toggle-cd-idle') : null)
+                            || (action.subFilter === 'stacked_e' ? document.getElementById('btn-toggle-stacked-e') : null)
                             || document.getElementById('master-roster-table');
                         flashElement(scrollEl);
                     }

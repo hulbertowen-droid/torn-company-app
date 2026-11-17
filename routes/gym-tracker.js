@@ -707,6 +707,53 @@ function buildMemberRecord(pId, bRec, info, callerId, isLeadership, customStart 
             };
         })();
 
+    const liveEnergyView = (typeof global.computeLiveEnergyView === 'function')
+        ? global.computeLiveEnergyView(bRec, now)
+        : (() => {
+            const le = bRec?.liveEnergy || null;
+            const inferFn = (userKeys && typeof userKeys.computeEnergyXanaxInference === 'function')
+                ? userKeys.computeEnergyXanaxInference
+                : null;
+            if (!le || (le.status && le.status !== 'ok')) {
+                const payload = le && le.status && le.status !== 'ok'
+                    ? { status: le.status, errorCode: le.errorCode || null, errorReason: le.errorReason || 'Torn API key unavailable', keyAccessLevel: le.keyAccessLevel || null, lastCheckedAt: le.lastCheckedAt || null }
+                    : null;
+                return inferFn ? inferFn(payload) : {
+                    tracked: false, current: null, maximum: null, pct: null, excessEnergy: null,
+                    minXanaxFromEnergy: null, exactBaseE: null, isStacked: false, atHardCap: false,
+                    boosterActive: false, boosterCdSec: null, refillUsed: null, fulltimeSeconds: null,
+                    isFull: false, status: payload?.status || 'untracked', keyAccessLevel: payload?.keyAccessLevel || null,
+                    reasoning: payload?.errorReason || 'Link a Torn API key via Discord to read exact live energy',
+                    lastCheckedAt: payload?.lastCheckedAt || null
+                };
+            }
+            const effBoost = (typeof le.boosterCooldownEndsAt === 'number')
+                ? (le.boosterCooldownEndsAt > now ? Math.max(1, Math.ceil((le.boosterCooldownEndsAt - now) / 1000)) : 0)
+                : (typeof le.boosterCooldownSec === 'number' ? le.boosterCooldownSec : null);
+            return inferFn
+                ? inferFn(le, effBoost, typeof le.refillUsed === 'boolean' ? le.refillUsed : null)
+                : {
+                    tracked: typeof le.current === 'number',
+                    current: le.current ?? null,
+                    maximum: le.maximum ?? null,
+                    pct: le.maximum ? Math.round((le.current / le.maximum) * 100) : null,
+                    excessEnergy: typeof le.current === 'number' && typeof le.maximum === 'number' ? Math.max(0, le.current - le.maximum) : null,
+                    minXanaxFromEnergy: (typeof le.current === 'number' && typeof le.maximum === 'number' && le.current > le.maximum) ? Math.ceil((le.current - le.maximum) / 250) : 0,
+                    exactBaseE: null,
+                    isStacked: Boolean(typeof le.current === 'number' && typeof le.maximum === 'number' && le.current > le.maximum),
+                    atHardCap: Boolean(le.current >= 1000),
+                    boosterActive: Boolean(effBoost && effBoost > 0),
+                    boosterCdSec: effBoost,
+                    refillUsed: le.refillUsed ?? null,
+                    fulltimeSeconds: le.fulltimeSeconds ?? null,
+                    isFull: Boolean(le.isFull),
+                    status: 'ok',
+                    keyAccessLevel: le.keyAccessLevel || null,
+                    reasoning: '',
+                    lastCheckedAt: le.lastCheckedAt || null
+                };
+        })();
+
     const dailyXanax = takenTodayTct !== null ? takenTodayTct : null;
 
     // Dynamic Energy Spent Estimation per window (24h, 7d, 30d, custom) via Vladar V2.0 inverse formula
@@ -959,6 +1006,27 @@ function buildMemberRecord(pId, bRec, info, callerId, isLeadership, customStart 
             isFloorEstimate: false,
             masked: true
         },
+        liveEnergy: canViewStats ? liveEnergyView : {
+            tracked: false,
+            current: null,
+            maximum: null,
+            pct: null,
+            excessEnergy: null,
+            minXanaxFromEnergy: null,
+            exactBaseE: null,
+            isStacked: false,
+            atHardCap: false,
+            boosterActive: false,
+            boosterCdSec: null,
+            refillUsed: null,
+            fulltimeSeconds: null,
+            isFull: false,
+            status: 'masked',
+            keyAccessLevel: null,
+            reasoning: 'Hidden by member privacy settings',
+            lastCheckedAt: null,
+            masked: true
+        },
         slacker: {
             isSlacking,
             zeroTrainHours,
@@ -1007,6 +1075,15 @@ router.get('/dashboard', async (req, res) => {
         const targetFacId = resolveFaction(req);
         const userKey = resolveApiKey(req);
 
+        if (typeof global.pollConnectedXanaxAndCooldowns === 'function') {
+            try {
+                await Promise.race([
+                    global.pollConnectedXanaxAndCooldowns({ maxAgeMs: 60000 }),
+                    new Promise(resolve => setTimeout(resolve, 3500))
+                ]);
+            } catch (e) {}
+        }
+
         let battleStats = {};
         if (fs.existsSync(BATTLESTATS_FILE)) {
             battleStats = JSON.parse(fs.readFileSync(BATTLESTATS_FILE, 'utf8'));
@@ -1052,6 +1129,10 @@ router.get('/dashboard', async (req, res) => {
             ? Number((drugCdIdleMembers.reduce((acc, m) => acc + Number(m.drugCooldown.inactiveHours || 0), 0) / drugCdIdleMembers.length).toFixed(1))
             : 0;
         const maxDrugCooldownOffHours = drugCdIdleMembers.reduce((mx, m) => Math.max(mx, Number(m.drugCooldown.inactiveHours || 0)), 0);
+        const liveEnergyTrackedMembers = memberList.filter(m => !m.stats?.masked && m.liveEnergy?.tracked);
+        const stackedEnergyMembers = liveEnergyTrackedMembers.filter(m => m.liveEnergy.isStacked);
+        const maxStackedEnergy = stackedEnergyMembers.reduce((mx, m) => Math.max(mx, Number(m.liveEnergy.current || 0)), 0);
+        const totalStackedXanaxInE = stackedEnergyMembers.reduce((acc, m) => acc + Number(m.liveEnergy.minXanaxFromEnergy || 0), 0);
         const tctDateNow = new Date().toISOString().slice(0, 10);
 
         // Faction-wide radar averages
@@ -1110,6 +1191,10 @@ router.get('/dashboard', async (req, res) => {
                 drugCooldownIdleCount: drugCdIdleMembers.length,
                 avgDrugCooldownOffHours,
                 maxDrugCooldownOffHours: Number(maxDrugCooldownOffHours.toFixed(1)),
+                liveEnergyTrackedCount: liveEnergyTrackedMembers.length,
+                stackedEnergyMembersCount: stackedEnergyMembers.length,
+                maxStackedEnergy,
+                totalStackedXanaxInE,
                 totalRefills24h: activeToday,
                 slackerCount: slackerList.length,
                 exemptCount: exemptList.length,
@@ -1163,6 +1248,16 @@ router.get('/roster', async (req, res) => {
         const timeframe = req.query.timeframe || '7d';
         const customStart = req.query.start ? Number(req.query.start) : null;
         const customEnd = req.query.end ? Number(req.query.end) : null;
+        const forceRefresh = req.query.refresh === '1' || req.query.force === '1';
+
+        if (typeof global.pollConnectedXanaxAndCooldowns === 'function') {
+            try {
+                await Promise.race([
+                    global.pollConnectedXanaxAndCooldowns({ maxAgeMs: forceRefresh ? 0 : 45000, force: forceRefresh }),
+                    new Promise(resolve => setTimeout(resolve, 4500))
+                ]);
+            } catch (e) {}
+        }
 
         let battleStats = {};
         if (fs.existsSync(BATTLESTATS_FILE)) {
@@ -1220,6 +1315,15 @@ router.get('/member/:playerId', async (req, res) => {
         const userKey = resolveApiKey(req);
         const pId = Number(req.params.playerId);
         if (!pId) return res.status(400).json({ success: false, error: "Invalid player ID" });
+
+        if (typeof global.refreshConnectedMemberBars === 'function') {
+            try {
+                await Promise.race([
+                    global.refreshConnectedMemberBars(pId, 15000),
+                    new Promise(resolve => setTimeout(resolve, 2500))
+                ]);
+            } catch (e) {}
+        }
 
         let battleStats = {};
         if (fs.existsSync(BATTLESTATS_FILE)) {
