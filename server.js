@@ -11778,25 +11778,43 @@ function resolveSiteHelperIntent(rawMsg, currentPage = '/') {
         };
     }
 
+    // 14. Fast Generic Page Navigation ("navigate to ...", "go to ...", "open ...")
+    if (/\b(navigate|go\s*to|open|take\s*me\s*to|switch\s*to)\b/.test(q)) {
+        if (/\bpayout/.test(q)) return { reply: "Navigating to **War Payouts** (`/payout.html`).", action: { type: 'payout_action', page: '/payout.html', label: 'War Payouts' } };
+        if (/\bwarboard|\bhome\b/.test(q)) return { reply: "Navigating to **Live Warboard** (`/`).", action: { type: 'warboard_action', page: '/', label: 'Live Warboard' } };
+        if (/\bchain/.test(q)) return { reply: "Navigating to **Chain Sentinel** (`/chain.html`).", action: { type: 'chain_action', page: '/chain.html', label: 'Chain Sentinel' } };
+        if (/\boverview|\bdashboard/.test(q)) return { reply: "Navigating to **Operations Overview** (`/dashboard.html`).", action: { type: 'dashboard_action', page: '/dashboard.html', tab: 'overview', label: 'Operations Overview' } };
+        if (/\barmory|\blogistics/.test(q)) return { reply: "Navigating to **Armory & Logistics** (`/armory.html`).", action: { type: 'armory_filter', page: '/armory.html', tab: 'usage', label: 'Armory & Logistics' } };
+        if (/\bgym|\bstat\s*tracker|\broster/.test(q)) return { reply: "Navigating to **Gym & Stat Tracker** (`/gym-stats.html`).", action: { type: 'gym_action', page: '/gym-stats.html', view: /roster/.test(q) ? 'roster' : 'overview', label: 'Gym & Stat Tracker' } };
+        if (/\boc\b|\borganized\s*crime/.test(q)) return { reply: "Navigating to **OC Manager** (`/oc.html`).", action: { type: 'oc_action', page: '/oc.html', tab: 'recruiting', label: 'OC Manager' } };
+        if (/\btravel/.test(q)) return { reply: "Navigating to **Travel Profit Desk** (`/travel.html`).", action: { type: 'travel_action', page: '/travel.html', label: 'Travel Profit Desk' } };
+        if (/\bcompany/.test(q)) return { reply: "Navigating to **Company Hub** (`/company.html`).", action: { type: 'company_action', page: '/company.html', label: 'Company Hub' } };
+        if (/\bcasino|\bgambl/.test(q)) return { reply: "Navigating to **Casino Analytics** (`/gamble.html`).", action: { type: 'gamble_action', page: '/gamble.html', tab: 'rr', label: 'Casino Analytics' } };
+        if (/\bbug/.test(q)) return { reply: "Navigating to **Bug Tracker** (`/bugs.html`).", action: { type: 'bugs_action', page: '/bugs.html', label: 'Bug Tracker' } };
+    }
+
     return null;
 }
 
 app.post('/api/ai/helper', async (req, res) => {
     try {
-        const { message = '', currentPage = '/', history = [] } = req.body || {};
+        const { message = '', mode = 'copilot', currentPage = '/', history = [] } = req.body || {};
         const cleanMsg = String(message || '').trim();
         if (!cleanMsg) {
             return res.status(400).json({ success: false, error: 'Message is required.' });
         }
 
-        // 1. Instant deterministic site action match (<5ms)
-        const directMatch = resolveSiteHelperIntent(cleanMsg, currentPage);
-        if (directMatch) {
-            return res.json({
-                success: true,
-                reply: directMatch.reply,
-                action: directMatch.action
-            });
+        // 1. Instant deterministic site action match (<5ms) unless asking a pure Tactical AI question
+        const isPureStrategyQuestion = mode === 'tactical' && /\b(how\s+does|what\s+is|when\s+should|explain|formula|strategy|guide|why)\b/i.test(cleanMsg);
+        if (!isPureStrategyQuestion) {
+            const directMatch = resolveSiteHelperIntent(cleanMsg, currentPage);
+            if (directMatch) {
+                return res.json({
+                    success: true,
+                    reply: directMatch.reply,
+                    action: directMatch.action
+                });
+            }
         }
 
         // 2. LLM Co-Pilot (uses server-wide Gemini pool + OpenRouter failover — no user key needed)

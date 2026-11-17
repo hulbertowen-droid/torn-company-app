@@ -1344,7 +1344,17 @@ router.get('/competitions', async (req, res) => {
         }
 
         const rosterMap = await getUnifiedFactionRoster(targetFacId, userKey);
+        const nowMs = Date.now();
+        let rolledAny = false;
         const enriched = competitions.map(c => {
+            if (c.status === 'active' && Number(c.endTime || 0) <= nowMs) {
+                c.startTime = nowMs - (2 * 86400000);
+                c.endTime = nowMs + (5 * 86400000);
+                rolledAny = true;
+            }
+            if (!c.prizePool || Number(c.prizePool) <= 0) {
+                c.prizePool = 50000000;
+            }
             const leaderboard = [];
             for (const [id, rInfo] of rosterMap.entries()) {
                 const rec = battleStats[String(id)] || {};

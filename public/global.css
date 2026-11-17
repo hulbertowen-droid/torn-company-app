@@ -255,6 +255,24 @@ body.light-mode ::-webkit-scrollbar-thumb:hover {
     display: none;
 }
 
+.sidebar.collapsed .sidebar-header {
+    padding: 0 6px;
+    justify-content: center;
+}
+
+.sidebar.collapsed .sidebar-logo,
+.sidebar.collapsed .theme-toggle {
+    display: none;
+}
+
+.sidebar.collapsed .toggle-btn {
+    width: 42px;
+    height: 36px;
+    background: var(--bg-elevated);
+    border-color: var(--border-subtle);
+    color: var(--text-primary);
+}
+
 .sidebar-actions {
     display: flex;
     align-items: center;
@@ -304,9 +322,12 @@ body.light-mode ::-webkit-scrollbar-thumb:hover {
 }
 
 .sidebar.collapsed .nav-section-title {
-    text-align: center;
-    padding: 12px 0 4px;
-    font-size: 0.55em;
+    display: none;
+}
+
+.sidebar.collapsed .nav-link {
+    justify-content: center;
+    padding: 9px 0;
 }
 
 .nav-link {

@@ -81,6 +81,19 @@
     }
 
     // 3. Sidebar Toggle & State Persistence
+    function syncTopbarToggleVisibility() {
+        const sidebar = document.getElementById('app-sidebar') || document.querySelector('.sidebar');
+        const topToggle = document.getElementById('mobile-nav-toggle');
+        if (!sidebar || !topToggle) return;
+        const isCollapsed = sidebar.classList.contains('collapsed');
+        if (window.innerWidth > 960) {
+            topToggle.style.display = isCollapsed ? 'inline-flex' : 'none';
+            topToggle.title = isCollapsed ? 'Expand Sidebar' : 'Toggle Sidebar';
+        } else {
+            topToggle.style.display = '';
+        }
+    }
+
     window.toggleSidebar = function() {
         const sidebar = document.getElementById('app-sidebar') || document.querySelector('.sidebar');
         if (!sidebar) return;
@@ -92,6 +105,7 @@
             sidebar.classList.toggle('collapsed');
             const isCollapsed = sidebar.classList.contains('collapsed');
             localStorage.setItem('sv_sidebar_collapsed', isCollapsed ? '1' : '0');
+            syncTopbarToggleVisibility();
         }
     };
 
@@ -115,6 +129,8 @@
             if (sidebar) sidebar.classList.add('collapsed');
             localStorage.setItem('sv_sidebar_collapsed', '1');
         }
+        syncTopbarToggleVisibility();
+        window.addEventListener('resize', syncTopbarToggleVisibility);
         syncUserIdentity();
         // Ensure bottom-left Helper AI Co-Pilot is loaded on every page
         if (!window.__fridayHelperLoaded && !document.querySelector('script[src*="/friday-helper.js"]')) {

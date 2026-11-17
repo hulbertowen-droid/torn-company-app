@@ -85,6 +85,17 @@
         overflow: hidden;
     }
 
+    #ff-matches-table {
+        width: 100%;
+        min-width: 0 !important;
+        border-collapse: collapse;
+        font-size: 0.78em;
+    }
+    #ff-matches-table th,
+    #ff-matches-table td {
+        padding: 6px 8px !important;
+        min-width: 0 !important;
+    }
     #ff-matches-table th.sticky-col,
     #ff-matches-table td.sticky-col {
         position: sticky;
@@ -294,14 +305,19 @@
         display: flex;
     }
     .drawer-panel {
+        position: fixed;
+        right: 0;
+        top: 0;
         width: 100%;
-        max-width: 640px;
+        max-width: 540px;
         height: 100vh;
         background: var(--bg-surface);
         border-left: 1px solid var(--border-default);
         display: flex;
         flex-direction: column;
         overflow-y: auto;
+        overflow-x: hidden;
+        box-sizing: border-box;
         box-shadow: -8px 0 32px rgba(0, 0, 0, 0.45);
         animation: slideLeft 0.25s cubic-bezier(0.16, 1, 0.3, 1);
     }
@@ -1180,9 +1196,10 @@
                 <div style="display:flex; align-items:center; gap:12px;">
                     <div style="font-size:2em;" id="dossier-avatar">🏋️</div>
                     <div>
-                        <div style="display:flex; align-items:center; gap:8px;">
+                        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
                             <h2 style="margin:0; font-size:1.25em; font-weight:900; color:var(--text-primary);" id="dossier-name">Player Dossier</h2>
                             <span class="badge" id="dossier-id" style="font-size:0.7em;">[—]</span>
+                            <a href="https://www.torn.com/profiles.php" id="dossier-torn-link" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation(); window.open(this.href, '_blank', 'noopener,noreferrer'); return false;" class="badge" style="font-size:0.68em; background:rgba(59,130,246,0.16); color:var(--accent-cobalt); text-decoration:none; border:1px solid rgba(59,130,246,0.35);">↗ Torn Profile</a>
                             <span class="badge" id="dossier-verified" style="font-size:0.68em; background:rgba(16,185,129,0.15); color:var(--status-active);">Verified Key</span>
                         </div>
                         <div style="font-size:0.76em; color:var(--text-tertiary); margin-top:2px;" id="dossier-sub">Level — • Role: —</div>
@@ -1295,7 +1312,7 @@
                 <h3 style="margin:0; font-size:1.15em; font-weight:900; color:var(--text-primary); display:flex; align-items:center; gap:8px;">
                     <span>🔒 Battle Stat Privacy Tiers</span>
                 </h3>
-                <button onclick="closePrivacySettingsModal()" style="background:transparent; border:none; color:var(--text-tertiary); font-size:1.4em; cursor:pointer;">✕</button>
+                <button type="button" onclick="closePrivacySettingsModal()" aria-label="Close" style="background:transparent; border:none; color:var(--text-tertiary); cursor:pointer; display:inline-flex; align-items:center; justify-content:center; padding:4px;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
             </div>
             <div style="padding:22px; display:flex; flex-direction:column; gap:14px; overflow-y:auto; flex:1; min-height:0;">
                 <div style="font-size:0.82em; color:var(--text-secondary); line-height:1.4;">
@@ -1348,7 +1365,7 @@
                 <h3 style="margin:0; font-size:1.15em; font-weight:900; color:var(--text-primary); display:flex; align-items:center; gap:8px;">
                     <span>🧮 Net Perk &amp; Gym Multiplier Calculator</span>
                 </h3>
-                <button onclick="closeModifierCalculatorModal()" style="background:transparent; border:none; color:var(--text-tertiary); font-size:1.4em; cursor:pointer;">✕</button>
+                <button type="button" onclick="closeModifierCalculatorModal()" aria-label="Close" style="background:transparent; border:none; color:var(--text-tertiary); cursor:pointer; display:inline-flex; align-items:center; justify-content:center; padding:4px;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
             </div>
             <div style="padding:22px; display:flex; flex-direction:column; gap:14px; overflow-y:auto; flex:1; min-height:0;">
                 <div style="font-size:0.82em; color:var(--text-secondary);">
@@ -1399,7 +1416,7 @@
         <div style="background:var(--bg-surface); border:1px solid var(--border-subtle); border-radius:14px; width:100%; max-width:540px; max-height:90vh; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 12px 48px rgba(0,0,0,0.7);">
             <div style="padding:16px 20px; border-bottom:1px solid var(--border-subtle); display:flex; justify-content:space-between; align-items:center; flex-shrink:0;">
                 <h3 style="margin:0; font-size:1.15em; font-weight:900; color:var(--text-primary);">🏆 Launch Faction Competition</h3>
-                <button onclick="closeNewContestModal()" style="background:transparent; border:none; color:var(--text-tertiary); font-size:1.4em; cursor:pointer;">✕</button>
+                <button type="button" onclick="closeNewContestModal()" aria-label="Close" style="background:transparent; border:none; color:var(--text-tertiary); cursor:pointer; display:inline-flex; align-items:center; justify-content:center; padding:4px;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
             </div>
             <div style="padding:20px; display:flex; flex-direction:column; gap:14px; overflow-y:auto; flex:1; min-height:0;">
                 <div>
@@ -2343,8 +2360,9 @@
                 <tr class="roster-row-clickable" onclick="openMemberDrawer('${escapeHtml(m.playerId)}')" title="Click row to open Operative Dossier for ${escapeHtml(m.playerName)}">
                     <td class="sticky-col">
                         <div style="font-weight:700; display:flex; align-items:center; gap:5px; white-space:nowrap;">
-                            <a href="https://www.torn.com/profiles.php?XID=${encodeURIComponent(m.playerId)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()" style="color:var(--text-primary); text-decoration:none;">${escapeHtml(m.playerName)}</a>
+                            <span style="color:var(--text-primary); cursor:pointer;">${escapeHtml(m.playerName)}</span>
                             <span class="badge" style="background:var(--bg-elevated); border:1px solid var(--border-subtle); color:var(--text-secondary); font-size:0.72em; padding:1px 5px; font-weight:700;">Lv ${m.level || 1}</span>
+                            <a href="https://www.torn.com/profiles.php?XID=${encodeURIComponent(m.playerId)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation(); window.open(this.href, '_blank', 'noopener,noreferrer'); return false;" title="Open Torn Profile in new tab" style="color:var(--text-tertiary); text-decoration:none; font-size:0.78em; padding:0 3px;">↗</a>
                         </div>
                         <div style="font-size:0.74em; color:var(--text-tertiary); white-space:nowrap; margin-top:2px;">${escapeHtml(m.role)} • [${escapeHtml(m.playerId)}]</div>
                     </td>
@@ -2380,6 +2398,8 @@
 
         document.getElementById('dossier-name').textContent = 'Loading Operative...';
         document.getElementById('dossier-id').textContent = `[${playerId}]`;
+        const tornLink = document.getElementById('dossier-torn-link');
+        if (tornLink) tornLink.href = `https://www.torn.com/profiles.php?XID=${encodeURIComponent(playerId)}`;
 
         try {
             const myKey = typeof getApiKey === 'function' ? getApiKey() : '';
@@ -2711,14 +2731,21 @@
 
     function renderActiveContest(active) {
         if (!active) return;
-        document.getElementById('contest-title').textContent = active.title;
-        document.getElementById('contest-desc').textContent = active.description;
-        document.getElementById('contest-prizepool').textContent = `$${(active.prizePool || 0).toLocaleString()}`;
+        document.getElementById('contest-title').textContent = active.title || '7-Day Pre-War Strength Blitz';
+        document.getElementById('contest-desc').textContent = active.description || 'Faction-wide stat competition.';
+        const rawPrize = Number(String(active.prizePool ?? active.prize_pool ?? 50000000).replace(/[^0-9.]/g, '')) || 50000000;
+        document.getElementById('contest-prizepool').textContent = `$${Math.round(rawPrize).toLocaleString()}`;
 
         // Live countdown
         if (contestCountdownInterval) clearInterval(contestCountdownInterval);
+        const rawEnd = Number(active.endTime ?? active.end_timestamp ?? 0);
+        const endMs = rawEnd > 0 ? (rawEnd < 1e11 ? rawEnd * 1000 : rawEnd) : (Date.now() + 5 * 86400000);
         const updateCountdown = () => {
-            const diff = Math.max(0, active.endTime - Date.now());
+            const diff = Math.max(0, endMs - Date.now());
+            if (diff <= 0) {
+                document.getElementById('contest-countdown').textContent = '🏁 Contest Ended';
+                return;
+            }
             const days = Math.floor(diff / 86400000);
             const hours = Math.floor((diff % 86400000) / 3600000);
             const mins = Math.floor((diff % 3600000) / 60000);
@@ -3025,7 +3052,12 @@
         }
 
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') closeMemberDrawer();
+            if (e.key === 'Escape') {
+                closeMemberDrawer();
+                if (typeof closeModifierCalculatorModal === 'function') closeModifierCalculatorModal();
+                if (typeof closePrivacySettingsModal === 'function') closePrivacySettingsModal();
+                if (typeof closeNewContestModal === 'function') closeNewContestModal();
+            }
         });
 
         hydrateCachedGymData();
@@ -3037,6 +3069,7 @@
 
         loadDashboard();
         loadRoster();
+        loadCompetitions();
     });
 
     window.addEventListener('hashchange', () => {

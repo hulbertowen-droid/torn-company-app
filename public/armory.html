@@ -1271,7 +1271,7 @@
                             <button class="btn btn-sm btn-outline-warning" onclick="copyLowStockDiscordAlert()" title="Copy low-stock restock checklist for Discord">
                                 <span>📋</span> Copy Restock Alert
                             </button>
-                            <a href="https://www.torn.com/factions.php?step=your#/tab=armoury&sub=donator" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-primary">
+                            <a href="https://www.torn.com/factions.php?step=your#/tab=armoury&sub=donator" target="_blank" rel="noopener noreferrer" onclick="event.preventDefault(); window.open(this.href, '_blank', 'noopener,noreferrer');" class="btn btn-sm btn-outline-primary">
                                 <span>📦</span> Deposit Supplies
                             </a>
                         </div>
@@ -1335,7 +1335,7 @@
                                 <option value="loaned">Currently Loaned Out</option>
                                 <option value="available">Available in Vault</option>
                             </select>
-                            <a href="https://www.torn.com/factions.php?step=your#/tab=armoury&sub=weapons" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-warning">
+                            <a href="https://www.torn.com/factions.php?step=your#/tab=armoury&sub=weapons" target="_blank" rel="noopener noreferrer" onclick="event.preventDefault(); window.open(this.href, '_blank', 'noopener,noreferrer');" class="btn btn-sm btn-outline-warning">
                                 <span>➕</span> Issue Loan on Torn
                             </a>
                         </div>
@@ -3111,7 +3111,7 @@ function filterArsenal() {
         return true;
     });
 
-    if (badge) badge.textContent = `${list.length} pieces`;
+    if (badge) badge.textContent = list.length === 1 ? '1 piece' : `${list.length} pieces`;
     if (!tbody) return;
     if (!list.length) {
         tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:20px; color:var(--text-tertiary);">No arsenal equipment matches the filter.</td></tr>';
@@ -3119,23 +3119,27 @@ function filterArsenal() {
     }
 
     tbody.innerHTML = list.map(item => {
-        const total = item.quantity || ((item.available || 0) + (item.loaned || 0)) || 1;
+        const avail = Number(item.available || 0);
+        const total = item.quantity || (avail + (item.loaned || 0)) || 1;
         const pct = Math.min(100, Math.round(((item.loaned || 0) / total) * 100));
+        const actionBtn = avail <= 0
+            ? `<button type="button" disabled class="refresh-btn" style="opacity:0.5; cursor:not-allowed; padding:4px 10px; font-size:0.75em;" title="All units are currently loaned out">All Loaned</button>`
+            : `<a href="https://www.torn.com/factions.php?step=your#/tab=armoury&sub=weapons" target="_blank" rel="noopener noreferrer" onclick="event.preventDefault(); window.open(this.href, '_blank', 'noopener,noreferrer');" class="refresh-btn" style="text-decoration:none; padding:4px 10px; font-size:0.75em;">Issue ↗</a>`;
         return `<tr>
             <td style="font-weight:700;">${escapeHtml(item.name)}</td>
             <td><span class="badge-type ${item.itemCat === 'Armor' ? 'armor' : ''}">${escapeHtml(item.type || item.itemCat)}</span></td>
-            <td style="font-family:var(--font-mono); color:var(--accent-emerald); font-weight:800;">${fmtNum(item.available || 0)}</td>
+            <td style="font-family:var(--font-mono); color:${avail > 0 ? 'var(--accent-emerald)' : 'var(--text-tertiary)'}; font-weight:800;">${fmtNum(avail)}</td>
             <td style="font-family:var(--font-mono); color:var(--accent-amber); font-weight:800;">${fmtNum(item.loaned || 0)}</td>
             <td style="font-family:var(--font-mono);">${fmtNum(total)}</td>
             <td style="min-width:110px;">
                 <div style="font-size:0.75em; color:var(--text-tertiary); margin-bottom:2px;">${pct}% in field</div>
                 <div style="height:4px; background:var(--bg-elevated); border-radius:2px; overflow:hidden;"><div style="width:${pct}%; height:100%; background:var(--accent-cobalt);"></div></div>
             </td>
-            <td style="text-align:right;"><a href="https://www.torn.com/factions.php?step=your#/tab=armoury&sub=weapons" target="_blank" rel="noopener noreferrer" class="refresh-btn" style="text-decoration:none; padding:4px 10px; font-size:0.75em;">Issue</a></td>
+            <td style="text-align:right;">${actionBtn}</td>
         </tr>`;
     }).join('');
 }
-const filterArsenalDebounced = debounce(filterArsenal, 200);
+const filterArsenalDebounced = debounce(filterArsenal, 150);
 
 function filterLoans() {
     if (!currentArmoryData) return;
@@ -3192,6 +3196,11 @@ function filterLoans() {
 const filterLoansDebounced = debounce(filterLoans, 200);
 
 document.addEventListener('DOMContentLoaded', () => {
+    const arsInp = document.getElementById('arsenal-search');
+    if (arsInp) {
+        arsInp.addEventListener('input', filterArsenalDebounced);
+        arsInp.addEventListener('keyup', filterArsenalDebounced);
+    }
     hydrateArmoryThresholdInputs();
     initTrackerDates();
     initArmoryHash();

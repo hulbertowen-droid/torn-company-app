@@ -269,7 +269,25 @@ window.openGlobalSettings = async function() {
     const statusText = document.getElementById('gs-status-text');
     const logoutBtn = document.getElementById('gs-btn-logout');
 
-    if (statusText) {
+    // Immediately show connected badge if a verified session exists in storage (prevents stuck "Verifying connection...")
+    let cachedUser = null;
+    try {
+        const rawU = sessionStorage.getItem('sv_user');
+        if (rawU) cachedUser = JSON.parse(rawU);
+    } catch (_) {}
+    const cachedName = cachedUser?.playerName || localStorage.getItem('warboard_myname') || '';
+    const cachedPid = cachedUser?.playerId || localStorage.getItem('warboard_myPlayerId') || '';
+    const cachedFid = cachedUser?.factionId || localStorage.getItem('warboard_myFactionId') || '';
+    const cachedFname = cachedUser?.factionName || localStorage.getItem('warboard_myFactionName') || 'Faction';
+
+    if (hasAccess && cachedName) {
+        const facLabel = cachedFid && String(cachedFid) !== '0' ? `${cachedFname} [${cachedFid}]` : 'Factionless';
+        if (keyInput) keyInput.placeholder = `•••••••••••••••• (Connected: ${cachedName} — paste new key to switch)`;
+        if (statusText) {
+            statusText.innerHTML = `<span class="badge" style="background:rgba(16,185,129,0.15); color:#10b981; border:1px solid rgba(16,185,129,0.35); padding:4px 8px; border-radius:4px; font-weight:700;">🟢 Connected: ${cachedName}${cachedPid ? ` [${cachedPid}]` : ''} — ${facLabel}</span>`;
+        }
+        if (logoutBtn) logoutBtn.style.display = 'block';
+    } else if (statusText) {
         statusText.innerHTML = '<span style="color:var(--text-secondary, #94a3b8); font-size:0.85em;">⏳ Verifying connection...</span>';
     }
 

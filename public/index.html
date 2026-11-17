@@ -409,26 +409,34 @@
 
     .table-dense-header {
         display: grid;
-        grid-template-columns: minmax(180px, 1.8fr) minmax(90px, 0.9fr) minmax(120px, 1.2fr) minmax(130px, 1.3fr) auto;
-        gap: 10px;
-        padding: 8px 16px;
-        font-size: 0.7rem;
+        grid-template-columns: minmax(0, 1.45fr) minmax(0, 0.62fr) minmax(0, 0.85fr) minmax(0, 0.92fr) minmax(0, 1.25fr);
+        gap: 6px;
+        padding: 7px 10px;
+        font-size: 0.68rem;
         font-weight: 800;
         text-transform: uppercase;
         color: var(--text-tertiary);
         background: var(--bg-surface);
         border-bottom: 1px solid var(--border-subtle);
-        letter-spacing: 0.5px;
+        letter-spacing: 0.4px;
+        min-width: 0;
+        overflow-x: hidden;
     }
     .table-dense-row {
         display: grid;
-        grid-template-columns: minmax(180px, 1.8fr) minmax(90px, 0.9fr) minmax(120px, 1.2fr) minmax(130px, 1.3fr) auto;
-        gap: 10px;
-        padding: 10px 16px;
+        grid-template-columns: minmax(0, 1.45fr) minmax(0, 0.62fr) minmax(0, 0.85fr) minmax(0, 0.92fr) minmax(0, 1.25fr);
+        gap: 6px;
+        padding: 8px 10px;
         align-items: center;
         border-bottom: 1px solid var(--border-subtle);
-        font-size: 0.82rem;
+        font-size: 0.78rem;
         transition: background 0.15s;
+        min-width: 0;
+        overflow-x: hidden;
+    }
+    .table-dense-header > div,
+    .table-dense-row > div {
+        min-width: 0;
     }
     .table-dense-row:hover { background: var(--bg-hover); }
     .table-dense-row.hosp-imminent {
@@ -1060,7 +1068,7 @@
                     </div>
 
                     <!-- Friendly Table Header -->
-                    <div class="table-dense-header" style="grid-template-columns: minmax(170px, 1.8fr) minmax(85px, 0.9fr) minmax(110px, 1.1fr) auto;">
+                    <div class="table-dense-header" style="grid-template-columns: minmax(0, 1.6fr) minmax(0, 0.85fr) minmax(0, 0.95fr) minmax(0, 0.8fr);">
                         <div>Member</div>
                         <div>War Combat</div>
                         <div>Defense Status</div>
@@ -2342,12 +2350,12 @@ function renderEnemyTable() {
                     </div>
                 </div>
 
-                <div style="display:flex;align-items:center;justify-content:flex-end;gap:5px;flex-wrap:wrap;">
-                    <a href="https://www.torn.com/loader.php?sid=attack&user2ID=${p.id}" target="_blank" class="btn-attack-direct">⚔️ Attack</a>
+                <div style="display:flex;align-items:center;justify-content:flex-end;gap:4px;flex-wrap:wrap;">
+                    <a href="https://www.torn.com/loader.php?sid=attack&user2ID=${p.id}" target="_blank" rel="noopener noreferrer" class="btn-attack-direct" style="padding:4px 8px;font-size:0.7rem;">⚔️ Attack</a>
                     ${claimHtml}
-                    <button class="btn-filter" style="padding:4px 7px;font-size:0.72rem;" onclick="inspectTarget('${p.id}', '${p.name.replace(/'/g, "\\'")}')" title="Target Intel">🔍</button>
-                    <button class="btn-filter" style="padding:4px 7px;font-size:0.72rem;" onclick="openStatOverrideModal('${p.id}', '${p.name.replace(/'/g, "\\'")}', ${typeof p.estStats === 'number' ? p.estStats : 0})" title="Override Stats">✏️</button>
-                    <button class="btn-filter" style="padding:4px 7px;font-size:0.72rem;" onclick="requestBackup('${p.id}', '${p.name.replace(/'/g, "\\'")}')" title="Request SOS Backup">🆘</button>
+                    <button class="btn-filter" style="padding:3px 6px;font-size:0.68rem;" onclick="inspectTarget('${p.id}', '${p.name.replace(/'/g, "\\'")}')" title="Target Intel">🔍</button>
+                    <button class="btn-filter" style="padding:3px 6px;font-size:0.68rem;" onclick="openStatOverrideModal('${p.id}', '${p.name.replace(/'/g, "\\'")}', ${typeof p.estStats === 'number' ? p.estStats : 0})" title="Override Stats">✏️</button>
+                    <button class="btn-filter" style="padding:3px 6px;font-size:0.68rem;" onclick="requestBackup('${p.id}', '${p.name.replace(/'/g, "\\'")}')" title="Request SOS Backup">🆘</button>
                 </div>
             </div>
         `;
@@ -2436,7 +2444,7 @@ function renderFriendlyTable() {
         }
 
         return `
-            <div class="table-dense-row" style="grid-template-columns: minmax(170px, 1.8fr) minmax(85px, 0.9fr) minmax(110px, 1.1fr) auto;">
+            <div class="table-dense-row" style="grid-template-columns: minmax(0, 1.6fr) minmax(0, 0.85fr) minmax(0, 0.95fr) minmax(0, 0.8fr);">
                 <div>
                     <div style="display:flex;align-items:center;gap:6px;">
                         <span style="color:${dotColor};font-size:0.75rem;">●</span>

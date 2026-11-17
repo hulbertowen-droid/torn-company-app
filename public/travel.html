@@ -174,6 +174,36 @@
         border-radius: var(--radius-md);
         overflow: hidden;
         box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+        min-width: 0;
+    }
+    .table-wrap {
+        width: 100%;
+        overflow-x: auto;
+    }
+    .table-wrap table {
+        width: 100%;
+        min-width: 0;
+        border-collapse: collapse;
+        font-size: 0.81em;
+    }
+    .table-wrap th {
+        padding: 8px 8px;
+        text-align: left;
+        font-size: 0.72em;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+        color: var(--text-tertiary);
+        border-bottom: 1px solid var(--border-default);
+        background: var(--bg-elevated);
+        white-space: nowrap;
+        cursor: pointer;
+    }
+    .table-wrap td {
+        padding: 7px 8px;
+        border-bottom: 1px solid var(--border-subtle);
+        vertical-align: middle;
+        white-space: nowrap;
     }
     .table-header {
         padding: 14px 20px;
@@ -434,10 +464,10 @@
                             <th onclick="sortBy('name')">Item <span class="sort-arrow">↕</span></th>
                             <th onclick="sortBy('country')">Country <span class="sort-arrow">↕</span></th>
                             <th onclick="sortBy('flightTimeMins')">Flight (RT) <span class="sort-arrow">↕</span></th>
-                            <th onclick="sortBy('stock')">YATA Stock <span class="sort-arrow">↕</span></th>
-                            <th onclick="sortBy('cost')">Buy Price <span class="sort-arrow">↕</span></th>
-                            <th onclick="sortBy('marketPrice')">Market Price <span class="sort-arrow">↕</span></th>
-                            <th onclick="sortBy('profit')">Profit/Item <span class="sort-arrow">↕</span></th>
+                            <th onclick="sortBy('stock')">Stock <span class="sort-arrow">↕</span></th>
+                            <th onclick="sortBy('cost')">Buy <span class="sort-arrow">↕</span></th>
+                            <th onclick="sortBy('marketPrice')">Market <span class="sort-arrow">↕</span></th>
+                            <th onclick="sortBy('profit')">Unit Profit <span class="sort-arrow">↕</span></th>
                             <th onclick="sortBy('totalProfit')">Total Profit <span class="sort-arrow">↕</span></th>
                             <th onclick="sortBy('profitPerHr')" class="sorted">$/hr <span class="sort-arrow">↓</span></th>
                         </tr>
@@ -461,8 +491,17 @@ let allItems = [];
 let capacity = parseInt(localStorage.getItem('travelCapacity') || '29');
 let flightProfile = localStorage.getItem('travelFlightProfile') || 'airstrip';
 let currentFilter = 'all';
+let activeCategory = 'all';
+let inStockOnly = false;
 let sortKey = 'profitPerHr';
 let sortAsc = false;
+
+const SHORT_COUNTRY_NAMES = {
+    'United Kingdom': 'UK',
+    'Cayman Islands': 'Cayman Isl.',
+    'South Africa': 'S. Africa',
+    'Switzerland': 'Switz.'
+};
 
 const CATEGORIES = {
     plushie: ['Plushie'],
@@ -592,11 +631,12 @@ function renderTable() {
         category: getCategory(item.name)
     }));
 
-    // Filter
-    if (currentFilter === 'instock') {
+    // Filter (combine category + inStockOnly simultaneously)
+    if (activeCategory !== 'all') {
+        items = items.filter(i => i.category === activeCategory);
+    }
+    if (inStockOnly) {
         items = items.filter(i => i.stock > 0);
-    } else if (currentFilter !== 'all') {
-        items = items.filter(i => i.category === currentFilter);
     }
 
     // Sort
@@ -644,6 +684,7 @@ function renderTable() {
     tbody.innerHTML = items.map((item, i) => {
         const cat = item.category;
         const flag = item.flag || COUNTRY_FLAGS[item.country] || '🌍';
+        const shortCountry = SHORT_COUNTRY_NAMES[item.country] || item.country;
         const rowClass = item.stock === 0 ? 'out-stock' : (item.stock < capacity ? 'low-stock' : 'top-pick');
         const totalActual = item.totalProfit;
 
@@ -653,7 +694,7 @@ function renderTable() {
                 <div class="item-name">${item.name}</div>
                 <div class="item-category">${catEmoji[cat]} ${cat.charAt(0).toUpperCase()+cat.slice(1)}</div>
             </td>
-            <td><span class="country-flag">${flag} <span class="country-badge">${item.country}</span></span></td>
+            <td title="${item.country}"><span class="country-flag">${flag} <span class="country-badge">${shortCountry}</span></span></td>
             <td class="flight-time">${fmtFlight(item.flightTimeMins)}</td>
             <td>${fmtStock(item.stock, capacity)}</td>
             <td style="color:var(--text-dim);">${fmt(item.cost)}</td>
@@ -690,10 +731,19 @@ function applySort() {
     renderTable();
 }
 
-function setFilter(filter, btn) {
-    currentFilter = filter;
-    document.querySelectorAll('.pill-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
+function setFilter(filter, btn, forceState) {
+    if (filter === 'instock') {
+        inStockOnly = typeof forceState === 'boolean' ? forceState : !inStockOnly;
+        const stockBtn = btn || document.querySelector('.pill-btn[data-filter="instock"]');
+        if (stockBtn) stockBtn.classList.toggle('active', inStockOnly);
+        renderTable();
+        return;
+    }
+    activeCategory = filter || 'all';
+    currentFilter = activeCategory;
+    document.querySelectorAll('.pill-btn:not([data-filter="instock"])').forEach(b => b.classList.remove('active'));
+    const targetBtn = btn || document.querySelector(`.pill-btn[data-filter="${activeCategory}"]`);
+    if (targetBtn) targetBtn.classList.add('active');
     renderTable();
 }
 
