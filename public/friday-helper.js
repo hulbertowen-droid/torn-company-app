@@ -367,6 +367,10 @@
 
                 // OC MANAGER (/oc.html)
                 if (action.type === 'oc_action') {
+                    if (action.view && typeof window.switchOcView === 'function') {
+                        window.switchOcView(action.view);
+                        if (!isFollowupPass) flashElement(document.getElementById('view-tab-' + action.view));
+                    }
                     if (action.tab && typeof window.setTab === 'function') {
                         window.setTab(action.tab);
                         if (!isFollowupPass) flashElement(document.getElementById('tab-' + action.tab));

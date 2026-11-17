@@ -10913,11 +10913,19 @@ app.get('/api/ocs', async (req, res) => {
             });
         }
 
-        // Build a member lookup map: name + live status
+        // Build a member lookup map: name, level, live status, days in faction
         const memberLookup = {};
         if (memberData.members) {
             Object.entries(memberData.members).forEach(([id, m]) => {
-                memberLookup[id] = { name: m.name, status: m.status || null, last_action: m.last_action || null };
+                memberLookup[id] = {
+                    id: Number(id),
+                    name: m.name,
+                    level: Number(m.level || 1),
+                    days_in_faction: Number(m.days_in_faction || 0),
+                    position: m.position || 'Member',
+                    status: m.status || null,
+                    last_action: m.last_action || null
+                };
             });
         }
 
@@ -10927,6 +10935,7 @@ app.get('/api/ocs', async (req, res) => {
                 if (slot.user && slot.user.id) {
                     const info = memberLookup[slot.user.id.toString()];
                     slot.user.name = info?.name || slot.user.name || `ID:${slot.user.id}`;
+                    slot.user.level = info?.level || 1;
                     if (info?.status) slot.user.status = info.status;
                     if (info?.last_action) slot.user.last_action = info.last_action;
                 }
@@ -10935,7 +10944,7 @@ app.get('/api/ocs', async (req, res) => {
             return { ...crime, slots };
         });
 
-        const resultPayload = { success: true, factionId: fid, crimes };
+        const resultPayload = { success: true, factionId: fid, crimes, members: memberLookup };
         ocApiCache[resolvedCacheKey] = { timestamp: Date.now(), data: resultPayload };
         res.json(resultPayload);
     } catch (err) {
@@ -11985,12 +11994,42 @@ function resolveSiteHelperIntent(rawMsg, currentPage = '/') {
         };
     }
 
-    // 8. OC Manager
-    if (/\b(ready\s*oc|planning\s*oc|recruiting\s*oc|oc\s*manager|organized\s*crime)\b/.test(q)) {
-        const tab = /ready/.test(q) ? 'ready' : (/planning/.test(q) ? 'planning' : 'recruiting');
+    // 8. OC Manager (Command Center 6 Views + Board Subfilters)
+    if (/\b(oc\s*bench|unassigned\s*(member|to\s*oc|bench)|bench\s*radar|spawn\s*architect)\b/.test(q)) {
         return {
-            reply: `I've opened **OC Manager** and switched to the **${tab.toUpperCase()}** crimes tab.`,
-            action: { type: 'oc_action', page: '/oc.html', tab, label: `Open OC Manager (${tab.toUpperCase()})` }
+            reply: "I've opened **OC Manager → Bench & Crew Matcher** so you can pair unassigned members to open roles.",
+            action: { type: 'oc_action', page: '/oc.html#bench', view: 'bench', label: 'Open OC Bench & Crew Matcher' }
+        };
+    }
+    if (/\b(oc\s*payout|oc\s*split|crime\s*split|vault\s*cut\s*calculator)\b/.test(q)) {
+        return {
+            reply: "I've opened **OC Manager → Payouts & Split Ledger** so you can calculate consumable reimbursements, vault cuts, and member payouts.",
+            action: { type: 'oc_action', page: '/oc.html#payouts', view: 'payouts', label: 'Open OC Payout Calculator' }
+        };
+    }
+    if (/\b(oc\s*roi|tier\s*roi|what[\s-]*if\s*crew|crew\s*simulator|oc\s*sandbox)\b/.test(q)) {
+        return {
+            reply: "I've opened **OC Manager → ROI & Crew Simulator** for EV/Respect modeling and What-If crew testing.",
+            action: { type: 'oc_action', page: '/oc.html#roi', view: 'roi', label: 'Open OC ROI & Simulator' }
+        };
+    }
+    if (/\b(oc\s*leaderboard|post[\s-]*mortem|oc\s*reliability|fail\s*diagnostics)\b/.test(q)) {
+        return {
+            reply: "I've opened **OC Manager → Operative Crime Leaderboard** to inspect reliability scores and fail post-mortems.",
+            action: { type: 'oc_action', page: '/oc.html#leaderboard', view: 'leaderboard', label: 'Open OC Leaderboard' }
+        };
+    }
+    if (/\b(oc\s*economics|30[\s-]*day\s*oc|oc\s*treasury|item\s*drop\s*vault)\b/.test(q)) {
+        return {
+            reply: "I've opened **OC Manager → 30-Day OC Economics** to view treasury charts, item drops, and CSV exports.",
+            action: { type: 'oc_action', page: '/oc.html#economics', view: 'economics', label: 'Open 30-Day OC Economics' }
+        };
+    }
+    if (/\b(ready\s*oc|planning\s*oc|recruiting\s*oc|oc\s*manager|organized\s*crime)\b/.test(q)) {
+        const tab = /ready/.test(q) ? 'ready' : (/planning/.test(q) ? 'planning' : (/recruiting/.test(q) ? 'recruiting' : 'all'));
+        return {
+            reply: `I've opened **OC Manager → Active Operations Board** (${tab.toUpperCase()} filter).`,
+            action: { type: 'oc_action', page: '/oc.html', view: 'board', tab, label: `Open OC Manager (${tab.toUpperCase()})` }
         };
     }
 
@@ -12202,6 +12241,17 @@ app.use('/api/bazaar', bazaarRoutes);
 
 const gymTrackerRoutes = require('./routes/gym-tracker');
 app.use('/api/gym-tracker', gymTrackerRoutes);
+
+const ocCommandRoutes = require('./routes/oc-command');
+ocCommandRoutes.setDeps({
+    cachedTornFetch,
+    getUserFactionInfo,
+    getFactionArmoryCandidateKeys,
+    getDiscordConfig: () => discordConfig,
+    getOcConfig: () => ocConfig,
+    getOcMemberHistory: () => ocMemberHistory
+});
+app.use('/api/oc', ocCommandRoutes.router);
 
 app.get('/api/weav3r-price/:itemId', async (req, res) => {
     const { itemId } = req.params;

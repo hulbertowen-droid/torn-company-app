@@ -3,9 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <!-- PWA & Mobile Web Capabilities -->
     <link rel="manifest" href="/manifest.json">
-    <meta name="theme-color" content="#0d1117">
+    <meta name="theme-color" content="#0a0f1c">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="FactionOS">
@@ -13,22 +12,19 @@
     <meta name="application-name" content="FactionOS">
     <meta name="format-detection" content="telephone=no">
 
-    <!-- PWA Icons & Apple Touch Icons -->
     <link rel="icon" type="image/svg+xml" href="/icons/icon.svg">
     <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
     <link rel="apple-touch-icon" href="/icons/icon-180.png">
     <link rel="apple-touch-icon" sizes="152x152" href="/icons/icon-152.png">
     <link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-180.png">
-    <title>OC Manager | FactionOS</title>
-    <meta name="description" content="Torn City organized crime planner — team readiness, slot assignments, item requirements, success probability, and scheduled execution timers.">
-    
-    <!-- Fonts & Core Design System -->
+    <title>OC 2.0 Command Center | FactionOS</title>
+    <meta name="description" content="Torn City Organized Crimes (OC 2.0) Command Center — live bench radar, CPR matching, gear readiness, payout split ledger, ROI matrix, timeline Gantt, and analytics.">
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/global.css?v=4.4.0">
-    
-    <!-- Scripts & Auth -->
+
     <script src="/auth-gate.js?v=4.4.0"></script>
     <script src="/global_settings.js?v=4.4.0"></script>
     <script src="/global-topbar.js?v=4.4.0"></script>
@@ -36,204 +32,581 @@
     <script src="/pwa-helper.js?v=1.2.0" defer></script>
 
     <style>
-    /* ─── Page-Specific OC Manager Styling ─── */
+    /* ─── OC 2.0 Command Center Tactical Aesthetics ─── */
+    html, body { max-width: 100%; overflow-x: hidden; }
+    .main-wrapper, .main-content { min-width: 0; }
+    .settings-btn { display: none !important; }
+
+    :root {
+        --oc-glass-bg: rgba(15, 23, 42, 0.84);
+        --oc-glass-elev: rgba(10, 15, 28, 0.92);
+        --oc-border-cyan: rgba(56, 189, 248, 0.18);
+        --oc-border-cyan-strong: rgba(56, 189, 248, 0.38);
+    }
+    body.light-mode {
+        --oc-glass-bg: rgba(255, 255, 255, 0.94);
+        --oc-glass-elev: rgba(248, 250, 252, 0.98);
+        --oc-border-cyan: rgba(14, 165, 233, 0.24);
+        --oc-border-cyan-strong: rgba(14, 165, 233, 0.48);
+    }
+
+    .oc-page-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 14px;
+        margin-bottom: 18px;
+    }
+    .oc-page-title {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin: 0 0 4px 0;
+        font-size: 1.55em;
+        font-weight: 900;
+        letter-spacing: -0.4px;
+        color: var(--text-primary);
+    }
+    .oc-subtitle {
+        font-size: 0.8em;
+        color: var(--text-tertiary);
+        font-family: var(--font-mono);
+        margin: 0;
+    }
+    .oc-war-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 14px;
+        border-radius: 999px;
+        font-size: 0.78em;
+        font-weight: 800;
+        border: 1px solid var(--oc-border-cyan);
+        background: var(--oc-glass-bg);
+        color: var(--text-secondary);
+        white-space: nowrap;
+    }
+    .oc-war-pill.safe { border-color: rgba(16, 185, 129, 0.4); background: rgba(16, 185, 129, 0.1); color: #34d399; }
+    .oc-war-pill.warn { border-color: rgba(245, 158, 11, 0.45); background: rgba(245, 158, 11, 0.12); color: #fbbf24; }
+    .oc-war-pill.danger { border-color: rgba(244, 63, 94, 0.5); background: rgba(244, 63, 94, 0.14); color: #fda4af; }
+
+    /* ─── 6-Card Executive KPI Ribbon ─── */
+    .oc-kpi-grid {
+        display: grid;
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+        gap: 12px;
+        margin-bottom: 18px;
+    }
+    @media (max-width: 1320px) { .oc-kpi-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+    @media (max-width: 720px) { .oc-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+    .oc-kpi-card {
+        background: var(--oc-glass-bg);
+        border: 1px solid var(--oc-border-cyan);
+        border-radius: 12px;
+        padding: 13px 14px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        gap: 5px;
+        backdrop-filter: blur(10px);
+        transition: border-color var(--transition-fast), transform var(--transition-fast);
+        min-width: 0;
+    }
+    .oc-kpi-card:hover { border-color: var(--oc-border-cyan-strong); transform: translateY(-1px); }
+    .oc-kpi-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 6px;
+        font-size: 0.68em;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.6px;
+        color: var(--text-tertiary);
+    }
+    .oc-kpi-val {
+        font-family: var(--font-mono);
+        font-size: 1.38em;
+        font-weight: 900;
+        color: var(--text-primary);
+        line-height: 1.15;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .oc-kpi-sub {
+        font-size: 0.71em;
+        color: var(--text-secondary);
+        line-height: 1.35;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 6px;
+        flex-wrap: wrap;
+    }
+    .oc-kpi-mini-btn {
+        font-size: 0.92em;
+        padding: 2px 7px;
+        border-radius: 5px;
+        border: 1px solid rgba(56, 189, 248, 0.35);
+        background: rgba(56, 189, 248, 0.12);
+        color: #38bdf8;
+        font-weight: 800;
+        cursor: pointer;
+    }
+    .oc-kpi-mini-btn:hover { background: rgba(56, 189, 248, 0.24); }
+
+    /* ─── 6-Tab Workspace Bar & Quick Actions ─── */
+    .oc-workspace-bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+        background: var(--oc-glass-elev);
+        border: 1px solid var(--oc-border-cyan);
+        border-radius: 12px;
+        padding: 8px 10px;
+        margin-bottom: 16px;
+    }
+    .oc-view-tabs {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        flex-wrap: wrap;
+    }
+    .oc-view-tab {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 12px;
+        border-radius: 8px;
+        border: 1px solid transparent;
+        background: transparent;
+        color: var(--text-secondary);
+        font-size: 0.78em;
+        font-weight: 800;
+        cursor: pointer;
+        font-family: inherit;
+        white-space: nowrap;
+        transition: all var(--transition-fast);
+    }
+    .oc-view-tab:hover:not(.active) { background: rgba(255, 255, 255, 0.05); color: var(--text-primary); }
+    .oc-view-tab.active {
+        background: rgba(56, 189, 248, 0.15);
+        border-color: rgba(56, 189, 248, 0.42);
+        color: #38bdf8;
+        box-shadow: 0 0 16px rgba(56, 189, 248, 0.12);
+    }
+    .oc-quick-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+    .oc-action-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 7px 11px;
+        border-radius: 8px;
+        border: 1px solid rgba(56, 189, 248, 0.25);
+        background: rgba(15, 23, 42, 0.85);
+        color: var(--text-primary);
+        font-size: 0.76em;
+        font-weight: 800;
+        cursor: pointer;
+        font-family: inherit;
+        white-space: nowrap;
+        transition: all var(--transition-fast);
+    }
+    .oc-action-btn:hover { border-color: #38bdf8; background: rgba(56, 189, 248, 0.14); }
+    .oc-action-btn.primary { background: rgba(59, 130, 246, 0.2); border-color: rgba(59, 130, 246, 0.48); color: #93c5fd; }
+    .oc-action-btn.purple { background: rgba(139, 92, 246, 0.18); border-color: rgba(139, 92, 246, 0.45); color: #ddd6fe; }
+    .oc-action-btn:disabled { opacity: 0.55; cursor: wait; }
+    .spin-svg { animation: ocSpin 0.9s linear infinite; }
+    @keyframes ocSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+    .oc-view-pane { display: none; }
+    .oc-view-pane.active { display: block; }
+
+    /* ─── Glass Panels, Strips & Tool Cards ─── */
+    .oc-glass-panel {
+        background: var(--oc-glass-bg);
+        border: 1px solid var(--oc-border-cyan);
+        border-radius: 12px;
+        padding: 15px 18px;
+        margin-bottom: 16px;
+        backdrop-filter: blur(10px);
+    }
+    .oc-alert-strip {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+        padding: 11px 16px;
+        border-radius: 10px;
+        margin-bottom: 12px;
+        border: 1px solid rgba(245, 158, 11, 0.38);
+        background: rgba(245, 158, 11, 0.08);
+        font-size: 0.83em;
+    }
+    .oc-alert-strip.crimson {
+        border-color: rgba(244, 63, 94, 0.42);
+        background: rgba(244, 63, 94, 0.09);
+    }
+    .oc-alert-strip.cyan {
+        border-color: rgba(56, 189, 248, 0.36);
+        background: rgba(56, 189, 248, 0.08);
+    }
+
+    /* ─── 24h / 72h Timeline Gantt Chronometer (Tool 7) ─── */
+    .gantt-wrap { overflow-x: auto; padding-top: 8px; }
+    .gantt-axis {
+        display: grid;
+        grid-template-columns: 185px 1fr;
+        align-items: center;
+        gap: 12px;
+        font-size: 0.7em;
+        color: var(--text-tertiary);
+        font-family: var(--font-mono);
+        margin-bottom: 6px;
+        min-width: 660px;
+    }
+    .gantt-ticks {
+        position: relative;
+        height: 20px;
+        display: flex;
+        justify-content: space-between;
+        border-bottom: 1px solid var(--border-subtle);
+    }
+    .gantt-row {
+        display: grid;
+        grid-template-columns: 185px 1fr;
+        align-items: center;
+        gap: 12px;
+        padding: 5px 0;
+        border-bottom: 1px dashed rgba(255, 255, 255, 0.04);
+        min-width: 660px;
+    }
+    .gantt-track {
+        position: relative;
+        height: 24px;
+        background: rgba(2, 6, 23, 0.65);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        border-radius: 6px;
+        overflow: hidden;
+    }
+    .gantt-midnight-line {
+        position: absolute;
+        top: 0; bottom: 0;
+        width: 0;
+        border-left: 1.5px dashed rgba(245, 158, 11, 0.75);
+        z-index: 3;
+        pointer-events: none;
+    }
+    .gantt-pill {
+        position: absolute;
+        top: 3px; bottom: 3px;
+        border-radius: 4px;
+        display: flex;
+        align-items: center;
+        padding: 0 8px;
+        font-size: 0.7em;
+        font-weight: 800;
+        font-family: var(--font-mono);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        z-index: 2;
+    }
+    .gantt-pill.ready { background: rgba(16, 185, 129, 0.28); border: 1px solid #10b981; color: #6ee7b7; }
+    .gantt-pill.planning { background: rgba(6, 182, 212, 0.25); border: 1px solid #06b6d4; color: #67e8f9; }
+    .gantt-pill.recruiting { background: rgba(245, 158, 11, 0.22); border: 1px solid #f59e0b; color: #fde68a; }
+    .gantt-pill.blocked { background: rgba(244, 63, 94, 0.28); border: 1px solid #f43f5e; color: #fecdd3; }
+
+    /* ─── Board Filters & Redesigned OC Cards ─── */
+    .oc-board-toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-bottom: 14px;
+    }
     .tabs {
         display: inline-flex;
         gap: 4px;
-        margin-bottom: 24px;
-        background: var(--bg-surface);
-        padding: 5px;
-        border-radius: var(--radius-md);
-        border: 1px solid var(--border-subtle);
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+        background: var(--oc-glass-elev);
+        padding: 4px;
+        border-radius: 10px;
+        border: 1px solid var(--oc-border-cyan);
+        flex-wrap: wrap;
     }
     .tab-btn {
-        padding: 8px 20px;
-        border-radius: var(--radius-sm);
+        padding: 7px 13px;
+        border-radius: 7px;
         border: 1px solid transparent;
         cursor: pointer;
         font-weight: 800;
-        font-size: 0.82em;
-        text-transform: uppercase;
-        letter-spacing: 0.6px;
+        font-size: 0.76em;
         transition: all var(--transition-fast);
         background: transparent;
         color: var(--text-secondary);
         font-family: inherit;
+        white-space: nowrap;
     }
-    .tab-btn.active {
-        background: var(--accent-cobalt-dim);
-        border-color: var(--accent-cobalt-border);
-        color: var(--accent-cobalt);
+    .tab-btn.active { background: rgba(56, 189, 248, 0.16); border-color: rgba(56, 189, 248, 0.42); color: #38bdf8; }
+    .tab-btn:hover:not(.active) { background: rgba(255, 255, 255, 0.04); color: var(--text-primary); }
+
+    .oc-filter-controls {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
     }
-    .tab-btn:hover:not(.active) {
-        background: var(--bg-elevated);
+    .oc-input, .oc-select {
+        background: #0a0f1c;
+        border: 1px solid var(--oc-border-cyan);
+        border-radius: 7px;
+        padding: 7px 11px;
         color: var(--text-primary);
+        font-size: 0.8em;
+        font-family: inherit;
     }
+    body.light-mode .oc-input, body.light-mode .oc-select { background: #fff; color: #0f172a; }
+    .oc-input:focus, .oc-select:focus { outline: none; border-color: #38bdf8; }
 
     .oc-card {
-        background: var(--bg-surface);
-        border: 1px solid var(--border-subtle);
-        border-radius: var(--radius-md);
-        margin-bottom: 20px;
+        background: var(--oc-glass-bg);
+        border: 1px solid var(--oc-border-cyan);
+        border-radius: 12px;
+        margin-bottom: 16px;
         overflow: hidden;
-        transition: all var(--transition-fast);
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+        box-shadow: 0 8px 26px rgba(0, 0, 0, 0.25);
     }
-    .oc-card:hover { border-color: var(--border-strong); }
-    .oc-card.ready { border-left: 4px solid var(--accent-emerald); }
-    .oc-card.recruiting { border-left: 4px solid var(--accent-amber); }
-    .oc-card.planning { border-left: 4px solid var(--accent-cobalt); }
+    .oc-card.ready { border-left: 4px solid #10b981; }
+    .oc-card.recruiting { border-left: 4px solid #f59e0b; }
+    .oc-card.planning { border-left: 4px solid #38bdf8; }
+    .oc-card.blocked-card { border-top: 2px solid #f43f5e; }
+    .oc-card.stall-card { border-top: 2px solid #f59e0b; }
 
     .oc-header {
-        padding: 16px 22px;
+        padding: 14px 18px;
         display: flex;
         align-items: center;
         justify-content: space-between;
+        gap: 14px;
+        flex-wrap: wrap;
         cursor: pointer;
-        user-select: none;
+        background: rgba(255, 255, 255, 0.015);
         border-bottom: 1px solid var(--border-subtle);
-        gap: 16px;
-        background: rgba(255, 255, 255, 0.01);
     }
-    .oc-header:hover { background: var(--bg-elevated); }
-
-    .oc-title-block { display: flex; align-items: center; gap: 14px; }
+    .oc-header:hover { background: rgba(56, 189, 248, 0.05); }
+    .oc-title-block { display: flex; align-items: center; gap: 12px; min-width: 0; }
     .oc-thumbnail {
-        width: 54px; height: 54px; border-radius: var(--radius-sm);
-        background: var(--bg-elevated);
+        width: 46px; height: 46px;
+        border-radius: 10px;
+        background: rgba(10, 15, 28, 0.9);
+        border: 1px solid var(--oc-border-cyan);
         display: flex; align-items: center; justify-content: center;
-        font-size: 1.7em; flex-shrink: 0;
-        border: 1px solid var(--border-subtle);
+        font-size: 1.45em; flex-shrink: 0;
     }
-    .oc-name { font-weight: 900; font-size: 1.15em; color: var(--text-primary); }
-    .oc-meta { display: flex; align-items: center; gap: 10px; margin-top: 4px; flex-wrap: wrap; }
+    .oc-name { font-weight: 900; font-size: 1.08em; color: var(--text-primary); }
+    .oc-meta { display: flex; align-items: center; gap: 8px; margin-top: 4px; flex-wrap: wrap; }
     .diff-badge {
-        font-size: 0.74em;
-        font-weight: 800;
-        padding: 2px 8px;
-        border-radius: var(--radius-sm);
-        background: var(--accent-cobalt-dim);
-        color: var(--accent-cobalt);
-        border: 1px solid var(--accent-cobalt-border);
+        font-size: 0.7em; font-weight: 800; padding: 2px 8px; border-radius: 6px;
+        background: rgba(56, 189, 248, 0.14); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.35);
         font-family: var(--font-mono);
     }
-    .slots-badge { font-size: 0.76em; color: var(--text-tertiary); font-family: var(--font-mono); }
-
-    .oc-header-right { display: flex; align-items: center; gap: 16px; flex-shrink: 0; }
+    .slots-badge { font-size: 0.74em; color: var(--text-secondary); font-family: var(--font-mono); }
+    .oc-header-right { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
     .timer-block { text-align: right; }
-    .timer-big { font-size: 1.4em; font-weight: 900; font-family: var(--font-mono); font-feature-settings: "tnum" 1; }
-    .timer-label { font-size: 0.7em; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.8px; font-weight: 700; }
-
-    .pill-recruiting { background: var(--accent-amber-dim); color: var(--accent-amber); border: 1px solid var(--accent-amber-border); }
-    .pill-planning { background: var(--accent-cobalt-dim); color: var(--accent-cobalt); border: 1px solid var(--accent-cobalt-border); }
-    .pill-ready { background: var(--accent-emerald-dim); color: var(--accent-emerald); border: 1px solid var(--accent-emerald-border); animation: pulseDot 1.5s infinite; }
-    .pill-successful { background: var(--accent-emerald-dim); color: var(--accent-emerald); border: 1px solid var(--accent-emerald-border); }
-    .pill-failure { background: var(--accent-crimson-dim); color: var(--accent-crimson); border: 1px solid var(--accent-crimson-border); }
-    .collapse-arrow { color: var(--text-tertiary); font-size: 1em; transition: transform var(--transition-fast); }
+    .timer-big { font-size: 1.2em; font-weight: 900; font-family: var(--font-mono); }
+    .timer-label { font-size: 0.66em; color: var(--text-tertiary); text-transform: uppercase; font-weight: 700; }
+    .collapse-arrow { color: var(--text-tertiary); font-size: 0.9em; transition: transform 0.15s ease; }
     .oc-card.open .collapse-arrow { transform: rotate(180deg); }
 
-    /* Slots Grid */
-    .oc-body { padding: 18px 22px; }
-    .slots-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; }
-
-    .slot-card {
-        background: var(--bg-elevated);
-        border: 1px solid var(--border-subtle);
-        border-radius: var(--radius-sm);
-        padding: 14px;
-        position: relative;
-        transition: all var(--transition-fast);
+    .status-pill {
+        display: inline-flex; align-items: center; gap: 5px;
+        padding: 4px 10px; border-radius: 999px; font-size: 0.72em; font-weight: 800;
+        white-space: nowrap;
     }
-    .slot-card.slot-issue { border-color: var(--accent-crimson-border); background: var(--accent-crimson-dim); }
-    .slot-card.slot-ok { border-color: var(--accent-emerald-border); }
-    .slot-card.slot-empty { opacity: 0.5; border-style: dashed; }
+    .pill-recruiting { background: rgba(245, 158, 11, 0.14); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4); }
+    .pill-planning { background: rgba(56, 189, 248, 0.14); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.38); }
+    .pill-ready { background: rgba(16, 185, 129, 0.16); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.45); }
 
-    .slot-role { font-size: 0.72em; font-weight: 800; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-tertiary); margin-bottom: 6px; }
-    .slot-name { font-weight: 700; font-size: 0.98em; margin-bottom: 2px; }
-    .slot-name a { color: var(--text-primary); text-decoration: none; }
-    .slot-name a:hover { color: var(--accent-cobalt); text-decoration: underline; }
-    .slot-id { font-size: 0.74em; color: var(--text-tertiary); margin-bottom: 10px; font-family: var(--font-mono); }
-
-    .pass-rate-bar-wrap { margin: 8px 0 4px; }
-    .pass-rate-label { font-size: 0.72em; color: var(--text-tertiary); display: flex; justify-content: space-between; margin-bottom: 3px; font-family: var(--font-mono); }
-    .pass-rate-bar { height: 4px; background: rgba(255,255,255,0.06); border-radius: 2px; overflow: hidden; }
-    .pass-rate-fill { height: 100%; border-radius: 2px; transition: width 0.5s ease; }
-
-    .slot-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
-    .tag-hosp { background: var(--accent-crimson-dim); color: var(--accent-crimson); border: 1px solid var(--accent-crimson-border); }
-    .tag-jail { background: var(--accent-amber-dim); color: var(--accent-amber); border: 1px solid var(--accent-amber-border); }
-    .tag-ok { background: var(--accent-emerald-dim); color: var(--accent-emerald); border: 1px solid var(--accent-emerald-border); }
-    .tag-item-missing { background: var(--accent-crimson-dim); color: var(--accent-crimson); border: 1px solid var(--accent-crimson-border); }
-    .tag-item-faction { background: var(--accent-purple-dim); color: var(--accent-purple); border: 1px solid rgba(139, 92, 246, 0.3); }
-    .tag-item-user { background: var(--accent-cobalt-dim); color: var(--accent-cobalt); border: 1px solid var(--accent-cobalt-border); }
-    .tag-item-used { background: var(--accent-amber-dim); color: var(--accent-amber); border: 1px solid var(--accent-amber-border); }
-    .tag-item-reusable { background: var(--accent-emerald-dim); color: var(--accent-emerald); border: 1px solid var(--accent-emerald-border); }
-
-    .oc-rewards {
-        display: flex;
-        gap: 16px;
-        padding: 12px 22px;
-        background: var(--accent-amber-dim);
-        border-top: 1px solid var(--border-subtle);
-        flex-wrap: wrap;
-        align-items: center;
-    }
-    .reward-label { font-size: 0.72em; text-transform: uppercase; color: var(--text-tertiary); font-weight: 800; letter-spacing: 0.8px; }
-    .reward-value { font-weight: 900; font-size: 0.92em; color: var(--accent-amber); font-family: var(--font-mono); }
-    .reward-sep { color: var(--border-default); }
-
-    /* Hide redundant floating settings button */
-    .settings-btn { display: none !important; }
-
-    .subtitle {
-        font-size: 0.84em;
-        color: var(--text-tertiary);
-        margin: -6px 0 18px 0;
-        font-family: var(--font-mono);
-    }
-    .tag {
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        padding: 2px 7px;
-        border-radius: 4px;
-        font-size: 0.72em;
+    .oc-readiness-banner {
+        padding: 8px 18px;
+        font-size: 0.78em;
         font-weight: 700;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        flex-wrap: wrap;
+        border-bottom: 1px solid var(--border-subtle);
+    }
+    .oc-readiness-banner.clear { background: rgba(16, 185, 129, 0.08); color: #6ee7b7; }
+    .oc-readiness-banner.blocked { background: rgba(244, 63, 94, 0.12); color: #fda4af; }
+    .oc-readiness-banner.stall { background: rgba(245, 158, 11, 0.1); color: #fde68a; }
+
+    /* Slot rows table inside each crime card */
+    .oc-body { padding: 14px 18px; }
+    .slot-table-wrap { overflow-x: auto; }
+    .oc-slot-table { width: 100%; border-collapse: collapse; font-size: 0.82em; min-width: 680px; }
+    .oc-slot-table th {
+        text-align: left; padding: 7px 10px; font-size: 0.75em; text-transform: uppercase;
+        color: var(--text-tertiary); border-bottom: 1px solid var(--border-subtle); font-weight: 800;
+    }
+    .oc-slot-table td { padding: 9px 10px; border-bottom: 1px solid rgba(255, 255, 255, 0.04); vertical-align: middle; }
+    .oc-slot-table tr:last-child td { border-bottom: none; }
+    .cpr-badge {
+        display: inline-flex; align-items: center; justify-content: center;
+        padding: 3px 8px; border-radius: 6px; font-family: var(--font-mono); font-weight: 800; font-size: 0.86em;
         white-space: nowrap;
     }
-    .alert-box {
-        padding: 16px 20px;
-        border-radius: var(--radius-md);
-        border: 1px solid var(--border-default);
-        background: var(--bg-surface);
-        color: var(--text-primary);
-        font-size: 0.9em;
-        line-height: 1.55;
-        margin: 12px 0;
+    .cpr-opt { background: rgba(16, 185, 129, 0.16); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.4); }
+    .cpr-safe { background: rgba(6, 182, 212, 0.16); color: #22d3ee; border: 1px solid rgba(6, 182, 212, 0.4); }
+    .cpr-warn { background: rgba(245, 158, 11, 0.16); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4); }
+    .cpr-risk { background: rgba(244, 63, 94, 0.2); color: #fb7185; border: 1px solid rgba(244, 63, 94, 0.5); animation: ocPulseWarn 1.8s infinite; }
+    @keyframes ocPulseWarn { 0%, 100% { box-shadow: 0 0 0 rgba(244,63,94,0); } 50% { box-shadow: 0 0 10px rgba(244,63,94,0.45); } }
+
+    .item-pill {
+        display: inline-flex; align-items: center; gap: 5px;
+        padding: 3px 8px; border-radius: 6px; font-size: 0.85em; font-weight: 700; white-space: nowrap;
     }
-    .alert-info { border-color: var(--accent-cobalt-border); background: rgba(59, 130, 246, 0.08); }
-    .alert-warn { border-color: var(--accent-amber-border); background: rgba(245, 158, 11, 0.09); color: var(--accent-amber); }
-    .alert-error { border-color: var(--accent-crimson-border); background: rgba(239, 68, 68, 0.1); color: #fca5a5; }
-    .btn-discord-ping {
-        background: rgba(88, 101, 242, 0.18);
-        border: 1px solid rgba(88, 101, 242, 0.45);
-        color: #99aab5;
-        color: #c7d2fe;
-        padding: 5px 10px;
-        border-radius: var(--radius-sm);
-        font-size: 0.74em;
-        font-weight: 800;
-        cursor: pointer;
-        transition: all var(--transition-fast);
+    .item-pill.supplied { background: rgba(16, 185, 129, 0.12); color: #6ee7b7; border: 1px solid rgba(16, 185, 129, 0.35); }
+    .item-pill.missing { background: rgba(244, 63, 94, 0.14); color: #fda4af; border: 1px solid rgba(245, 158, 11, 0.45); }
+    .mini-icon-btn {
+        display: inline-flex; align-items: center; gap: 3px;
+        padding: 2px 6px; border-radius: 5px; font-size: 0.82em; font-weight: 700;
+        border: 1px solid rgba(56, 189, 248, 0.3); background: rgba(56, 189, 248, 0.1);
+        color: #7dd3fc; text-decoration: none; cursor: pointer;
+    }
+    .mini-icon-btn:hover { background: rgba(56, 189, 248, 0.24); }
+
+    .oc-card-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        flex-wrap: wrap;
+        padding: 10px 18px;
+        background: rgba(10, 15, 28, 0.65);
+        border-top: 1px solid var(--border-subtle);
+    }
+    .oc-footer-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+    /* ─── Grids for Tools 1, 3, 5, 6, 12, 14, 15 ─── */
+    .oc-two-col { display: grid; grid-template-columns: 1fr 1.25fr; gap: 16px; }
+    .oc-equal-two-col { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+    .bench-cards-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(275px, 1fr)); gap: 12px; }
+    @media (max-width: 980px) {
+        .oc-two-col, .oc-equal-two-col { grid-template-columns: 1fr; }
+    }
+
+    .bench-card {
+        background: rgba(10, 15, 28, 0.86);
+        border: 1px solid var(--oc-border-cyan);
+        border-radius: 10px;
+        padding: 13px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+    .oc-data-table-wrap {
+        overflow-x: auto;
+        border: 1px solid var(--oc-border-cyan);
+        border-radius: 10px;
+        background: var(--oc-glass-bg);
+    }
+    .oc-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.8em;
+    }
+    .oc-table th {
+        background: rgba(10, 15, 28, 0.96);
+        padding: 10px 11px;
+        text-align: left;
+        font-size: 0.78em;
+        text-transform: uppercase;
+        letter-spacing: 0.45px;
+        color: var(--text-tertiary);
+        border-bottom: 1px solid var(--oc-border-cyan);
         white-space: nowrap;
+        user-select: none;
     }
-    .btn-discord-ping:hover {
-        background: #5865f2;
-        color: #fff;
-        border-color: #5865f2;
+    .oc-table th.sort-active { color: #38bdf8; }
+    .oc-table td {
+        padding: 9px 11px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.045);
+        vertical-align: middle;
     }
-    .btn-discord-ping:disabled { opacity: 0.55; cursor: wait; }
+    .oc-table tr:hover td { background: rgba(56, 189, 248, 0.045); }
+    .oc-table .sticky-col {
+        position: sticky;
+        left: 0;
+        background: #0d1424;
+        z-index: 2;
+        border-right: 1px solid rgba(56, 189, 248, 0.14);
+    }
+    body.light-mode .oc-table .sticky-col { background: #fff; }
+
+    /* Radial gauge */
+    .sim-gauge-wrap { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 14px 0; }
+    .sim-gauge-svg { width: 170px; height: 170px; }
+
+    /* Drawer & Modals */
+    .oc-drawer-overlay {
+        position: fixed; inset: 0; background: rgba(4, 7, 15, 0.78); backdrop-filter: blur(6px);
+        z-index: 95000; display: none; justify-content: flex-end;
+    }
+    .oc-drawer-overlay.open { display: flex; }
+    .oc-drawer-panel {
+        width: min(560px, 95vw); height: 100vh; overflow-y: auto;
+        background: #0b1120; border-left: 1px solid var(--oc-border-cyan-strong);
+        padding: 20px; display: flex; flex-direction: column; gap: 14px;
+        box-shadow: -16px 0 50px rgba(0, 0, 0, 0.75);
+    }
+    .oc-modal-overlay {
+        position: fixed; inset: 0; background: rgba(4, 7, 15, 0.82); backdrop-filter: blur(8px);
+        z-index: 96000; display: none; align-items: center; justify-content: center; padding: 16px;
+    }
+    .oc-modal-overlay.open { display: flex; }
+    .oc-modal-card {
+        width: min(680px, 96vw); max-height: 90vh; overflow-y: auto;
+        background: #0f172a; border: 1px solid var(--oc-border-cyan-strong);
+        border-radius: 14px; padding: 22px; color: var(--text-primary);
+        box-shadow: 0 24px 70px rgba(0, 0, 0, 0.85);
+    }
+
+    .oc-toast-container {
+        position: fixed; bottom: 22px; right: 22px; z-index: 99990;
+        display: flex; flex-direction: column; gap: 8px; pointer-events: none;
+    }
+    .oc-toast {
+        background: #0f172a; border: 1px solid rgba(56, 189, 248, 0.45);
+        color: #f8fafc; padding: 10px 16px; border-radius: 10px;
+        font-size: 0.82em; font-weight: 700; box-shadow: 0 12px 30px rgba(0,0,0,0.6);
+    }
+    .oc-progress-mini {
+        width: 82px; height: 6px; background: rgba(255,255,255,0.08);
+        border-radius: 99px; overflow: hidden; display: inline-block; vertical-align: middle;
+    }
+    .oc-progress-fill { height: 100%; border-radius: 99px; background: #38bdf8; }
+
+    .sweet-spot-row { background: rgba(6, 182, 212, 0.08) !important; }
+    .sweet-spot-badge {
+        display: inline-flex; align-items: center; gap: 4px;
+        padding: 2px 8px; border-radius: 999px; font-size: 0.72em; font-weight: 900;
+        background: rgba(6, 182, 212, 0.22); color: #22d3ee; border: 1px solid rgba(34, 211, 238, 0.6);
+        box-shadow: 0 0 12px rgba(6, 182, 212, 0.25);
+    }
     </style>
 </head>
 <body>
@@ -268,12 +641,13 @@
             <a href="/bugs.html" class="nav-link"><span class="nav-icon">🐛</span> <span class="nav-text">Bug Tracker</span></a>
         </div>
     </nav>
+
     <div class="main-wrapper">
         <header class="app-topbar">
             <div class="topbar-left">
                 <button class="toggle-btn" onclick="toggleSidebar()" title="Toggle Sidebar" id="mobile-nav-toggle" style="display:none;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
                 <div class="topbar-crumb">
-                    <span>OPERATIONS</span> / <strong style="color:var(--text-primary);">ORGANIZED CRIME PLANNER</strong>
+                    <span>OPERATIONS</span> / <strong style="color:var(--text-primary);">OC 2.0 COMMAND CENTER</strong>
                 </div>
             </div>
             <div class="topbar-right">
@@ -285,539 +659,521 @@
                     <span class="pulse-indicator"></span>
                     <span id="global-ws-status">LIVE WS</span>
                 </div>
-                <button class="btn btn-secondary btn-sm" onclick="fetchOCs()" title="Refresh OCs" style="padding:4px 8px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></button>
-                <button class="btn btn-secondary btn-sm" onclick="openGlobalSettings ? openGlobalSettings() : openSettings()" title="Settings" style="padding:4px 8px;">⚙️</button>
+                <button class="btn btn-secondary btn-sm" onclick="fetchOCs(true)" title="Sync Live OCs" style="padding:4px 8px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></button>
+                <button class="btn btn-secondary btn-sm" onclick="openSettings()" title="API &amp; Global Settings" style="padding:4px 8px;">⚙️</button>
             </div>
         </header>
 
-    <main class="main-content">
-        <div id="refresh-bar-container"><div id="refresh-bar"></div></div>
+        <main class="main-content">
+            <div id="refresh-bar-container"><div id="refresh-bar"></div></div>
 
-        <h1>💼 OC Manager</h1>
-        <p class="subtitle" id="status-line">Connecting to Torn API...</p>
-
-        <div class="container">
-            <div class="tabs">
-                <button class="tab-btn active" id="tab-recruiting" onclick="setTab('recruiting')">Recruiting</button>
-                <button class="tab-btn" id="tab-planning" onclick="setTab('planning')">Planning</button>
-                <button class="tab-btn" id="tab-ready" onclick="setTab('ready')">Ready</button>
-            </div>
-            <div id="oc-container">
-                <div style="color:var(--text-dim); padding:40px; text-align:center;">Loading...</div>
-            </div>
-        </div>
-    </main>
-    </div>
-
-    <button class="settings-btn" onclick="openGlobalSettings()" title="Settings">⚙️</button>
-
-    <div id="settings-modal" class="modal-overlay" style="display:none;" onclick="if(event.target===this) closeSettings()">
-        <div class="modal-content">
-            <button class="close-btn" onclick="closeSettings()" aria-label="Close settings" style="display:inline-flex;align-items:center;justify-content:center;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
-            <h2>⚙️ OC Settings</h2>
-            <div>
-                <label>Your Torn API Key (needs Faction access)</label>
-                <input type="password" id="api-key" placeholder="Paste your 16-char Torn API key">
-            </div>
-
-            <div style="margin: 16px 0; padding: 14px 16px; background: rgba(88,101,242,0.08); border: 1px solid rgba(88,101,242,0.3); border-radius: 10px;">
-                <div style="font-weight: 700; color: #7289da; font-size: 0.88em; margin-bottom: 5px;">📢 Discord OC Alerts & Notifications</div>
-                <div style="font-size: 0.78em; color: var(--text-dim); line-height: 1.5;">
-                    Organized Crime notification channels, role mentions, missing item alerts, upcoming warnings, and live test triggers are managed on the <strong>Discord Alerts</strong> page.
+            <!-- Page Header & Tool 8 War Conflict Pill -->
+            <div class="oc-page-head">
+                <div>
+                    <h1 class="oc-page-title">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+                        OC 2.0 Command Center
+                    </h1>
+                    <p class="oc-subtitle" id="status-line">Connecting to Torn OC 2.0 Telemetry...</p>
                 </div>
-                <a href="/discord.html" style="display:inline-flex; align-items:center; gap:6px; margin-top:10px; font-size:0.82em; color:#00cec9; text-decoration:none; font-weight:700;">
-                    ➔ Open Discord Alerts Settings
-                </a>
+                <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                    <div class="oc-war-pill safe" id="war-sync-pill" title="Ranked War &amp; Chain Overlap Guard (Tool 8)">
+                        <span>⚔️</span>
+                        <span id="war-sync-text">No War Conflict</span>
+                    </div>
+                    <button class="oc-action-btn" onclick="openCprModal()" title="Configure CPR Floors &amp; Import TornStats CPR">
+                        <span>🎯</span> Floors &amp; CPR Sync
+                    </button>
+                </div>
             </div>
 
-            <button class="btn-save" onclick="saveSettings()">💾 Save Settings</button>
-        </div>
-    </div>
+            <!-- 6-Card Executive KPI Ribbon -->
+            <section class="oc-kpi-grid" aria-label="OC Executive Metrics">
+                <div class="oc-kpi-card">
+                    <div class="oc-kpi-top"><span>Active OCs &amp; Slots</span><span>💼</span></div>
+                    <div class="oc-kpi-val" id="kpi-active-val">—</div>
+                    <div class="oc-kpi-sub" id="kpi-active-sub">Loading...</div>
+                </div>
+                <div class="oc-kpi-card">
+                    <div class="oc-kpi-top"><span>Roster Coverage</span><span>👥</span></div>
+                    <div class="oc-kpi-val" id="kpi-cov-val">—%</div>
+                    <div class="oc-kpi-sub" id="kpi-cov-sub">— of — in OCs</div>
+                </div>
+                <div class="oc-kpi-card">
+                    <div class="oc-kpi-top"><span>Ready &amp; Next Complete</span><span>⏱️</span></div>
+                    <div class="oc-kpi-val" id="kpi-ready-val">— Ready</div>
+                    <div class="oc-kpi-sub" id="kpi-next-timer">Next in —</div>
+                </div>
+                <div class="oc-kpi-card">
+                    <div class="oc-kpi-top"><span>Crew Pass Health</span><span>🎯</span></div>
+                    <div class="oc-kpi-val" id="kpi-cpr-val">—% Avg</div>
+                    <div class="oc-kpi-sub" id="kpi-cpr-sub">0 slots below floor</div>
+                </div>
+                <div class="oc-kpi-card">
+                    <div class="oc-kpi-top"><span>Gear &amp; Blocker Alerts</span><span>🚨</span></div>
+                    <div class="oc-kpi-val" id="kpi-alerts-val">0 Alerts</div>
+                    <div class="oc-kpi-sub" id="kpi-alerts-sub">0 Missing • 0 Blocked</div>
+                </div>
+                <div class="oc-kpi-card">
+                    <div class="oc-kpi-top"><span>30D OC Treasury</span><span>💰</span></div>
+                    <div class="oc-kpi-val" id="kpi-treasury-val">$0</div>
+                    <div class="oc-kpi-sub">
+                        <span id="kpi-respect-sub">+0 Respect</span>
+                        <button class="oc-kpi-mini-btn" onclick="switchOcView('payouts')">Calculator</button>
+                    </div>
+                </div>
+            </section>
 
-<script>
-let myKey = typeof getApiKey === 'function' ? getApiKey() : (localStorage.getItem("warboard_apikey") || "");
-let allCrimes = [];
-let currentTab = "recruiting";
-let refreshTimer = null;
-let progressTimer = null;
-let ocLiveTimer = null;
-const openCrimeIds = new Set();
-const REFRESH_MS = 300000;
+            <!-- 6-Tab Workspace Bar + Quick Actions -->
+            <div class="oc-workspace-bar">
+                <div class="oc-view-tabs" role="tablist" aria-label="OC Command Views">
+                    <button class="oc-view-tab active" id="view-tab-board" onclick="switchOcView('board')">🎯 Active Operations Board</button>
+                    <button class="oc-view-tab" id="view-tab-bench" onclick="switchOcView('bench')">🪑 Bench &amp; Crew Matcher</button>
+                    <button class="oc-view-tab" id="view-tab-payouts" onclick="switchOcView('payouts')">💰 Payouts &amp; Split Ledger</button>
+                    <button class="oc-view-tab" id="view-tab-roi" onclick="switchOcView('roi')">📊 ROI &amp; Crew Simulator</button>
+                    <button class="oc-view-tab" id="view-tab-leaderboard" onclick="switchOcView('leaderboard')">🏆 Operative Leaderboard</button>
+                    <button class="oc-view-tab" id="view-tab-economics" onclick="switchOcView('economics')">📈 30-Day Economics</button>
+                </div>
+                <div class="oc-quick-actions">
+                    <button class="oc-action-btn purple" onclick="openBroadcastModal()">📢 Copy Open-Slot Callout</button>
+                    <button class="oc-action-btn" id="btn-ping-unassigned" onclick="copyAvailableBenchPings()">📋 Ping Unassigned (0)</button>
+                    <button class="oc-action-btn primary" id="btn-sync-ocs" onclick="fetchOCs(true)">
+                        <svg id="sync-oc-svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                        <span>Sync Live OCs</span>
+                    </button>
+                </div>
+            </div>
 
-function hasOcAccess() {
-    const k = typeof getApiKey === 'function' ? getApiKey() : (localStorage.getItem("warboard_apikey") || "");
-    return (typeof hasTornAccess === 'function' && hasTornAccess()) || Boolean(k);
-}
+            <!-- ═══════════════════════════════════════════════════════════ -->
+            <!-- TAB 1: ACTIVE OPERATIONS BOARD                             -->
+            <!-- ═══════════════════════════════════════════════════════════ -->
+            <div class="oc-view-pane active" id="pane-board">
+                <!-- Tool 1: Unassigned Bench Alert Strip -->
+                <div id="bench-alert-strip" style="display:none;"></div>
 
-const _apiKeyInput = document.getElementById("api-key");
-if (_apiKeyInput) _apiKeyInput.value = myKey;
+                <!-- Tool 4: Missing Role Consumables Summary Strip -->
+                <div id="missing-gear-summary" style="display:none;"></div>
 
-document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') closeSettings();
-});
+                <!-- Tool 10: Compact Spawn Demand Strip -->
+                <div id="board-spawn-strip" style="display:none;"></div>
 
-function openSettings() {
-    if (typeof openGlobalSettings === 'function') return openGlobalSettings();
-    const modal = document.getElementById("settings-modal");
-    if (modal) modal.style.display = "flex";
-    const inp = document.getElementById("api-key");
-    if (inp) inp.value = (typeof getApiKey === 'function' ? getApiKey() : localStorage.getItem('warboard_apikey')) || myKey || '';
-}
-function closeSettings() {
-    const modal = document.getElementById("settings-modal");
-    if (modal) modal.style.display = "none";
-}
-
-function saveSettings() {
-    myKey = (document.getElementById("api-key")?.value || '').trim();
-    if (myKey) {
-        fetch('/api/auth/connect', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ apiKey: myKey })
-        }).then(r => r.json()).then(d => {
-            if (d.success && d.sessionToken) {
-                localStorage.setItem('sv_session_token', d.sessionToken);
-                sessionStorage.setItem('sv_user', JSON.stringify(d.user));
-                if (window.svAuth?.persistProfile) window.svAuth.persistProfile(d.user);
-            }
-            closeSettings();
-            fetchOCs();
-        }).catch(() => { closeSettings(); fetchOCs(); });
-    } else {
-        closeSettings();
-    }
-}
-
-function setTab(tab) {
-    currentTab = tab;
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    document.getElementById('tab-' + tab).classList.add('active');
-    renderOCs(allCrimes);
-}
-
-let isFetchingOCs = false;
-let lastOCsEtag = '';
-
-function stopProgressBar() {
-    if (progressTimer) { clearInterval(progressTimer); progressTimer = null; }
-    if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
-}
-
-function startProgressBar() {
-    if (document.hidden) return;
-    if (progressTimer) clearInterval(progressTimer);
-    const bar = document.getElementById("refresh-bar");
-    let startTime = Date.now();
-    if (bar) {
-        bar.style.transition = "none"; bar.style.width = "0%";
-        setTimeout(() => { bar.style.transition = "width 0.1s linear"; }, 50);
-    }
-    progressTimer = setInterval(() => {
-        if (document.hidden) { stopProgressBar(); return; }
-        let pct = Math.min((Date.now() - startTime) / REFRESH_MS * 100, 100);
-        if (bar) bar.style.width = pct + "%";
-    }, 100);
-}
-
-async function fetchOCs() {
-    myKey = typeof getApiKey === 'function' ? getApiKey() : (localStorage.getItem("warboard_apikey") || "");
-    if (!hasOcAccess() || isFetchingOCs || document.hidden) {
-        if (!hasOcAccess()) {
-            document.getElementById("oc-container").innerHTML = `
-                <div class="alert-box alert-info">
-                    ⚙️ <strong>API Key Required</strong> — Connect your Torn API key (with Faction AA / OC permission) in <button onclick="openSettings()" style="background:var(--accent-cobalt);color:#fff;border:none;padding:3px 10px;border-radius:4px;cursor:pointer;font-weight:700;margin:0 4px;">Settings</button> to load organized crimes.
-                </div>`;
-            document.getElementById("status-line").textContent = "Connect Torn API key to sync organized crimes.";
-        }
-        return;
-    }
-
-    isFetchingOCs = true;
-    try {
-        const headers = {};
-        if (myKey) headers['x-api-key'] = myKey;
-        if (lastOCsEtag) headers['If-None-Match'] = lastOCsEtag;
-        const res = await fetch(`/api/ocs`, { headers });
-        if (res.status === 304) {
-            startProgressBar();
-            if (refreshTimer) clearInterval(refreshTimer);
-            refreshTimer = setInterval(() => {
-                if (document.hidden) { stopProgressBar(); return; }
-                fetchOCs();
-            }, REFRESH_MS);
-            return;
-        }
-        const etagHeader = res.headers.get('ETag');
-        if (etagHeader) lastOCsEtag = etagHeader;
-        const data = await res.json();
-
-        if (res.status === 403 || data.permissionError || data.requiresAA) {
-            document.getElementById("oc-container").innerHTML = `
-                <div class="alert-box alert-warn">
-                    🔐 <strong>Faction AA API Permission Required</strong><br><br>
-                    Your current Torn API key does not have Faction Organized Crime (AA) permissions to read <code>faction/crimes</code>.
-                    Request Faction AA access from leadership or enter an AA-enabled key in <button onclick="openSettings()" style="background:var(--accent-amber);color:#000;border:none;padding:3px 10px;border-radius:4px;cursor:pointer;font-weight:800;">Settings</button>.
-                </div>`;
-            document.getElementById("status-line").textContent = "Faction AA API permission required.";
-            return;
-        }
-
-        if (data.error) {
-            document.getElementById("oc-container").innerHTML = `<div class="alert-box alert-error">❌ ${data.error}</div>`;
-            document.getElementById("status-line").textContent = "Error loading data.";
-            return;
-        }
-
-        allCrimes = data.crimes || [];
-        try { sessionStorage.setItem('sv_cache_ocs', JSON.stringify(allCrimes)); } catch(e) {}
-        renderOCs(allCrimes);
-        startProgressBar();
-
-        const now = new Date().toLocaleTimeString();
-        document.getElementById("status-line").textContent = `Showing ${allCrimes.length} crimes • Last updated: ${now} • Auto-refresh every 5 min`;
-
-        if (refreshTimer) clearInterval(refreshTimer);
-        refreshTimer = setInterval(() => {
-            if (document.hidden) { stopProgressBar(); return; }
-            fetchOCs();
-        }, REFRESH_MS);
-
-    } catch (e) {
-        document.getElementById("oc-container").innerHTML = `<div class="alert-box alert-error">❌ Failed to load Organized Crimes data (${e.message || 'Network error'}).</div>`;
-    } finally {
-        isFetchingOCs = false;
-    }
-}
-
-document.addEventListener('visibilitychange', () => {
-    if (document.hidden) {
-        stopProgressBar();
-    } else {
-        fetchOCs();
-    }
-});
-
-function getCrimeEmoji(name) {
-    if (!name) return "🔫";
-    const n = name.toLowerCase();
-    if (n.includes("stage") || n.includes("fright") || n.includes("heist")) return "🎭";
-    if (n.includes("market") || n.includes("trader")) return "💹";
-    if (n.includes("car") || n.includes("lot") || n.includes("vehicle")) return "🚗";
-    if (n.includes("lotus") || n.includes("petal") || n.includes("club")) return "🌸";
-    if (n.includes("smoke") || n.includes("mirror")) return "💨";
-    if (n.includes("cash") || n.includes("money") || n.includes("bank")) return "💰";
-    if (n.includes("first aid") || n.includes("hospital") || n.includes("medic")) return "🏥";
-    if (n.includes("fire") || n.includes("arson")) return "🔥";
-    if (n.includes("jewelry") || n.includes("jewel")) return "💎";
-    if (n.includes("gas") || n.includes("light")) return "⛽";
-    if (n.includes("pet") || n.includes("animal")) return "🐾";
-    return "🎯";
-}
-
-function getPassRateColor(rate) {
-    if (rate >= 80) return "var(--green)";
-    if (rate >= 60) return "var(--gold)";
-    return "var(--red)";
-}
-
-function formatCountdown(seconds) {
-    if (seconds <= 0) return "00:00:00";
-    const h = Math.floor(seconds / 3600);
-    const m = Math.floor((seconds % 3600) / 60);
-    const s = Math.floor(seconds % 60);
-    return [h, m, s].map(v => String(v).padStart(2, "0")).join(":");
-}
-
-function getTabForCrime(crime) {
-    const status = (crime.status || "").toLowerCase();
-    const now = Math.floor(Date.now() / 1000);
-    if (status === "ready") return "ready";
-    if (status === "recruiting") return "recruiting";
-    if (status === "planning") {
-        if (crime.ready_at && crime.ready_at <= now) return "ready";
-        return "planning";
-    }
-    return null; // completed/failed/expired -> not shown
-}
-
-function renderOCs(crimes) {
-    const container = document.getElementById("oc-container");
-    const now = Math.floor(Date.now() / 1000);
-
-    // Filter to current tab
-    const tabCrimes = crimes.filter(c => getTabForCrime(c) === currentTab);
-
-    // Update tab counts
-    const counts = { recruiting: 0, planning: 0, ready: 0 };
-    crimes.forEach(c => {
-        const t = getTabForCrime(c);
-        if (t) counts[t]++;
-    });
-    document.getElementById("tab-recruiting").textContent = `Recruiting (${counts.recruiting})`;
-    document.getElementById("tab-planning").textContent = `Planning (${counts.planning})`;
-    document.getElementById("tab-ready").textContent = `✅ Ready (${counts.ready})`;
-
-    if (tabCrimes.length === 0) {
-        container.innerHTML = `
-            <div class="empty-state">
-                <div class="icon">📋</div>
-                <h3>No ${currentTab} crimes</h3>
-                <p>Nothing in the ${currentTab} phase right now.</p>
-            </div>`;
-        return;
-    }
-
-    container.innerHTML = "";
-    tabCrimes.forEach(crime => {
-        const status = (crime.status || "").toLowerCase();
-        const secsLeft = (crime.ready_at || 0) - now;
-        const isReady = status === "ready" || (status === "planning" && (!crime.ready_at || secsLeft <= 0));
-        const filledSlots = (crime.slots || []).filter(s => s.user).length;
-        const totalSlots = (crime.slots || []).length;
-
-        let statusPillHtml = "";
-        if (isReady) statusPillHtml = `<span class="status-pill pill-ready">✅ READY</span>`;
-        else if (status === "recruiting") statusPillHtml = `<span class="status-pill pill-recruiting">👥 Recruiting</span>`;
-        else if (status === "planning") statusPillHtml = `<span class="status-pill pill-planning">⏳ Planning</span>`;
-
-        let timerHtml = "";
-        if (isReady) {
-            timerHtml = `<div class="timer-block"><div class="timer-big" style="color:var(--green)">READY!</div><div class="timer-label">Execute now</div></div>`;
-        } else if (status === "planning" && crime.ready_at) {
-            const t = formatCountdown(secsLeft);
-            timerHtml = `<div class="timer-block"><div class="timer-big" style="color:var(--blue)" data-ready="${crime.ready_at}">${t}</div><div class="timer-label">Until ready</div></div>`;
-        } else if (status === "recruiting" && crime.expired_at) {
-            const expSecs = crime.expired_at - now;
-            const t = expSecs > 0 ? formatCountdown(expSecs) : "Expired";
-            timerHtml = `<div class="timer-block"><div class="timer-big" style="color:var(--gold)" data-expired="${crime.expired_at}">${t}</div><div class="timer-label">Until expired</div></div>`;
-        }
-
-        let cardClass = "oc-card";
-        if (isReady) cardClass += " ready";
-        else if (status === "recruiting") cardClass += " recruiting";
-        else if (status === "planning") cardClass += " planning";
-
-        // --- Slots ---
-        let slotsHtml = "";
-        (crime.slots || []).forEach(slot => {
-            const role = slot.position_info?.label || slot.position || "Unknown Role";
-            const passRate = slot.checkpoint_pass_rate || 0;
-            const passColor = getPassRateColor(passRate);
-
-            if (!slot.user) {
-                slotsHtml += `
-                    <div class="slot-card slot-empty">
-                        <div class="slot-role">${role}</div>
-                        <div class="slot-name" style="color:var(--text-dim)">— Empty Slot —</div>
-                        ${slot.item_requirement ? `<div class="slot-tags"><span class="tag tag-item-missing">📦 Item Required</span></div>` : ""}
-                    </div>`;
-                return;
-            }
-
-            const uid = slot.user.id;
-            const uname = slot.user.name || `[${uid}]`;
-            const outcome = slot.user.outcome || "";
-            const outLower = outcome.toLowerCase();
-            const isHosp = outLower === "hospitalized";
-            const isJail = outLower === "jailed";
-            const hasIssue = isHosp || isJail || (slot.item_requirement && !slot.item_requirement.is_available);
-
-            let tags = "";
-
-            // Status tag
-            if (isHosp) tags += `<span class="tag tag-hosp">🏥 Hospitalized</span>`;
-            else if (isJail) tags += `<span class="tag tag-jail">⛓️ Jailed</span>`;
-            else if (status === "recruiting" || status === "planning") tags += `<span class="tag tag-ok">✅ Ready</span>`;
-
-            // Item tags
-            if (slot.item_requirement) {
-                if (!slot.item_requirement.is_available) {
-                    tags += `<span class="tag tag-item-missing">❌ Item Missing</span>`;
-                } else if (slot.item_outcome) {
-                    const ownedBy = slot.item_outcome.owned_by;
-                    const itemOutcome = slot.item_outcome.outcome;
-                    const reusable = slot.item_requirement.is_reusable;
-                    if (itemOutcome === "used") {
-                        tags += reusable
-                            ? `<span class="tag tag-item-reusable">✅ Item Kept</span>`
-                            : `<span class="tag tag-item-used">🔥 Item Consumed</span>`;
-                        if (ownedBy === "faction") tags += `<span class="tag tag-item-faction">🏛 Faction Item</span>`;
-                        else if (ownedBy === "user") tags += `<span class="tag tag-item-user">👤 Own Item</span>`;
-                    }
-                } else {
-                    // Has it, not yet used
-                    tags += `<span class="tag tag-ok">📦 Item Ready</span>`;
-                    const reusable = slot.item_requirement.is_reusable;
-                    if (reusable) tags += `<span class="tag tag-item-reusable">♻️ Reusable</span>`;
-                }
-            }
-
-            const slotClass = hasIssue ? "slot-card slot-issue" : "slot-card slot-ok";
-
-            slotsHtml += `
-                <div class="${slotClass}">
-                    <div class="slot-role">${role}</div>
-                    <div class="slot-name"><a href="https://www.torn.com/profiles.php?XID=${uid}" target="_blank">${uname}</a></div>
-                    <div class="slot-id">ID: ${uid}</div>
-                    <div class="pass-rate-bar-wrap">
-                        <div class="pass-rate-label">
-                            <span>Success Rate</span>
-                            <span style="color:${passColor}; font-weight:700">${passRate}%</span>
+                <!-- Tool 7: Collapsible 24h/72h Timeline Gantt Chronometer -->
+                <div class="oc-glass-panel" id="timeline-gantt-panel" style="padding:12px 16px;">
+                    <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
+                        <div style="display:flex; align-items:center; gap:10px;">
+                            <strong style="font-size:0.86em; color:var(--text-primary);">⏱️ 24-Hour Stage Timeline &amp; Planning Chronometer</strong>
+                            <span style="font-size:0.74em; color:var(--text-tertiary);" id="gantt-summary-hint">Anchored to live TCT</span>
                         </div>
-                        <div class="pass-rate-bar">
-                            <div class="pass-rate-fill" style="width:${passRate}%; background:${passColor};"></div>
+                        <div style="display:flex; align-items:center; gap:6px;">
+                            <button class="tab-btn active" id="gantt-btn-24" onclick="setGanttWindow(24)" style="padding:4px 10px;">24h</button>
+                            <button class="tab-btn" id="gantt-btn-72" onclick="setGanttWindow(72)" style="padding:4px 10px;">72h</button>
+                            <button class="oc-action-btn" onclick="toggleGanttCollapse()" id="gantt-collapse-btn" style="padding:4px 10px;">Hide Timeline</button>
                         </div>
                     </div>
-                    <div class="slot-tags">${tags}</div>
-                </div>`;
-        });
+                    <div class="gantt-wrap" id="gantt-body"></div>
+                </div>
 
-        // --- Rewards (for completed crimes) ---
-        let rewardsHtml = "";
-        if (crime.rewards) {
-            const r = crime.rewards;
-            let parts = [];
-            if (r.money > 0) parts.push(`<span class="reward-label">💰 Cash</span> <span class="reward-value">$${r.money.toLocaleString()}</span>`);
-            if (r.respect > 0) parts.push(`<span class="reward-label">⭐ Respect</span> <span class="reward-value">${r.respect}</span>`);
-            if (r.items && r.items.length > 0) parts.push(`<span class="reward-label">📦 Items</span> <span class="reward-value">${r.items.length} item(s)</span>`);
-            if (parts.length > 0) {
-                rewardsHtml = `<div class="oc-rewards">${parts.join('<span class="reward-sep"> | </span>')}</div>`;
-            }
-        }
+                <!-- Board Status Filter Pills & Search / Tier / Sort Bar -->
+                <div class="oc-board-toolbar">
+                    <div class="tabs" id="board-status-pills">
+                        <button class="tab-btn active" id="tab-all" onclick="setTab('all')">All Active (0)</button>
+                        <button class="tab-btn" id="tab-recruiting" onclick="setTab('recruiting')">Recruiting (0)</button>
+                        <button class="tab-btn" id="tab-planning" onclick="setTab('planning')">Planning (0)</button>
+                        <button class="tab-btn" id="tab-ready" onclick="setTab('ready')">✅ Ready (0)</button>
+                        <button class="tab-btn" id="tab-blocked" onclick="setTab('blocked')">⚠️ Needs Attention (0)</button>
+                    </div>
+                    <div class="oc-filter-controls">
+                        <button class="oc-action-btn" id="btn-safe-prewar" onclick="toggleSafePreWar()" title="Show only OCs completing before active/scheduled Ranked War start">🛡️ Safe Pre-War Only</button>
+                        <input type="text" id="oc-search-input" class="oc-input" placeholder="Search crime, role, or member..." style="width:210px;">
+                        <select id="oc-tier-filter" class="oc-select" onchange="renderBoard()">
+                            <option value="all">All Tiers</option>
+                            <option value="1-2">Tier 1–2</option>
+                            <option value="3-4">Tier 3–4</option>
+                            <option value="5+">Tier 5+</option>
+                        </select>
+                        <select id="oc-sort-select" class="oc-select" onchange="renderBoard()">
+                            <option value="soonest">Sort: Soonest Completion</option>
+                            <option value="tier">Sort: Highest Tier</option>
+                            <option value="ev">Sort: Highest Est. Payout</option>
+                            <option value="openslots">Sort: Most Open Slots</option>
+                        </select>
+                    </div>
+                </div>
 
-        const cardId = "crime-" + crime.id;
-        const isOpen = openCrimeIds.has(cardId);
-        const safeName = String(crime.name || "Unknown Crime").replace(/'/g, "\\'");
-        const pingBtnHtml = isReady
-            ? `<button class="btn-discord-ping" onclick="event.stopPropagation(); pingReadyOC('${crime.id}', '${safeName}', this)" title="Send Launch Ping to Discord">📢 Ping Ready OC</button>`
-            : '';
-        container.innerHTML += `
-            <div class="${cardClass}${isOpen ? ' open' : ''}" id="${cardId}">
-                <div class="oc-header" onclick="toggleCard('${cardId}')">
-                    <div class="oc-title-block">
-                        <div class="oc-thumbnail">${getCrimeEmoji(crime.name)}</div>
+                <!-- Enhanced OC Cards List -->
+                <div id="oc-container">
+                    <div style="color:var(--text-tertiary); padding:40px; text-align:center;">Connecting to Torn OC 2.0 Telemetry...</div>
+                </div>
+            </div>
+
+            <!-- ═══════════════════════════════════════════════════════════ -->
+            <!-- TAB 2: BENCH & CREW MATCHER (TOOLS 1, 3, 10)               -->
+            <!-- ═══════════════════════════════════════════════════════════ -->
+            <div class="oc-view-pane" id="pane-bench">
+                <!-- Tool 10: Spawn Architect Recommendation Card -->
+                <div class="oc-glass-panel" id="spawn-architect-card"></div>
+
+                <!-- Tool 3: Two-Column Optimal Crew Auto-Matcher -->
+                <div class="oc-glass-panel">
+                    <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:14px;">
                         <div>
-                            <div class="oc-name">${crime.name || "Unknown Crime"}</div>
-                            <div class="oc-meta">
-                                ${crime.difficulty ? `<span class="diff-badge">Difficulty ${crime.difficulty}</span>` : ""}
-                                <span class="slots-badge">${filledSlots}/${totalSlots} slots filled</span>
+                            <h2 style="margin:0; font-size:1.05em; font-weight:900; color:var(--text-primary);">🧠 Smart Role &amp; CPR Auto-Matcher (Optimal Crew Builder)</h2>
+                            <div style="font-size:0.78em; color:var(--text-secondary); margin-top:2px;">
+                                Bipartite matching pairs Available Bench operatives to open Recruiting slots while preserving veteran 90%+ operatives for higher tiers.
                             </div>
                         </div>
+                        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                            <span style="font-size:0.76em; color:var(--text-tertiary);">T1–4 Floor: <strong id="floor-disp-low" style="color:#38bdf8;">70%</strong> • T5–8 Floor: <strong id="floor-disp-high" style="color:#38bdf8;">65%</strong></span>
+                            <button class="oc-action-btn" onclick="openCprModal()">⚙️ Set CPR Floors / Sync TornStats</button>
+                            <button class="oc-action-btn primary" onclick="copyMatcherPlan()">📋 Copy Assignment Plan to Discord</button>
+                        </div>
                     </div>
-                    <div class="oc-header-right">
-                        ${pingBtnHtml}
-                        ${timerHtml}
-                        ${statusPillHtml}
-                        <span class="collapse-arrow">▼</span>
+                    <div class="oc-equal-two-col" id="smart-matcher-grid"></div>
+                </div>
+
+                <!-- Tool 1: Full Unassigned Bench Radar Grid -->
+                <div class="oc-glass-panel">
+                    <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:14px;">
+                        <div class="tabs" id="bench-bucket-tabs">
+                            <button class="tab-btn active" id="bench-tab-all" onclick="setBenchBucket('all')">All Unassigned (0)</button>
+                            <button class="tab-btn" id="bench-tab-available" onclick="setBenchBucket('available')">🟢 Available Now (0)</button>
+                            <button class="tab-btn" id="bench-tab-blocked" onclick="setBenchBucket('blocked')">🟡 Temp Blocked (0)</button>
+                            <button class="tab-btn" id="bench-tab-inactive" onclick="setBenchBucket('inactive')">⚫ Inactive / Exempt (0)</button>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                            <input type="text" id="bench-search-input" class="oc-input" placeholder="Search bench member..." style="width:190px;">
+                            <button class="oc-action-btn" onclick="copyAvailableBenchPings()">📋 Copy Available Bench Discord Pings</button>
+                            <button class="oc-action-btn" onclick="openTornMailToBench()">✉️ Open Torn Mail to Bench</button>
+                        </div>
+                    </div>
+                    <div class="bench-cards-grid" id="bench-cards-container"></div>
+                </div>
+            </div>
+
+            <!-- ═══════════════════════════════════════════════════════════ -->
+            <!-- TAB 3: PAYOUTS & SPLIT LEDGER (TOOL 5)                     -->
+            <!-- ═══════════════════════════════════════════════════════════ -->
+            <div class="oc-view-pane" id="pane-payouts">
+                <div class="oc-two-col">
+                    <!-- Left Config Panel -->
+                    <div class="oc-glass-panel">
+                        <h2 style="margin:0 0 12px 0; font-size:1.05em; font-weight:900;">💰 OC Payout &amp; Vault Split Controls</h2>
+
+                        <div style="margin-bottom:12px;">
+                            <label style="display:block; font-size:0.75em; font-weight:800; color:var(--text-tertiary); margin-bottom:5px;">SELECT CRIME (ACTIVE OR COMPLETED)</label>
+                            <select id="payout-crime-select" class="oc-select" style="width:100%;" onchange="loadPayoutCrime(this.value)"></select>
+                        </div>
+
+                        <div class="oc-equal-two-col" style="gap:10px; margin-bottom:12px;">
+                            <div>
+                                <label style="display:block; font-size:0.72em; font-weight:800; color:var(--text-tertiary); margin-bottom:4px;">GROSS CASH REWARD ($)</label>
+                                <input type="number" id="payout-cash-input" class="oc-input" style="width:100%;" min="0" step="10000" oninput="recalcPayoutLedger()">
+                            </div>
+                            <div>
+                                <label style="display:block; font-size:0.72em; font-weight:800; color:var(--text-tertiary); margin-bottom:4px;">ITEM DROPS VALUE ($)</label>
+                                <input type="number" id="payout-items-input" class="oc-input" style="width:100%;" min="0" step="10000" oninput="recalcPayoutLedger()">
+                            </div>
+                        </div>
+
+                        <label style="display:flex; align-items:center; gap:8px; font-size:0.8em; font-weight:700; margin-bottom:14px; cursor:pointer;">
+                            <input type="checkbox" id="payout-include-items" checked onchange="recalcPayoutLedger()">
+                            <span>Include Item Drop Market Value in Gross Split Pool</span>
+                        </label>
+
+                        <div style="margin-bottom:14px;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                                <label style="font-size:0.74em; font-weight:800; color:var(--text-tertiary);">FACTION VAULT CUT %</label>
+                                <span class="font-mono" id="payout-vault-pct-label" style="font-weight:900; color:#fbbf24;">10%</span>
+                            </div>
+                            <input type="range" id="payout-vault-slider" min="0" max="100" value="10" style="width:100%;" oninput="setVaultCutPct(this.value)">
+                            <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:6px;">
+                                <button class="tab-btn" onclick="setVaultCutPct(0)" style="padding:4px 9px;">0%</button>
+                                <button class="tab-btn" onclick="setVaultCutPct(10)" style="padding:4px 9px;">10%</button>
+                                <button class="tab-btn" onclick="setVaultCutPct(15)" style="padding:4px 9px;">15%</button>
+                                <button class="tab-btn" onclick="setVaultCutPct(20)" style="padding:4px 9px;">20%</button>
+                                <button class="tab-btn" onclick="setVaultCutPct(25)" style="padding:4px 9px;">25%</button>
+                                <button class="tab-btn" onclick="setVaultCutPct(100)" style="padding:4px 9px;">100% Vault</button>
+                            </div>
+                        </div>
+
+                        <div style="margin-bottom:14px;">
+                            <label style="display:block; font-size:0.74em; font-weight:800; color:var(--text-tertiary); margin-bottom:6px;">DISTRIBUTION MODE</label>
+                            <div class="tabs" style="width:100%;">
+                                <button class="tab-btn active" id="mode-btn-equal" onclick="setPayoutMode('equal')" style="flex:1;">A: Equal (1/N)</button>
+                                <button class="tab-btn" id="mode-btn-cpr" onclick="setPayoutMode('cpr')" style="flex:1;">B: CPR Weighted</button>
+                                <button class="tab-btn" id="mode-btn-role" onclick="setPayoutMode('role')" style="flex:1;">C: Role Diff Weight</button>
+                            </div>
+                        </div>
+
+                        <div>
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                                <label style="font-size:0.74em; font-weight:800; color:var(--text-tertiary);">CONSUMABLE ITEM REIMBURSEMENTS</label>
+                                <span style="font-size:0.71em; color:var(--text-secondary);">Deducted pre-Vault Cut</span>
+                            </div>
+                            <div id="payout-reimburse-list" style="display:flex; flex-direction:column; gap:6px;"></div>
+                        </div>
+                    </div>
+
+                    <!-- Right Itemized Receipt Panel -->
+                    <div class="oc-glass-panel">
+                        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:12px;">
+                            <h2 style="margin:0; font-size:1.05em; font-weight:900;">🧾 Itemized Crew Payout Receipt</h2>
+                            <button class="oc-action-btn primary" onclick="copyPayoutDiscordReceipt()">📋 Copy Discord Payout Receipt</button>
+                        </div>
+
+                        <div style="display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:8px; margin-bottom:14px;" id="payout-summary-cards"></div>
+
+                        <div class="oc-data-table-wrap">
+                            <table class="oc-table">
+                                <thead>
+                                    <tr>
+                                        <th>Member</th>
+                                        <th>Role</th>
+                                        <th>CPR</th>
+                                        <th>Item Reimburse</th>
+                                        <th>Pool Share</th>
+                                        <th>Final Payout</th>
+                                        <th>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="payout-receipt-tbody"></tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
-                <div class="oc-body" style="display:${isOpen ? 'block' : 'none'};">
-                    <div class="slots-grid">${slotsHtml}</div>
+            </div>
+
+            <!-- ═══════════════════════════════════════════════════════════ -->
+            <!-- TAB 4: ROI & CREW SIMULATOR (TOOLS 6 & 12)                 -->
+            <!-- ═══════════════════════════════════════════════════════════ -->
+            <div class="oc-view-pane" id="pane-roi">
+                <!-- Tool 6: Tier EV/Respect ROI Matrix -->
+                <div class="oc-glass-panel">
+                    <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:14px;">
+                        <div>
+                            <h2 style="margin:0; font-size:1.06em; font-weight:900;">📊 Tier Expected Value (EV), Respect &amp; Profit-Per-Day Matrix (Tiers 1–8)</h2>
+                            <div style="font-size:0.78em; color:var(--text-secondary); margin-top:2px;">
+                                Blended Torn OC 2.0 baseline + your faction's real completed payouts. Automatically identifies your Sweet Spot tier.
+                            </div>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:10px;">
+                            <label style="font-size:0.78em; font-weight:700; color:var(--text-secondary);">Crew Avg CPR Assumption:</label>
+                            <input type="range" id="roi-cpr-slider" min="40" max="98" value="78" oninput="updateRoiCpr(this.value)">
+                            <span class="font-mono" id="roi-cpr-val" style="font-weight:900; color:#38bdf8;">78%</span>
+                        </div>
+                    </div>
+
+                    <div id="roi-chart-wrap" style="margin-bottom:16px;"></div>
+
+                    <div class="oc-data-table-wrap">
+                        <table class="oc-table" id="roi-matrix-table">
+                            <thead>
+                                <tr>
+                                    <th onclick="sortRoiTable('difficulty')" style="cursor:pointer;">Tier <span id="roi-sind-difficulty">↕</span></th>
+                                    <th onclick="sortRoiTable('name')" style="cursor:pointer;">Crime Name <span id="roi-sind-name">↕</span></th>
+                                    <th onclick="sortRoiTable('crewSize')" style="cursor:pointer;">Crew / Days <span id="roi-sind-crewSize">↕</span></th>
+                                    <th onclick="sortRoiTable('winRate')" style="cursor:pointer;">Est. Success % <span id="roi-sind-winRate">↕</span></th>
+                                    <th onclick="sortRoiTable('consumableCost')" style="cursor:pointer;">Gear Cost <span id="roi-sind-consumableCost">↕</span></th>
+                                    <th onclick="sortRoiTable('netEv')" style="cursor:pointer;">Net EV <span id="roi-sind-netEv">↕</span></th>
+                                    <th onclick="sortRoiTable('evPerMemberDay')" class="sort-active" style="cursor:pointer;">EV / Member / Day <span id="roi-sind-evPerMemberDay">↓</span></th>
+                                    <th onclick="sortRoiTable('respectPerDay')" style="cursor:pointer;">Respect / Day <span id="roi-sind-respectPerDay">↕</span></th>
+                                    <th>Faction History</th>
+                                </tr>
+                            </thead>
+                            <tbody id="roi-matrix-tbody"></tbody>
+                        </table>
+                    </div>
                 </div>
-                ${rewardsHtml}
-            </div>`;
-    });
 
-    // Start live timers
-    startLiveTimers();
-}
+                <!-- Tool 12: Interactive What-If Crew Swap & Pass-Rate Simulator -->
+                <div class="oc-glass-panel" id="simulator-sandbox-panel">
+                    <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:14px;">
+                        <div>
+                            <h2 style="margin:0; font-size:1.06em; font-weight:900;">🧪 Interactive "What-If" Crew Swap &amp; Pass-Rate Simulator</h2>
+                            <div style="font-size:0.78em; color:var(--text-secondary);">Load any live OC or Tiers 1–8 blueprint, swap members, drag CPR sliders, and inspect live Team Pass Probability &amp; EV.</div>
+                        </div>
+                        <select id="sim-crime-select" class="oc-select" style="min-width:260px;" onchange="loadSimCrime(this.value)"></select>
+                    </div>
+                    <div class="oc-two-col">
+                        <div id="sim-slots-list" style="display:flex; flex-direction:column; gap:10px;"></div>
+                        <div class="oc-glass-panel" style="margin:0; background:rgba(10,15,28,0.9); text-align:center;" id="sim-results-panel"></div>
+                    </div>
+                </div>
+            </div>
 
-async function pingReadyOC(crimeId, crimeName, btnEl) {
-    if (btnEl) { btnEl.disabled = true; btnEl.textContent = '⏳ Pinging...'; }
-    try {
-        const res = await fetch('/api/oc-ping', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ crimeId, crimeName })
-        });
-        const data = await res.json();
-        if (!res.ok || data.error) throw new Error(data.error || 'Discord webhook not configured');
-        if (btnEl) { btnEl.textContent = '✅ Pinged!'; }
-        document.getElementById("status-line").textContent = `Discord ping sent for ${crimeName}`;
-    } catch (e) {
-        if (btnEl) { btnEl.disabled = false; btnEl.textContent = '❌ Failed'; }
-        document.getElementById("status-line").textContent = `Discord ping error: ${e.message}`;
-    }
-}
+            <!-- ═══════════════════════════════════════════════════════════ -->
+            <!-- TAB 5: OPERATIVE CRIME LEADERBOARD & POST-MORTEMS (13 & 14)-->
+            <!-- ═══════════════════════════════════════════════════════════ -->
+            <div class="oc-view-pane" id="pane-leaderboard">
+                <!-- Tool 14: Leaderboard & Reliability Table -->
+                <div class="oc-glass-panel">
+                    <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:14px;">
+                        <div>
+                            <h2 style="margin:0; font-size:1.06em; font-weight:900;">🏆 Faction OC Operative Leaderboard &amp; Reliability Scores</h2>
+                            <div style="font-size:0.78em; color:var(--text-secondary);">Click any operative row to open their full Crime Dossier Drawer with best roles &amp; CPR history.</div>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                            <input type="text" id="lb-search-input" class="oc-input" placeholder="Search operative or ID..." style="width:200px;">
+                            <select id="lb-rank-filter" class="oc-select" onchange="renderLeaderboard()">
+                                <option value="all">All Ranks</option>
+                                <option value="mastermind">👑 Heist Mastermind</option>
+                                <option value="reliable">⚡ Reliable Operative</option>
+                                <option value="sponsor">🛠️ Gear Sponsor</option>
+                                <option value="risk">⚠️ Bench / Blocker Risk</option>
+                            </select>
+                        </div>
+                    </div>
 
-function toggleCard(id) {
-    const card = document.getElementById(id);
-    if (!card) return;
-    const body = card.querySelector('.oc-body');
-    const isOpen = body.style.display !== 'none';
-    body.style.display = isOpen ? 'none' : 'block';
-    card.classList.toggle('open', !isOpen);
-    if (!isOpen) openCrimeIds.add(id);
-    else openCrimeIds.delete(id);
-}
+                    <div class="oc-data-table-wrap">
+                        <table class="oc-table" id="oc-leaderboard-table">
+                            <thead>
+                                <tr>
+                                    <th class="sticky-col" onclick="sortLeaderboard('name')" style="cursor:pointer;">Member <span id="lb-sind-name">↕</span></th>
+                                    <th onclick="sortLeaderboard('rank')" style="cursor:pointer;">Tactical Rank <span id="lb-sind-rank">↕</span></th>
+                                    <th onclick="sortLeaderboard('activeOc')" style="cursor:pointer;">Current Status <span id="lb-sind-activeOc">↕</span></th>
+                                    <th onclick="sortLeaderboard('completed')" style="cursor:pointer;">Completed <span id="lb-sind-completed">↕</span></th>
+                                    <th onclick="sortLeaderboard('passRate')" style="cursor:pointer;">Pass Rate <span id="lb-sind-passRate">↕</span></th>
+                                    <th onclick="sortLeaderboard('avgCpr')" style="cursor:pointer;">Avg CPR <span id="lb-sind-avgCpr">↕</span></th>
+                                    <th onclick="sortLeaderboard('grossCash')" class="sort-active" style="cursor:pointer;">Gross Value <span id="lb-sind-grossCash">↓</span></th>
+                                    <th onclick="sortLeaderboard('respect')" style="cursor:pointer;">Respect <span id="lb-sind-respect">↕</span></th>
+                                    <th onclick="sortLeaderboard('gearSupplied')" style="cursor:pointer;">Gear Supplied <span id="lb-sind-gearSupplied">↕</span></th>
+                                    <th onclick="sortLeaderboard('reliability')" style="cursor:pointer;">Reliability <span id="lb-sind-reliability">↕</span></th>
+                                </tr>
+                            </thead>
+                            <tbody id="oc-leaderboard-tbody"></tbody>
+                        </table>
+                    </div>
+                </div>
 
-function startLiveTimers() {
-    if (ocLiveTimer) clearInterval(ocLiveTimer);
-    ocLiveTimer = setInterval(() => {
-        const now = Math.floor(Date.now() / 1000);
-        let transitioned = false;
-        document.querySelectorAll('[data-ready]').forEach(el => {
-            const readyAt = parseInt(el.dataset.ready, 10);
-            const secsLeft = readyAt - now;
-            if (secsLeft <= 0) {
-                if (el.textContent !== 'READY!') {
-                    el.textContent = "READY!";
-                    el.style.color = "var(--green)";
-                    transitioned = true;
-                }
-            } else {
-                el.textContent = formatCountdown(secsLeft);
-            }
-        });
-        document.querySelectorAll('[data-expired]').forEach(el => {
-            const expAt = parseInt(el.dataset.expired, 10);
-            const expLeft = expAt - now;
-            if (expLeft <= 0) {
-                el.textContent = "Expired";
-            } else {
-                el.textContent = formatCountdown(expLeft);
-            }
-        });
-        if (transitioned && allCrimes.length) renderOCs(allCrimes);
-    }, 1000);
-}
+                <!-- Tool 13: Fail / Critical Fail Post-Mortem Analyzer -->
+                <div class="oc-glass-panel">
+                    <h2 style="margin:0 0 6px 0; font-size:1.06em; font-weight:900;">🩹 Fail &amp; Critical Fail Post-Mortem Analyzer</h2>
+                    <div style="font-size:0.78em; color:var(--text-secondary); margin-bottom:14px;">
+                        Identifies the bottleneck role/slot, missing gear, live crew Jail/Hospital recovery status, and targeted coaching recommendations.
+                    </div>
+                    <div id="postmortem-list" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(340px, 1fr)); gap:12px;"></div>
+                </div>
+            </div>
 
-// Auto-open cards on page load
-function autoOpenAll() {
-    document.querySelectorAll('.oc-card').forEach(c => {
-        if (c.id) openCrimeIds.add(c.id);
-        c.classList.add('open');
-        const b = c.querySelector('.oc-body');
-        if (b) b.style.display = 'block';
-    });
-}
+            <!-- ═══════════════════════════════════════════════════════════ -->
+            <!-- TAB 6: 30-DAY OC ECONOMICS & ANALYTICS SUITE (TOOL 15)     -->
+            <!-- ═══════════════════════════════════════════════════════════ -->
+            <div class="oc-view-pane" id="pane-economics">
+                <div class="oc-glass-panel" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
+                    <div class="tabs" id="econ-window-tabs">
+                        <button class="tab-btn" id="econ-btn-7" onclick="setEconWindow(7)">7 Days</button>
+                        <button class="tab-btn active" id="econ-btn-30" onclick="setEconWindow(30)">30 Days</button>
+                        <button class="tab-btn" id="econ-btn-90" onclick="setEconWindow(90)">90 Days</button>
+                        <button class="tab-btn" id="econ-btn-all" onclick="setEconWindow(9999)">All Time</button>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                        <span style="font-size:0.78em; color:var(--text-secondary);" id="econ-totals-banner">Loading economic ledger...</span>
+                        <button class="oc-action-btn primary" onclick="exportOcLedgerCSV()">📥 Export OC Ledger CSV</button>
+                    </div>
+                </div>
 
-// Instant render from session cache if available
-try {
-    const cachedOcs = sessionStorage.getItem('sv_cache_ocs');
-    if (cachedOcs) {
-        const parsed = JSON.parse(cachedOcs);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-            allCrimes = parsed;
-            renderOCs(allCrimes);
-            setTimeout(autoOpenAll, 50);
-        }
-    }
-} catch(e) {}
+                <div class="oc-equal-two-col" style="margin-bottom:16px;">
+                    <div class="oc-glass-panel" style="margin:0;">
+                        <h3 style="margin:0 0 10px 0; font-size:0.95em; font-weight:900;">📊 Daily OC Revenue, Item Drops &amp; Vault Cut</h3>
+                        <div id="econ-revenue-chart"></div>
+                    </div>
+                    <div class="oc-glass-panel" style="margin:0;">
+                        <h3 style="margin:0 0 10px 0; font-size:0.95em; font-weight:900;">🎯 Success vs. Failure Breakdown by Tier</h3>
+                        <div id="econ-tier-chart"></div>
+                    </div>
+                </div>
 
-// Init (never auto-open blocking modal on load)
-if (hasOcAccess()) {
-    fetchOCs().then(() => { setTimeout(autoOpenAll, 200); });
-} else {
-    document.getElementById("status-line").textContent = "Connect Torn API key in Settings to sync Organized Crimes.";
-    document.getElementById("oc-container").innerHTML = `
-        <div class="alert-box alert-info">
-            ⚙️ <strong>Welcome to OC Manager!</strong><br><br>
-            To get started, click <button onclick="openSettings()" style="background:var(--accent-cobalt);color:#fff;border:none;padding:3px 10px;border-radius:4px;cursor:pointer;font-weight:700;">Settings</button> in the top right to connect your Torn API key (with Faction AA access).
-            Once connected, you will see all active organized crimes with live countdowns, member assignments, item tracking, and Discord launch pings.
-        </div>`;
-}
-</script>
+                <div class="oc-equal-two-col">
+                    <div class="oc-glass-panel" style="margin:0;">
+                        <h3 style="margin:0 0 10px 0; font-size:0.95em; font-weight:900;">💎 High-Value Item Drops &amp; Cache Log</h3>
+                        <div class="oc-data-table-wrap">
+                            <table class="oc-table">
+                                <thead><tr><th>Date (TCT)</th><th>Crime</th><th>Item Dropped</th><th>Qty</th><th>Market Value</th></tr></thead>
+                                <tbody id="econ-drops-tbody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="oc-glass-panel" style="margin:0;">
+                        <h3 style="margin:0 0 10px 0; font-size:0.95em; font-weight:900;">🏆 Crime Type Profitability Leaderboard</h3>
+                        <div class="oc-data-table-wrap">
+                            <table class="oc-table">
+                                <thead><tr><th>Crime (Tier)</th><th>W / L</th><th>Gross Cash + Items</th><th>Consumables</th><th>Respect</th></tr></thead>
+                                <tbody id="econ-profit-tbody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- ─── Slide-Over Operative Crime Dossier Drawer (Tool 14) ─── -->
+    <div id="oc-dossier-overlay" class="oc-drawer-overlay" onclick="if(event.target===this) closeOcDossier()">
+        <div class="oc-drawer-panel" id="oc-dossier-panel"></div>
+    </div>
+
+    <!-- ─── Broadcast Studio Modal (Tool 11) ─── -->
+    <div id="broadcast-modal" class="oc-modal-overlay" onclick="if(event.target===this) closeBroadcastModal()">
+        <div class="oc-modal-card">
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;">
+                <h2 style="margin:0; font-size:1.1em; font-weight:900;">📢 Crew Callout &amp; Broadcast Studio</h2>
+                <button class="oc-action-btn" onclick="closeBroadcastModal()" aria-label="Close">✕</button>
+            </div>
+            <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:12px;">
+                <div class="tabs">
+                    <button class="tab-btn active" id="bc-tab-discord" onclick="setBroadcastTab('discord')">Discord Rich Callout</button>
+                    <button class="tab-btn" id="bc-tab-torn" onclick="setBroadcastTab('torn')">Torn Chat Compact (&lt;250c)</button>
+                </div>
+                <div style="display:flex; align-items:center; gap:6px;">
+                    <label style="font-size:0.74em; color:var(--text-tertiary); font-weight:700;">@Mention:</label>
+                    <input type="text" id="bc-mention-input" class="oc-input" value="@OC-Ready" style="width:120px; padding:5px 8px;" oninput="renderBroadcastPreview()">
+                </div>
+            </div>
+            <textarea id="bc-preview-text" class="oc-input" rows="10" style="width:100%; font-family:var(--font-mono); line-height:1.45; resize:vertical;"></textarea>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px; gap:10px; flex-wrap:wrap;">
+                <span id="bc-char-counter" style="font-size:0.76em; color:var(--text-secondary); font-family:var(--font-mono);">0 chars</span>
+                <button class="oc-action-btn primary" onclick="copyBroadcastText()">📋 Copy Broadcast Text</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ─── CPR Thresholds & TornStats Import Modal (Tool 3) ─── -->
+    <div id="cpr-modal" class="oc-modal-overlay" onclick="if(event.target===this) closeCprModal()">
+        <div class="oc-modal-card">
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;">
+                <h2 style="margin:0; font-size:1.1em; font-weight:900;">🎯 Minimum Safe CPR Floors &amp; TornStats Sync</h2>
+                <button class="oc-action-btn" onclick="closeCprModal()" aria-label="Close">✕</button>
+            </div>
+            <div class="oc-equal-two-col" style="margin-bottom:14px;">
+                <div>
+                    <label style="display:block; font-size:0.74em; font-weight:800; color:var(--text-tertiary); margin-bottom:4px;">TIERS 1–4 MIN SAFE CPR (%)</label>
+                    <input type="number" id="cpr-floor-low" class="oc-input" min="10" max="100" value="70" style="width:100%;">
+                </div>
+                <div>
+                    <label style="display:block; font-size:0.74em; font-weight:800; color:var(--text-tertiary); margin-bottom:4px;">TIERS 5–8 MIN SAFE CPR (%)</label>
+                    <input type="number" id="cpr-floor-high" class="oc-input" min="10" max="100" value="65" style="width:100%;">
+                </div>
+            </div>
+            <div style="margin-bottom:12px;">
+                <label style="display:block; font-size:0.74em; font-weight:800; color:var(--text-tertiary); margin-bottom:4px;">OPTIONAL: SYNC TORNSTATS FACTION CPR API KEY</label>
+                <input type="password" id="cpr-tornstats-key" class="oc-input" placeholder="Uses Global Settings TornStats key if left blank..." style="width:100%;">
+            </div>
+            <div style="margin-bottom:14px;">
+                <label style="display:block; font-size:0.74em; font-weight:800; color:var(--text-tertiary); margin-bottom:4px;">MANUAL JSON / OVERRIDES (e.g. {"3776908": {"Techie": 88}})</label>
+                <textarea id="cpr-manual-json" class="oc-input" rows="4" placeholder='{"3776908": {"Techie": 86, "Hacker": 84}}' style="width:100%; font-family:var(--font-mono);"></textarea>
+            </div>
+            <div style="display:flex; justify-content:flex-end; gap:8px;">
+                <button class="oc-action-btn" onclick="closeCprModal()">Cancel</button>
+                <button class="oc-action-btn primary" onclick="saveCprSettingsAndSync()">💾 Save Floors &amp; Sync CPR</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Legacy hidden settings modal shim for compatibility -->
+    <div id="settings-modal" class="modal-overlay" style="display:none;" onclick="if(event.target===this) closeSettings()"></div>
+
+    <div class="oc-toast-container" id="oc-toast-container"></div>
+
+    <script src="/oc-command.js?v=5.0.0"></script>
 </body>
 </html>
