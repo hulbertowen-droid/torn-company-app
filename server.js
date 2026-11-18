@@ -11994,42 +11994,30 @@ function resolveSiteHelperIntent(rawMsg, currentPage = '/') {
         };
     }
 
-    // 8. OC Manager (Command Center 6 Views + Board Subfilters)
-    if (/\b(oc\s*bench|unassigned\s*(member|to\s*oc|bench)|bench\s*radar|spawn\s*architect)\b/.test(q)) {
+    // 8. OC Manager (Consolidated 4 Workspaces + Board Subfilters)
+    if (/\b(oc\s*bench|unassigned\s*(member|to\s*oc|bench)|bench\s*radar|crew\s*builder|what[\s-]*if\s*crew|crew\s*simulator|oc\s*sandbox|workbench)\b/.test(q)) {
         return {
-            reply: "I've opened **OC Manager → Bench & Crew Matcher** so you can pair unassigned members to open roles.",
-            action: { type: 'oc_action', page: '/oc.html#bench', view: 'bench', label: 'Open OC Bench & Crew Matcher' }
+            reply: "I've opened **OC Manager → Interactive Crew Builder & What-If Simulator** (`#workbench`).",
+            action: { type: 'oc_action', page: '/oc.html#workbench', view: 'workbench', label: 'Open OC Crew Workbench' }
         };
     }
-    if (/\b(oc\s*payout|oc\s*split|crime\s*split|vault\s*cut\s*calculator)\b/.test(q)) {
+    if (/\b(oc\s*payout|oc\s*split|crime\s*split|vault\s*cut\s*calculator|batch\s*settlement|unpaid\s*oc|oc\s*economics|30[\s-]*day\s*oc|oc\s*treasury|item\s*drop\s*vault)\b/.test(q)) {
         return {
-            reply: "I've opened **OC Manager → Payouts & Split Ledger** so you can calculate consumable reimbursements, vault cuts, and member payouts.",
-            action: { type: 'oc_action', page: '/oc.html#payouts', view: 'payouts', label: 'Open OC Payout Calculator' }
+            reply: "I've opened **OC Manager → Payouts, Batch Settlement & Economics** (`#payouts`).",
+            action: { type: 'oc_action', page: '/oc.html#payouts', view: 'payouts', label: 'Open OC Payouts & Economics' }
         };
     }
-    if (/\b(oc\s*roi|tier\s*roi|what[\s-]*if\s*crew|crew\s*simulator|oc\s*sandbox)\b/.test(q)) {
+    if (/\b(oc\s*roi|tier\s*roi|role\s*matrix|cpr\s*heatmap|oc\s*leaderboard|post[\s-]*mortem|oc\s*reliability|fail\s*diagnostics|tier\s*advisor)\b/.test(q)) {
         return {
-            reply: "I've opened **OC Manager → ROI & Crew Simulator** for EV/Respect modeling and What-If crew testing.",
-            action: { type: 'oc_action', page: '/oc.html#roi', view: 'roi', label: 'Open OC ROI & Simulator' }
-        };
-    }
-    if (/\b(oc\s*leaderboard|post[\s-]*mortem|oc\s*reliability|fail\s*diagnostics)\b/.test(q)) {
-        return {
-            reply: "I've opened **OC Manager → Operative Crime Leaderboard** to inspect reliability scores and fail post-mortems.",
-            action: { type: 'oc_action', page: '/oc.html#leaderboard', view: 'leaderboard', label: 'Open OC Leaderboard' }
-        };
-    }
-    if (/\b(oc\s*economics|30[\s-]*day\s*oc|oc\s*treasury|item\s*drop\s*vault)\b/.test(q)) {
-        return {
-            reply: "I've opened **OC Manager → 30-Day OC Economics** to view treasury charts, item drops, and CSV exports.",
-            action: { type: 'oc_action', page: '/oc.html#economics', view: 'economics', label: 'Open 30-Day OC Economics' }
+            reply: "I've opened **OC Manager → Operative Role Matrix, Leaderboard & Tier Advisor** (`#intel`).",
+            action: { type: 'oc_action', page: '/oc.html#intel', view: 'intel', label: 'Open OC Role Matrix & Intel' }
         };
     }
     if (/\b(ready\s*oc|planning\s*oc|recruiting\s*oc|oc\s*manager|organized\s*crime)\b/.test(q)) {
         const tab = /ready/.test(q) ? 'ready' : (/planning/.test(q) ? 'planning' : (/recruiting/.test(q) ? 'recruiting' : 'all'));
         return {
-            reply: `I've opened **OC Manager → Active Operations Board** (${tab.toUpperCase()} filter).`,
-            action: { type: 'oc_action', page: '/oc.html', view: 'board', tab, label: `Open OC Manager (${tab.toUpperCase()})` }
+            reply: `I've opened **OC Manager → Live Command & Queue Optimizer** (${tab.toUpperCase()} filter).`,
+            action: { type: 'oc_action', page: '/oc.html', view: 'board', tab, label: `Open OC Command (${tab.toUpperCase()})` }
         };
     }
 
@@ -12249,7 +12237,8 @@ ocCommandRoutes.setDeps({
     getFactionArmoryCandidateKeys,
     getDiscordConfig: () => discordConfig,
     getOcConfig: () => ocConfig,
-    getOcMemberHistory: () => ocMemberHistory
+    getOcMemberHistory: () => ocMemberHistory,
+    userKeys
 });
 app.use('/api/oc', ocCommandRoutes.router);
 

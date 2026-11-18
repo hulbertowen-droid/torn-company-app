@@ -21,6 +21,8 @@ const router = express.Router();
 
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const CPR_OVERRIDES_FILE = path.join(DATA_DIR, 'oc_cpr_overrides.json');
+const ROLE_CPR_CACHE_FILE = path.join(DATA_DIR, 'oc_role_cpr_cache.json');
+const PAYOUT_STATUS_FILE = path.join(DATA_DIR, 'oc_payout_status.json');
 
 let deps = {
     cachedTornFetch: null,
@@ -28,11 +30,20 @@ let deps = {
     getFactionArmoryCandidateKeys: null,
     getDiscordConfig: () => ({}),
     getOcConfig: () => ({}),
-    getOcMemberHistory: () => ({})
+    getOcMemberHistory: () => ({}),
+    userKeys: null
 };
 
 function setDeps(d = {}) {
     deps = { ...deps, ...d };
+}
+
+function normalizeCrimeName(name) {
+    return String(name || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .trim()
+        .toLowerCase();
 }
 
 // Per-faction in-memory caches
@@ -40,26 +51,38 @@ const commandCenterCache = new Map();
 const completedHistoryCache = new Map();
 const armoryStockCache = new Map();
 const rankedWarsCache = new Map();
+const userOcHarvestTimestamps = new Map();
 let tornItemsMemoryCache = { ts: 0, items: {} };
 
-// Load manual / TornStats CPR overrides (scoped cleanly by factionId -> playerId -> roles)
+// Load manual / TornStats CPR overrides, role CPR cache, and batch payout settlement status
 let cprOverridesByFaction = {};
-try {
-    if (fs.existsSync(CPR_OVERRIDES_FILE)) {
-        cprOverridesByFaction = JSON.parse(fs.readFileSync(CPR_OVERRIDES_FILE, 'utf8')) || {};
-    }
-} catch (e) {
-    console.warn('[OC-Command] Failed loading oc_cpr_overrides.json:', e.message);
-}
+let roleCprCacheByFaction = {};
+let payoutStatusByFaction = {};
 
-function saveCprOverrides() {
+function loadJsonSafe(filePath) {
+    try {
+        if (fs.existsSync(filePath)) return JSON.parse(fs.readFileSync(filePath, 'utf8')) || {};
+    } catch (e) {
+        console.warn(`[OC-Command] Failed loading ${path.basename(filePath)}:`, e.message);
+    }
+    return {};
+}
+function saveJsonSafe(filePath, data) {
     try {
         if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-        fs.writeFileSync(CPR_OVERRIDES_FILE, JSON.stringify(cprOverridesByFaction, null, 2), 'utf8');
+        fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
     } catch (e) {
-        console.warn('[OC-Command] Failed saving oc_cpr_overrides.json:', e.message);
+        console.warn(`[OC-Command] Failed saving ${path.basename(filePath)}:`, e.message);
     }
 }
+
+cprOverridesByFaction = loadJsonSafe(CPR_OVERRIDES_FILE);
+roleCprCacheByFaction = loadJsonSafe(ROLE_CPR_CACHE_FILE);
+payoutStatusByFaction = loadJsonSafe(PAYOUT_STATUS_FILE);
+
+function saveCprOverrides() { saveJsonSafe(CPR_OVERRIDES_FILE, cprOverridesByFaction); }
+function saveRoleCprCache() { saveJsonSafe(ROLE_CPR_CACHE_FILE, roleCprCacheByFaction); }
+function savePayoutStatus() { saveJsonSafe(PAYOUT_STATUS_FILE, payoutStatusByFaction); }
 
 // Complete Torn OC 2.0 Tiers 1–8 Baseline Reference Catalog (enriched dynamically with live faction data)
 const BASE_OC_CATALOG = [
@@ -415,10 +438,10 @@ router.get('/command-center', async (req, res) => {
         const crimes = (crimeData.crimes || []).map(enrichCrime);
         const completedCrimes = (completedRaw || []).map(enrichCrime);
 
-        // Merge observed faction empirical data into catalog
+        // Merge observed faction empirical data into catalog (NFD-normalized to deduplicate "Guardian Ángels" etc.)
         const observedStats = {};
         completedCrimes.forEach(c => {
-            const key = String(c.name || '').toLowerCase();
+            const key = normalizeCrimeName(c.name);
             if (!key) return;
             if (!observedStats[key]) {
                 observedStats[key] = {
@@ -453,7 +476,7 @@ router.get('/command-center', async (req, res) => {
 
         const catalogByName = new Map();
         BASE_OC_CATALOG.forEach(entry => {
-            catalogByName.set(entry.name.toLowerCase(), { ...entry, observedCount: 0, observedWins: 0 });
+            catalogByName.set(normalizeCrimeName(entry.name), { ...entry, observedCount: 0, observedWins: 0 });
         });
         Object.entries(observedStats).forEach(([k, obs]) => {
             const base = catalogByName.get(k);
@@ -465,7 +488,7 @@ router.get('/command-center', async (req, res) => {
             const reqIds = obs.requiredItemIds.length ? obs.requiredItemIds : (base?.requiredItemIds || []);
 
             catalogByName.set(k, {
-                name: obs.name,
+                name: base?.name || obs.name,
                 difficulty: obs.difficulty || base?.difficulty || 1,
                 crewSize: roles.length || base?.crewSize || 3,
                 planningDays: planDays,
@@ -479,6 +502,64 @@ router.get('/command-center', async (req, res) => {
                 observedWins: obs.wins
             });
         });
+
+        // Harvest Priority 2 per-role CPR cache from live crimes & connected faction members (strictly scoped to fid)
+        if (!roleCprCacheByFaction[fid]) roleCprCacheByFaction[fid] = {};
+        const facRoleCache = roleCprCacheByFaction[fid];
+        let roleCacheDirty = false;
+        const nowMs = Date.now();
+
+        const recordCachedCpr = (pId, roleName, cprVal, crimeName, tier, source) => {
+            const pStr = String(pId);
+            const rStr = String(roleName || '').trim();
+            const num = Number(cprVal);
+            if (!pStr || !rStr || Number.isNaN(num) || num <= 0 || num > 100) return;
+            if (!facRoleCache[pStr]) facRoleCache[pStr] = {};
+            const existing = facRoleCache[pStr][rStr];
+            if (!existing || existing.cpr !== num || source === 'live' || source === 'user_key') {
+                facRoleCache[pStr][rStr] = {
+                    cpr: num,
+                    crimeName: String(crimeName || ''),
+                    tier: Number(tier || 1),
+                    source,
+                    updatedAt: nowMs
+                };
+                roleCacheDirty = true;
+            }
+        };
+
+        // Always record exact live slotted CPRs into Priority 2 cache so members retain role history immediately
+        crimes.forEach(c => {
+            (c.slots || []).forEach(s => {
+                if (s.user?.id && s.checkpoint_pass_rate > 0) {
+                    recordCachedCpr(s.user.id, s.position || s.position_info?.label, s.checkpoint_pass_rate, c.name, c.difficulty, 'live');
+                }
+            });
+        });
+
+        // Harvest v2/user/organizedcrime for connected members of THIS faction (capped at 1.5s, 5m cooldown per user)
+        const uKeysMod = deps.userKeys;
+        if (uKeysMod && typeof uKeysMod.getAllConnectedMembers === 'function') {
+            const connectedFacMembers = uKeysMod.getAllConnectedMembers()
+                .filter(m => memberLookup[String(m.tornId)] && (!userOcHarvestTimestamps.get(String(m.tornId)) || (nowMs - userOcHarvestTimestamps.get(String(m.tornId))) > 300000))
+                .slice(0, 6);
+            if (connectedFacMembers.length > 0) {
+                const harvestPromise = Promise.allSettled(connectedFacMembers.map(async (m) => {
+                    userOcHarvestTimestamps.set(String(m.tornId), nowMs);
+                    const uOc = await fetchJsonWithTimeout(`https://api.torn.com/v2/user/organizedcrime?key=${encodeURIComponent(m.key)}`, 4000).catch(() => null);
+                    const ocObj = uOc?.organizedCrime;
+                    if (ocObj && Array.isArray(ocObj.slots)) {
+                        ocObj.slots.forEach(sl => {
+                            if ((!sl.user || Number(sl.user.id) === Number(m.tornId)) && Number(sl.checkpoint_pass_rate || 0) > 0) {
+                                recordCachedCpr(m.tornId, sl.position || sl.position_info?.label, sl.checkpoint_pass_rate, ocObj.name, ocObj.difficulty, 'user_key');
+                            }
+                        });
+                    }
+                }));
+                await Promise.race([harvestPromise, new Promise(r => setTimeout(r, 1500))]);
+            }
+        }
+        if (roleCacheDirty) saveRoleCprCache();
 
         const catalog = Array.from(catalogByName.values()).map(entry => {
             const requiredItems = (entry.requiredItemIds || []).map(id => {
@@ -518,6 +599,8 @@ router.get('/command-center', async (req, res) => {
             warState,
             catalog,
             cprOverrides: facOverrides,
+            factionRoleCprCache: facRoleCache,
+            payoutStatus: payoutStatusByFaction[fid] || {},
             ocMemberHistory: ocMemHist,
             cprFloors: defaultFloors
         };
@@ -595,6 +678,43 @@ router.post('/cpr-import', async (req, res) => {
         }
 
         res.json({ success: true, importedCount, overrides: cprOverridesByFaction[fid] });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * POST /api/oc/payout-status
+ * Persist Paid / Unpaid settlement flags for completed crimes per faction.
+ */
+router.post('/payout-status', async (req, res) => {
+    try {
+        const { userKey, fid: initialFid } = await resolveCallerKeyAndFaction(req);
+        if (!userKey && !req.userSession) {
+            return res.status(401).json({ success: false, error: 'Authentication required' });
+        }
+        const fid = initialFid || '52355';
+        const { crimeIds, paid } = req.body || {};
+        if (!Array.isArray(crimeIds) || crimeIds.length === 0) {
+            return res.status(400).json({ success: false, error: 'crimeIds array is required' });
+        }
+        if (!payoutStatusByFaction[fid]) payoutStatusByFaction[fid] = {};
+        const now = Date.now();
+        const actor = req.userSession?.playerName || 'Leadership';
+        crimeIds.forEach(cid => {
+            const idStr = String(cid).trim();
+            if (!idStr) return;
+            if (paid) {
+                payoutStatusByFaction[fid][idStr] = { paid: true, paidAt: now, paidBy: actor };
+            } else {
+                payoutStatusByFaction[fid][idStr] = { paid: false, updatedAt: now, updatedBy: actor };
+            }
+        });
+        savePayoutStatus();
+        for (const key of commandCenterCache.keys()) {
+            if (key.startsWith(`${fid}:`)) commandCenterCache.delete(key);
+        }
+        res.json({ success: true, payoutStatus: payoutStatusByFaction[fid] });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }

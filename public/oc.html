@@ -18,7 +18,7 @@
     <link rel="apple-touch-icon" sizes="152x152" href="/icons/icon-152.png">
     <link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-180.png">
     <title>OC 2.0 Command Center | FactionOS</title>
-    <meta name="description" content="Torn City Organized Crimes (OC 2.0) Command Center — live bench radar, CPR matching, gear readiness, payout split ledger, ROI matrix, timeline Gantt, and analytics.">
+    <meta name="description" content="Torn City Organized Crimes (OC 2.0) Command Center — exact per-role CPR engine, queue consolidation optimizer, stateful crew workbench, batch payout settlement, and role heatmap matrix.">
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -158,7 +158,7 @@
     }
     .oc-kpi-mini-btn:hover { background: rgba(56, 189, 248, 0.24); }
 
-    /* ─── 6-Tab Workspace Bar & Quick Actions ─── */
+    /* ─── 4-Tab Consolidated Workspace Bar & Quick Actions ─── */
     .oc-workspace-bar {
         display: flex;
         align-items: center;
@@ -174,19 +174,19 @@
     .oc-view-tabs {
         display: flex;
         align-items: center;
-        gap: 5px;
+        gap: 6px;
         flex-wrap: wrap;
     }
     .oc-view-tab {
         display: inline-flex;
         align-items: center;
         gap: 6px;
-        padding: 8px 12px;
+        padding: 8px 13px;
         border-radius: 8px;
         border: 1px solid transparent;
         background: transparent;
         color: var(--text-secondary);
-        font-size: 0.78em;
+        font-size: 0.79em;
         font-weight: 800;
         cursor: pointer;
         font-family: inherit;
@@ -222,17 +222,37 @@
         white-space: nowrap;
         transition: all var(--transition-fast);
     }
+    body.light-mode .oc-action-btn { background: #fff; color: #0f172a; }
     .oc-action-btn:hover { border-color: #38bdf8; background: rgba(56, 189, 248, 0.14); }
-    .oc-action-btn.primary { background: rgba(59, 130, 246, 0.2); border-color: rgba(59, 130, 246, 0.48); color: #93c5fd; }
+    .oc-action-btn.primary { background: rgba(59, 130, 246, 0.22); border-color: rgba(59, 130, 246, 0.5); color: #93c5fd; }
+    body.light-mode .oc-action-btn.primary { color: #1d4ed8; }
+    .oc-action-btn.emerald { background: rgba(16, 185, 129, 0.2); border-color: rgba(16, 185, 129, 0.48); color: #6ee7b7; }
     .oc-action-btn.purple { background: rgba(139, 92, 246, 0.18); border-color: rgba(139, 92, 246, 0.45); color: #ddd6fe; }
-    .oc-action-btn:disabled { opacity: 0.55; cursor: wait; }
+    .oc-action-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .oc-close-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        padding: 0;
+        border-radius: 8px;
+        border: 1px solid rgba(56, 189, 248, 0.28);
+        background: rgba(15, 23, 42, 0.85);
+        color: var(--text-primary);
+        cursor: pointer;
+        flex-shrink: 0;
+        transition: all var(--transition-fast);
+    }
+    .oc-close-btn:hover { border-color: #fb7185; color: #fb7185; background: rgba(244, 63, 94, 0.12); }
+
     .spin-svg { animation: ocSpin 0.9s linear infinite; }
     @keyframes ocSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
     .oc-view-pane { display: none; }
     .oc-view-pane.active { display: block; }
 
-    /* ─── Glass Panels, Strips & Tool Cards ─── */
+    /* ─── Glass Panels, Strips & Queue Consolidation Cards ─── */
     .oc-glass-panel {
         background: var(--oc-glass-bg);
         border: 1px solid var(--oc-border-cyan);
@@ -240,6 +260,7 @@
         padding: 15px 18px;
         margin-bottom: 16px;
         backdrop-filter: blur(10px);
+        min-width: 0;
     }
     .oc-alert-strip {
         display: flex;
@@ -247,41 +268,53 @@
         justify-content: space-between;
         gap: 12px;
         flex-wrap: wrap;
-        padding: 11px 16px;
+        padding: 12px 16px;
         border-radius: 10px;
-        margin-bottom: 12px;
+        margin-bottom: 14px;
         border: 1px solid rgba(245, 158, 11, 0.38);
         background: rgba(245, 158, 11, 0.08);
-        font-size: 0.83em;
+        font-size: 0.82em;
     }
-    .oc-alert-strip.crimson {
-        border-color: rgba(244, 63, 94, 0.42);
-        background: rgba(244, 63, 94, 0.09);
-    }
-    .oc-alert-strip.cyan {
-        border-color: rgba(56, 189, 248, 0.36);
-        background: rgba(56, 189, 248, 0.08);
-    }
+    .oc-alert-strip.crimson { border-color: rgba(244, 63, 94, 0.45); background: rgba(244, 63, 94, 0.09); }
+    .oc-alert-strip.cyan { border-color: rgba(56, 189, 248, 0.36); background: rgba(56, 189, 248, 0.08); }
+    .oc-alert-strip.emerald { border-color: rgba(16, 185, 129, 0.38); background: rgba(16, 185, 129, 0.08); }
 
-    /* ─── 24h / 72h Timeline Gantt Chronometer (Tool 7) ─── */
+    /* ─── 24h / 72h Timeline Gantt Chronometer ─── */
     .gantt-wrap { overflow-x: auto; padding-top: 8px; }
     .gantt-axis {
         display: grid;
         grid-template-columns: 185px 1fr;
-        align-items: center;
+        align-items: end;
         gap: 12px;
         font-size: 0.7em;
         color: var(--text-tertiary);
         font-family: var(--font-mono);
+        margin-top: 16px;
         margin-bottom: 6px;
         min-width: 660px;
     }
     .gantt-ticks {
         position: relative;
-        height: 20px;
+        height: 22px;
         display: flex;
         justify-content: space-between;
+        align-items: flex-end;
+        padding-bottom: 3px;
         border-bottom: 1px solid var(--border-subtle);
+    }
+    .gantt-midnight-badge {
+        position: absolute;
+        top: -17px;
+        transform: translateX(-50%);
+        padding: 1px 6px;
+        border-radius: 4px;
+        background: rgba(245, 158, 11, 0.18);
+        border: 1px solid rgba(245, 158, 11, 0.45);
+        color: #fbbf24;
+        font-weight: 800;
+        font-size: 0.92em;
+        white-space: nowrap;
+        pointer-events: none;
     }
     .gantt-row {
         display: grid;
@@ -304,7 +337,7 @@
         position: absolute;
         top: 0; bottom: 0;
         width: 0;
-        border-left: 1.5px dashed rgba(245, 158, 11, 0.75);
+        border-left: 1.5px dashed rgba(245, 158, 11, 0.78);
         z-index: 3;
         pointer-events: none;
     }
@@ -328,7 +361,7 @@
     .gantt-pill.recruiting { background: rgba(245, 158, 11, 0.22); border: 1px solid #f59e0b; color: #fde68a; }
     .gantt-pill.blocked { background: rgba(244, 63, 94, 0.28); border: 1px solid #f43f5e; color: #fecdd3; }
 
-    /* ─── Board Filters & Redesigned OC Cards ─── */
+    /* ─── Board Filters & Enhanced OC Cards ─── */
     .oc-board-toolbar {
         display: flex;
         align-items: center;
@@ -347,7 +380,7 @@
         flex-wrap: wrap;
     }
     .tab-btn {
-        padding: 7px 13px;
+        padding: 7px 12px;
         border-radius: 7px;
         border: 1px solid transparent;
         cursor: pointer;
@@ -420,9 +453,9 @@
     .diff-badge {
         font-size: 0.7em; font-weight: 800; padding: 2px 8px; border-radius: 6px;
         background: rgba(56, 189, 248, 0.14); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.35);
-        font-family: var(--font-mono);
+        font-family: var(--font-mono); white-space: nowrap;
     }
-    .slots-badge { font-size: 0.74em; color: var(--text-secondary); font-family: var(--font-mono); }
+    .slots-badge { font-size: 0.74em; color: var(--text-secondary); font-family: var(--font-mono); white-space: nowrap; }
     .oc-header-right { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
     .timer-block { text-align: right; }
     .timer-big { font-size: 1.2em; font-weight: 900; font-family: var(--font-mono); }
@@ -438,6 +471,7 @@
     .pill-recruiting { background: rgba(245, 158, 11, 0.14); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4); }
     .pill-planning { background: rgba(56, 189, 248, 0.14); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.38); }
     .pill-ready { background: rgba(16, 185, 129, 0.16); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.45); }
+    .pill-staged { background: rgba(56, 189, 248, 0.18); color: #7dd3fc; border: 1px solid rgba(56, 189, 248, 0.55); }
 
     .oc-readiness-banner {
         padding: 8px 18px;
@@ -457,7 +491,7 @@
     /* Slot rows table inside each crime card */
     .oc-body { padding: 14px 18px; }
     .slot-table-wrap { overflow-x: auto; }
-    .oc-slot-table { width: 100%; border-collapse: collapse; font-size: 0.82em; min-width: 680px; }
+    .oc-slot-table { width: 100%; border-collapse: collapse; font-size: 0.82em; min-width: 720px; }
     .oc-slot-table th {
         text-align: left; padding: 7px 10px; font-size: 0.75em; text-transform: uppercase;
         color: var(--text-tertiary); border-bottom: 1px solid var(--border-subtle); font-weight: 800;
@@ -465,15 +499,19 @@
     .oc-slot-table td { padding: 9px 10px; border-bottom: 1px solid rgba(255, 255, 255, 0.04); vertical-align: middle; }
     .oc-slot-table tr:last-child td { border-bottom: none; }
     .cpr-badge {
-        display: inline-flex; align-items: center; justify-content: center;
+        display: inline-flex; align-items: center; justify-content: center; gap: 4px;
         padding: 3px 8px; border-radius: 6px; font-family: var(--font-mono); font-weight: 800; font-size: 0.86em;
         white-space: nowrap;
     }
     .cpr-opt { background: rgba(16, 185, 129, 0.16); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.4); }
     .cpr-safe { background: rgba(6, 182, 212, 0.16); color: #22d3ee; border: 1px solid rgba(6, 182, 212, 0.4); }
     .cpr-warn { background: rgba(245, 158, 11, 0.16); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4); }
-    .cpr-risk { background: rgba(244, 63, 94, 0.2); color: #fb7185; border: 1px solid rgba(244, 63, 94, 0.5); animation: ocPulseWarn 1.8s infinite; }
-    @keyframes ocPulseWarn { 0%, 100% { box-shadow: 0 0 0 rgba(244,63,94,0); } 50% { box-shadow: 0 0 10px rgba(244,63,94,0.45); } }
+    .cpr-risk {
+        background: rgba(244, 63, 94, 0.22); color: #fda4af; border: 1px solid rgba(244, 63, 94, 0.55);
+        cursor: pointer; animation: ocPulseWarn 1.8s infinite;
+    }
+    .cpr-risk:hover { background: rgba(244, 63, 94, 0.35); color: #fff; }
+    @keyframes ocPulseWarn { 0%, 100% { box-shadow: 0 0 0 rgba(244,63,94,0); } 50% { box-shadow: 0 0 11px rgba(244,63,94,0.48); } }
 
     .item-pill {
         display: inline-flex; align-items: center; gap: 5px;
@@ -501,11 +539,11 @@
     }
     .oc-footer-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
-    /* ─── Grids for Tools 1, 3, 5, 6, 12, 14, 15 ─── */
-    .oc-two-col { display: grid; grid-template-columns: 1fr 1.25fr; gap: 16px; }
-    .oc-equal-two-col { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
-    .bench-cards-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(275px, 1fr)); gap: 12px; }
-    @media (max-width: 980px) {
+    /* ─── Responsive Workspace Grids ─── */
+    .oc-two-col { display: grid; grid-template-columns: 1fr 1.25fr; gap: 16px; align-items: start; }
+    .oc-equal-two-col { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
+    .bench-cards-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(265px, 1fr)); gap: 11px; }
+    @media (max-width: 1080px) {
         .oc-two-col, .oc-equal-two-col { grid-template-columns: 1fr; }
     }
 
@@ -513,11 +551,18 @@
         background: rgba(10, 15, 28, 0.86);
         border: 1px solid var(--oc-border-cyan);
         border-radius: 10px;
-        padding: 13px;
+        padding: 12px;
         display: flex;
         flex-direction: column;
         gap: 8px;
+        transition: opacity var(--transition-fast), border-color var(--transition-fast);
     }
+    .bench-card.is-staged {
+        opacity: 0.62;
+        border-color: rgba(56, 189, 248, 0.52);
+        background: rgba(15, 23, 42, 0.55);
+    }
+
     .oc-data-table-wrap {
         overflow-x: auto;
         border: 1px solid var(--oc-border-cyan);
@@ -527,15 +572,15 @@
     .oc-table {
         width: 100%;
         border-collapse: collapse;
-        font-size: 0.8em;
+        font-size: 0.79em;
     }
     .oc-table th {
         background: rgba(10, 15, 28, 0.96);
-        padding: 10px 11px;
+        padding: 8px 9px;
         text-align: left;
-        font-size: 0.78em;
+        font-size: 0.76em;
         text-transform: uppercase;
-        letter-spacing: 0.45px;
+        letter-spacing: 0.4px;
         color: var(--text-tertiary);
         border-bottom: 1px solid var(--oc-border-cyan);
         white-space: nowrap;
@@ -543,7 +588,7 @@
     }
     .oc-table th.sort-active { color: #38bdf8; }
     .oc-table td {
-        padding: 9px 11px;
+        padding: 8px 9px;
         border-bottom: 1px solid rgba(255, 255, 255, 0.045);
         vertical-align: middle;
     }
@@ -557,9 +602,25 @@
     }
     body.light-mode .oc-table .sticky-col { background: #fff; }
 
+    /* Heatmap Matrix Cells */
+    .hm-cell {
+        text-align: center;
+        font-family: var(--font-mono);
+        font-weight: 800;
+        border-radius: 5px;
+        padding: 3px 6px;
+        display: inline-block;
+        min-width: 40px;
+    }
+    .hm-opt { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.35); }
+    .hm-safe { background: rgba(6, 182, 212, 0.18); color: #22d3ee; border: 1px solid rgba(6, 182, 212, 0.35); }
+    .hm-warn { background: rgba(245, 158, 11, 0.18); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.35); }
+    .hm-risk { background: rgba(244, 63, 94, 0.2); color: #fb7185; border: 1px solid rgba(244, 63, 94, 0.35); }
+    .hm-empty { color: var(--text-tertiary); font-family: var(--font-mono); }
+
     /* Radial gauge */
-    .sim-gauge-wrap { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 14px 0; }
-    .sim-gauge-svg { width: 170px; height: 170px; }
+    .sim-gauge-wrap { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 10px 0; }
+    .sim-gauge-svg { width: 155px; height: 155px; }
 
     /* Drawer & Modals */
     .oc-drawer-overlay {
@@ -595,7 +656,7 @@
         font-size: 0.82em; font-weight: 700; box-shadow: 0 12px 30px rgba(0,0,0,0.6);
     }
     .oc-progress-mini {
-        width: 82px; height: 6px; background: rgba(255,255,255,0.08);
+        width: 78px; height: 6px; background: rgba(255,255,255,0.08);
         border-radius: 99px; overflow: hidden; display: inline-block; vertical-align: middle;
     }
     .oc-progress-fill { height: 100%; border-radius: 99px; background: #38bdf8; }
@@ -606,6 +667,13 @@
         padding: 2px 8px; border-radius: 999px; font-size: 0.72em; font-weight: 900;
         background: rgba(6, 182, 212, 0.22); color: #22d3ee; border: 1px solid rgba(34, 211, 238, 0.6);
         box-shadow: 0 0 12px rgba(6, 182, 212, 0.25);
+        white-space: nowrap;
+    }
+    .fail-warn-badge {
+        display: inline-flex; align-items: center; gap: 4px;
+        padding: 2px 8px; border-radius: 999px; font-size: 0.72em; font-weight: 800;
+        background: rgba(244, 63, 94, 0.16); color: #fda4af; border: 1px solid rgba(244, 63, 94, 0.48);
+        white-space: nowrap;
     }
     </style>
 </head>
@@ -667,7 +735,7 @@
         <main class="main-content">
             <div id="refresh-bar-container"><div id="refresh-bar"></div></div>
 
-            <!-- Page Header & Tool 8 War Conflict Pill -->
+            <!-- Page Header & War Sync Indicator -->
             <div class="oc-page-head">
                 <div>
                     <h1 class="oc-page-title">
@@ -677,11 +745,11 @@
                     <p class="oc-subtitle" id="status-line">Connecting to Torn OC 2.0 Telemetry...</p>
                 </div>
                 <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
-                    <div class="oc-war-pill safe" id="war-sync-pill" title="Ranked War &amp; Chain Overlap Guard (Tool 8)">
+                    <div class="oc-war-pill safe" id="war-sync-pill" title="Ranked War &amp; Chain Overlap Guard">
                         <span>⚔️</span>
                         <span id="war-sync-text">No War Conflict</span>
                     </div>
-                    <button class="oc-action-btn" onclick="openCprModal()" title="Configure CPR Floors &amp; Import TornStats CPR">
+                    <button class="oc-action-btn" onclick="openCprModal()" title="Configure CPR Floors &amp; Import TornStats / Member Role CPRs">
                         <span>🎯</span> Floors &amp; CPR Sync
                     </button>
                 </div>
@@ -719,20 +787,18 @@
                     <div class="oc-kpi-val" id="kpi-treasury-val">$0</div>
                     <div class="oc-kpi-sub">
                         <span id="kpi-respect-sub">+0 Respect</span>
-                        <button class="oc-kpi-mini-btn" onclick="switchOcView('payouts')">Calculator</button>
+                        <button class="oc-kpi-mini-btn" onclick="switchOcView('payouts')">Settlements</button>
                     </div>
                 </div>
             </section>
 
-            <!-- 6-Tab Workspace Bar + Quick Actions -->
+            <!-- 4 Action-Driven Consolidated Workspaces + Quick Actions -->
             <div class="oc-workspace-bar">
-                <div class="oc-view-tabs" role="tablist" aria-label="OC Command Views">
-                    <button class="oc-view-tab active" id="view-tab-board" onclick="switchOcView('board')">🎯 Active Operations Board</button>
-                    <button class="oc-view-tab" id="view-tab-bench" onclick="switchOcView('bench')">🪑 Bench &amp; Crew Matcher</button>
-                    <button class="oc-view-tab" id="view-tab-payouts" onclick="switchOcView('payouts')">💰 Payouts &amp; Split Ledger</button>
-                    <button class="oc-view-tab" id="view-tab-roi" onclick="switchOcView('roi')">📊 ROI &amp; Crew Simulator</button>
-                    <button class="oc-view-tab" id="view-tab-leaderboard" onclick="switchOcView('leaderboard')">🏆 Operative Leaderboard</button>
-                    <button class="oc-view-tab" id="view-tab-economics" onclick="switchOcView('economics')">📈 30-Day Economics</button>
+                <div class="oc-view-tabs" role="tablist" aria-label="OC Workspaces">
+                    <button class="oc-view-tab active" id="view-tab-board" onclick="switchOcView('board')">🎯 Live Command &amp; Queue</button>
+                    <button class="oc-view-tab" id="view-tab-workbench" onclick="switchOcView('workbench')">🛠️ Crew Builder &amp; Simulator</button>
+                    <button class="oc-view-tab" id="view-tab-payouts" onclick="switchOcView('payouts')">💰 Payouts, Batch &amp; Economics</button>
+                    <button class="oc-view-tab" id="view-tab-intel" onclick="switchOcView('intel')">🧬 Role Matrix, Ranks &amp; Advisor</button>
                 </div>
                 <div class="oc-quick-actions">
                     <button class="oc-action-btn purple" onclick="openBroadcastModal()">📢 Copy Open-Slot Callout</button>
@@ -745,23 +811,20 @@
             </div>
 
             <!-- ═══════════════════════════════════════════════════════════ -->
-            <!-- TAB 1: ACTIVE OPERATIONS BOARD                             -->
+            <!-- WORKSPACE 1 (#board): LIVE COMMAND & QUEUE OPTIMIZER       -->
             <!-- ═══════════════════════════════════════════════════════════ -->
             <div class="oc-view-pane active" id="pane-board">
-                <!-- Tool 1: Unassigned Bench Alert Strip -->
-                <div id="bench-alert-strip" style="display:none;"></div>
+                <!-- Real Tool #1: Recruiting Queue Over-Spawn & Consolidation Optimizer -->
+                <div id="queue-optimizer-card" style="display:none;"></div>
 
-                <!-- Tool 4: Missing Role Consumables Summary Strip -->
+                <!-- Missing Role Consumables Summary Strip -->
                 <div id="missing-gear-summary" style="display:none;"></div>
 
-                <!-- Tool 10: Compact Spawn Demand Strip -->
-                <div id="board-spawn-strip" style="display:none;"></div>
-
-                <!-- Tool 7: Collapsible 24h/72h Timeline Gantt Chronometer -->
+                <!-- Fixed 24h / 72h Stage Timeline & Planning Chronometer -->
                 <div class="oc-glass-panel" id="timeline-gantt-panel" style="padding:12px 16px;">
                     <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
-                        <div style="display:flex; align-items:center; gap:10px;">
-                            <strong style="font-size:0.86em; color:var(--text-primary);">⏱️ 24-Hour Stage Timeline &amp; Planning Chronometer</strong>
+                        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                            <strong style="font-size:0.86em; color:var(--text-primary);" id="gantt-title-heading">⏱️ 24-Hour Stage Timeline &amp; Planning Chronometer</strong>
                             <span style="font-size:0.74em; color:var(--text-tertiary);" id="gantt-summary-hint">Anchored to live TCT</span>
                         </div>
                         <div style="display:flex; align-items:center; gap:6px;">
@@ -784,7 +847,7 @@
                     </div>
                     <div class="oc-filter-controls">
                         <button class="oc-action-btn" id="btn-safe-prewar" onclick="toggleSafePreWar()" title="Show only OCs completing before active/scheduled Ranked War start">🛡️ Safe Pre-War Only</button>
-                        <input type="text" id="oc-search-input" class="oc-input" placeholder="Search crime, role, or member..." style="width:210px;">
+                        <input type="text" id="oc-search-input" class="oc-input" placeholder="Search crime, role, or member..." style="min-width:248px; width:260px;">
                         <select id="oc-tier-filter" class="oc-select" onchange="renderBoard()">
                             <option value="all">All Tiers</option>
                             <option value="1-2">Tier 1–2</option>
@@ -800,171 +863,297 @@
                     </div>
                 </div>
 
-                <!-- Enhanced OC Cards List -->
+                <!-- Enhanced OC Cards Container (with Real Tool #2 <65% Bottleneck Swapper) -->
                 <div id="oc-container">
                     <div style="color:var(--text-tertiary); padding:40px; text-align:center;">Connecting to Torn OC 2.0 Telemetry...</div>
                 </div>
             </div>
 
             <!-- ═══════════════════════════════════════════════════════════ -->
-            <!-- TAB 2: BENCH & CREW MATCHER (TOOLS 1, 3, 10)               -->
+            <!-- WORKSPACE 2 (#workbench): CREW BUILDER & WHAT-IF SIMULATOR -->
             <!-- ═══════════════════════════════════════════════════════════ -->
-            <div class="oc-view-pane" id="pane-bench">
-                <!-- Tool 10: Spawn Architect Recommendation Card -->
-                <div class="oc-glass-panel" id="spawn-architect-card"></div>
+            <div class="oc-view-pane" id="pane-workbench">
+                <!-- Consolidation Summary Banner -->
+                <div id="workbench-queue-banner" style="display:none;"></div>
 
-                <!-- Tool 3: Two-Column Optimal Crew Auto-Matcher -->
-                <div class="oc-glass-panel">
-                    <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:14px;">
-                        <div>
-                            <h2 style="margin:0; font-size:1.05em; font-weight:900; color:var(--text-primary);">🧠 Smart Role &amp; CPR Auto-Matcher (Optimal Crew Builder)</h2>
-                            <div style="font-size:0.78em; color:var(--text-secondary); margin-top:2px;">
-                                Bipartite matching pairs Available Bench operatives to open Recruiting slots while preserving veteran 90%+ operatives for higher tiers.
+                <div class="oc-two-col">
+                    <!-- LEFT PANE: Stateful Open-Slot Queue + What-If Simulator -->
+                    <div style="display:flex; flex-direction:column; gap:16px; min-width:0;">
+                        <!-- Interactive What-If Crew Swap & Pass-Rate Simulator -->
+                        <div class="oc-glass-panel" id="simulator-sandbox-panel" style="margin:0;">
+                            <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:12px;">
+                                <div>
+                                    <h2 style="margin:0; font-size:1.04em; font-weight:900;">🧪 Interactive "What-If" Crew Swap Simulator</h2>
+                                    <div style="font-size:0.76em; color:var(--text-secondary);">Dropdowns &amp; sliders show exact per-role CPRs (never cross-role averages).</div>
+                                </div>
+                                <select id="sim-crime-select" class="oc-select" style="min-width:250px; max-width:100%;" onchange="loadSimCrime(this.value)"></select>
                             </div>
+                            <div id="sim-slots-list" style="display:flex; flex-direction:column; gap:9px; margin-bottom:12px;"></div>
+                            <div class="oc-glass-panel" style="margin:0; background:rgba(10,15,28,0.9); text-align:center;" id="sim-results-panel"></div>
                         </div>
-                        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-                            <span style="font-size:0.76em; color:var(--text-tertiary);">T1–4 Floor: <strong id="floor-disp-low" style="color:#38bdf8;">70%</strong> • T5–8 Floor: <strong id="floor-disp-high" style="color:#38bdf8;">65%</strong></span>
-                            <button class="oc-action-btn" onclick="openCprModal()">⚙️ Set CPR Floors / Sync TornStats</button>
-                            <button class="oc-action-btn primary" onclick="copyMatcherPlan()">📋 Copy Assignment Plan to Discord</button>
-                        </div>
-                    </div>
-                    <div class="oc-equal-two-col" id="smart-matcher-grid"></div>
-                </div>
 
-                <!-- Tool 1: Full Unassigned Bench Radar Grid -->
-                <div class="oc-glass-panel">
-                    <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:14px;">
-                        <div class="tabs" id="bench-bucket-tabs">
-                            <button class="tab-btn active" id="bench-tab-all" onclick="setBenchBucket('all')">All Unassigned (0)</button>
-                            <button class="tab-btn" id="bench-tab-available" onclick="setBenchBucket('available')">🟢 Available Now (0)</button>
-                            <button class="tab-btn" id="bench-tab-blocked" onclick="setBenchBucket('blocked')">🟡 Temp Blocked (0)</button>
-                            <button class="tab-btn" id="bench-tab-inactive" onclick="setBenchBucket('inactive')">⚫ Inactive / Exempt (0)</button>
-                        </div>
-                        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-                            <input type="text" id="bench-search-input" class="oc-input" placeholder="Search bench member..." style="width:190px;">
-                            <button class="oc-action-btn" onclick="copyAvailableBenchPings()">📋 Copy Available Bench Discord Pings</button>
-                            <button class="oc-action-btn" onclick="openTornMailToBench()">✉️ Open Torn Mail to Bench</button>
+                        <!-- Open Recruiting Role Slots Queue -->
+                        <div class="oc-glass-panel" style="margin:0;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:10px;">
+                                <div>
+                                    <h3 style="margin:0; font-size:0.96em; font-weight:900;">📋 Open Recruiting Role Slots Queue</h3>
+                                    <div style="font-size:0.74em; color:var(--text-secondary);">Prioritized by fastest path to 100% fill • Floors: T1–4 <strong id="floor-disp-low" style="color:#38bdf8;">70%</strong> / T5–8 <strong id="floor-disp-high" style="color:#38bdf8;">65%</strong></div>
+                                </div>
+                                <button class="oc-action-btn" onclick="openCprModal()">⚙️ CPR Floors / Sync</button>
+                            </div>
+                            <div id="wb-open-slots-list" style="display:flex; flex-direction:column; gap:7px; max-height:420px; overflow-y:auto;"></div>
                         </div>
                     </div>
-                    <div class="bench-cards-grid" id="bench-cards-container"></div>
+
+                    <!-- RIGHT PANE: Live Bench Pool + Staged Assignments Cart -->
+                    <div style="display:flex; flex-direction:column; gap:16px; min-width:0;">
+                        <div class="oc-glass-panel" style="margin:0;">
+                            <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-bottom:12px;">
+                                <div class="tabs" id="bench-bucket-tabs">
+                                    <button class="tab-btn active" id="bench-tab-all" onclick="setBenchBucket('all')">All (0)</button>
+                                    <button class="tab-btn" id="bench-tab-available" onclick="setBenchBucket('available')">🟢 Available (0)</button>
+                                    <button class="tab-btn" id="bench-tab-blocked" onclick="setBenchBucket('blocked')">🟡 Blocked (0)</button>
+                                    <button class="tab-btn" id="bench-tab-inactive" onclick="setBenchBucket('inactive')">⚫ Inactive (0)</button>
+                                </div>
+                                <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
+                                    <input type="text" id="bench-search-input" class="oc-input" placeholder="Search bench member..." style="width:185px;">
+                                    <button class="oc-action-btn" onclick="openTornMailToBench()" title="Open Torn Mail to Available Bench">✉️ Mail Bench</button>
+                                </div>
+                            </div>
+                            <div class="bench-cards-grid" id="bench-cards-container"></div>
+                        </div>
+
+                        <!-- Stateful Staged Crew Assignments Cart -->
+                        <div class="oc-glass-panel" id="staged-cart-panel" style="margin:0; border-color:rgba(56,189,248,0.45); background:rgba(10,15,28,0.95);">
+                            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:10px;">
+                                <h3 style="margin:0; font-size:0.98em; font-weight:900; color:#38bdf8;">📌 Staged Crew Assignments Cart (<span id="staged-cart-count">0</span>)</h3>
+                                <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                                    <button class="oc-action-btn" onclick="autoStageBestFills()" style="padding:5px 10px;">⚡ Auto-Stage Best Fills</button>
+                                    <button class="oc-action-btn" onclick="clearStagedAssignments()" style="padding:5px 10px;">↺ Clear Staged</button>
+                                    <button class="oc-action-btn primary" onclick="copyAllStagedToDiscordAndTorn()" style="padding:5px 11px;">📢 Copy All Staged Assignments to Discord &amp; Torn Chat</button>
+                                </div>
+                            </div>
+                            <div id="staged-cart-list" style="display:flex; flex-direction:column; gap:6px;"></div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
             <!-- ═══════════════════════════════════════════════════════════ -->
-            <!-- TAB 3: PAYOUTS & SPLIT LEDGER (TOOL 5)                     -->
+            <!-- WORKSPACE 3 (#payouts): PAYOUTS, BATCH SETTLEMENT & ECON   -->
             <!-- ═══════════════════════════════════════════════════════════ -->
             <div class="oc-view-pane" id="pane-payouts">
-                <div class="oc-two-col">
-                    <!-- Left Config Panel -->
-                    <div class="oc-glass-panel">
-                        <h2 style="margin:0 0 12px 0; font-size:1.05em; font-weight:900;">💰 OC Payout &amp; Vault Split Controls</h2>
-
-                        <div style="margin-bottom:12px;">
-                            <label style="display:block; font-size:0.75em; font-weight:800; color:var(--text-tertiary); margin-bottom:5px;">SELECT CRIME (ACTIVE OR COMPLETED)</label>
-                            <select id="payout-crime-select" class="oc-select" style="width:100%;" onchange="loadPayoutCrime(this.value)"></select>
-                        </div>
-
-                        <div class="oc-equal-two-col" style="gap:10px; margin-bottom:12px;">
-                            <div>
-                                <label style="display:block; font-size:0.72em; font-weight:800; color:var(--text-tertiary); margin-bottom:4px;">GROSS CASH REWARD ($)</label>
-                                <input type="number" id="payout-cash-input" class="oc-input" style="width:100%;" min="0" step="10000" oninput="recalcPayoutLedger()">
-                            </div>
-                            <div>
-                                <label style="display:block; font-size:0.72em; font-weight:800; color:var(--text-tertiary); margin-bottom:4px;">ITEM DROPS VALUE ($)</label>
-                                <input type="number" id="payout-items-input" class="oc-input" style="width:100%;" min="0" step="10000" oninput="recalcPayoutLedger()">
-                            </div>
-                        </div>
-
-                        <label style="display:flex; align-items:center; gap:8px; font-size:0.8em; font-weight:700; margin-bottom:14px; cursor:pointer;">
-                            <input type="checkbox" id="payout-include-items" checked onchange="recalcPayoutLedger()">
-                            <span>Include Item Drop Market Value in Gross Split Pool</span>
-                        </label>
-
-                        <div style="margin-bottom:14px;">
-                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                                <label style="font-size:0.74em; font-weight:800; color:var(--text-tertiary);">FACTION VAULT CUT %</label>
-                                <span class="font-mono" id="payout-vault-pct-label" style="font-weight:900; color:#fbbf24;">10%</span>
-                            </div>
-                            <input type="range" id="payout-vault-slider" min="0" max="100" value="10" style="width:100%;" oninput="setVaultCutPct(this.value)">
-                            <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:6px;">
-                                <button class="tab-btn" onclick="setVaultCutPct(0)" style="padding:4px 9px;">0%</button>
-                                <button class="tab-btn" onclick="setVaultCutPct(10)" style="padding:4px 9px;">10%</button>
-                                <button class="tab-btn" onclick="setVaultCutPct(15)" style="padding:4px 9px;">15%</button>
-                                <button class="tab-btn" onclick="setVaultCutPct(20)" style="padding:4px 9px;">20%</button>
-                                <button class="tab-btn" onclick="setVaultCutPct(25)" style="padding:4px 9px;">25%</button>
-                                <button class="tab-btn" onclick="setVaultCutPct(100)" style="padding:4px 9px;">100% Vault</button>
-                            </div>
-                        </div>
-
-                        <div style="margin-bottom:14px;">
-                            <label style="display:block; font-size:0.74em; font-weight:800; color:var(--text-tertiary); margin-bottom:6px;">DISTRIBUTION MODE</label>
-                            <div class="tabs" style="width:100%;">
-                                <button class="tab-btn active" id="mode-btn-equal" onclick="setPayoutMode('equal')" style="flex:1;">A: Equal (1/N)</button>
-                                <button class="tab-btn" id="mode-btn-cpr" onclick="setPayoutMode('cpr')" style="flex:1;">B: CPR Weighted</button>
-                                <button class="tab-btn" id="mode-btn-role" onclick="setPayoutMode('role')" style="flex:1;">C: Role Diff Weight</button>
-                            </div>
-                        </div>
-
+                <!-- Real Tool #3: Completed OCs Unpaid Settlement Queue & Batch Payer -->
+                <div class="oc-glass-panel" id="batch-settlement-panel">
+                    <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:12px;">
                         <div>
-                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                                <label style="font-size:0.74em; font-weight:800; color:var(--text-tertiary);">CONSUMABLE ITEM REIMBURSEMENTS</label>
-                                <span style="font-size:0.71em; color:var(--text-secondary);">Deducted pre-Vault Cut</span>
+                            <h2 style="margin:0; font-size:1.05em; font-weight:900;">🧾 Completed OCs Unpaid Settlement Queue &amp; Batch Payer</h2>
+                            <div style="font-size:0.77em; color:var(--text-secondary);">Select multiple completed OCs to sum member payouts &amp; consumed item reimbursements into a single transfer per operative.</div>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                            <div class="tabs">
+                                <button class="tab-btn active" id="settle-flt-unpaid" onclick="setSettlementFilter('unpaid')">Unpaid Queue (<span id="unpaid-queue-cnt">0</span>)</button>
+                                <button class="tab-btn" id="settle-flt-all" onclick="setSettlementFilter('all')">All Completed (Last 30)</button>
                             </div>
-                            <div id="payout-reimburse-list" style="display:flex; flex-direction:column; gap:6px;"></div>
+                            <button class="oc-action-btn" onclick="selectAllUnpaidSettlements()">✓ Select All Unpaid</button>
+                            <button class="oc-action-btn" onclick="clearBatchSelection()">Clear</button>
+                            <button class="oc-action-btn emerald" onclick="markSelectedSettlementsPaid(true)">✅ Mark Selected OCs as Paid</button>
                         </div>
                     </div>
 
-                    <!-- Right Itemized Receipt Panel -->
-                    <div class="oc-glass-panel">
-                        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:12px;">
-                            <h2 style="margin:0; font-size:1.05em; font-weight:900;">🧾 Itemized Crew Payout Receipt</h2>
-                            <button class="oc-action-btn primary" onclick="copyPayoutDiscordReceipt()">📋 Copy Discord Payout Receipt</button>
-                        </div>
-
-                        <div style="display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:8px; margin-bottom:14px;" id="payout-summary-cards"></div>
-
-                        <div class="oc-data-table-wrap">
+                    <div class="oc-two-col">
+                        <div class="oc-data-table-wrap" style="max-height:360px; overflow-y:auto;">
                             <table class="oc-table">
                                 <thead>
                                     <tr>
-                                        <th>Member</th>
-                                        <th>Role</th>
-                                        <th>CPR</th>
-                                        <th>Item Reimburse</th>
-                                        <th>Pool Share</th>
-                                        <th>Final Payout</th>
-                                        <th>Action</th>
+                                        <th style="width:30px;">Sel</th>
+                                        <th>Date</th>
+                                        <th>Crime</th>
+                                        <th>Gross</th>
+                                        <th>Consumed</th>
+                                        <th>Status</th>
                                     </tr>
                                 </thead>
-                                <tbody id="payout-receipt-tbody"></tbody>
+                                <tbody id="batch-queue-tbody"></tbody>
                             </table>
+                        </div>
+
+                        <div class="oc-glass-panel" style="margin:0; background:rgba(10,15,28,0.88);">
+                            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:10px;">
+                                <h3 style="margin:0; font-size:0.95em; font-weight:900;">💸 Consolidated Member Payout Ledger (<span id="batch-sel-cnt">0</span> OCs selected)</h3>
+                                <button class="oc-action-btn primary" onclick="copyBatchLedgerReceipt()" style="padding:5px 10px;">📋 Copy Batch Receipt</button>
+                            </div>
+                            <div class="oc-data-table-wrap" style="max-height:290px; overflow-y:auto;">
+                                <table class="oc-table">
+                                    <thead><tr><th>Operative</th><th>Crimes</th><th>Reimburse</th><th>Net Payout</th><th>Action</th></tr></thead>
+                                    <tbody id="batch-consolidated-tbody"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Single-Crime Interactive Split Calculator (Fixed Reusable vs Consumable Gear) -->
+                <div class="oc-glass-panel" id="payout-calc-panel">
+                    <div class="oc-two-col">
+                        <div>
+                            <h2 style="margin:0 0 12px 0; font-size:1.05em; font-weight:900;">⚖️ Single-Crime Split &amp; Vault Cut Calculator</h2>
+                            <div style="margin-bottom:12px;">
+                                <label style="display:block; font-size:0.74em; font-weight:800; color:var(--text-tertiary); margin-bottom:5px;">SELECT CRIME (ACTIVE OR COMPLETED)</label>
+                                <select id="payout-crime-select" class="oc-select" style="width:100%;" onchange="loadPayoutCrime(this.value)"></select>
+                            </div>
+                            <div class="oc-equal-two-col" style="gap:10px; margin-bottom:10px;">
+                                <div>
+                                    <label style="display:block; font-size:0.72em; font-weight:800; color:var(--text-tertiary); margin-bottom:4px;">GROSS CASH REWARD ($)</label>
+                                    <input type="number" id="payout-cash-input" class="oc-input" style="width:100%;" min="0" step="10000" oninput="recalcPayoutLedger()">
+                                </div>
+                                <div>
+                                    <label style="display:block; font-size:0.72em; font-weight:800; color:var(--text-tertiary); margin-bottom:4px;">ITEM DROPS VALUE ($)</label>
+                                    <input type="number" id="payout-items-input" class="oc-input" style="width:100%;" min="0" step="10000" oninput="recalcPayoutLedger()">
+                                </div>
+                            </div>
+                            <label style="display:flex; align-items:center; gap:8px; font-size:0.79em; font-weight:700; margin-bottom:12px; cursor:pointer;">
+                                <input type="checkbox" id="payout-include-items" checked onchange="recalcPayoutLedger()">
+                                <span>Include Item Drop Market Value in Gross Split Pool</span>
+                            </label>
+                            <div style="margin-bottom:12px;">
+                                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+                                    <label style="font-size:0.74em; font-weight:800; color:var(--text-tertiary);">FACTION VAULT CUT %</label>
+                                    <span class="font-mono" id="payout-vault-pct-label" style="font-weight:900; color:#fbbf24;">10%</span>
+                                </div>
+                                <input type="range" id="payout-vault-slider" min="0" max="100" value="10" style="width:100%;" oninput="setVaultCutPct(this.value)">
+                                <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:6px;">
+                                    <button class="tab-btn" onclick="setVaultCutPct(0)" style="padding:4px 9px;">0%</button>
+                                    <button class="tab-btn" onclick="setVaultCutPct(10)" style="padding:4px 9px;">10%</button>
+                                    <button class="tab-btn" onclick="setVaultCutPct(15)" style="padding:4px 9px;">15%</button>
+                                    <button class="tab-btn" onclick="setVaultCutPct(20)" style="padding:4px 9px;">20%</button>
+                                    <button class="tab-btn" onclick="setVaultCutPct(25)" style="padding:4px 9px;">25%</button>
+                                    <button class="tab-btn" onclick="setVaultCutPct(100)" style="padding:4px 9px;">100% Vault</button>
+                                </div>
+                            </div>
+                            <div style="margin-bottom:12px;">
+                                <label style="display:block; font-size:0.74em; font-weight:800; color:var(--text-tertiary); margin-bottom:6px;">DISTRIBUTION MODE</label>
+                                <div class="tabs" style="width:100%;">
+                                    <button class="tab-btn active" id="mode-btn-equal" onclick="setPayoutMode('equal')" style="flex:1;">A: Equal (1/N)</button>
+                                    <button class="tab-btn" id="mode-btn-cpr" onclick="setPayoutMode('cpr')" style="flex:1;">B: CPR Weighted</button>
+                                    <button class="tab-btn" id="mode-btn-role" onclick="setPayoutMode('role')" style="flex:1;">C: Role Weight</button>
+                                </div>
+                            </div>
+                            <div>
+                                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                                    <label style="font-size:0.74em; font-weight:800; color:var(--text-tertiary);">CONSUMABLE vs. REUSABLE GEAR REIMBURSEMENTS</label>
+                                    <span style="font-size:0.7em; color:#34d399;">Auto-Reimburse Consumed: ON</span>
+                                </div>
+                                <div id="payout-reimburse-list" style="display:flex; flex-direction:column; gap:6px;"></div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:10px;">
+                                <h3 style="margin:0; font-size:1em; font-weight:900;">🧾 Single-Crime Payout Receipt</h3>
+                                <button class="oc-action-btn primary" onclick="copyPayoutDiscordReceipt()">📋 Copy Discord Receipt</button>
+                            </div>
+                            <div style="display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:8px; margin-bottom:12px;" id="payout-summary-cards"></div>
+                            <div class="oc-data-table-wrap">
+                                <table class="oc-table">
+                                    <thead><tr><th>Member</th><th>Role</th><th>CPR</th><th>Reimburse</th><th>Share %</th><th>Final Payout</th><th>Action</th></tr></thead>
+                                    <tbody id="payout-receipt-tbody"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 7d / 30d / 90d / All-Time Economics Analytics Suite (Fixed X-Axis Buckets) -->
+                <div class="oc-glass-panel" id="economics-suite-panel">
+                    <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:14px;">
+                        <div class="tabs" id="econ-window-tabs">
+                            <button class="tab-btn" id="econ-btn-7" onclick="setEconWindow(7)">7 Days</button>
+                            <button class="tab-btn active" id="econ-btn-30" onclick="setEconWindow(30)">30 Days</button>
+                            <button class="tab-btn" id="econ-btn-90" onclick="setEconWindow(90)">90 Days</button>
+                            <button class="tab-btn" id="econ-btn-all" onclick="setEconWindow(9999)">All Time</button>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                            <span style="font-size:0.78em; color:var(--text-secondary);" id="econ-totals-banner">Loading economic ledger...</span>
+                            <button class="oc-action-btn primary" onclick="exportOcLedgerCSV()">📥 Export OC Ledger CSV</button>
+                        </div>
+                    </div>
+
+                    <div class="oc-equal-two-col" style="margin-bottom:16px;">
+                        <div class="oc-glass-panel" style="margin:0; background:rgba(10,15,28,0.75);">
+                            <h3 style="margin:0 0 8px 0; font-size:0.93em; font-weight:900;" id="econ-chart-title">📊 Daily OC Revenue, Item Drops &amp; Vault Cut (30 Days)</h3>
+                            <div id="econ-revenue-chart"></div>
+                        </div>
+                        <div class="oc-glass-panel" style="margin:0; background:rgba(10,15,28,0.75);">
+                            <h3 style="margin:0 0 8px 0; font-size:0.93em; font-weight:900;">🎯 Success vs. Failure Breakdown by Tier</h3>
+                            <div id="econ-tier-chart"></div>
+                        </div>
+                    </div>
+
+                    <div class="oc-equal-two-col">
+                        <div class="oc-glass-panel" style="margin:0; background:rgba(10,15,28,0.75);">
+                            <h3 style="margin:0 0 8px 0; font-size:0.93em; font-weight:900;">💎 High-Value Item Drops &amp; Cache Log</h3>
+                            <div class="oc-data-table-wrap">
+                                <table class="oc-table">
+                                    <thead><tr><th>Date (TCT)</th><th>Crime</th><th>Item Dropped</th><th>Qty</th><th>Market Value</th></tr></thead>
+                                    <tbody id="econ-drops-tbody"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="oc-glass-panel" style="margin:0; background:rgba(10,15,28,0.75);">
+                            <h3 style="margin:0 0 8px 0; font-size:0.93em; font-weight:900;">🏆 Crime Type Profitability Leaderboard</h3>
+                            <div class="oc-data-table-wrap">
+                                <table class="oc-table">
+                                    <thead><tr><th>Crime (Tier)</th><th>W / L</th><th>Gross Cash + Items</th><th>Consumables</th><th>Respect</th></tr></thead>
+                                    <tbody id="econ-profit-tbody"></tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
 
             <!-- ═══════════════════════════════════════════════════════════ -->
-            <!-- TAB 4: ROI & CREW SIMULATOR (TOOLS 6 & 12)                 -->
+            <!-- WORKSPACE 4 (#intel): ROLE MATRIX, LEADERBOARD & TIER ADVISOR -->
             <!-- ═══════════════════════════════════════════════════════════ -->
-            <div class="oc-view-pane" id="pane-roi">
-                <!-- Tool 6: Tier EV/Respect ROI Matrix -->
-                <div class="oc-glass-panel">
-                    <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:14px;">
+            <div class="oc-view-pane" id="pane-intel">
+                <!-- Real Tool #4: Faction Member × Role CPR Heatmap Matrix -->
+                <div class="oc-glass-panel" id="role-heatmap-panel">
+                    <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:12px;">
                         <div>
-                            <h2 style="margin:0; font-size:1.06em; font-weight:900;">📊 Tier Expected Value (EV), Respect &amp; Profit-Per-Day Matrix (Tiers 1–8)</h2>
-                            <div style="font-size:0.78em; color:var(--text-secondary); margin-top:2px;">
-                                Blended Torn OC 2.0 baseline + your faction's real completed payouts. Automatically identifies your Sweet Spot tier.
-                            </div>
+                            <h2 style="margin:0; font-size:1.05em; font-weight:900;">🧬 Faction Member × Role CPR Heatmap Matrix</h2>
+                            <div style="font-size:0.76em; color:var(--text-secondary);">Click any role column header (e.g., TECHIE ↓) to rank the entire faction by that exact role CPR.</div>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                            <label style="display:inline-flex; align-items:center; gap:6px; font-size:0.78em; font-weight:700; cursor:pointer;">
+                                <input type="checkbox" id="hm-bench-only" onchange="renderRoleHeatmap()">
+                                <span>Show Unassigned Bench Members Only</span>
+                            </label>
+                            <input type="text" id="hm-search-input" class="oc-input" placeholder="Filter operative..." style="width:180px;">
+                        </div>
+                    </div>
+                    <div class="oc-data-table-wrap" style="max-height:430px; overflow:auto;">
+                        <table class="oc-table" id="role-heatmap-table">
+                            <thead id="role-heatmap-thead"></thead>
+                            <tbody id="role-heatmap-tbody"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Cleaned Tier EV & ROI Advisor (Deduplicated + Realistic >=70% Win Sweet Spot) -->
+                <div class="oc-glass-panel" id="roi-advisor-panel">
+                    <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:12px;">
+                        <div>
+                            <h2 style="margin:0; font-size:1.05em; font-weight:900;">📊 Tier Expected Value (EV) &amp; Faction Sweet Spot Advisor (Tiers 1–8)</h2>
+                            <div style="font-size:0.76em; color:var(--text-secondary);">Deduplicated by crime • Highlights Sweet Spot strictly among tiers with &ge;70% executable success rate.</div>
                         </div>
                         <div style="display:flex; align-items:center; gap:10px;">
-                            <label style="font-size:0.78em; font-weight:700; color:var(--text-secondary);">Crew Avg CPR Assumption:</label>
+                            <label style="font-size:0.78em; font-weight:700; color:var(--text-secondary);">Assumed CPR (if Est.):</label>
                             <input type="range" id="roi-cpr-slider" min="40" max="98" value="78" oninput="updateRoiCpr(this.value)">
                             <span class="font-mono" id="roi-cpr-val" style="font-weight:900; color:#38bdf8;">78%</span>
                         </div>
                     </div>
-
-                    <div id="roi-chart-wrap" style="margin-bottom:16px;"></div>
-
+                    <div id="roi-chart-wrap" style="margin-bottom:14px;"></div>
                     <div class="oc-data-table-wrap">
                         <table class="oc-table" id="roi-matrix-table">
                             <thead>
@@ -972,7 +1161,7 @@
                                     <th onclick="sortRoiTable('difficulty')" style="cursor:pointer;">Tier <span id="roi-sind-difficulty">↕</span></th>
                                     <th onclick="sortRoiTable('name')" style="cursor:pointer;">Crime Name <span id="roi-sind-name">↕</span></th>
                                     <th onclick="sortRoiTable('crewSize')" style="cursor:pointer;">Crew / Days <span id="roi-sind-crewSize">↕</span></th>
-                                    <th onclick="sortRoiTable('winRate')" style="cursor:pointer;">Est. Success % <span id="roi-sind-winRate">↕</span></th>
+                                    <th onclick="sortRoiTable('winRate')" style="cursor:pointer;">Pass % <span id="roi-sind-winRate">↕</span></th>
                                     <th onclick="sortRoiTable('consumableCost')" style="cursor:pointer;">Gear Cost <span id="roi-sind-consumableCost">↕</span></th>
                                     <th onclick="sortRoiTable('netEv')" style="cursor:pointer;">Net EV <span id="roi-sind-netEv">↕</span></th>
                                     <th onclick="sortRoiTable('evPerMemberDay')" class="sort-active" style="cursor:pointer;">EV / Member / Day <span id="roi-sind-evPerMemberDay">↓</span></th>
@@ -985,32 +1174,12 @@
                     </div>
                 </div>
 
-                <!-- Tool 12: Interactive What-If Crew Swap & Pass-Rate Simulator -->
-                <div class="oc-glass-panel" id="simulator-sandbox-panel">
-                    <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:14px;">
+                <!-- Operative Crime Leaderboard (Compact padding, unclipped Gear Supplied header) -->
+                <div class="oc-glass-panel" id="leaderboard-panel">
+                    <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:12px;">
                         <div>
-                            <h2 style="margin:0; font-size:1.06em; font-weight:900;">🧪 Interactive "What-If" Crew Swap &amp; Pass-Rate Simulator</h2>
-                            <div style="font-size:0.78em; color:var(--text-secondary);">Load any live OC or Tiers 1–8 blueprint, swap members, drag CPR sliders, and inspect live Team Pass Probability &amp; EV.</div>
-                        </div>
-                        <select id="sim-crime-select" class="oc-select" style="min-width:260px;" onchange="loadSimCrime(this.value)"></select>
-                    </div>
-                    <div class="oc-two-col">
-                        <div id="sim-slots-list" style="display:flex; flex-direction:column; gap:10px;"></div>
-                        <div class="oc-glass-panel" style="margin:0; background:rgba(10,15,28,0.9); text-align:center;" id="sim-results-panel"></div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- ═══════════════════════════════════════════════════════════ -->
-            <!-- TAB 5: OPERATIVE CRIME LEADERBOARD & POST-MORTEMS (13 & 14)-->
-            <!-- ═══════════════════════════════════════════════════════════ -->
-            <div class="oc-view-pane" id="pane-leaderboard">
-                <!-- Tool 14: Leaderboard & Reliability Table -->
-                <div class="oc-glass-panel">
-                    <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:14px;">
-                        <div>
-                            <h2 style="margin:0; font-size:1.06em; font-weight:900;">🏆 Faction OC Operative Leaderboard &amp; Reliability Scores</h2>
-                            <div style="font-size:0.78em; color:var(--text-secondary);">Click any operative row to open their full Crime Dossier Drawer with best roles &amp; CPR history.</div>
+                            <h2 style="margin:0; font-size:1.05em; font-weight:900;">🏆 Operative Crime Leaderboard &amp; Reliability Scores</h2>
+                            <div style="font-size:0.76em; color:var(--text-secondary);">Click any operative row to open their full Crime Dossier Drawer.</div>
                         </div>
                         <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
                             <input type="text" id="lb-search-input" class="oc-input" placeholder="Search operative or ID..." style="width:200px;">
@@ -1023,7 +1192,6 @@
                             </select>
                         </div>
                     </div>
-
                     <div class="oc-data-table-wrap">
                         <table class="oc-table" id="oc-leaderboard-table">
                             <thead>
@@ -1031,13 +1199,13 @@
                                     <th class="sticky-col" onclick="sortLeaderboard('name')" style="cursor:pointer;">Member <span id="lb-sind-name">↕</span></th>
                                     <th onclick="sortLeaderboard('rank')" style="cursor:pointer;">Tactical Rank <span id="lb-sind-rank">↕</span></th>
                                     <th onclick="sortLeaderboard('activeOc')" style="cursor:pointer;">Current Status <span id="lb-sind-activeOc">↕</span></th>
-                                    <th onclick="sortLeaderboard('completed')" style="cursor:pointer;">Completed <span id="lb-sind-completed">↕</span></th>
-                                    <th onclick="sortLeaderboard('passRate')" style="cursor:pointer;">Pass Rate <span id="lb-sind-passRate">↕</span></th>
+                                    <th onclick="sortLeaderboard('completed')" style="cursor:pointer;">Done <span id="lb-sind-completed">↕</span></th>
+                                    <th onclick="sortLeaderboard('passRate')" style="cursor:pointer;">Pass % <span id="lb-sind-passRate">↕</span></th>
                                     <th onclick="sortLeaderboard('avgCpr')" style="cursor:pointer;">Avg CPR <span id="lb-sind-avgCpr">↕</span></th>
                                     <th onclick="sortLeaderboard('grossCash')" class="sort-active" style="cursor:pointer;">Gross Value <span id="lb-sind-grossCash">↓</span></th>
-                                    <th onclick="sortLeaderboard('respect')" style="cursor:pointer;">Respect <span id="lb-sind-respect">↕</span></th>
+                                    <th onclick="sortLeaderboard('respect')" style="cursor:pointer;">Resp <span id="lb-sind-respect">↕</span></th>
                                     <th onclick="sortLeaderboard('gearSupplied')" style="cursor:pointer;">Gear Supplied <span id="lb-sind-gearSupplied">↕</span></th>
-                                    <th onclick="sortLeaderboard('reliability')" style="cursor:pointer;">Reliability <span id="lb-sind-reliability">↕</span></th>
+                                    <th onclick="sortLeaderboard('reliability')" style="cursor:pointer;">Reliab. <span id="lb-sind-reliability">↕</span></th>
                                 </tr>
                             </thead>
                             <tbody id="oc-leaderboard-tbody"></tbody>
@@ -1045,79 +1213,31 @@
                     </div>
                 </div>
 
-                <!-- Tool 13: Fail / Critical Fail Post-Mortem Analyzer -->
+                <!-- Fail & Critical Fail Post-Mortem Analyzer -->
                 <div class="oc-glass-panel">
-                    <h2 style="margin:0 0 6px 0; font-size:1.06em; font-weight:900;">🩹 Fail &amp; Critical Fail Post-Mortem Analyzer</h2>
-                    <div style="font-size:0.78em; color:var(--text-secondary); margin-bottom:14px;">
+                    <h2 style="margin:0 0 6px 0; font-size:1.05em; font-weight:900;">🩹 Fail &amp; Critical Fail Post-Mortem Analyzer</h2>
+                    <div style="font-size:0.76em; color:var(--text-secondary); margin-bottom:12px;">
                         Identifies the bottleneck role/slot, missing gear, live crew Jail/Hospital recovery status, and targeted coaching recommendations.
                     </div>
-                    <div id="postmortem-list" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(340px, 1fr)); gap:12px;"></div>
-                </div>
-            </div>
-
-            <!-- ═══════════════════════════════════════════════════════════ -->
-            <!-- TAB 6: 30-DAY OC ECONOMICS & ANALYTICS SUITE (TOOL 15)     -->
-            <!-- ═══════════════════════════════════════════════════════════ -->
-            <div class="oc-view-pane" id="pane-economics">
-                <div class="oc-glass-panel" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
-                    <div class="tabs" id="econ-window-tabs">
-                        <button class="tab-btn" id="econ-btn-7" onclick="setEconWindow(7)">7 Days</button>
-                        <button class="tab-btn active" id="econ-btn-30" onclick="setEconWindow(30)">30 Days</button>
-                        <button class="tab-btn" id="econ-btn-90" onclick="setEconWindow(90)">90 Days</button>
-                        <button class="tab-btn" id="econ-btn-all" onclick="setEconWindow(9999)">All Time</button>
-                    </div>
-                    <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
-                        <span style="font-size:0.78em; color:var(--text-secondary);" id="econ-totals-banner">Loading economic ledger...</span>
-                        <button class="oc-action-btn primary" onclick="exportOcLedgerCSV()">📥 Export OC Ledger CSV</button>
-                    </div>
-                </div>
-
-                <div class="oc-equal-two-col" style="margin-bottom:16px;">
-                    <div class="oc-glass-panel" style="margin:0;">
-                        <h3 style="margin:0 0 10px 0; font-size:0.95em; font-weight:900;">📊 Daily OC Revenue, Item Drops &amp; Vault Cut</h3>
-                        <div id="econ-revenue-chart"></div>
-                    </div>
-                    <div class="oc-glass-panel" style="margin:0;">
-                        <h3 style="margin:0 0 10px 0; font-size:0.95em; font-weight:900;">🎯 Success vs. Failure Breakdown by Tier</h3>
-                        <div id="econ-tier-chart"></div>
-                    </div>
-                </div>
-
-                <div class="oc-equal-two-col">
-                    <div class="oc-glass-panel" style="margin:0;">
-                        <h3 style="margin:0 0 10px 0; font-size:0.95em; font-weight:900;">💎 High-Value Item Drops &amp; Cache Log</h3>
-                        <div class="oc-data-table-wrap">
-                            <table class="oc-table">
-                                <thead><tr><th>Date (TCT)</th><th>Crime</th><th>Item Dropped</th><th>Qty</th><th>Market Value</th></tr></thead>
-                                <tbody id="econ-drops-tbody"></tbody>
-                            </table>
-                        </div>
-                    </div>
-                    <div class="oc-glass-panel" style="margin:0;">
-                        <h3 style="margin:0 0 10px 0; font-size:0.95em; font-weight:900;">🏆 Crime Type Profitability Leaderboard</h3>
-                        <div class="oc-data-table-wrap">
-                            <table class="oc-table">
-                                <thead><tr><th>Crime (Tier)</th><th>W / L</th><th>Gross Cash + Items</th><th>Consumables</th><th>Respect</th></tr></thead>
-                                <tbody id="econ-profit-tbody"></tbody>
-                            </table>
-                        </div>
-                    </div>
+                    <div id="postmortem-list" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(330px, 1fr)); gap:12px;"></div>
                 </div>
             </div>
         </main>
     </div>
 
-    <!-- ─── Slide-Over Operative Crime Dossier Drawer (Tool 14) ─── -->
+    <!-- ─── Slide-Over Operative Crime Dossier Drawer ─── -->
     <div id="oc-dossier-overlay" class="oc-drawer-overlay" onclick="if(event.target===this) closeOcDossier()">
         <div class="oc-drawer-panel" id="oc-dossier-panel"></div>
     </div>
 
-    <!-- ─── Broadcast Studio Modal (Tool 11) ─── -->
+    <!-- ─── Broadcast Studio Modal ─── -->
     <div id="broadcast-modal" class="oc-modal-overlay" onclick="if(event.target===this) closeBroadcastModal()">
         <div class="oc-modal-card">
             <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;">
                 <h2 style="margin:0; font-size:1.1em; font-weight:900;">📢 Crew Callout &amp; Broadcast Studio</h2>
-                <button class="oc-action-btn" onclick="closeBroadcastModal()" aria-label="Close">✕</button>
+                <button class="oc-close-btn" onclick="closeBroadcastModal()" aria-label="Close Broadcast Studio">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
             </div>
             <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:12px;">
                 <div class="tabs">
@@ -1137,12 +1257,14 @@
         </div>
     </div>
 
-    <!-- ─── CPR Thresholds & TornStats Import Modal (Tool 3) ─── -->
+    <!-- ─── CPR Thresholds & TornStats Import Modal (Crisp SVG Close Icon) ─── -->
     <div id="cpr-modal" class="oc-modal-overlay" onclick="if(event.target===this) closeCprModal()">
         <div class="oc-modal-card">
             <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;">
                 <h2 style="margin:0; font-size:1.1em; font-weight:900;">🎯 Minimum Safe CPR Floors &amp; TornStats Sync</h2>
-                <button class="oc-action-btn" onclick="closeCprModal()" aria-label="Close">✕</button>
+                <button class="oc-close-btn" onclick="closeCprModal()" aria-label="Close CPR Modal">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
             </div>
             <div class="oc-equal-two-col" style="margin-bottom:14px;">
                 <div>
@@ -1159,8 +1281,8 @@
                 <input type="password" id="cpr-tornstats-key" class="oc-input" placeholder="Uses Global Settings TornStats key if left blank..." style="width:100%;">
             </div>
             <div style="margin-bottom:14px;">
-                <label style="display:block; font-size:0.74em; font-weight:800; color:var(--text-tertiary); margin-bottom:4px;">MANUAL JSON / OVERRIDES (e.g. {"3776908": {"Techie": 88}})</label>
-                <textarea id="cpr-manual-json" class="oc-input" rows="4" placeholder='{"3776908": {"Techie": 86, "Hacker": 84}}' style="width:100%; font-family:var(--font-mono);"></textarea>
+                <label style="display:block; font-size:0.74em; font-weight:800; color:var(--text-tertiary); margin-bottom:4px;">MANUAL JSON / OVERRIDES (e.g. {"3776908": {"Techie": 48}})</label>
+                <textarea id="cpr-manual-json" class="oc-input" rows="4" placeholder='{"3776908": {"Techie": 48, "Hacker": 75}}' style="width:100%; font-family:var(--font-mono);"></textarea>
             </div>
             <div style="display:flex; justify-content:flex-end; gap:8px;">
                 <button class="oc-action-btn" onclick="closeCprModal()">Cancel</button>
@@ -1174,6 +1296,6 @@
 
     <div class="oc-toast-container" id="oc-toast-container"></div>
 
-    <script src="/oc-command.js?v=5.0.0"></script>
+    <script src="/oc-command.js?v=6.0.0"></script>
 </body>
 </html>
