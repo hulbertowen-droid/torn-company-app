@@ -12614,22 +12614,47 @@ function resolveSiteHelperIntent(rawMsg, currentPage = '/') {
     }
 
     // 5. Travel Profit Desk
-    if (/\b(plushie|flower|travel\s*profit|travel\s*capacity|airstrip|wlt|bct|business\s*class)\b/.test(q)) {
+    if (/\b(plushie|flower|contraband|black\s*market|museum\s*set|fly\s*for\s*a\s*set|travel\s*profit|travel\s*capacity|travel\s*desk|best\s*run|best\s*flight|mug\s*risk|airstrip|wlt|bct|business\s*class|50[\s-]*flight|travel\s*merit)\b/.test(q)) {
         let filter = null;
         if (/\bplushie/.test(q)) filter = 'plushie';
         else if (/\bflower/.test(q)) filter = 'flower';
+        else if (/\bcontraband|black\s*market/.test(q)) filter = 'contraband';
+        else if (/\bweapon|temp|grenade|armor/.test(q)) filter = 'weapon';
         else if (/\bdrug|xanax/.test(q)) filter = 'drug';
         else if (/\bin\s*stock/.test(q)) filter = 'instock';
+
+        let viewMode = null;
+        if (/\bmuseum|set\s*planner|fly\s*for\s*a\s*set/.test(q)) viewMode = 'museum';
+        else if (/\bcountry\s*card|by\s*country|destination\s*card/.test(q)) viewMode = 'countries';
+        else if (/\bscatter|bubble\s*chart|simulator|daily\s*profit/.test(q)) viewMode = 'analytics';
+        else if (/\bmerit|50[\s-]*flight|trip\s*log|flight\s*log/.test(q)) viewMode = 'merits';
+        else if (/\btable|by\s*item/.test(q)) viewMode = 'items';
+
         const capMatch = q.match(/\b(\d{1,2})\s*(?:cap|capacity|items)\b/) || (q.includes('capacity') && q.match(/\b(\d{1,2})\b/));
         const capacity = capMatch ? parseInt(capMatch[1], 10) : null;
+
         let flightProfile = null;
         if (/\bwlt\b/.test(q)) flightProfile = 'wlt';
         else if (/\bbct|business\s*class\b/.test(q)) flightProfile = 'bct';
         else if (/\bstandard\b/.test(q)) flightProfile = 'standard';
         else if (/\bairstrip|private\s*island\b/.test(q)) flightProfile = 'airstrip';
+
+        const hrMatch = q.match(/(?:under|max|within|<=?)\s*(\d+(?:\.\d+)?)\s*(?:h|hr|hrs|hour|hours)\b/i);
+        const minMatch = q.match(/(?:under|max|within|<=?)\s*(\d+)\s*(?:m|min|mins|minutes)\b/i);
+        const maxRtMins = hrMatch ? Math.round(parseFloat(hrMatch[1]) * 60) : (minMatch ? parseInt(minMatch[1], 10) : null);
+
+        let budget = null;
+        const bMatch = q.match(/\$\s*(\d+(?:\.\d+)?)\s*([mkb])?\b/i) || q.match(/\b(\d+(?:\.\d+)?)\s*([mkb])\s*budget\b/i);
+        if (bMatch) {
+            const mult = (bMatch[2] || '').toLowerCase() === 'b' ? 1e9 : ((bMatch[2] || '').toLowerCase() === 'm' ? 1e6 : ((bMatch[2] || '').toLowerCase() === 'k' ? 1e3 : 1));
+            budget = Math.round(parseFloat(bMatch[1]) * mult);
+        }
+        const lowMugRisk = /\blow\s*mug|\bno\s*mug|\bsafe\s*mug/.test(q);
+        const noEnergyWaste = /\bno\s*energy\s*waste|\b0e\s*waste|\benergy\s*guard/.test(q);
+
         return {
-            reply: `I've updated the **Travel Profit Desk**${filter ? ` to filter by **${filter}**` : ''}${capacity ? `, set capacity to **${capacity}**` : ''}${flightProfile ? `, and set flight mode to **${flightProfile.toUpperCase()}**` : ''}.`,
-            action: { type: 'travel_action', page: '/travel.html', filter, capacity, flightProfile, label: 'Apply Travel Desk Settings' }
+            reply: `I've configured the **Travel Profit Desk**${viewMode ? ` on **${viewMode.toUpperCase()}** view` : ''}${filter ? `, filtered to **${filter}**` : ''}${maxRtMins ? `, capped flight time at **≤${maxRtMins}m RT**` : ''}${budget ? `, set budget cap to **$${budget.toLocaleString()}**` : ''}${lowMugRisk ? `, enabled **Low Mug Risk**` : ''}${capacity ? `, capacity **${capacity}**` : ''}${flightProfile ? `, mode **${flightProfile.toUpperCase()}**` : ''}.`,
+            action: { type: 'travel_action', page: '/travel.html', filter, viewMode, capacity, flightProfile, maxRtMins, budget, lowMugRisk, noEnergyWaste, inStockOnly: true, label: 'Apply Travel Tactical Filters' }
         };
     }
 
@@ -14138,33 +14163,44 @@ function trackStockVelocities(data) {
     }
 }
 
+let lastYataSource = 'yata';
+
 function triggerYataBackgroundFetch() {
     if (yataFetchPromise) return yataFetchPromise;
 
     yataFetchPromise = (async () => {
+        const endpoints = [
+            { name: 'yata', url: 'https://yata.yt/api/v1/travel/export/' },
+            { name: 'yata-mirror', url: 'https://www.yata.yt/api/v1/travel/export/' }
+        ];
         try {
-            const resp = await fetch('https://yata.yt/api/v1/travel/export/', {
-                signal: AbortSignal.timeout(8000), // 8 seconds
-                headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-                    'Accept': 'application/json, text/plain, */*',
-                    'Accept-Language': 'en-US,en;q=0.9',
-                    'Cache-Control': 'no-cache'
+            for (const ep of endpoints) {
+                try {
+                    const resp = await fetch(ep.url, {
+                        signal: AbortSignal.timeout(7500),
+                        headers: {
+                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                            'Accept': 'application/json, text/plain, */*',
+                            'Accept-Language': 'en-US,en;q=0.9',
+                            'Cache-Control': 'no-cache'
+                        }
+                    });
+                    if (resp.ok) {
+                        const data = await resp.json();
+                        if (data && data.stocks) {
+                            cachedYataStocks = data;
+                            lastYataFetchTime = Date.now();
+                            lastYataSource = ep.name;
+                            trackStockVelocities(data);
+                            return cachedYataStocks;
+                        }
+                    } else {
+                        console.warn(`[YATA Stock] ${ep.name} returned HTTP ${resp.status} ${resp.statusText}`);
+                    }
+                } catch (innerErr) {
+                    console.warn(`[YATA Stock] ${ep.name} notice: ${innerErr.message}`);
                 }
-            });
-            if (resp.ok) {
-                const data = await resp.json();
-                if (data && data.stocks) {
-                    cachedYataStocks = data;
-                    lastYataFetchTime = Date.now();
-                    trackStockVelocities(data);
-                    return cachedYataStocks;
-                }
-            } else {
-                console.warn(`[YATA Stock] Live fetch returned HTTP ${resp.status} ${resp.statusText}`);
             }
-        } catch (err) {
-            console.warn(`[YATA Stock] Live fetch notice: ${err.message}. Using cache if available.`);
         } finally {
             yataFetchPromise = null;
         }
@@ -14224,16 +14260,87 @@ app.get('/api/items', async (req, res) => {
     }
 });
 
+// Canonical Torn Travel 2.0 (Post-June 23, 2026 Patch #438 — 5.26% reduction) flight table & tickets
+const TRAVEL_2_PROFILES = {
+    mex: { code: "mex", country: "Mexico", city: "Ciudad Juárez", flag: "🇲🇽", ticketCost: 6500, standard: 24, airstrip: 17, wlt: 12, bct: 7, book: { standard: 18, airstrip: 13, wlt: 9, bct: 5 } },
+    cay: { code: "cay", country: "Cayman Islands", city: "George Town", flag: "🇰🇾", ticketCost: 10000, standard: 33, airstrip: 23, wlt: 17, bct: 10, book: { standard: 25, airstrip: 17, wlt: 13, bct: 8 } },
+    can: { code: "can", country: "Canada", city: "Toronto", flag: "🇨🇦", ticketCost: 9000, standard: 39, airstrip: 27, wlt: 19, bct: 12, book: { standard: 29, airstrip: 20, wlt: 15, bct: 9 } },
+    haw: { code: "haw", country: "Hawaii", city: "Honolulu", flag: "🇺🇸", ticketCost: 11000, standard: 127, airstrip: 89, wlt: 63, bct: 38, book: { standard: 95, airstrip: 67, wlt: 48, bct: 29 } },
+    uni: { code: "uni", country: "United Kingdom", city: "London", flag: "🇬🇧", ticketCost: 18000, standard: 151, airstrip: 106, wlt: 75, bct: 45, book: { standard: 113, airstrip: 80, wlt: 57, bct: 34 } },
+    arg: { code: "arg", country: "Argentina", city: "Buenos Aires", flag: "🇦🇷", ticketCost: 21000, standard: 158, airstrip: 111, wlt: 79, bct: 47, book: { standard: 119, airstrip: 83, wlt: 59, bct: 35 } },
+    swi: { code: "swi", country: "Switzerland", city: "Zurich", flag: "🇨🇭", ticketCost: 27000, standard: 166, airstrip: 116, wlt: 83, bct: 50, book: { standard: 125, airstrip: 97, wlt: 62, bct: 38 } },
+    jap: { code: "jap", country: "Japan", city: "Tokyo", flag: "🇯🇵", ticketCost: 32000, standard: 213, airstrip: 149, wlt: 107, bct: 64, book: { standard: 160, airstrip: 112, wlt: 80, bct: 48 } },
+    chi: { code: "chi", country: "China", city: "Beijing", flag: "🇨🇳", ticketCost: 35000, standard: 229, airstrip: 160, wlt: 114, bct: 69, book: { standard: 172, airstrip: 120, wlt: 86, bct: 52 } },
+    uae: { code: "uae", country: "UAE", city: "Dubai", flag: "🇦🇪", ticketCost: 32000, standard: 257, airstrip: 180, wlt: 128, bct: 77, book: { standard: 193, airstrip: 135, wlt: 97, bct: 58 } },
+    sou: { code: "sou", country: "South Africa", city: "Johannesburg", flag: "🇿🇦", ticketCost: 40000, standard: 282, airstrip: 197, wlt: 141, bct: 85, book: { standard: 212, airstrip: 148, wlt: 106, bct: 64 } }
+};
+
+// All 24 Black Market Contraband items with reference foreign buy prices & variable price ranges (±18%)
+const CONTRABAND_ITEMS_META = {
+    "Ambergris Lump": { id: 1495, country: "uae", baseCost: 338424 },
+    "Basalt Point": { id: 1502, country: "haw", baseCost: 118854 },
+    "Bear Gall": { id: 1484, country: "can", baseCost: 30669 },
+    "Bearer Bond": { id: 1482, country: "cay", baseCost: 88065 },
+    "Chalcedony Point": { id: 1503, country: "arg", baseCost: 100000 },
+    "Chert Point": { id: 1501, country: "uni", baseCost: 130728 },
+    "Counterfeit Manga": { id: 1492, country: "jap", baseCost: 23134 },
+    "Ephedrine Powder": { id: 1489, country: "swi", baseCost: 13934 },
+    "Ergotamine Ampoule": { id: 1491, country: "swi", baseCost: 4899 },
+    "Insulin": { id: 1483, country: "can", baseCost: 2514 },
+    "Meteorite Fragment": { id: 1488, country: "arg", baseCost: 458000 },
+    "Natural Pearls": { id: 1496, country: "uae", baseCost: 95693 },
+    "Obsidian Point": { id: 1499, country: "mex", baseCost: 135905 },
+    "Pangolin Scales": { id: 1494, country: "chi", baseCost: 153000 },
+    "Patagonian Fossil": { id: 1487, country: "arg", baseCost: 549000 },
+    "Quartz Point": { id: 1504, country: "can", baseCost: 146379 },
+    "Quartzite Point": { id: 1500, country: "sou", baseCost: 122595 },
+    "Raw Ivory": { id: 358, country: "sou", baseCost: 1884 },
+    "Safrole Oil": { id: 1490, country: "swi", baseCost: 4784 },
+    "Shark Fin": { id: 1485, country: "haw", baseCost: 20286 },
+    "Tiger Bone Powder": { id: 1498, country: "chi", baseCost: 30114 },
+    "Turtle Shell": { id: 1486, country: "haw", baseCost: 70960 },
+    "Uncut Diamonds": { id: 1497, country: "sou", baseCost: 179275 },
+    "Whale Meat": { id: 1493, country: "jap", baseCost: 1923 }
+};
+
+const CONTRABAND_ID_SET = new Set(Object.values(CONTRABAND_ITEMS_META).map(x => x.id));
+const CONTRABAND_NAME_SET = new Set(Object.keys(CONTRABAND_ITEMS_META).map(x => x.toLowerCase()));
+const STRICT_DRUG_NAMES = new Set(['xanax', 'ecstasy', 'vicodin', 'cannabis', 'opium', 'lsd', 'shrooms', 'pcp', 'speed', 'ketamine', 'love juice']);
+const TEMP_WEAPON_NAMES = new Set(['flash grenade', 'smoke grenade', 'tear gas', 'grenade', 'stick grenade', 'heg', 'claymore mine', 'throwing knife', 'ninja star', 'fireworks', 'molotov cocktail', 'pepper spray', 'trout', 'snowball', 'brick', 'book']);
+const FLOWER_NAMES = new Set(['dahlia', 'banana orchid', 'crocus', 'orchid', 'heather', 'ceibo flower', 'edelweiss', 'cherry blossom', 'peony', 'tribulus omanense', 'african violet']);
+
+function classifyTravelItem(name, tornType, itemId) {
+    const lower = String(name || '').trim().toLowerCase();
+    const tType = String(tornType || '').trim();
+    if (CONTRABAND_ID_SET.has(Number(itemId)) || CONTRABAND_NAME_SET.has(lower)) {
+        return { category: 'contraband', shopType: 'Black Market' };
+    }
+    if (lower.includes('plushie') || tType === 'Plushie') {
+        return { category: 'plushie', shopType: 'General Store' };
+    }
+    if (FLOWER_NAMES.has(lower) || tType === 'Flower') {
+        return { category: 'flower', shopType: 'General Store' };
+    }
+    if (TEMP_WEAPON_NAMES.has(lower) || ['Temporary', 'Primary', 'Secondary', 'Melee', 'Defensive'].includes(tType)) {
+        return { category: 'weapon', shopType: 'Arms Dealer' };
+    }
+    if (STRICT_DRUG_NAMES.has(lower) || tType === 'Drug') {
+        return { category: 'drug', shopType: 'General Store' };
+    }
+    return { category: 'other', shopType: 'General Store' };
+}
+
 app.get('/api/travel-profits', async (req, res) => {
     const rawReqKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey;
-    const serverFallbackKey = (typeof getNextApiKey === 'function' ? getNextApiKey() : null) || discordConfig.apiKey || TORN_API_KEY || null;
-    const apiKey = (rawReqKey && rawReqKey !== 'null' && rawReqKey !== 'undefined' && String(rawReqKey).trim().length >= 16)
+    const userOwnKey = (rawReqKey && rawReqKey !== 'null' && rawReqKey !== 'undefined' && String(rawReqKey).trim().length >= 16)
         ? String(rawReqKey).trim()
-        : serverFallbackKey;
+        : null;
+    const serverFallbackKey = (typeof getNextApiKey === 'function' ? getNextApiKey() : null) || discordConfig.apiKey || TORN_API_KEY || null;
+    const apiKey = userOwnKey || serverFallbackKey;
     if (!apiKey) return res.status(401).json({ error: "API Key required" });
     try {
-        if (rawReqKey && rawReqKey !== 'null' && rawReqKey !== 'undefined' && String(rawReqKey).trim().length >= 16) {
-            await verifySubscription(apiKey).catch(() => null);
+        if (userOwnKey) {
+            await verifySubscription(userOwnKey).catch(() => null);
         }
 
         // Fetch Torn market data using high-speed server cache
@@ -14242,65 +14349,99 @@ app.get('/api/travel-profits', async (req, res) => {
             return res.status(500).json({ error: "Failed to load Torn items database" });
         }
 
-        // Fetch live YATA stock data (with cache & timeout resilience)
-        const yataData = await getLiveYataStocks();
+        // Fetch live YATA stock data (with multi-source fallback so UI never 503s)
+        let yataData = await getLiveYataStocks();
+        let dataSource = lastYataSource || 'yata';
         if (!yataData || !yataData.stocks) {
-            return res.status(503).json({ error: "YATA travel stock feed is temporarily unavailable. Please try again shortly." });
+            dataSource = 'fallback';
+            const nowSec = Math.floor(Date.now() / 1000);
+            const synthStocks = {};
+            for (const [cCode, fbArr] of Object.entries(FALLBACK_DESTINATIONS)) {
+                synthStocks[cCode] = { update: nowSec - 300, stocks: fbArr };
+            }
+            yataData = { timestamp: nowSec, stocks: synthStocks };
         }
 
         const items = cachedCatalog.items;
-        // Canonical abroad high-volume trade items using verified Torn IDs matching FALLBACK_DESTINATIONS & YATA
+        const bctMarketPrice = Number(items[367]?.market_value || 10500000);
+        const pointMarketPrice = 45500;
+
+        // Tracked countries with comprehensive item IDs (including all 24 Black Market Contraband items)
         const trackedCountries = [
-            { code: "mex", country: "Mexico", flag: "🇲🇽", itemIds: [258, 260, 259, 409, 1125, 1499] },
-            { code: "cay", country: "Cayman Islands", flag: "🏝️", itemIds: [618, 617, 1482] },
-            { code: "can", country: "Canada", flag: "🇨🇦", itemIds: [261, 263, 206, 197, 1483, 1504] },
-            { code: "haw", country: "Hawaii", flag: "🌺", itemIds: [264, 1485, 1486, 1502] },
-            { code: "uni", country: "UK", flag: "🇬🇧", itemIds: [268, 266, 267, 206, 197, 1501] },
-            { code: "arg", country: "Argentina", flag: "🇦🇷", itemIds: [269, 271, 256, 199, 1487, 1488] },
-            { code: "swi", country: "Switzerland", flag: "🇨🇭", itemIds: [273, 272, 222, 199, 1489, 1491] },
-            { code: "jap", country: "Japan", flag: "🇯🇵", itemIds: [277, 206, 197, 1333, 1492] },
-            { code: "chi", country: "China", flag: "🇨🇳", itemIds: [274, 276, 1462, 1494, 1498] },
-            { code: "uae", country: "UAE", flag: "🇦🇪", itemIds: [384, 385, 1264, 1495] },
-            { code: "sou", country: "South Africa", flag: "🇿🇦", itemIds: [281, 282, 206, 226, 358, 1497] }
+            { code: "mex", itemIds: [258, 260, 259, 409, 1125, 1499, 26, 50, 159, 230, 399, 432] },
+            { code: "cay", itemIds: [618, 617, 1482, 612, 613, 614, 615] },
+            { code: "can", itemIds: [261, 263, 206, 196, 197, 201, 205, 1483, 1484, 1504, 1348, 328] },
+            { code: "haw", itemIds: [264, 1485, 1486, 1502, 240, 242, 419, 420, 421] },
+            { code: "uni", itemIds: [268, 266, 267, 206, 196, 197, 198, 201, 203, 205, 1501, 220, 221, 219] },
+            { code: "arg", itemIds: [269, 271, 256, 196, 198, 199, 203, 204, 1487, 1488, 1503, 333] },
+            { code: "swi", itemIds: [273, 272, 222, 196, 198, 199, 201, 203, 204, 1489, 1490, 1491, 361, 398] },
+            { code: "jap", itemIds: [277, 206, 197, 198, 200, 203, 204, 205, 1333, 1492, 1493, 239, 334] },
+            { code: "chi", itemIds: [274, 276, 197, 199, 200, 201, 204, 1462, 1494, 1498, 326, 335] },
+            { code: "uae", itemIds: [384, 385, 1264, 1495, 1496, 412, 414] },
+            { code: "sou", itemIds: [281, 282, 206, 199, 200, 201, 203, 226, 358, 1497, 1500, 332, 651, 652, 653, 654] }
         ];
 
         const countryRestock = {};
         let results = [];
         for (const cMeta of trackedCountries) {
-            const prof = FLIGHT_PROFILES[cMeta.code] || { standard: 120, airstrip: 84 };
+            const prof = TRAVEL_2_PROFILES[cMeta.code];
             const yEntry = yataData.stocks[cMeta.code] || null;
             const yStocks = Array.isArray(yEntry?.stocks) ? yEntry.stocks : [];
-            const yUpdated = yEntry?.update ? Number(yEntry.update) : 0;
-            if (yUpdated) countryRestock[cMeta.code] = yUpdated;
+            const yUpdated = yEntry?.update ? Number(yEntry.update) : Math.floor(Date.now() / 1000) - 120;
+            countryRestock[cMeta.code] = yUpdated;
 
             const fallbackList = FALLBACK_DESTINATIONS[cMeta.code] || [];
             const candidateIds = new Set(cMeta.itemIds);
-            // Also include any stocked Plushie/Flower/Drug/Special from live YATA for this country
+            for (const fb of fallbackList) {
+                if (fb && fb.id && CONTRABAND_ID_SET.has(Number(fb.id))) candidateIds.add(Number(fb.id));
+            }
             for (const ys of yStocks) {
                 if (!ys || !ys.id) continue;
                 const meta = items[ys.id];
                 const tType = String(meta?.type || '');
-                if (['Plushie', 'Flower', 'Drug', 'Temporary', 'Special', 'Supply Pack'].includes(tType)) {
+                const cls = classifyTravelItem(ys.name || meta?.name, tType, ys.id);
+                if (['plushie', 'flower', 'contraband', 'drug', 'weapon', 'other'].includes(cls.category) &&
+                    (['Plushie', 'Flower', 'Drug', 'Temporary', 'Special', 'Supply Pack', 'Enhancer', 'Other', 'Primary', 'Secondary', 'Melee', 'Defensive'].includes(tType) || CONTRABAND_ID_SET.has(Number(ys.id)))) {
                     candidateIds.add(Number(ys.id));
                 }
             }
 
             const standardMins = prof.standard;
             const airstripMins = prof.airstrip;
-            const wltMins = Math.max(1, Math.round(airstripMins * 0.70));
-            const bctMins = Math.max(1, Math.round(airstripMins * 0.42));
+            const wltMins = prof.wlt;
+            const bctMins = prof.bct;
 
             for (const itemId of candidateIds) {
                 const tornItem = items[itemId];
                 const fbItem = fallbackList.find(f => Number(f.id) === Number(itemId));
                 const ys = yStocks.find(s => Number(s.id) === Number(itemId));
-                const marketPrice = Number(tornItem?.market_value || 0);
-                if (marketPrice <= 0) continue;
+                const name = ys?.name || tornItem?.name || fbItem?.name || `Item #${itemId}`;
+                const sellPrice = Number(tornItem?.sell_price || 0);
+                const marketPrice = Number(tornItem?.market_value || sellPrice || 0);
+                if (marketPrice <= 0 && sellPrice <= 0) continue;
 
                 const cost = Number(ys?.cost ?? fbItem?.cost ?? tornItem?.buy_price ?? 0);
+                if (cost <= 0) continue;
                 const stock = ys ? Number(ys.quantity || 0) : 0;
-                const name = ys?.name || tornItem?.name || fbItem?.name || `Item #${itemId}`;
                 const type = tornItem?.type || 'Item';
+                const { category, shopType } = classifyTravelItem(name, type, itemId);
+
+                // Contraband variable-price intelligence
+                let contrabandRange = null;
+                const cbMeta = CONTRABAND_ITEMS_META[name] || Object.values(CONTRABAND_ITEMS_META).find(x => x.id === Number(itemId));
+                if (cbMeta) {
+                    const avgCost = cbMeta.baseCost;
+                    const minCost = Math.round(avgCost * 0.82);
+                    const maxCost = Math.round(avgCost * 1.18);
+                    const dealPct = avgCost > 0 ? Math.round(((cost - avgCost) / avgCost) * 1000) / 10 : 0;
+                    const dealTier = dealPct <= -6 ? 'floor' : (dealPct >= 6 ? 'high' : 'normal');
+                    contrabandRange = { minCost, maxCost, avgCost, dealPct, dealTier };
+                }
+
+                // Velocity & burn rate
+                const vKey = `${cMeta.code}_${itemId}`;
+                const vTrack = stockVelocityTracker[vKey] || null;
+                const burnRatePerMin = getItemBurnRate(cMeta.code, { id: itemId, name });
 
                 const profit = marketPrice - cost;
                 const roundTrip = airstripMins * 2;
@@ -14311,16 +14452,26 @@ app.get('/api/travel-profits', async (req, res) => {
                     id: Number(itemId),
                     name,
                     type,
-                    country: cMeta.country,
+                    category,
+                    shopType,
+                    country: prof.country,
+                    city: prof.city,
                     countryCode: cMeta.code,
-                    flag: cMeta.flag,
+                    flag: prof.flag,
+                    ticketCost: prof.ticketCost,
                     flightTimeMins: airstripMins,
                     standardMins,
                     airstripMins,
                     wltMins,
                     bctMins,
+                    bookMins: prof.book,
                     cost,
+                    sellPrice,
                     stock,
+                    burnRatePerMin,
+                    lastRestockTs: vTrack?.lastRestockTs || null,
+                    zeroSinceTs: vTrack?.zeroSinceTs || null,
+                    contrabandRange,
                     yataUpdated: yUpdated,
                     marketPrice,
                     profit,
@@ -14331,12 +14482,83 @@ app.get('/api/travel-profits', async (req, res) => {
             }
         }
 
+        // Fetch optional live player context if user has their own Torn API key connected
+        let playerContext = null;
+        if (userOwnKey) {
+            try {
+                const pHash = userOwnKey.slice(0, 8);
+                const pData = await cachedTornFetch(
+                    `https://api.torn.com/user/?selections=basic,bars,cooldowns,travel,money,perks&key=${encodeURIComponent(userOwnKey)}`,
+                    `travel_player_ctx_${pHash}`,
+                    30000
+                );
+                if (pData && !pData.error) {
+                    const allPerks = [
+                        ...(pData.faction_perks || []),
+                        ...(pData.job_perks || []),
+                        ...(pData.property_perks || []),
+                        ...(pData.enhancer_perks || []),
+                        ...(pData.book_perks || [])
+                    ].map(s => String(s));
+
+                    let factionExcursion = 10;
+                    for (const pk of (pData.faction_perks || [])) {
+                        const m = String(pk).match(/travel\s+item\s+capacity\s*\+?\s*(\d+)/i) || String(pk).match(/\+\s*(\d+)\s*travel\s+item/i);
+                        if (m) factionExcursion = Math.min(10, parseInt(m[1], 10));
+                    }
+                    const hasSuitcaseLarge = (pData.enhancer_perks || []).some(p => /\+\s*[34]\s*travel/i.test(String(p)));
+                    const hasAirstrip = (pData.property_perks || []).some(p => /airstrip|travel/i.test(String(p)));
+                    const hasSmugglingBook = (pData.book_perks || []).some(p => /travel\s+capacity|smuggling/i.test(String(p)));
+                    const hasMailingBook = (pData.book_perks || []).some(p => /flight\s+time|travel\s+time|mailing/i.test(String(p)));
+
+                    playerContext = {
+                        playerId: pData.player_id || null,
+                        name: pData.name || null,
+                        wallet: Number(pData.money_onhand || 0),
+                        energy: {
+                            current: Number(pData.energy?.current || 0),
+                            maximum: Number(pData.energy?.maximum || 150),
+                            fulltime: Number(pData.energy?.fulltime || 0)
+                        },
+                        nerve: {
+                            current: Number(pData.nerve?.current || 0),
+                            maximum: Number(pData.nerve?.maximum || 60),
+                            fulltime: Number(pData.nerve?.fulltime || 0)
+                        },
+                        cooldowns: {
+                            drug: Number(pData.cooldowns?.drug || 0),
+                            booster: Number(pData.cooldowns?.booster || 0),
+                            medical: Number(pData.cooldowns?.medical || 0)
+                        },
+                        travel: {
+                            destination: pData.travel?.destination || 'Torn',
+                            timeLeft: Number(pData.travel?.time_left || 0),
+                            departed: Number(pData.travel?.departed || 0)
+                        },
+                        detectedPerks: {
+                            factionExcursion,
+                            hasSuitcaseLarge,
+                            hasAirstrip,
+                            hasSmugglingBook,
+                            hasMailingBook,
+                            rawCount: allPerks.length
+                        }
+                    };
+                }
+            } catch (_) {}
+        }
+
         // Sort by single-item Profit / Hour descending by default
         results.sort((a, b) => b.profitPerHr - a.profitPerHr);
         res.json({
             success: true,
+            dataSource,
             yataTimestamp: yataData.timestamp || Math.floor(Date.now() / 1000),
+            bctMarketPrice,
+            pointMarketPrice,
             countryRestock,
+            travelProfiles: TRAVEL_2_PROFILES,
+            playerContext,
             items: results
         });
     } catch (err) {

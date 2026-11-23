@@ -20,15 +20,16 @@
     <link rel="apple-touch-icon" sizes="152x152" href="/icons/icon-152.png">
     <link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-180.png">
     <title>Travel Profit Desk | FactionOS</title>
-    <meta name="description" content="Live Torn travel profit calculator — real-time foreign item stock, profit per hour, flight durations, and capacity optimization.">
-    
+    <meta name="description" content="Torn Travel 2.0 command suite — Patch #438 flight times, interactive capacity builder, Contraband deal intelligence, Country Command cards, Museum Set Planner, and 50-flight merit tracker.">
+
     <!-- Fonts & Core Design System -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/global.css?v=4.4.0">
-    
+
     <!-- Scripts & Auth -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
     <script src="/auth-gate.js?v=4.4.0"></script>
     <script src="/global_settings.js?v=4.4.0"></script>
     <script src="/global-topbar.js?v=4.4.0"></script>
@@ -36,69 +37,243 @@
     <script src="/pwa-helper.js?v=1.2.0" defer></script>
 
     <style>
-    /* ─── Page-Specific Travel Desk Styling ─── */
+    /* ─── Travel Profit Desk 2.0 Tactical Suite Styling ─── */
+    .kpi-row-travel {
+        display: grid;
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+        gap: 10px;
+        margin-bottom: 14px;
+    }
+    .kpi-row-travel .kpi-card {
+        padding: 11px 13px !important;
+        min-width: 0;
+        overflow: hidden;
+    }
+    .kpi-row-travel .kpi-card > div {
+        min-width: 0;
+        flex: 1 1 auto;
+    }
+    .kpi-row-travel .kpi-value {
+        font-size: clamp(0.95rem, 1.22vw, 1.2rem) !important;
+        letter-spacing: -0.02em;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .kpi-row-travel .kpi-sub {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    @media (max-width: 1240px) {
+        .kpi-row-travel { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    }
+    @media (max-width: 720px) {
+        .kpi-row-travel { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+        .kpi-row-travel .kpi-value { font-size: 1.02rem !important; }
+    }
+
+    /* Smart Recommendation Advisor Banner */
+    .advisor-banner {
+        background: linear-gradient(135deg, rgba(14, 24, 42, 0.96), rgba(10, 16, 28, 0.98));
+        border: 1px solid rgba(56, 189, 248, 0.28);
+        border-radius: var(--radius-md);
+        padding: 14px 18px;
+        margin-bottom: 16px;
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 14px;
+        box-shadow: 0 6px 24px rgba(0, 0, 0, 0.28);
+    }
+    body.light-mode .advisor-banner {
+        background: linear-gradient(135deg, rgba(240, 249, 255, 0.95), rgba(248, 250, 252, 0.98));
+        border-color: rgba(14, 165, 233, 0.35);
+    }
+    @media (max-width: 980px) {
+        .advisor-banner { grid-template-columns: 1fr; gap: 10px; padding: 12px 14px; }
+    }
+    .adv-slot {
+        background: rgba(255, 255, 255, 0.025);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-sm);
+        padding: 10px 12px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        gap: 6px;
+        min-width: 0;
+    }
+    .adv-slot.primary-pick {
+        border-color: rgba(16, 185, 129, 0.38);
+        background: rgba(16, 185, 129, 0.06);
+    }
+    .adv-tag {
+        font-size: 0.68em;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.7px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 6px;
+    }
+    .adv-main {
+        font-size: 0.92em;
+        font-weight: 800;
+        color: var(--text-primary);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .adv-meta {
+        font-size: 0.75em;
+        color: var(--text-secondary);
+        font-family: var(--font-mono);
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+    }
+    .adv-actions {
+        display: flex;
+        gap: 6px;
+        margin-top: 2px;
+    }
+
+    /* Workspace Sub-Navigation Tabs */
+    .travel-view-tabs {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 14px;
+        overflow-x: auto;
+        padding-bottom: 2px;
+        scrollbar-width: none;
+    }
+    .travel-view-tabs::-webkit-scrollbar { display: none; }
+    .tv-tab {
+        padding: 9px 16px;
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--border-default);
+        background: var(--bg-surface);
+        color: var(--text-secondary);
+        font-size: 0.82em;
+        font-weight: 800;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: all 0.16s ease;
+        font-family: inherit;
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+    }
+    .tv-tab:hover {
+        border-color: var(--accent-cobalt);
+        color: var(--text-primary);
+    }
+    .tv-tab.active {
+        background: rgba(56, 189, 248, 0.14);
+        border-color: rgba(56, 189, 248, 0.55);
+        color: #38bdf8;
+        box-shadow: 0 0 16px rgba(56, 189, 248, 0.14);
+    }
+    body.light-mode .tv-tab.active {
+        background: rgba(2, 132, 199, 0.12);
+        border-color: rgba(2, 132, 199, 0.5);
+        color: #0284c7;
+    }
+
+    /* Controls Bar & Drawers */
     .controls-bar {
         background: var(--bg-surface);
         border: 1px solid var(--border-subtle);
         border-radius: var(--radius-md);
-        padding: 16px 20px;
-        margin-bottom: 20px;
+        padding: 14px 16px;
+        margin-bottom: 12px;
         display: flex;
-        align-items: center;
-        gap: 16px;
-        flex-wrap: wrap;
+        flex-direction: column;
+        gap: 12px;
         box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
     }
-    .controls-bar .ctrl-group {
+    .controls-row {
         display: flex;
         align-items: center;
-        gap: 8px;
+        gap: 12px;
+        flex-wrap: wrap;
+    }
+    .controls-bar .ctrl-group {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: nowrap;
     }
     .controls-bar label {
-        font-size: 0.74em;
+        font-size: 0.72em;
         font-weight: 800;
         text-transform: uppercase;
         color: var(--text-tertiary);
-        letter-spacing: 0.8px;
+        letter-spacing: 0.6px;
         white-space: nowrap;
+        margin: 0 !important;
     }
-    .ctrl-input {
-        padding: 8px 12px;
+    input.ctrl-input {
+        padding: 6px 9px !important;
         border-radius: var(--radius-sm);
         border: 1px solid var(--border-default);
         background: var(--bg-elevated);
         color: var(--text-primary);
-        font-size: 0.9em;
+        font-size: 0.85em;
         font-family: var(--font-mono);
-        width: 80px;
+        width: 68px !important;
+        min-width: 0;
         transition: all var(--transition-fast);
     }
-    .ctrl-input:focus {
+    input.ctrl-input.wide { width: 122px !important; }
+    input.ctrl-input.search-box {
+        width: 195px !important;
+        font-family: inherit;
+    }
+    input.ctrl-input:focus, select.ctrl-select:focus {
         outline: none;
         border-color: var(--accent-cobalt);
-        box-shadow: 0 0 0 3px var(--accent-cobalt-dim);
+        box-shadow: 0 0 0 2px var(--accent-cobalt-dim);
     }
-    .ctrl-select {
-        padding: 8px 12px;
+    select.ctrl-select {
+        padding: 6px 10px !important;
         border-radius: var(--radius-sm);
         border: 1px solid var(--border-default);
         background: var(--bg-elevated);
         color: var(--text-primary);
-        font-size: 0.86em;
+        font-size: 0.83em;
         font-family: inherit;
         cursor: pointer;
+        width: auto !important;
+        max-width: 215px;
+    }
+    .builder-grid input.ctrl-input,
+    .builder-grid select.ctrl-select {
+        width: 100% !important;
+        max-width: 100%;
+    }
+    @media (max-width: 640px) {
+        .controls-bar .ctrl-group { flex-wrap: wrap; }
+        input.ctrl-input.search-box { width: 100% !important; }
     }
     .btn-ctrl {
-        padding: 8px 16px;
+        padding: 7px 12px;
         border-radius: var(--radius-sm);
         border: 1px solid var(--border-default);
         background: var(--bg-elevated);
         color: var(--text-secondary);
-        font-size: 0.84em;
+        font-size: 0.8em;
         font-weight: 700;
         cursor: pointer;
         transition: all var(--transition-fast);
         font-family: inherit;
+        white-space: nowrap;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
     }
     .btn-ctrl:hover {
         border-color: var(--accent-cobalt);
@@ -109,22 +284,58 @@
         color: #ffffff;
         border-color: var(--accent-cobalt);
     }
-    .btn-ctrl.primary:hover {
-        background: #4f94fc;
+    .btn-ctrl.active-toggle {
+        background: rgba(56, 189, 248, 0.14);
+        border-color: rgba(56, 189, 248, 0.5);
+        color: #38bdf8;
     }
+
+    /* Interactive Capacity Builder & Guardrails Drawer */
+    .builder-drawer {
+        display: none;
+        background: rgba(12, 18, 30, 0.78);
+        border: 1px solid rgba(56, 189, 248, 0.28);
+        border-radius: var(--radius-md);
+        padding: 14px 16px;
+        margin-bottom: 12px;
+    }
+    body.light-mode .builder-drawer {
+        background: rgba(241, 245, 249, 0.92);
+        border-color: rgba(2, 132, 199, 0.3);
+    }
+    .builder-drawer.open { display: block; }
+    .builder-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(185px, 1fr));
+        gap: 12px;
+        margin-top: 10px;
+    }
+    .b-field {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+    }
+    .b-field label {
+        font-size: 0.71em;
+        font-weight: 800;
+        text-transform: uppercase;
+        color: var(--text-secondary);
+    }
+
+    /* Restock & Data Source Pill */
     .restock-pill {
         margin-left: auto;
         display: inline-flex;
         align-items: center;
         gap: 6px;
-        padding: 6px 14px;
+        padding: 5px 12px;
         border-radius: var(--radius-full);
         border: 1px solid var(--accent-cobalt-border);
         background: var(--accent-cobalt-dim);
         color: var(--accent-cobalt);
-        font-size: 0.78em;
+        font-size: 0.75em;
         font-weight: 800;
-        letter-spacing: 0.5px;
+        letter-spacing: 0.4px;
         white-space: nowrap;
         font-family: var(--font-mono);
     }
@@ -141,30 +352,43 @@
         animation: pulseDot 1.5s infinite;
     }
 
-    /* Filter Pills */
-    .filter-pills { display: flex; gap: 6px; flex-wrap: wrap; }
-    .pill-btn {
-        padding: 5px 13px;
+    /* Filter Pills & Country Chips */
+    .filter-pills, .country-chips-bar {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+    .pill-btn, .country-chip {
+        padding: 5px 11px;
         border-radius: var(--radius-full);
         border: 1px solid var(--border-default);
         background: transparent;
         color: var(--text-secondary);
-        font-size: 0.78em;
+        font-size: 0.76em;
         font-weight: 700;
         cursor: pointer;
         transition: all var(--transition-fast);
         white-space: nowrap;
         font-family: inherit;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
     }
-    .pill-btn:hover {
+    .pill-btn:hover, .country-chip:hover {
         border-color: var(--accent-cobalt);
         color: var(--accent-cobalt);
         background: var(--bg-elevated);
     }
-    .pill-btn.active {
+    .pill-btn.active, .country-chip.active {
         background: var(--accent-cobalt-dim);
         border-color: var(--accent-cobalt-border);
         color: var(--accent-cobalt);
+    }
+    .pill-btn.guard-pill.active {
+        background: rgba(16, 185, 129, 0.14);
+        border-color: rgba(16, 185, 129, 0.45);
+        color: #10b981;
     }
 
     /* Table Styling */
@@ -175,6 +399,7 @@
         overflow: hidden;
         box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
         min-width: 0;
+        margin-bottom: 18px;
     }
     .table-wrap {
         width: 100%;
@@ -184,12 +409,12 @@
         width: 100%;
         min-width: 0;
         border-collapse: collapse;
-        font-size: 0.81em;
+        font-size: 0.8em;
     }
     .table-wrap th {
-        padding: 8px 8px;
+        padding: 9px 8px;
         text-align: left;
-        font-size: 0.72em;
+        font-size: 0.71em;
         font-weight: 800;
         text-transform: uppercase;
         letter-spacing: 0.4px;
@@ -198,6 +423,11 @@
         background: var(--bg-elevated);
         white-space: nowrap;
         cursor: pointer;
+        user-select: none;
+    }
+    .table-wrap th.sorted {
+        color: #38bdf8;
+        background: rgba(56, 189, 248, 0.07);
     }
     .table-wrap td {
         padding: 7px 8px;
@@ -205,8 +435,14 @@
         vertical-align: middle;
         white-space: nowrap;
     }
+    .table-wrap tr:hover {
+        background: rgba(56, 189, 248, 0.04);
+    }
+    .table-wrap tr.pinned-row {
+        background: rgba(245, 158, 11, 0.05);
+    }
     .table-header {
-        padding: 14px 20px;
+        padding: 12px 18px;
         border-bottom: 1px solid var(--border-subtle);
         display: flex;
         align-items: center;
@@ -237,24 +473,10 @@
         font-family: var(--font-mono);
     }
     .rank-badge.gold { background: var(--accent-amber-dim); color: var(--accent-amber); border: 1px solid var(--accent-amber-border); }
-    .rank-badge.silver { background: rgba(200,200,220,0.1); color: #c0c0d0; border: 1px solid #c0c0d0; }
-    .rank-badge.bronze { background: rgba(180,110,80,0.12); color: #cd7f32; border: 1px solid #cd7f32; }
+    .rank-badge.silver { background: rgba(200,200,220,0.12); color: #cbd5e1; border: 1px solid #94a3b8; }
+    .rank-badge.bronze { background: rgba(180,110,80,0.14); color: #d97706; border: 1px solid #b45309; }
     .rank-badge.normal { background: var(--bg-elevated); color: var(--text-tertiary); border: 1px solid var(--border-subtle); }
 
-    .pph-val {
-        font-weight: 800;
-        color: var(--accent-emerald);
-        font-family: var(--font-mono);
-    }
-    .profit-val {
-        font-weight: 700;
-        font-family: var(--font-mono);
-    }
-    .sub-calc {
-        font-size: 0.72em;
-        color: var(--text-tertiary);
-        margin-top: 1px;
-    }
     .refresh-btn {
         display: inline-flex;
         align-items: center;
@@ -275,11 +497,12 @@
         color: var(--accent-cobalt);
     }
     .refresh-btn:disabled { opacity: 0.6; cursor: wait; }
-    .item-name { font-weight: 700; color: var(--text-primary); }
-    .item-category { font-size: 0.72em; color: var(--text-tertiary); margin-top: 2px; }
-    .country-flag { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+
+    .item-name { font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 5px; }
+    .item-category { font-size: 0.71em; color: var(--text-tertiary); margin-top: 2px; display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+    .country-flag { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
     .country-badge {
-        padding: 2px 8px;
+        padding: 2px 7px;
         border-radius: 99px;
         background: var(--bg-elevated);
         border: 1px solid var(--border-subtle);
@@ -289,23 +512,211 @@
     .flight-time { font-family: var(--font-mono); color: var(--text-secondary); white-space: nowrap; }
     .profit-item, .profit-hr { font-family: var(--font-mono); font-weight: 800; white-space: nowrap; }
     .profit-item { color: var(--accent-emerald); }
+    .profit-loss { color: var(--accent-crimson, #ef4444) !important; font-family: var(--font-mono); font-weight: 800; }
     .profit-hr { color: #38bdf8; }
     .stock-none {
-        display: inline-block; padding: 2px 8px; border-radius: 99px;
+        display: inline-block; padding: 2px 7px; border-radius: 99px;
         background: rgba(239, 68, 68, 0.14); color: var(--accent-crimson);
-        border: 1px solid rgba(239, 68, 68, 0.35); font-size: 0.74em; font-weight: 800;
+        border: 1px solid rgba(239, 68, 68, 0.35); font-size: 0.72em; font-weight: 800;
     }
     .stock-low {
-        display: inline-block; padding: 2px 8px; border-radius: 99px;
+        display: inline-block; padding: 2px 7px; border-radius: 99px;
         background: rgba(245, 158, 11, 0.15); color: var(--accent-amber);
-        border: 1px solid rgba(245, 158, 11, 0.35); font-family: var(--font-mono); font-size: 0.78em; font-weight: 800;
+        border: 1px solid rgba(245, 158, 11, 0.35); font-family: var(--font-mono); font-size: 0.76em; font-weight: 800;
     }
     .stock-ok {
-        display: inline-block; padding: 2px 8px; border-radius: 99px;
+        display: inline-block; padding: 2px 7px; border-radius: 99px;
         background: rgba(16, 185, 129, 0.14); color: var(--accent-emerald);
-        border: 1px solid rgba(16, 185, 129, 0.3); font-family: var(--font-mono); font-size: 0.78em; font-weight: 800;
+        border: 1px solid rgba(16, 185, 129, 0.3); font-family: var(--font-mono); font-size: 0.76em; font-weight: 800;
     }
-    tr.out-stock { opacity: 0.58; }
+    tr.out-stock { opacity: 0.66; }
+
+    /* Badges for Mug Risk, Contraband Deal, Energy Guard & Shop Type */
+    .mini-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        padding: 1px 6px;
+        border-radius: 4px;
+        font-size: 0.69em;
+        font-weight: 800;
+        font-family: var(--font-mono);
+        white-space: nowrap;
+    }
+    .mini-badge.green { background: rgba(16, 185, 129, 0.14); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.32); }
+    .mini-badge.amber { background: rgba(245, 158, 11, 0.14); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.32); }
+    .mini-badge.red { background: rgba(239, 68, 68, 0.14); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.32); }
+    .mini-badge.cyan { background: rgba(56, 189, 248, 0.14); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.32); }
+    .mini-badge.purple { background: rgba(168, 85, 247, 0.15); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.32); }
+
+    .star-pin-btn {
+        background: none;
+        border: none;
+        cursor: pointer;
+        font-size: 0.98em;
+        padding: 0 3px;
+        color: var(--text-tertiary);
+        transition: transform 0.12s ease, color 0.12s ease;
+    }
+    .star-pin-btn.pinned { color: #fbbf24; }
+    .star-pin-btn:hover { transform: scale(1.18); }
+
+    .act-link {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 3px 6px;
+        border-radius: 5px;
+        border: 1px solid var(--border-default);
+        background: var(--bg-elevated);
+        color: var(--text-secondary);
+        text-decoration: none;
+        font-size: 0.72em;
+        font-weight: 700;
+        cursor: pointer;
+    }
+    .act-link:hover {
+        border-color: var(--accent-cobalt);
+        color: #38bdf8;
+    }
+
+    /* Country Command Grid (Tab 2) */
+    .country-command-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(335px, 1fr));
+        gap: 14px;
+        margin-bottom: 18px;
+    }
+    @media (max-width: 520px) {
+        .country-command-grid { grid-template-columns: 1fr; }
+    }
+    .country-cmd-card {
+        background: var(--bg-surface);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-md);
+        padding: 15px 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.22);
+        transition: border-color 0.15s ease;
+    }
+    .country-cmd-card:hover {
+        border-color: rgba(56, 189, 248, 0.38);
+    }
+    .cc-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 8px;
+    }
+    .cc-title {
+        font-size: 1.02em;
+        font-weight: 800;
+        color: var(--text-primary);
+        display: flex;
+        align-items: center;
+        gap: 7px;
+    }
+    .cc-sub {
+        font-size: 0.74em;
+        color: var(--text-tertiary);
+        font-family: var(--font-mono);
+        margin-top: 2px;
+    }
+    .cc-item-slot {
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-sm);
+        padding: 8px 10px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+    }
+    .cc-item-slot.primary {
+        border-color: rgba(56, 189, 248, 0.32);
+        background: rgba(56, 189, 248, 0.05);
+    }
+
+    /* Museum Set Planner & Simulator Panels */
+    .panel-grid-2 {
+        display: grid;
+        grid-template-columns: 1.35fr 1fr;
+        gap: 16px;
+        margin-bottom: 18px;
+    }
+    @media (max-width: 960px) {
+        .panel-grid-2 { grid-template-columns: 1fr; }
+    }
+    .tactical-panel {
+        background: var(--bg-surface);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-md);
+        padding: 16px 18px;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+    }
+    .tactical-panel h3 {
+        margin: 0 0 12px 0;
+        font-size: 0.94em;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.6px;
+        color: var(--text-primary);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+    }
+    .museum-pieces-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(215px, 1fr));
+        gap: 8px;
+        margin-top: 10px;
+    }
+    .museum-piece-card {
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-sm);
+        padding: 8px 10px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        font-size: 0.79em;
+    }
+    .museum-piece-card.complete {
+        border-color: rgba(16, 185, 129, 0.4);
+        background: rgba(16, 185, 129, 0.06);
+    }
+    .merit-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(235px, 1fr));
+        gap: 10px;
+    }
+    .merit-card {
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-sm);
+        padding: 10px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+    .merit-bar-bg {
+        height: 7px;
+        border-radius: 99px;
+        background: rgba(255, 255, 255, 0.07);
+        overflow: hidden;
+    }
+    .merit-bar-fill {
+        height: 100%;
+        border-radius: 99px;
+        background: linear-gradient(90deg, #38bdf8, #10b981);
+        transition: width 0.25s ease;
+    }
+    .view-pane { display: none; }
+    .view-pane.active { display: block; }
     </style>
 </head>
 <body>
@@ -345,7 +756,7 @@
             <div class="topbar-left">
                 <button class="toggle-btn" onclick="toggleSidebar()" title="Toggle Sidebar" id="mobile-nav-toggle" style="display:none;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
                 <div class="topbar-crumb">
-                    <span>TACTICAL DESK</span> / <strong style="color:var(--text-primary);">TRAVEL PROFIT DESK</strong>
+                    <span>TACTICAL DESK</span> / <strong style="color:var(--text-primary);">TRAVEL PROFIT DESK 2.0</strong>
                 </div>
             </div>
             <div class="topbar-right">
@@ -364,16 +775,23 @@
 
     <main class="main-content">
         <!-- Header -->
-        <div class="page-header">
-            <div class="page-title">✈️ Travel <span>Profit</span> Calculator</div>
-            <div style="display:flex;align-items:center;gap:10px;">
-                <span id="last-updated" style="font-size:0.78em;color:var(--text-dim);"></span>
+        <div class="page-header" style="margin-bottom:14px;">
+            <div>
+                <div class="page-title">✈️ Travel <span>Profit &amp; Route</span> Command</div>
+                <div style="font-size:0.77em; color:var(--text-tertiary); margin-top:3px;" id="player-flight-banner">
+                    Torn Travel 2.0 (Patch #438 -5.26% Flight Times) • Live Foreign Stock, Contraband &amp; Museum Arbitrage
+                </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                <span class="mini-badge cyan" id="feed-source-badge" title="Foreign stock telemetry feed">YATA LIVE</span>
+                <span id="last-updated" style="font-size:0.76em;color:var(--text-dim);"></span>
+                <a href="https://www.torn.com/travelagency.php" target="_blank" rel="noopener" class="btn-ctrl" title="Open Torn Travel Agency">✈️ Travel Agency</a>
                 <button class="refresh-btn" onclick="loadProfits(true)" id="refresh-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> Refresh</button>
             </div>
         </div>
 
-        <!-- KPI Row -->
-        <div class="kpi-row">
+        <!-- 6-Card Executive KPI Row -->
+        <div class="kpi-row-travel">
             <div class="kpi-card">
                 <span class="kpi-icon">🏆</span>
                 <div>
@@ -391,6 +809,22 @@
                 </div>
             </div>
             <div class="kpi-card">
+                <span class="kpi-icon">🕶️</span>
+                <div>
+                    <div class="kpi-label">Best Contraband Run</div>
+                    <div class="kpi-value" id="kpi-best-contra">—</div>
+                    <div class="kpi-sub" id="kpi-best-contra-name">Black Market</div>
+                </div>
+            </div>
+            <div class="kpi-card">
+                <span class="kpi-icon">🏛️</span>
+                <div>
+                    <div class="kpi-label">Plushie / Flower Set</div>
+                    <div class="kpi-value" id="kpi-set-val">$455,000</div>
+                    <div class="kpi-sub" id="kpi-set-sub">10 pts @ $45.5k/pt</div>
+                </div>
+            </div>
+            <div class="kpi-card">
                 <span class="kpi-icon">🛒</span>
                 <div>
                     <div class="kpi-label">Items In Stock</div>
@@ -401,83 +835,393 @@
             <div class="kpi-card">
                 <span class="kpi-icon">⏱️</span>
                 <div>
-                    <div class="kpi-label">YATA Restock In</div>
+                    <div class="kpi-label">Next Shop Restock</div>
                     <div class="kpi-value" id="kpi-restock">—</div>
-                    <div class="kpi-sub">Every 15 min UTC</div>
+                    <div class="kpi-sub">15m UTC cycle</div>
                 </div>
             </div>
         </div>
 
-        <!-- Controls -->
+        <!-- Smart "What Should I Fly To Right Now?" Advisor Banner (Phase 3) -->
+        <div class="advisor-banner" id="advisor-banner">
+            <div class="adv-slot primary-pick">
+                <div class="adv-tag"><span style="color:#10b981;">🟢 #1 OPTIMAL FLIGHT NOW</span><span id="adv-1-badge" class="mini-badge green">0E Wasted</span></div>
+                <div class="adv-main" id="adv-1-title">Scanning live foreign stocks…</div>
+                <div class="adv-meta" id="adv-1-meta">—</div>
+                <div class="adv-actions" id="adv-1-actions"></div>
+            </div>
+            <div class="adv-slot">
+                <div class="adv-tag"><span style="color:#38bdf8;">⚡ FAST SPRINT (&le; 1.5h RT)</span><span id="adv-2-badge" class="mini-badge cyan">Quick Turn</span></div>
+                <div class="adv-main" id="adv-2-title">Scanning short-haul runs…</div>
+                <div class="adv-meta" id="adv-2-meta">—</div>
+                <div class="adv-actions" id="adv-2-actions"></div>
+            </div>
+            <div class="adv-slot">
+                <div class="adv-tag"><span style="color:#c084fc;">🕶️ BEST BLACK MARKET / HIGH ROI</span><span id="adv-3-badge" class="mini-badge purple">Contraband</span></div>
+                <div class="adv-main" id="adv-3-title">Scanning Black Market…</div>
+                <div class="adv-meta" id="adv-3-meta">—</div>
+                <div class="adv-actions" id="adv-3-actions"></div>
+            </div>
+        </div>
+
+        <!-- 5-Tab Tactical Workspace Bar -->
+        <div class="travel-view-tabs" id="travel-view-tabs">
+            <button type="button" class="tv-tab active" data-view="items" onclick="switchTravelView('items', this)">📊 By Item (Profit Table)</button>
+            <button type="button" class="tv-tab" data-view="countries" onclick="switchTravelView('countries', this)">🌍 By Country (11 Destination Cards)</button>
+            <button type="button" class="tv-tab" data-view="museum" onclick="switchTravelView('museum', this)">🏛️ Museum Set Planner</button>
+            <button type="button" class="tv-tab" data-view="analytics" onclick="switchTravelView('analytics', this)">📈 Scatter Chart &amp; Daily Simulator</button>
+            <button type="button" class="tv-tab" data-view="merits" onclick="switchTravelView('merits', this)">🏅 50-Flight Merits, Trip Log &amp; Alerts</button>
+        </div>
+
+        <!-- Unified Controls & Filter Bar -->
         <div class="controls-bar">
-            <div class="ctrl-group">
-                <label for="capacity">🧳 Capacity</label>
-                <input type="number" id="capacity" class="ctrl-input" value="29" min="1" max="100" onchange="applyCapacity()">
-                <button class="btn-ctrl primary" onclick="applyCapacity()">Apply</button>
-            </div>
-            <div class="ctrl-group">
-                <label for="flight-profile">✈️ Flight</label>
-                <select id="flight-profile" class="ctrl-select" onchange="applyFlightProfile()">
-                    <option value="airstrip" selected>Private Airstrip (PI)</option>
-                    <option value="wlt">WLT Benefit</option>
-                    <option value="bct">Business Class (BCT)</option>
-                    <option value="standard">Standard</option>
-                </select>
-            </div>
-            <div class="ctrl-group">
-                <label>Sort by</label>
-                <select id="sort-select" class="ctrl-select" onchange="applySort()">
-                    <option value="profitPerHr">Profit / Hour</option>
-                    <option value="totalProfit">Total Trip Profit</option>
-                    <option value="profit">Profit / Item</option>
-                    <option value="flightTimeMins">Shortest Flight</option>
-                    <option value="stock">Stock Available</option>
-                </select>
-            </div>
-            <div class="ctrl-group">
-                <label>Filter</label>
-                <div class="filter-pills" id="filter-pills">
-                    <button class="pill-btn active" data-filter="all" onclick="setFilter('all', this)">All Items</button>
-                    <button class="pill-btn" data-filter="plushie" onclick="setFilter('plushie', this)">🧸 Plushies</button>
-                    <button class="pill-btn" data-filter="flower" onclick="setFilter('flower', this)">🌸 Flowers</button>
-                    <button class="pill-btn" data-filter="drug" onclick="setFilter('drug', this)">💊 High Value</button>
-                    <button class="pill-btn" data-filter="instock" onclick="setFilter('instock', this)">✅ In Stock Only</button>
+            <div class="controls-row">
+                <div class="ctrl-group">
+                    <label for="capacity">🧳 Cap</label>
+                    <input type="number" id="capacity" class="ctrl-input" value="28" min="1" max="100" onchange="applyCapacity(true)">
+                    <button type="button" class="btn-ctrl" id="btn-cap-builder" onclick="toggleCapacityBuilder()" title="Open Patch #438 Interactive Capacity Builder">⚙️ Builder <span id="cap-builder-note" style="color:#38bdf8;">(28)</span></button>
+                </div>
+                <div class="ctrl-group">
+                    <label for="flight-profile">✈️ Mode</label>
+                    <select id="flight-profile" class="ctrl-select" onchange="applyFlightProfile()">
+                        <option value="airstrip" selected>Private Airstrip (PI)</option>
+                        <option value="wlt">WLT Benefit</option>
+                        <option value="bct">Business Class (BCT)</option>
+                        <option value="standard">Standard Ticket</option>
+                    </select>
+                    <label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;text-transform:none;font-size:0.78em;color:var(--text-secondary);" title="Mailing Yourself Abroad Book (-25% Flight Time)">
+                        <input type="checkbox" id="chk-book-mailing" onchange="onFlightModifierChange()" style="accent-color:#38bdf8;"> 📖 -25% Book
+                    </label>
+                    <label id="lbl-free-bct" style="display:none;align-items:center;gap:4px;cursor:pointer;text-transform:none;font-size:0.78em;color:#fbbf24;" title="10★ Lingerie Store perk waives Business Class Ticket cost">
+                        <input type="checkbox" id="chk-free-bct" onchange="onFlightModifierChange()" style="accent-color:#fbbf24;"> Free BCT (10★)
+                    </label>
+                </div>
+                <div class="ctrl-group">
+                    <label for="sell-basis">💵 Sell Basis</label>
+                    <select id="sell-basis" class="ctrl-select" onchange="onSellBasisChange()">
+                        <option value="market_5" selected>Item Market (-5% fee)</option>
+                        <option value="market_anon_15">Market Anonymous (-15%)</option>
+                        <option value="bazaar_0">Bazaar / Trade (0% fee)</option>
+                        <option value="custom_trader">Custom Trader %</option>
+                        <option value="npc_museum">NPC Shop / Museum (0% mug)</option>
+                    </select>
+                    <input type="number" id="custom-trader-pct" class="ctrl-input" value="97" min="50" max="110" step="0.5" style="display:none;width:64px;" onchange="onSellBasisChange()" title="Trader payout % of Market Value">
+                </div>
+                <div class="ctrl-group">
+                    <label for="sort-select">Sort</label>
+                    <select id="sort-select" class="ctrl-select" onchange="applySort()">
+                        <option value="profitPerHr">Profit / Hour ($/hr)</option>
+                        <option value="totalProfit">Total Trip Profit</option>
+                        <option value="profit">Unit Profit</option>
+                        <option value="roi">ROI %</option>
+                        <option value="flightTimeMins">Shortest Flight (RT)</option>
+                        <option value="stock">Stock Available</option>
+                        <option value="cost">Buy Cost</option>
+                        <option value="marketPrice">Market Value</option>
+                        <option value="capital">Capital Needed</option>
+                        <option value="name">Item Name</option>
+                        <option value="country">Country</option>
+                    </select>
+                </div>
+                <div class="restock-pill" id="restock-pill">
+                    <span class="restock-dot"></span>
+                    <span id="restock-label">Calculating...</span>
                 </div>
             </div>
-            <div class="restock-pill" id="restock-pill">
-                <span class="restock-dot"></span>
-                <span id="restock-label">Calculating...</span>
+
+            <!-- Interactive Capacity Builder Drawer (Patch #438 Rules) -->
+            <div class="builder-drawer" id="capacity-builder-drawer">
+                <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;border-bottom:1px solid var(--border-subtle);padding-bottom:8px;">
+                    <div style="font-size:0.82em;font-weight:800;color:#38bdf8;">🧳 Interactive Travel Capacity Builder (Patch #438 Rules)</div>
+                    <div style="display:flex;gap:8px;align-items:center;">
+                        <button type="button" class="btn-ctrl" onclick="autoPopulateCapacityFromApi()">⚡ Auto-Sync My API Perks</button>
+                        <button type="button" class="btn-ctrl" onclick="resetCapacityDefault()">Reset Default (28)</button>
+                    </div>
+                </div>
+                <div class="builder-grid">
+                    <div class="b-field">
+                        <label for="cb-base">Base Flight Method</label>
+                        <select id="cb-base" class="ctrl-select" onchange="recalcCapacityFromBuilder()">
+                            <option value="15" selected>Airstrip / WLT / BCT (15)</option>
+                            <option value="10">Standard Ticket (10)</option>
+                        </select>
+                    </div>
+                    <div class="b-field">
+                        <label for="cb-suitcase">Suitcase (Non-Stacking)</label>
+                        <select id="cb-suitcase" class="ctrl-select" onchange="recalcCapacityFromBuilder()">
+                            <option value="3" selected>Large Suitcase (+3)</option>
+                            <option value="2">Medium Suitcase (+2)</option>
+                            <option value="1">Small Suitcase (+1)</option>
+                            <option value="0">None (0)</option>
+                        </select>
+                    </div>
+                    <div class="b-field">
+                        <label for="cb-excursion">Faction Excursion (0 to +10)</label>
+                        <input type="number" id="cb-excursion" class="ctrl-input" value="10" min="0" max="10" onchange="recalcCapacityFromBuilder()" style="width:100%;">
+                    </div>
+                    <div class="b-field">
+                        <label for="cb-company">Company Perk</label>
+                        <select id="cb-company" class="ctrl-select" onchange="recalcCapacityFromBuilder()">
+                            <option value="none" selected>None (0)</option>
+                            <option value="lingerie_3">3★ Lingerie Store (+2)</option>
+                            <option value="lingerie_10">10★ Lingerie (+2 &amp; Free BCT)</option>
+                            <option value="cruise_3">3★ Cruise Line (+2)</option>
+                            <option value="cruise_10">10★ Cruise Line (+5)</option>
+                            <option value="flower_7">7★ Flower Shop (+5 Flowers only)</option>
+                            <option value="toy_7">7★ Toy Shop (+5 Plushies only)</option>
+                        </select>
+                    </div>
+                    <div class="b-field">
+                        <label for="cb-outbound">Outbound Gear Slots (-N)</label>
+                        <input type="number" id="cb-outbound" class="ctrl-input" value="0" min="0" max="25" onchange="recalcCapacityFromBuilder()" style="width:100%;" title="Slots occupied by weapons/armor carried abroad">
+                    </div>
+                    <div class="b-field">
+                        <label>Books &amp; Events</label>
+                        <div style="display:flex;flex-direction:column;gap:5px;font-size:0.78em;color:var(--text-primary);">
+                            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;text-transform:none;"><input type="checkbox" id="cb-book-smuggling" onchange="recalcCapacityFromBuilder()" style="accent-color:#38bdf8;"> 📘 Smuggling For Beginners (+10)</label>
+                            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;text-transform:none;"><input type="checkbox" id="cb-tourism-day" onchange="recalcCapacityFromBuilder()" style="accent-color:#10b981;"> 🎉 Tourism Day (2× total, excl. +5 shop)</label>
+                        </div>
+                    </div>
+                </div>
+                <div id="cb-formula-readout" style="margin-top:10px;font-size:0.76em;font-family:var(--font-mono);color:var(--text-secondary);">
+                    Effective Capacity: 15 (Base) + 3 (Large Suitcase) + 10 (Excursion) = 28 items
+                </div>
+            </div>
+
+            <!-- Row 2: Search, Category Pills & Guardrail Quick Filters -->
+            <div id="table-only-filters" style="display:flex;flex-direction:column;gap:10px;">
+            <div class="controls-row">
+                <input type="search" id="travel-search" class="ctrl-input search-box" placeholder="🔍 Search item, country, shop…" oninput="onSearchInput()">
+                <div class="filter-pills" id="filter-pills">
+                    <button type="button" class="pill-btn active" data-filter="all" onclick="setFilter('all', this)">All Items</button>
+                    <button type="button" class="pill-btn" data-filter="plushie" onclick="setFilter('plushie', this)">🧸 Plushies</button>
+                    <button type="button" class="pill-btn" data-filter="flower" onclick="setFilter('flower', this)">🌸 Flowers</button>
+                    <button type="button" class="pill-btn" data-filter="contraband" onclick="setFilter('contraband', this)">🕶️ Contraband (24)</button>
+                    <button type="button" class="pill-btn" data-filter="drug" onclick="setFilter('drug', this)">💊 Drugs</button>
+                    <button type="button" class="pill-btn" data-filter="weapon" onclick="setFilter('weapon', this)">💣 Temps &amp; Weapons</button>
+                    <button type="button" class="pill-btn" data-filter="other" onclick="setFilter('other', this)">📦 Other / Enhancers</button>
+                    <button type="button" class="pill-btn" data-filter="instock" onclick="setFilter('instock', this)">✅ In Stock Only</button>
+                    <button type="button" class="pill-btn" data-filter="profitable" onclick="toggleGuardFilter('profitable', this)">💰 Profitable Only</button>
+                    <button type="button" class="pill-btn" data-filter="watched" onclick="toggleGuardFilter('watched', this)">⭐ Watched (<span id="watched-count">0</span>)</button>
+                </div>
+            </div>
+
+            <!-- Row 3: Personal Schedule Guardrails, Cash Budget & Multi-Country Filter Chips -->
+            <div class="controls-row" style="border-top:1px solid var(--border-subtle);padding-top:10px;">
+                <div class="ctrl-group">
+                    <label for="max-flight-mins">⏳ Max RT</label>
+                    <select id="max-flight-mins" class="ctrl-select" onchange="onGuardrailInputChange()">
+                        <option value="0" selected>Any Flight Time</option>
+                        <option value="60">&le; 1h RT (Mex/Cay/Can)</option>
+                        <option value="120">&le; 2h RT</option>
+                        <option value="200">&le; 3h 20m (100E Full Regen)</option>
+                        <option value="240">&le; 4h RT (Mid-Haul)</option>
+                        <option value="300">&le; 5h 00m (150E Donator Cap)</option>
+                        <option value="360">&le; 6h RT</option>
+                    </select>
+                </div>
+                <div class="ctrl-group">
+                    <label for="guard-energy-cap">⚡ Energy Guard</label>
+                    <select id="guard-energy-cap" class="ctrl-select" onchange="onGuardrailInputChange()" title="Flag or hide flights that overflow natural energy regeneration">
+                        <option value="150" selected>Donator 150E (5h cap)</option>
+                        <option value="100">Non-Donator 100E (3h 20m)</option>
+                    </select>
+                    <button type="button" class="pill-btn guard-pill" id="btn-guard-0e" onclick="toggleGuardFilter('noEnergyWaste', this)" title="Hide flights that waste natural Energy or collide with Drug CD">⚡ 0E Waste Only</button>
+                </div>
+                <div class="ctrl-group">
+                    <label for="budget-input">💼 Budget Cap</label>
+                    <input type="text" id="budget-input" class="ctrl-input wide" placeholder="Unlimited ($)" oninput="onBudgetInputChange()" title="Enter max cash to carry (e.g. 5000000 or 5m)">
+                    <button type="button" class="btn-ctrl" id="btn-use-wallet" onclick="applyWalletBudget()" style="display:none;" title="Limit budget to live Torn wallet cash">Use Wallet</button>
+                    <button type="button" class="pill-btn guard-pill" id="btn-guard-mug" onclick="toggleGuardFilter('lowMugRisk', this)" title="Hide runs requiring $5M+ cash abroad (High Mug Risk)">🛡️ Low/Med Mug (&lt;$5M)</button>
+                </div>
+            </div>
+
+            <!-- Multi-Select Country Chips -->
+            <div class="country-chips-bar" id="country-chips-bar"></div>
             </div>
         </div>
 
-        <!-- Results Table -->
-        <div class="table-card">
-            <div class="table-header">
-                <p class="table-title">📊 Profit Rankings</p>
-                <span id="row-count" style="font-size:0.78em;color:var(--text-dim);">Loading data...</span>
+        <!-- ===================================================================
+             VIEW PANE 1: BY ITEM (TACTICAL PROFIT TABLE)
+             =================================================================== -->
+        <div class="view-pane active" id="pane-items">
+            <div class="table-card">
+                <div class="table-header">
+                    <p class="table-title">📊 Live Foreign Profit Rankings</p>
+                    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                        <span id="row-count" style="font-size:0.78em;color:var(--text-dim);">Loading data...</span>
+                    </div>
+                </div>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th data-sort-col="rank" onclick="sortBy('rank')"># <span class="sort-arrow">↕</span></th>
+                                <th data-sort-col="name" onclick="sortBy('name')">Item &amp; Shop <span class="sort-arrow">↕</span></th>
+                                <th data-sort-col="country" onclick="sortBy('country')">Country <span class="sort-arrow">↕</span></th>
+                                <th data-sort-col="flightTimeMins" onclick="sortBy('flightTimeMins')">Flight (1W / RT) <span class="sort-arrow">↕</span></th>
+                                <th data-sort-col="stock" onclick="sortBy('stock')">Stock &amp; Age <span class="sort-arrow">↕</span></th>
+                                <th data-sort-col="cost" onclick="sortBy('cost')">Buy Cost <span class="sort-arrow">↕</span></th>
+                                <th data-sort-col="marketPrice" onclick="sortBy('marketPrice')">Net Sell <span class="sort-arrow">↕</span></th>
+                                <th data-sort-col="profit" onclick="sortBy('profit')">Unit Profit <span class="sort-arrow">↕</span></th>
+                                <th data-sort-col="capital" onclick="sortBy('capital')">Capital &amp; Mug <span class="sort-arrow">↕</span></th>
+                                <th data-sort-col="roi" onclick="sortBy('roi')">ROI % <span class="sort-arrow">↕</span></th>
+                                <th data-sort-col="totalProfit" onclick="sortBy('totalProfit')">Total Profit <span class="sort-arrow">↕</span></th>
+                                <th data-sort-col="profitPerHr" onclick="sortBy('profitPerHr')" class="sorted">$/hr <span class="sort-arrow">↓</span></th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="profits-tbody">
+                            <tr class="shimmer-row"><td colspan="13"><div class="shimmer-line"></div></td></tr>
+                            <tr class="shimmer-row"><td colspan="13"><div class="shimmer-line" style="width:80%"></div></td></tr>
+                            <tr class="shimmer-row"><td colspan="13"><div class="shimmer-line" style="width:90%"></div></td></tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
-            <div class="table-wrap">
-                <table>
-                    <thead>
-                        <tr>
-                            <th onclick="sortBy('rank')">#</th>
-                            <th onclick="sortBy('name')">Item <span class="sort-arrow">↕</span></th>
-                            <th onclick="sortBy('country')">Country <span class="sort-arrow">↕</span></th>
-                            <th onclick="sortBy('flightTimeMins')">Flight (RT) <span class="sort-arrow">↕</span></th>
-                            <th onclick="sortBy('stock')">Stock <span class="sort-arrow">↕</span></th>
-                            <th onclick="sortBy('cost')">Buy <span class="sort-arrow">↕</span></th>
-                            <th onclick="sortBy('marketPrice')">Market <span class="sort-arrow">↕</span></th>
-                            <th onclick="sortBy('profit')">Unit Profit <span class="sort-arrow">↕</span></th>
-                            <th onclick="sortBy('totalProfit')">Total Profit <span class="sort-arrow">↕</span></th>
-                            <th onclick="sortBy('profitPerHr')" class="sorted">$/hr <span class="sort-arrow">↓</span></th>
-                        </tr>
-                    </thead>
-                    <tbody id="profits-tbody">
-                        <tr class="shimmer-row"><td colspan="10"><div class="shimmer-line"></div></td></tr>
-                        <tr class="shimmer-row"><td colspan="10"><div class="shimmer-line" style="width:80%"></div></td></tr>
-                        <tr class="shimmer-row"><td colspan="10"><div class="shimmer-line" style="width:90%"></div></td></tr>
-                    </tbody>
-                </table>
+        </div>
+
+        <!-- ===================================================================
+             VIEW PANE 2: BY COUNTRY (11 DESTINATION COMMAND CARDS)
+             =================================================================== -->
+        <div class="view-pane" id="pane-countries">
+            <div class="country-command-grid" id="country-command-grid"></div>
+        </div>
+
+        <!-- ===================================================================
+             VIEW PANE 3: MUSEUM SET PLANNER ("FLY FOR A SET")
+             =================================================================== -->
+        <div class="view-pane" id="pane-museum">
+            <div class="panel-grid-2">
+                <div class="tactical-panel">
+                    <h3>
+                        <span>🏛️ Museum Set Builder &amp; Arbitrage Calculator</span>
+                        <a href="https://www.torn.com/museum.php" target="_blank" rel="noopener" class="act-link">Open Torn Museum ↗</a>
+                    </h3>
+                    <div class="controls-row" style="margin-bottom:12px;">
+                        <div class="ctrl-group">
+                            <label for="mus-set-type">Collection</label>
+                            <select id="mus-set-type" class="ctrl-select" onchange="renderMuseumPlanner()">
+                                <option value="plushie" selected>🧸 Plushie Set (13 items → 10 pts)</option>
+                                <option value="flower">🌸 Flower Set (11 items → 10 pts)</option>
+                                <option value="arrowhead">🏹 6× Arrowhead Point Set (6 Contraband → 25 pts)</option>
+                                <option value="fossil">🦕 Patagonian Fossil (Argentina → 20 pts)</option>
+                                <option value="meteorite">☄️ Meteorite Fragment (Argentina → 15 pts)</option>
+                            </select>
+                        </div>
+                        <div class="ctrl-group">
+                            <label for="mus-target-sets">Target Sets</label>
+                            <input type="number" id="mus-target-sets" class="ctrl-input" value="10" min="1" max="1000" onchange="renderMuseumPlanner()">
+                        </div>
+                        <div class="ctrl-group">
+                            <label for="mus-point-price">Point Price ($)</label>
+                            <input type="number" id="mus-point-price" class="ctrl-input wide" value="45500" min="10000" max="100000" step="100" onchange="renderMuseumPlanner()">
+                        </div>
+                        <label style="display:inline-flex;align-items:center;gap:5px;font-size:0.8em;font-weight:700;color:#10b981;cursor:pointer;">
+                            <input type="checkbox" id="mus-day-bonus" onchange="renderMuseumPlanner()" style="accent-color:#10b981;"> 🎉 Museum Day (+10% Points)
+                        </label>
+                    </div>
+                    <div id="museum-arbitrage-summary" style="margin-bottom:12px;"></div>
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                        <span style="font-size:0.75em;font-weight:800;color:var(--text-tertiary);text-transform:uppercase;">Check Off Owned Pieces / Enter Inventory</span>
+                        <button type="button" class="btn-ctrl" onclick="clearMuseumOwned()">Clear Owned</button>
+                    </div>
+                    <div class="museum-pieces-grid" id="museum-pieces-grid"></div>
+                </div>
+                <div class="tactical-panel">
+                    <h3><span>🗺️ Remaining Flights &amp; Route Plan</span><span id="mus-total-flights-badge" class="mini-badge cyan">0 Flights</span></h3>
+                    <div id="museum-route-breakdown"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===================================================================
+             VIEW PANE 4: VISUAL ANALYTICS (SCATTER CHART) & DAILY SIMULATOR
+             =================================================================== -->
+        <div class="view-pane" id="pane-analytics">
+            <div class="panel-grid-2">
+                <div class="tactical-panel">
+                    <h3>
+                        <span>📈 Profit/Hr vs. Round-Trip Flight Time Sweet-Spot Map</span>
+                        <span class="mini-badge green">Click bubble to inspect</span>
+                    </h3>
+                    <div style="position:relative;height:340px;width:100%;">
+                        <canvas id="travel-scatter-canvas"></canvas>
+                    </div>
+                    <div style="font-size:0.74em;color:var(--text-tertiary);margin-top:8px;">
+                        Vertical guard lines mark <strong>3h 20m (100E Full Regen)</strong> and <strong>5h 00m (150E Donator Cap)</strong>. Top-left quadrant = highest $/hr with zero energy waste.
+                    </div>
+                </div>
+                <div class="tactical-panel">
+                    <h3><span>🧮 Daily &amp; Weekly Flight Schedule Profit Simulator</span></h3>
+                    <div class="controls-row" style="margin-bottom:12px;">
+                        <div class="ctrl-group">
+                            <label for="sim-hours-day">Active Flying Hrs/Day</label>
+                            <input type="number" id="sim-hours-day" class="ctrl-input" value="10" min="1" max="24" step="0.5" onchange="renderDailySimulator()">
+                        </div>
+                        <div class="ctrl-group">
+                            <label for="sim-preset">Schedule Preset</label>
+                            <select id="sim-preset" class="ctrl-select" onchange="applySimulatorPreset()">
+                                <option value="custom">Custom Hours</option>
+                                <option value="casual">Casual (4h/day — 2 flights)</option>
+                                <option value="workday" selected>Active Grinder (10h/day)</option>
+                                <option value="hardcore">Hardcore Pilot (16h/day)</option>
+                            </select>
+                        </div>
+                        <label style="display:inline-flex;align-items:center;gap:5px;font-size:0.78em;color:var(--text-secondary);cursor:pointer;">
+                            <input type="checkbox" id="sim-pi-upkeep" checked onchange="renderDailySimulator()" style="accent-color:#f59e0b;"> Deduct PI Upkeep ($352.5k/day)
+                        </label>
+                    </div>
+                    <div id="daily-sim-output"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===================================================================
+             VIEW PANE 5: 50-FLIGHT MERIT TRACKER, TRIP LOG & RESTOCK ALERTS
+             =================================================================== -->
+        <div class="view-pane" id="pane-merits">
+            <div class="panel-grid-2">
+                <div class="tactical-panel">
+                    <h3>
+                        <span>🏅 50-Flight Country Honor Bar &amp; Merit Tracker</span>
+                        <span id="merits-completed-badge" class="mini-badge green">0 / 11 Completed</span>
+                    </h3>
+                    <div style="font-size:0.76em;color:var(--text-tertiary);margin-bottom:10px;">
+                        Every country grants an Honor Bar merit at <strong>50 flights</strong>. Logging a trip from the table or Country cards automatically increments that destination's flight counter.
+                    </div>
+                    <div class="merit-grid" id="merit-grid"></div>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:16px;">
+                    <div class="tactical-panel">
+                        <h3>
+                            <span>🔔 Live Restock &amp; Target $/Hr Alert Sentinel</span>
+                            <label style="display:inline-flex;align-items:center;gap:5px;font-size:0.8em;cursor:pointer;text-transform:none;">
+                                <input type="checkbox" id="chk-restock-alerts" onchange="toggleRestockAlertSentinel()" style="accent-color:#10b981;"> Arm Audio + Browser Alerts
+                            </label>
+                        </h3>
+                        <div class="controls-row">
+                            <div class="ctrl-group">
+                                <label for="alert-min-pph">Alert if Watched Item &ge; $/hr</label>
+                                <input type="number" id="alert-min-pph" class="ctrl-input wide" value="250000" step="25000" onchange="saveAlertPrefs()">
+                            </div>
+                            <button type="button" class="btn-ctrl" onclick="testTravelAlertChime()">🔊 Test Chime</button>
+                        </div>
+                        <div id="alert-watched-list" style="margin-top:10px;font-size:0.78em;color:var(--text-secondary);"></div>
+                    </div>
+
+                    <div class="tactical-panel">
+                        <h3>
+                            <span>📓 Personal Flight Profit Ledger</span>
+                            <div style="display:flex;gap:6px;">
+                                <button type="button" class="btn-ctrl" onclick="exportTripLogCsv()">📥 Export CSV</button>
+                                <button type="button" class="btn-ctrl" onclick="clearTripLog()">Clear</button>
+                            </div>
+                        </h3>
+                        <div id="trip-log-summary" style="margin-bottom:10px;"></div>
+                        <div id="trip-log-list" style="max-height:260px;overflow-y:auto;"></div>
+                    </div>
+                </div>
             </div>
         </div>
     </main>
@@ -486,57 +1230,324 @@
 <script>
 const TRAVEL_REFRESH_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>';
 
-// ── State ────────────────────────────────────────────────────────────────────
-let allItems = [];
-let capacity = parseInt(localStorage.getItem('travelCapacity') || '29');
-let flightProfile = localStorage.getItem('travelFlightProfile') || 'airstrip';
-let currentFilter = 'all';
-let activeCategory = 'all';
-let inStockOnly = false;
-let sortKey = 'profitPerHr';
-let sortAsc = false;
-
-const SHORT_COUNTRY_NAMES = {
-    'United Kingdom': 'UK',
-    'Cayman Islands': 'Cayman Isl.',
-    'South Africa': 'S. Africa',
-    'Switzerland': 'Switz.'
+// ══════════════════════════════════════════════════════════════════════════════
+// 1. CANONICAL TORN TRAVEL 2.0 (POST-JUNE 23, 2026 PATCH #438 — 5.26% REDUCTION)
+// ══════════════════════════════════════════════════════════════════════════════
+const TRAVEL_2_COUNTRIES = {
+    'Mexico':          { code: 'mex', name: 'Mexico',          short: 'Mexico',      city: 'Ciudad Juárez', flag: '🇲🇽', ticket: 6500,  merit: 'Süden',    std: 24,  air: 17,  wlt: 12,  bct: 7,  book: { std: 18,  air: 13,  wlt: 9,   bct: 5  } },
+    'Cayman Islands':  { code: 'cay', name: 'Cayman Islands',  short: 'Cayman Isl.', city: 'George Town',   flag: '🇰🇾', ticket: 10000, merit: 'Paradise', std: 33,  air: 23,  wlt: 17,  bct: 10, book: { std: 25,  air: 17,  wlt: 13,  bct: 8  } },
+    'Canada':          { code: 'can', name: 'Canada',          short: 'Canada',      city: 'Toronto',       flag: '🇨🇦', ticket: 9000,  merit: 'Mountie',  std: 39,  air: 27,  wlt: 19,  bct: 12, book: { std: 29,  air: 20,  wlt: 15,  bct: 9  } },
+    'Hawaii':          { code: 'haw', name: 'Hawaii',          short: 'Hawaii',      city: 'Honolulu',      flag: '🇺🇸', ticket: 11000, merit: 'Aloha',    std: 127, air: 89,  wlt: 63,  bct: 38, book: { std: 95,  air: 67,  wlt: 48,  bct: 29 } },
+    'United Kingdom':  { code: 'uni', name: 'United Kingdom',  short: 'UK',          city: 'London',        flag: '🇬🇧', ticket: 18000, merit: 'Brit',     std: 151, air: 106, wlt: 75,  bct: 45, book: { std: 113, air: 80,  wlt: 57,  bct: 34 } },
+    'Argentina':       { code: 'arg', name: 'Argentina',       short: 'Argentina',   city: 'Buenos Aires',  flag: '🇦🇷', ticket: 21000, merit: 'Gaucho',   std: 158, air: 111, wlt: 79,  bct: 47, book: { std: 119, air: 83,  wlt: 59,  bct: 35 } },
+    'Switzerland':     { code: 'swi', name: 'Switzerland',     short: 'Switz.',      city: 'Zurich',        flag: '🇨🇭', ticket: 27000, merit: 'Neutral',  std: 166, air: 116, wlt: 83,  bct: 50, book: { std: 125, air: 97,  wlt: 62,  bct: 38 } },
+    'Japan':           { code: 'jap', name: 'Japan',           short: 'Japan',       city: 'Tokyo',         flag: '🇯🇵', ticket: 32000, merit: 'Samurai',  std: 213, air: 149, wlt: 107, bct: 64, book: { std: 160, air: 112, wlt: 80,  bct: 48 } },
+    'China':           { code: 'chi', name: 'China',           short: 'China',       city: 'Beijing',       flag: '🇨🇳', ticket: 35000, merit: 'Dragon',   std: 229, air: 160, wlt: 114, bct: 69, book: { std: 172, air: 120, wlt: 86,  bct: 52 } },
+    'UAE':             { code: 'uae', name: 'UAE',             short: 'UAE',         city: 'Dubai',         flag: '🇦🇪', ticket: 32000, merit: 'Oasis',    std: 257, air: 180, wlt: 128, bct: 77, book: { std: 193, air: 135, wlt: 97,  bct: 58 } },
+    'South Africa':    { code: 'sou', name: 'South Africa',    short: 'S. Africa',   city: 'Johannesburg',  flag: '🇿🇦', ticket: 40000, merit: 'Safari',   std: 282, air: 197, wlt: 141, bct: 85, book: { std: 212, air: 148, wlt: 106, bct: 64 } }
 };
 
-const CATEGORIES = {
-    plushie: ['Plushie'],
-    flower: ['Orchid','Crocus','Dahlia','Ceibo Flower','Cherry Blossom','Peony','Edelweiss','Heather','African Violet','Tribulus Omanense'],
-    drug: ['Xanax','Smoke Grenade','Flash Grenade','Tear Gas']
+function normalizeCountryName(c) {
+    if (!c) return 'Mexico';
+    const s = String(c).trim();
+    if (s === 'UK' || s.toLowerCase() === 'uni' || s.toLowerCase().includes('kingdom')) return 'United Kingdom';
+    for (const [k, v] of Object.entries(TRAVEL_2_COUNTRIES)) {
+        if (k.toLowerCase() === s.toLowerCase() || v.code === s.toLowerCase() || v.short.toLowerCase() === s.toLowerCase()) return k;
+    }
+    return s;
+}
+
+// All 24 Black Market Contraband Items
+const CONTRABAND_CATALOG = {
+    'Ambergris Lump':     { id: 1495, country: 'UAE',            baseCost: 338424 },
+    'Basalt Point':       { id: 1502, country: 'Hawaii',         baseCost: 118854 },
+    'Bear Gall':          { id: 1484, country: 'Canada',         baseCost: 30669  },
+    'Bearer Bond':        { id: 1482, country: 'Cayman Islands', baseCost: 88065  },
+    'Chalcedony Point':   { id: 1503, country: 'Argentina',      baseCost: 100000 },
+    'Chert Point':        { id: 1501, country: 'United Kingdom', baseCost: 130728 },
+    'Counterfeit Manga':  { id: 1492, country: 'Japan',          baseCost: 23134  },
+    'Ephedrine Powder':   { id: 1489, country: 'Switzerland',    baseCost: 13934  },
+    'Ergotamine Ampoule': { id: 1491, country: 'Switzerland',    baseCost: 4899   },
+    'Insulin':            { id: 1483, country: 'Canada',         baseCost: 2514   },
+    'Meteorite Fragment': { id: 1488, country: 'Argentina',      baseCost: 458000 },
+    'Natural Pearls':     { id: 1496, country: 'UAE',            baseCost: 95693  },
+    'Obsidian Point':     { id: 1499, country: 'Mexico',         baseCost: 135905 },
+    'Pangolin Scales':    { id: 1494, country: 'China',          baseCost: 153000 },
+    'Patagonian Fossil':  { id: 1487, country: 'Argentina',      baseCost: 549000 },
+    'Quartz Point':       { id: 1504, country: 'Canada',         baseCost: 146379 },
+    'Quartzite Point':    { id: 1500, country: 'South Africa',   baseCost: 122595 },
+    'Raw Ivory':          { id: 358,  country: 'South Africa',   baseCost: 1884   },
+    'Safrole Oil':        { id: 1490, country: 'Switzerland',    baseCost: 4784   },
+    'Shark Fin':          { id: 1485, country: 'Hawaii',         baseCost: 20286  },
+    'Tiger Bone Powder':  { id: 1498, country: 'China',          baseCost: 30114  },
+    'Turtle Shell':       { id: 1486, country: 'Hawaii',         baseCost: 70960  },
+    'Uncut Diamonds':     { id: 1497, country: 'South Africa',   baseCost: 179275 },
+    'Whale Meat':         { id: 1493, country: 'Japan',          baseCost: 1923   }
 };
 
-function getCategory(name) {
-    if (name.includes('Plushie')) return 'plushie';
-    if (CATEGORIES.flower.some(f => name.includes(f))) return 'flower';
-    if (CATEGORIES.drug.includes(name)) return 'drug';
+const CONTRABAND_NAMES_LOWER = new Set(Object.keys(CONTRABAND_CATALOG).map(k => k.toLowerCase()));
+const CONTRABAND_IDS = new Set(Object.values(CONTRABAND_CATALOG).map(v => v.id));
+const STRICT_DRUGS_LOWER = new Set(['xanax', 'ecstasy', 'vicodin', 'cannabis', 'opium', 'lsd', 'shrooms', 'pcp', 'speed', 'ketamine', 'love juice']);
+const TEMPS_WEAPONS_LOWER = new Set(['flash grenade', 'smoke grenade', 'tear gas', 'grenade', 'stick grenade', 'heg', 'claymore mine', 'throwing knife', 'ninja star', 'fireworks', 'pepper spray', 'molotov cocktail', 'trout', 'snowball', 'brick', 'book']);
+const FLOWERS_LOWER = new Set(['dahlia', 'banana orchid', 'crocus', 'orchid', 'heather', 'ceibo flower', 'edelweiss', 'cherry blossom', 'peony', 'tribulus omanense', 'african violet']);
+
+function getCategory(name, rawType, itemId) {
+    const n = String(name || '').trim();
+    const low = n.toLowerCase();
+    const t = String(rawType || '').trim();
+    if (CONTRABAND_IDS.has(Number(itemId)) || CONTRABAND_NAMES_LOWER.has(low)) return 'contraband';
+    if (low.includes('plushie') || t === 'Plushie') return 'plushie';
+    if (FLOWERS_LOWER.has(low) || t === 'Flower') return 'flower';
+    // Strictly keep Flash Grenade, Smoke Grenade, Tear Gas OUT of Drugs
+    if (TEMPS_WEAPONS_LOWER.has(low) || ['Temporary', 'Primary', 'Secondary', 'Melee', 'Defensive'].includes(t)) return 'weapon';
+    if (STRICT_DRUGS_LOWER.has(low) || t === 'Drug') return 'drug';
     return 'other';
 }
 
-const COUNTRY_FLAGS = {
-    'Mexico':'🇲🇽','Canada':'🇨🇦','Hawaii':'🇺🇸','United Kingdom':'🇬🇧','UK':'🇬🇧','Argentina':'🇦🇷',
-    'Switzerland':'🇨🇭','Japan':'🇯🇵','China':'🇨🇳','UAE':'🇦🇪','South Africa':'🇿🇦','Cayman Islands':'🇰🇾'
+function getShopType(cat) {
+    if (cat === 'contraband') return 'Black Market';
+    if (cat === 'weapon') return 'Arms Dealer';
+    return 'General Store';
+}
+
+const CAT_META = {
+    plushie:    { emoji: '🧸', label: 'Plushie' },
+    flower:     { emoji: '🌸', label: 'Flower' },
+    contraband: { emoji: '🕶️', label: 'Contraband' },
+    drug:       { emoji: '💊', label: 'Drug' },
+    weapon:     { emoji: '💣', label: 'Temp/Wpn' },
+    other:      { emoji: '📦', label: 'Other' }
 };
 
+// ── State ────────────────────────────────────────────────────────────────────
+let allItems = [];
+let countryRestockMap = {};
+let livePlayerContext = null;
+let liveBctMarketPrice = 10500000;
+let livePointPrice = 45500;
+let scatterChartInstance = null;
+
+// Migrate legacy 29 default to Patch #438 default 28
+const savedCapRaw = localStorage.getItem('travelCapacity');
+const migrated28 = localStorage.getItem('travelCapMigrated438');
+if (!migrated28 && (!savedCapRaw || savedCapRaw === '29')) {
+    localStorage.setItem('travelCapacity', '28');
+    localStorage.setItem('travelCapMigrated438', '1');
+}
+let capacity = parseInt(localStorage.getItem('travelCapacity') || '28', 10) || 28;
+let flightProfile = localStorage.getItem('travelFlightProfile') || 'airstrip';
+let bookMailing = localStorage.getItem('travelBookMailing') === '1';
+let freeBct = localStorage.getItem('travelFreeBct') === '1';
+let sellBasis = localStorage.getItem('travelSellBasis') || 'market_5';
+let customTraderPct = parseFloat(localStorage.getItem('travelCustomTraderPct') || '97') || 97;
+
+let activeCategory = 'all';
+let currentFilter = 'all';
+let inStockOnly = false;
+let guardFilters = {
+    profitable: false,
+    watched: false,
+    noEnergyWaste: false,
+    lowMugRisk: false
+};
+let selectedCountries = new Set(); // empty = All Countries
+let searchQuery = '';
+let maxFlightRtMins = 0;
+let energyCapSetting = parseInt(localStorage.getItem('travelEnergyCap') || '150', 10) || 150;
+let budgetCap = parseInt(localStorage.getItem('travelBudgetCap') || '0', 10) || 0;
+
+let sortKey = 'profitPerHr';
+let sortAsc = false;
+let currentViewMode = 'items';
+
+let watchedItemKeys = new Set(JSON.parse(localStorage.getItem('travelWatchedItems') || '[]'));
+let countryMeritCounts = JSON.parse(localStorage.getItem('travelMeritCounts') || '{}');
+let personalTripLog = JSON.parse(localStorage.getItem('travelPersonalTripLog') || '[]');
+let museumOwnedMap = JSON.parse(localStorage.getItem('travelMuseumOwned') || '{}');
+
+// ── Formatting Helpers ───────────────────────────────────────────────────────
+function fmtSignedMoney(n) {
+    const val = Math.round(Number(n || 0));
+    if (val < 0) return '-$' + Math.abs(val).toLocaleString();
+    return '$' + val.toLocaleString();
+}
+function fmtCompactMoney(n) {
+    const val = Number(n || 0);
+    const sign = val < 0 ? '-' : '';
+    const abs = Math.abs(val);
+    if (abs >= 1e9) return sign + '$' + (abs / 1e9).toFixed(2) + 'B';
+    if (abs >= 1e6) return sign + '$' + (abs / 1e6).toFixed(2) + 'M';
+    if (abs >= 1e3) return sign + '$' + (abs / 1e3).toFixed(1) + 'k';
+    return sign + '$' + Math.round(abs).toLocaleString();
+}
+function fmtMins(mins) {
+    const m = Math.max(1, Math.round(Number(mins || 0)));
+    const h = Math.floor(m / 60);
+    const rem = m % 60;
+    return h > 0 ? `${h}h ${String(rem).padStart(2, '0')}m` : `${rem}m`;
+}
+function fmtAge(unixSec) {
+    if (!unixSec) return { label: 'Live', cls: 'green', mins: 0 };
+    const diffSec = Math.max(0, Math.floor(Date.now() / 1000) - Number(unixSec));
+    const mins = Math.floor(diffSec / 60);
+    if (mins < 1) return { label: 'Just now', cls: 'green', mins: 0 };
+    if (mins <= 10) return { label: `${mins}m ago`, cls: 'green', mins };
+    if (mins <= 20) return { label: `${mins}m ago`, cls: 'amber', mins };
+    return { label: `${mins}m ago`, cls: 'red', mins };
+}
+function escHtml(s) {
+    return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+// ── Patch #438 Capacity & Travel Math Engine ─────────────────────────────────
+function getEffectiveCapacityForCategory(category) {
+    const comp = document.getElementById('cb-company')?.value || 'none';
+    if (comp === 'flower_7' && category === 'flower') return capacity + 5;
+    if (comp === 'toy_7' && category === 'plushie') return capacity + 5;
+    return capacity;
+}
+
+function getOneWayFlightMins(countryName) {
+    const cKey = normalizeCountryName(countryName);
+    const cMeta = TRAVEL_2_COUNTRIES[cKey] || TRAVEL_2_COUNTRIES['Mexico'];
+    const mapKey = flightProfile === 'standard' ? 'std' : (flightProfile === 'wlt' ? 'wlt' : (flightProfile === 'bct' ? 'bct' : 'air'));
+    return bookMailing ? cMeta.book[mapKey] : cMeta[mapKey];
+}
+
+function getFlightTicketCost(countryName) {
+    const cKey = normalizeCountryName(countryName);
+    const cMeta = TRAVEL_2_COUNTRIES[cKey] || TRAVEL_2_COUNTRIES['Mexico'];
+    if (flightProfile === 'standard') return cMeta.ticket;
+    if (flightProfile === 'bct') return freeBct ? 0 : liveBctMarketPrice;
+    return 0; // airstrip & wlt have $0 ticket cost
+}
+
+function getNetUnitSellPrice(item, category) {
+    const mkt = Number(item.marketPrice || 0);
+    const npc = Number(item.sellPrice || 0);
+    if (sellBasis === 'market_5') return Math.floor(mkt * 0.95);
+    if (sellBasis === 'market_anon_15') return Math.floor(mkt * 0.85);
+    if (sellBasis === 'bazaar_0') return mkt;
+    if (sellBasis === 'custom_trader') return Math.floor(mkt * (customTraderPct / 100));
+    if (sellBasis === 'npc_museum') {
+        if (category === 'contraband' && npc > 0) return npc;
+        if (npc > mkt * 0.85) return npc;
+        return mkt;
+    }
+    return Math.floor(mkt * 0.95);
+}
+
+function getEnergyGuardMetrics(roundTripMins) {
+    // Full regen window from 0E: 150E = 300 mins (5h), 100E = 200 mins (3h 20m)
+    let minsToCap = energyCapSetting === 100 ? 200 : 300;
+    if (livePlayerContext && livePlayerContext.energy && livePlayerContext.energy.fulltime > 0) {
+        minsToCap = Math.round(livePlayerContext.energy.fulltime / 60);
+    } else if (livePlayerContext && livePlayerContext.energy && livePlayerContext.energy.current >= livePlayerContext.energy.maximum) {
+        minsToCap = energyCapSetting === 100 ? 200 : 300; // assume player dumps energy right before takeoff
+    }
+    const overMins = Math.max(0, roundTripMins - minsToCap);
+    // Torn natural energy regen = 5E per 10 mins (0.5E/min)
+    const energyWasted = Math.floor(overMins * 0.5);
+
+    let drugCollision = false;
+    if (livePlayerContext && livePlayerContext.cooldowns && livePlayerContext.cooldowns.drug > 60) {
+        const drugMins = Math.round(livePlayerContext.cooldowns.drug / 60);
+        if (roundTripMins > drugMins + 25) drugCollision = true;
+    }
+    return { minsToCap, energyWasted, drugCollision };
+}
+
 function getTravelMetrics(item) {
-    const minsMap = {
-        standard: Number(item.standardMins || item.flightTimeMins || 30),
-        airstrip: Number(item.airstripMins || item.flightTimeMins || 21),
-        wlt: Number(item.wltMins || item.flightTimeMins || 15),
-        bct: Number(item.bctMins || item.flightTimeMins || 9)
-    };
-    const flightMins = minsMap[flightProfile] || Number(item.flightTimeMins || 21);
-    const maxUnits = item.stock > 0 ? Math.min(capacity, item.stock) : 0;
-    const totalProfit = Number(item.profit || 0) * maxUnits;
-    const profitPerHr = flightMins > 0 ? (totalProfit / (flightMins * 2)) * 60 : 0;
+    const countryName = normalizeCountryName(item.country);
+    const cMeta = TRAVEL_2_COUNTRIES[countryName] || TRAVEL_2_COUNTRIES['Mexico'];
+    const category = item.category || getCategory(item.name, item.type, item.id);
+    const shopType = item.shopType || getShopType(category);
+
+    const oneWayMins = getOneWayFlightMins(countryName);
+    const roundTripMins = oneWayMins * 2;
+    const flightCost = getFlightTicketCost(countryName);
+    const effectiveCap = getEffectiveCapacityForCategory(category);
+
+    const buyCost = Number(item.cost || 0);
+    const netSellPrice = getNetUnitSellPrice(item, category);
+    const unitProfit = netSellPrice - buyCost;
+
+    // For OOS items, compute planned full-capacity math so user sees potential profit instead of $0
+    const stock = Number(item.stock || 0);
+    const isOutOfStock = stock <= 0;
+    let tripUnits = isOutOfStock ? effectiveCap : Math.min(effectiveCap, stock);
+    const fullCapCost = (buyCost * tripUnits) + flightCost;
+    const exceedsBudget = budgetCap > 0 && fullCapCost > budgetCap;
+    if (budgetCap > 0 && !isOutOfStock && buyCost > 0) {
+        const affordableUnits = Math.max(0, Math.floor(Math.max(0, budgetCap - flightCost) / buyCost));
+        if (affordableUnits > 0 && affordableUnits < tripUnits) {
+            tripUnits = affordableUnits;
+        }
+    }
+
+    const capitalNeeded = (buyCost * tripUnits) + flightCost;
+    const totalProfit = (unitProfit * tripUnits) - flightCost;
+    const profitPerHr = roundTripMins > 0 ? (totalProfit / roundTripMins) * 60 : 0;
+    const roi = capitalNeeded > 0 ? (totalProfit / capitalNeeded) * 100 : 0;
+
+    // Mug Risk Tier based on cash carried abroad
+    const cashAbroad = buyCost * tripUnits;
+    const mugTier = cashAbroad >= 5000000 ? 'high' : (cashAbroad >= 1000000 ? 'med' : 'low');
+
+    // Stock Survival Warning (will stock survive one-way flight?)
+    const burnRate = Number(item.burnRatePerMin || (category === 'plushie' || category === 'flower' ? 16 : 3));
+    const projectedStockAtLanding = Math.max(0, Math.round(stock - burnRate * oneWayMins));
+    const stockAtRisk = !isOutOfStock && (stock < effectiveCap || projectedStockAtLanding < effectiveCap);
+
+    // Contraband Deal Range
+    let cbDeal = item.contrabandRange || null;
+    if (!cbDeal && category === 'contraband') {
+        const ref = CONTRABAND_CATALOG[item.name];
+        if (ref && ref.baseCost > 0) {
+            const dealPct = Math.round(((buyCost - ref.baseCost) / ref.baseCost) * 1000) / 10;
+            cbDeal = {
+                minCost: Math.round(ref.baseCost * 0.82),
+                maxCost: Math.round(ref.baseCost * 1.18),
+                avgCost: ref.baseCost,
+                dealPct,
+                dealTier: dealPct <= -6 ? 'floor' : (dealPct >= 6 ? 'high' : 'normal')
+            };
+        }
+    }
+
+    const eg = getEnergyGuardMetrics(roundTripMins);
+    const watchKey = `${cMeta.code}_${item.id}`;
+
     return {
         ...item,
-        flightTimeMins: flightMins,
+        country: countryName,
+        countryCode: cMeta.code,
+        city: cMeta.city,
+        flag: cMeta.flag,
+        category,
+        shopType,
+        flightTimeMins: oneWayMins,
+        roundTripMins,
+        flightCost,
+        effectiveCap,
+        tripUnits,
+        netSellPrice,
+        profit: unitProfit,
+        capital: capitalNeeded,
+        cashAbroad,
+        mugTier,
+        roi,
         totalProfit,
-        profitPerHr
+        profitPerHr,
+        isOutOfStock,
+        exceedsBudget,
+        stockAtRisk,
+        projectedStockAtLanding,
+        cbDeal,
+        energyWasted: eg.energyWasted,
+        drugCollision: eg.drugCollision,
+        watchKey,
+        isWatched: watchedItemKeys.has(watchKey)
     };
 }
 
@@ -544,32 +1555,61 @@ function getTravelMetrics(item) {
 document.addEventListener('DOMContentLoaded', () => {
     const capEl = document.getElementById('capacity');
     if (capEl) capEl.value = capacity;
+    const capNote = document.getElementById('cap-builder-note');
+    if (capNote) capNote.textContent = `(${capacity})`;
     const profEl = document.getElementById('flight-profile');
     if (profEl) profEl.value = flightProfile;
+    const bookEl = document.getElementById('chk-book-mailing');
+    if (bookEl) bookEl.checked = bookMailing;
+    const freeBctEl = document.getElementById('chk-free-bct');
+    if (freeBctEl) freeBctEl.checked = freeBct;
+    const lblFreeBct = document.getElementById('lbl-free-bct');
+    if (lblFreeBct) lblFreeBct.style.display = flightProfile === 'bct' ? 'inline-flex' : 'none';
+    const sbEl = document.getElementById('sell-basis');
+    if (sbEl) sbEl.value = sellBasis;
+    const ctEl = document.getElementById('custom-trader-pct');
+    if (ctEl) {
+        ctEl.value = customTraderPct;
+        ctEl.style.display = sellBasis === 'custom_trader' ? 'inline-block' : 'none';
+    }
+    const ecEl = document.getElementById('guard-energy-cap');
+    if (ecEl) ecEl.value = String(energyCapSetting);
+    const bInp = document.getElementById('budget-input');
+    if (bInp && budgetCap > 0) bInp.value = budgetCap.toLocaleString();
+
+    restoreCapacityBuilderInputs();
+    renderCountryChips();
+    updateWatchedBadge();
+    renderMeritTracker();
+    renderTripLog();
+    renderAlertWatchedList();
+
     loadProfits();
     setInterval(updateRestockTimer, 1000);
     updateRestockTimer();
 });
 
-// ── Load ─────────────────────────────────────────────────────────────────────
+// ── Load Data ────────────────────────────────────────────────────────────────
 async function loadProfits(showSpin = false) {
     try {
-        const ct = sessionStorage.getItem('sv_cache_travel');
-        if (ct) {
-            allItems = JSON.parse(ct);
-            if (Array.isArray(allItems) && allItems.length > 0) {
-                renderTable();
-                updateKPIs();
+        const ct = sessionStorage.getItem('sv_cache_travel_v2');
+        if (ct && !allItems.length) {
+            const parsed = JSON.parse(ct);
+            if (parsed && Array.isArray(parsed.items) && parsed.items.length > 0) {
+                allItems = parsed.items;
+                countryRestockMap = parsed.countryRestock || {};
+                refreshAllViews();
             }
         }
-    } catch(e) {}
+    } catch (_) {}
+
     const apiKey = typeof getApiKey === 'function' ? getApiKey() : (localStorage.getItem('warboard_apikey') || '');
     const hasAccess = (typeof hasTornAccess === 'function' && hasTornAccess()) || Boolean(apiKey);
     const tbody = document.getElementById('profits-tbody');
     const refreshBtn = document.getElementById('refresh-btn');
 
     if (!hasAccess) {
-        tbody.innerHTML = `<tr><td colspan="10" style="padding:30px;text-align:center;color:var(--text-dim);">⚠️ No API Key found. Click Settings (top right) to connect your Torn API key.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="13" style="padding:30px;text-align:center;color:var(--text-dim);">⚠️ No API Key found. Click Settings (top right) to connect your Torn API key.</td></tr>`;
         return;
     }
 
@@ -585,13 +1625,36 @@ async function loadProfits(showSpin = false) {
         if (data.error) throw new Error(data.error);
 
         allItems = data.items || [];
-        try { sessionStorage.setItem('sv_cache_travel', JSON.stringify(allItems)); } catch(e) {}
-        renderTable();
-        updateKPIs();
+        countryRestockMap = data.countryRestock || {};
+        if (data.bctMarketPrice) liveBctMarketPrice = Number(data.bctMarketPrice);
+        if (data.pointMarketPrice) livePointPrice = Number(data.pointMarketPrice);
+        if (data.playerContext) {
+            livePlayerContext = data.playerContext;
+            applyLivePlayerContextBanner(livePlayerContext);
+        }
+
+        const feedBadge = document.getElementById('feed-source-badge');
+        if (feedBadge) {
+            const src = (data.dataSource || 'yata').toUpperCase();
+            feedBadge.textContent = src === 'FALLBACK' ? 'BACKUP FEED' : 'YATA LIVE';
+            feedBadge.className = 'mini-badge ' + (src === 'FALLBACK' ? 'amber' : 'cyan');
+        }
+
+        try {
+            sessionStorage.setItem('sv_cache_travel_v2', JSON.stringify({
+                items: allItems,
+                countryRestock: countryRestockMap
+            }));
+        } catch (_) {}
+
+        refreshAllViews();
+        checkRestockAlertsOnRefresh();
 
         document.getElementById('last-updated').textContent = 'Updated ' + new Date().toLocaleTimeString();
     } catch (err) {
-        tbody.innerHTML = `<tr><td colspan="10" style="padding:30px;text-align:center;color:var(--accent-crimson, #ef4444);">❌ ${err.message}</td></tr>`;
+        if (!allItems.length) {
+            tbody.innerHTML = `<tr><td colspan="13" style="padding:30px;text-align:center;color:var(--accent-crimson, #ef4444);">❌ ${escHtml(err.message)}</td></tr>`;
+        }
     } finally {
         if (refreshBtn) {
             refreshBtn.innerHTML = `${TRAVEL_REFRESH_SVG} Refresh`;
@@ -600,134 +1663,1023 @@ async function loadProfits(showSpin = false) {
     }
 }
 
-// ── KPIs ─────────────────────────────────────────────────────────────────────
+function applyLivePlayerContextBanner(ctx) {
+    const banner = document.getElementById('player-flight-banner');
+    const walletBtn = document.getElementById('btn-use-wallet');
+    if (walletBtn && ctx.wallet >= 0) {
+        walletBtn.style.display = 'inline-flex';
+        walletBtn.textContent = `💼 Wallet (${fmtCompactMoney(ctx.wallet)})`;
+    }
+    if (!banner) return;
+    const parts = [];
+    if (ctx.name) parts.push(`🟢 <strong>${escHtml(ctx.name)}</strong>`);
+    if (ctx.energy) parts.push(`⚡ Energy: <strong>${ctx.energy.current}/${ctx.energy.maximum}</strong>`);
+    if (ctx.cooldowns && ctx.cooldowns.drug > 0) parts.push(`💊 Drug CD: <strong>${fmtMins(ctx.cooldowns.drug / 60)}</strong>`);
+    else parts.push(`💊 Drug CD: <strong>Ready</strong>`);
+    if (ctx.travel && ctx.travel.timeLeft > 0) {
+        parts.push(`✈️ In Flight → <strong>${escHtml(ctx.travel.destination)} (${fmtMins(ctx.travel.timeLeft / 60)} left)</strong>`);
+    } else if (ctx.travel && ctx.travel.destination && ctx.travel.destination !== 'Torn') {
+        parts.push(`🌍 Abroad in <strong>${escHtml(ctx.travel.destination)}</strong>`);
+    }
+    banner.innerHTML = parts.join(' &nbsp;•&nbsp; ');
+}
+
+function refreshAllViews() {
+    updateKPIs();
+    renderAdvisorBanner();
+    renderTable();
+    renderCountryCommandCards();
+    renderMuseumPlanner();
+    renderDailySimulator();
+    if (currentViewMode === 'analytics') renderScatterChart();
+}
+
+// ── KPIs & Smart Advisor Banner ──────────────────────────────────────────────
 function updateKPIs() {
     if (!allItems.length) return;
     const computed = allItems.map(getTravelMetrics);
-    const withProfit = computed.filter(i => i.stock > 0 && i.profit > 0);
+    const inStockAll = computed.filter(i => !i.isOutOfStock);
+    const inStockProfit = inStockAll.filter(i => i.totalProfit > 0);
+    const pool = inStockProfit.length ? inStockProfit : inStockAll;
 
-    // Best $/hr
-    const bestRate = [...withProfit].sort((a,b) => b.profitPerHr - a.profitPerHr)[0];
-    document.getElementById('kpi-best-rate').textContent = bestRate ? '$' + Math.floor(bestRate.profitPerHr).toLocaleString() : '—';
+    const bestRate = [...pool].sort((a, b) => b.profitPerHr - a.profitPerHr)[0];
+    document.getElementById('kpi-best-rate').textContent = bestRate ? fmtSignedMoney(bestRate.profitPerHr) : '—';
     document.getElementById('kpi-best-name').textContent = bestRate ? `${bestRate.name} (${bestRate.country})` : '—';
 
-    // Best total
-    const bestTotal = [...withProfit].sort((a,b) => b.totalProfit - a.totalProfit)[0];
-    document.getElementById('kpi-best-total').textContent = bestTotal ? '$' + Math.floor(bestTotal.totalProfit).toLocaleString() : '—';
+    const bestTotal = [...pool].sort((a, b) => b.totalProfit - a.totalProfit)[0];
+    document.getElementById('kpi-best-total').textContent = bestTotal ? fmtSignedMoney(bestTotal.totalProfit) : '—';
     document.getElementById('kpi-best-total-name').textContent = bestTotal ? `${bestTotal.name} (${bestTotal.country})` : '—';
 
-    // Stock counts
+    const bestContra = [...inStockProfit].filter(i => i.category === 'contraband').sort((a, b) => b.profitPerHr - a.profitPerHr)[0];
+    document.getElementById('kpi-best-contra').textContent = bestContra ? fmtSignedMoney(bestContra.profitPerHr) : '—';
+    document.getElementById('kpi-best-contra-name').textContent = bestContra ? `${bestContra.name} (${bestContra.country})` : 'No Contraband in stock';
+
+    const ptInput = parseInt(document.getElementById('mus-point-price')?.value || String(livePointPrice), 10) || 45500;
+    const musDay = document.getElementById('mus-day-bonus')?.checked ? 1.1 : 1.0;
+    const setPts = Math.round(10 * musDay * 10) / 10;
+    document.getElementById('kpi-set-val').textContent = fmtSignedMoney(setPts * ptInput);
+    document.getElementById('kpi-set-sub').textContent = `${setPts} pts @ $${ptInput.toLocaleString()}/pt`;
+
     const inStock = allItems.filter(i => i.stock > 0).length;
-    const outStock = allItems.filter(i => i.stock === 0).length;
+    const outStock = allItems.filter(i => i.stock <= 0).length;
     document.getElementById('kpi-in-stock').textContent = inStock;
     document.getElementById('kpi-out-stock').textContent = outStock + ' out of stock';
 }
 
-// ── Render ────────────────────────────────────────────────────────────────────
+function renderAdvisorBanner() {
+    if (!allItems.length) return;
+    const computed = allItems.map(getTravelMetrics).filter(i => !i.isOutOfStock && i.totalProfit > 0);
+    const guardSafe = computed.filter(i => !i.exceedsBudget && !i.stockAtRisk && i.energyWasted === 0 && !i.drugCollision);
+
+    const pick1 = [...(guardSafe.length ? guardSafe : computed)].sort((a, b) => b.profitPerHr - a.profitPerHr)[0];
+    const pick2 = [...computed]
+        .filter(i => (!pick1 || i.id !== pick1.id) && i.roundTripMins <= 120 && !i.exceedsBudget && (i.category === 'plushie' || i.category === 'flower'))
+        .sort((a, b) => b.profitPerHr - a.profitPerHr)[0]
+        || [...computed].filter(i => (!pick1 || i.id !== pick1.id) && i.roundTripMins <= 120).sort((a, b) => b.profitPerHr - a.profitPerHr)[0];
+    const pick3 = [...computed]
+        .filter(i => (!pick1 || i.id !== pick1.id) && (!pick2 || i.id !== pick2.id) && (i.category === 'contraband' || i.totalProfit >= 1000000))
+        .sort((a, b) => b.totalProfit - a.totalProfit)[0]
+        || [...computed].filter(i => (!pick1 || i.id !== pick1.id) && (!pick2 || i.id !== pick2.id)).sort((a, b) => b.totalProfit - a.totalProfit)[0];
+
+    function fillSlot(slotNum, item, fallbackMsg) {
+        const tEl = document.getElementById(`adv-${slotNum}-title`);
+        const mEl = document.getElementById(`adv-${slotNum}-meta`);
+        const bEl = document.getElementById(`adv-${slotNum}-badge`);
+        const aEl = document.getElementById(`adv-${slotNum}-actions`);
+        if (!tEl || !mEl || !aEl) return;
+        if (!item) {
+            tEl.textContent = fallbackMsg;
+            mEl.textContent = 'Try relaxing filters or refreshing stock';
+            aEl.innerHTML = '';
+            return;
+        }
+        tEl.innerHTML = `${item.flag} ${escHtml(item.name)} <span style="font-weight:600;color:var(--text-secondary);">(${escHtml(item.country)})</span>`;
+        mEl.innerHTML = `<span style="color:#38bdf8;font-weight:800;">${fmtSignedMoney(item.profitPerHr)}/hr</span> • <span>${fmtSignedMoney(item.totalProfit)} trip</span> • <span>${fmtMins(item.roundTripMins)} RT</span> • <span>Stock: ${item.stock.toLocaleString()}</span>`;
+        if (bEl) {
+            bEl.textContent = item.energyWasted === 0 ? '0E Wasted' : `⚡ -${item.energyWasted}E`;
+            bEl.className = 'mini-badge ' + (item.energyWasted === 0 ? 'green' : 'amber');
+        }
+        aEl.innerHTML = `
+            <button type="button" class="act-link" onclick="focusCountryInTable('${escHtml(item.country)}')">🎯 Focus ${escHtml(TRAVEL_2_COUNTRIES[item.country]?.short || item.country)}</button>
+            <button type="button" class="act-link" onclick="logTripForItem(${item.id}, '${escHtml(item.country)}')">📝 Log Trip</button>
+            <a href="https://www.torn.com/travelagency.php" target="_blank" rel="noopener" class="act-link">✈️ Fly</a>
+        `;
+    }
+
+    fillSlot(1, pick1, 'No zero-waste runs match current budget');
+    fillSlot(2, pick2, 'No short-haul runs currently in stock');
+    fillSlot(3, pick3, 'No Contraband currently in stock');
+}
+
+// ── Render Table (View 1) ────────────────────────────────────────────────────
 function renderTable() {
     const tbody = document.getElementById('profits-tbody');
-    let items = allItems.map(item => ({
-        ...getTravelMetrics(item),
-        category: getCategory(item.name)
-    }));
+    if (!tbody) return;
 
-    // Filter (combine category + inStockOnly simultaneously)
+    let computed = allItems.map(getTravelMetrics);
+
+    // Assign true profit rank across ALL profitable items sorted by $/hr descending (Bug 1.5 fix)
+    const rankedProfitOrder = [...computed]
+        .filter(i => i.totalProfit > 0 && !i.isOutOfStock)
+        .sort((a, b) => b.profitPerHr - a.profitPerHr);
+    const trueRankMap = new Map();
+    rankedProfitOrder.forEach((itm, idx) => {
+        trueRankMap.set(`${itm.countryCode}_${itm.id}`, idx + 1);
+    });
+    computed.forEach((itm) => {
+        itm.trueProfitRank = trueRankMap.get(`${itm.countryCode}_${itm.id}`) || 999;
+    });
+
+    // Apply Filters
+    let items = computed;
     if (activeCategory !== 'all') {
         items = items.filter(i => i.category === activeCategory);
     }
     if (inStockOnly) {
-        items = items.filter(i => i.stock > 0);
+        items = items.filter(i => !i.isOutOfStock);
+    }
+    if (guardFilters.profitable) {
+        items = items.filter(i => i.totalProfit > 0);
+    }
+    if (guardFilters.watched) {
+        items = items.filter(i => i.isWatched);
+    }
+    if (guardFilters.noEnergyWaste) {
+        items = items.filter(i => i.energyWasted === 0 && !i.drugCollision);
+    }
+    if (guardFilters.lowMugRisk) {
+        items = items.filter(i => i.mugTier !== 'high');
+    }
+    if (maxFlightRtMins > 0) {
+        items = items.filter(i => i.roundTripMins <= maxFlightRtMins);
+    }
+    if (selectedCountries.size > 0) {
+        items = items.filter(i => selectedCountries.has(i.country));
+    }
+    if (searchQuery) {
+        const q = searchQuery.toLowerCase();
+        items = items.filter(i =>
+            i.name.toLowerCase().includes(q) ||
+            i.country.toLowerCase().includes(q) ||
+            i.city.toLowerCase().includes(q) ||
+            i.category.toLowerCase().includes(q) ||
+            i.shopType.toLowerCase().includes(q)
+        );
     }
 
     // Sort
     items.sort((a, b) => {
-        let av = a[sortKey] ?? 0;
-        let bv = b[sortKey] ?? 0;
+        // Keep pinned items floated to top unless sorting explicitly by column
+        const key = sortKey === 'rank' ? 'trueProfitRank' : sortKey;
+        let av = a[key] ?? 0;
+        let bv = b[key] ?? 0;
         if (typeof av === 'string') av = av.toLowerCase();
         if (typeof bv === 'string') bv = bv.toLowerCase();
-        if (sortKey === 'flightTimeMins') return sortAsc ? bv - av : av - bv;
+        if (av === bv) return 0;
         return sortAsc ? (av > bv ? 1 : -1) : (bv > av ? 1 : -1);
     });
 
-    // Push out-of-stock to bottom when sorting by profit
-    if (['profitPerHr','totalProfit','profit'].includes(sortKey)) {
-        const inStock = items.filter(i => i.stock > 0);
-        const noStock = items.filter(i => i.stock === 0);
-        items = [...inStock, ...noStock];
-    }
+    // Sync active header arrows
+    document.querySelectorAll('thead th[data-sort-col]').forEach(th => {
+        const col = th.getAttribute('data-sort-col');
+        const arrow = th.querySelector('.sort-arrow');
+        if (col === sortKey) {
+            th.classList.add('sorted');
+            if (arrow) arrow.textContent = sortAsc ? '↑' : '↓';
+        } else {
+            th.classList.remove('sorted');
+            if (arrow) arrow.textContent = '↕';
+        }
+    });
 
-    document.getElementById('row-count').textContent = items.length + ' items shown';
+    document.getElementById('row-count').textContent = `${items.length} items shown • Cap ${capacity}${bookMailing ? ' • -25% Book' : ''}`;
 
     if (!items.length) {
-        tbody.innerHTML = `<tr><td colspan="10" style="padding:30px;text-align:center;color:var(--text-dim);">No items match this filter.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="13" style="padding:30px;text-align:center;color:var(--text-dim);">No items match these filters. Try clearing country/guardrail filters.</td></tr>`;
         return;
     }
 
-    const fmt = n => '$' + Math.max(0, Math.floor(n)).toLocaleString();
-    const fmtFlight = mins => {
-        const rt = Math.round(mins * 2);
-        return `${Math.floor(rt/60)}h ${rt%60}m`;
+    const rankBadge = (itm, idx) => {
+        const r = itm.trueProfitRank;
+        if (r === 1 && itm.totalProfit > 0) return `<span class="rank-badge gold" title="True #1 Profit/Hr">1</span>`;
+        if (r === 2 && itm.totalProfit > 0) return `<span class="rank-badge silver" title="True #2 Profit/Hr">2</span>`;
+        if (r === 3 && itm.totalProfit > 0) return `<span class="rank-badge bronze" title="True #3 Profit/Hr">3</span>`;
+        return `<span class="rank-badge normal">${r < 999 ? r : idx + 1}</span>`;
     };
-    const fmtStock = (stock, cap) => {
-        if (stock === 0) return `<span class="stock-none">Out of Stock</span>`;
-        if (stock < cap) return `<span class="stock-low">${stock.toLocaleString()}</span>`;
-        return `<span class="stock-ok">${stock.toLocaleString()}</span>`;
-    };
-    const rankBadge = (i) => {
-        if (i === 0) return `<span class="rank-badge gold">1</span>`;
-        if (i === 1) return `<span class="rank-badge silver">2</span>`;
-        if (i === 2) return `<span class="rank-badge bronze">3</span>`;
-        return `<span class="rank-badge normal">${i+1}</span>`;
-    };
-    const catEmoji = { plushie: '🧸', flower: '🌸', drug: '💊', other: '📦' };
 
     tbody.innerHTML = items.map((item, i) => {
-        const cat = item.category;
-        const flag = item.flag || COUNTRY_FLAGS[item.country] || '🌍';
-        const shortCountry = SHORT_COUNTRY_NAMES[item.country] || item.country;
-        const rowClass = item.stock === 0 ? 'out-stock' : (item.stock < capacity ? 'low-stock' : 'top-pick');
-        const totalActual = item.totalProfit;
+        const cm = CAT_META[item.category] || CAT_META.other;
+        const shortCountry = TRAVEL_2_COUNTRIES[item.country]?.short || item.country;
+        const rowClass = `${item.isOutOfStock ? 'out-stock' : ''} ${item.isWatched ? 'pinned-row' : ''}`.trim();
+        const age = fmtAge(item.yataUpdated || countryRestockMap[item.countryCode]);
+
+        // Stock + Survival Badge
+        let stockHtml = '';
+        if (item.isOutOfStock) {
+            stockHtml = `<span class="stock-none">OOS</span> <span class="mini-badge amber" title="Showing projected profit for ${item.effectiveCap} units when restocked">Est ×${item.effectiveCap}</span>`;
+        } else if (item.stockAtRisk) {
+            stockHtml = `<span class="stock-low">${item.stock.toLocaleString()}</span> <span class="mini-badge amber" title="Projected ~${item.projectedStockAtLanding} left on landing">⚠️ Fast Burn</span>`;
+        } else {
+            stockHtml = `<span class="stock-ok">${item.stock.toLocaleString()}</span>`;
+        }
+        stockHtml += `<div class="sub-calc"><span class="mini-badge ${age.cls}">${age.label}</span></div>`;
+
+        // Contraband Variable Price Deal Indicator
+        let dealHtml = '';
+        if (item.cbDeal) {
+            const pctStr = (item.cbDeal.dealPct > 0 ? '+' : '') + item.cbDeal.dealPct + '%';
+            if (item.cbDeal.dealTier === 'floor') {
+                dealHtml = `<span class="mini-badge green" title="Foreign range: $${item.cbDeal.minCost.toLocaleString()}–$${item.cbDeal.maxCost.toLocaleString()}">🔥 Floor (${pctStr})</span>`;
+            } else if (item.cbDeal.dealTier === 'high') {
+                dealHtml = `<span class="mini-badge red" title="Foreign range: $${item.cbDeal.minCost.toLocaleString()}–$${item.cbDeal.maxCost.toLocaleString()}">High (${pctStr})</span>`;
+            } else {
+                dealHtml = `<span class="mini-badge cyan" title="Foreign range: $${item.cbDeal.minCost.toLocaleString()}–$${item.cbDeal.maxCost.toLocaleString()}">Avg (${pctStr})</span>`;
+            }
+        }
+
+        // Mug Risk & Budget Badge
+        const mugBadge = item.mugTier === 'high'
+            ? `<span class="mini-badge red" title="$5M+ carried abroad — use Ghost Trade or time your landing">🔴 High Mug</span>`
+            : (item.mugTier === 'med' ? `<span class="mini-badge amber">🟡 Med Mug</span>` : `<span class="mini-badge green">🟢 Low Mug</span>`);
+
+        // Energy Guard Badge
+        const energyBadge = item.energyWasted > 0
+            ? `<span class="mini-badge amber" title="Round trip exceeds natural energy cap window">⚡ -${item.energyWasted}E</span>`
+            : `<span class="mini-badge green">0E Waste</span>`;
+
+        const uCls = item.profit >= 0 ? 'profit-item' : 'profit-loss';
+        const tCls = item.totalProfit >= 0 ? 'profit-item' : 'profit-loss';
+        const hCls = item.profitPerHr >= 0 ? 'profit-hr' : 'profit-loss';
 
         return `<tr class="${rowClass}">
-            <td>${rankBadge(i)}</td>
             <td>
-                <div class="item-name">${item.name}</div>
-                <div class="item-category">${catEmoji[cat]} ${cat.charAt(0).toUpperCase()+cat.slice(1)}</div>
+                <div style="display:flex;align-items:center;gap:3px;">
+                    <button type="button" class="star-pin-btn ${item.isWatched ? 'pinned' : ''}" onclick="toggleWatchItem('${item.watchKey}')" title="Pin / Watch Item">${item.isWatched ? '★' : '☆'}</button>
+                    ${rankBadge(item, i)}
+                </div>
             </td>
-            <td title="${item.country}"><span class="country-flag">${flag} <span class="country-badge">${shortCountry}</span></span></td>
-            <td class="flight-time">${fmtFlight(item.flightTimeMins)}</td>
-            <td>${fmtStock(item.stock, capacity)}</td>
-            <td style="color:var(--text-dim);">${fmt(item.cost)}</td>
-            <td style="color:var(--text-dim);">${fmt(item.marketPrice)}</td>
-            <td class="${item.profit > 0 ? 'profit-item' : ''}" style="${item.profit <= 0 ? 'color:var(--accent-crimson, #ef4444)' : ''}">${fmt(item.profit)}</td>
-            <td class="${item.profit > 0 ? 'profit-item' : ''}" style="${item.profit <= 0 ? 'color:var(--accent-crimson, #ef4444)' : ''}">${fmt(totalActual)}</td>
-            <td class="profit-hr">${item.stock === 0 ? '<span style="color:var(--text-tertiary);">$0</span>' : (item.profit > 0 ? fmt(item.profitPerHr) : '<span style="color:var(--accent-crimson, #ef4444);">Loss</span>')}</td>
+            <td>
+                <div class="item-name">${escHtml(item.name)}</div>
+                <div class="item-category">
+                    <span>${cm.emoji} ${cm.label}</span>
+                    <span class="mini-badge ${item.shopType === 'Black Market' ? 'purple' : 'cyan'}">${escHtml(item.shopType)}</span>
+                    ${dealHtml}
+                </div>
+            </td>
+            <td title="${escHtml(item.country)} • ${escHtml(item.city)}">
+                <span class="country-flag">${item.flag} <span class="country-badge">${escHtml(shortCountry)}</span></span>
+                <div class="sub-calc">${escHtml(item.city)}</div>
+            </td>
+            <td class="flight-time">
+                <div><strong>${fmtMins(item.roundTripMins)}</strong> RT <span style="color:var(--text-tertiary);">(${fmtMins(item.flightTimeMins)} 1W)</span></div>
+                <div class="sub-calc">${energyBadge}${item.drugCollision ? ' <span class="mini-badge red">💊 Drug CD</span>' : ''}</div>
+            </td>
+            <td>${stockHtml}</td>
+            <td style="font-family:var(--font-mono);">
+                <div>${fmtSignedMoney(item.cost)}</div>
+                ${item.flightCost > 0 ? `<div class="sub-calc">+${fmtCompactMoney(item.flightCost)} ticket</div>` : ''}
+            </td>
+            <td style="font-family:var(--font-mono);">
+                <div>${fmtSignedMoney(item.netSellPrice)}</div>
+                <div class="sub-calc">Mkt ${fmtSignedMoney(item.marketPrice)}</div>
+            </td>
+            <td class="${uCls}">${fmtSignedMoney(item.profit)}</td>
+            <td style="font-family:var(--font-mono);">
+                <div>${fmtCompactMoney(item.capital)} <span style="color:var(--text-tertiary);">(×${item.tripUnits})</span></div>
+                <div class="sub-calc">${mugBadge}${item.exceedsBudget ? ' <span class="mini-badge red">Over Budget</span>' : ''}</div>
+            </td>
+            <td class="${item.roi >= 0 ? 'profit-item' : 'profit-loss'}">${item.roi >= 0 ? '+' : ''}${item.roi.toFixed(1)}%</td>
+            <td class="${tCls}">
+                <div>${fmtSignedMoney(item.totalProfit)}</div>
+                ${item.isOutOfStock ? `<div class="sub-calc">OOS ($0 now • Est ×${item.effectiveCap})</div>` : ''}
+            </td>
+            <td class="${hCls}">
+                <div>${fmtSignedMoney(item.profitPerHr)}</div>
+                ${item.isOutOfStock ? '<div class="sub-calc">Est. When Restocked</div>' : ''}
+            </td>
+            <td>
+                <div style="display:flex;gap:4px;">
+                    <button type="button" class="act-link" onclick="logTripForItem(${item.id}, '${escHtml(item.country)}')" title="Log Trip & Increment 50-Flight Merit">📝</button>
+                    <a href="https://www.torn.com/page.php?sid=ItemMarket#/market/view=search&itemID=${item.id}" target="_blank" rel="noopener" class="act-link" title="View on Torn Item Market">🛒</a>
+                    <a href="https://www.torn.com/travelagency.php" target="_blank" rel="noopener" class="act-link" title="Fly via Torn Travel Agency">✈️</a>
+                </div>
+            </td>
         </tr>`;
     }).join('');
 }
 
-// ── Controls ──────────────────────────────────────────────────────────────────
+// ── Country Command View (View 2 — 11 Destination Cards) ─────────────────────
+function renderCountryCommandCards() {
+    const grid = document.getElementById('country-command-grid');
+    if (!grid || !allItems.length) return;
+
+    const computed = allItems.map(getTravelMetrics);
+    const nowMs = Date.now();
+
+    const cards = Object.values(TRAVEL_2_COUNTRIES).map(cMeta => {
+        const cItems = computed.filter(i => i.country === cMeta.name);
+        const inStock = cItems.filter(i => !i.isOutOfStock).sort((a, b) => b.profitPerHr - a.profitPerHr);
+        const allSorted = [...cItems].sort((a, b) => b.profitPerHr - a.profitPerHr);
+
+        const top1 = inStock[0] || allSorted[0] || null;
+        const backup2 = inStock[1] || allSorted[1] || null;
+        const backup3 = inStock[2] || allSorted[2] || null;
+
+        const oneWay = getOneWayFlightMins(cMeta.name);
+        const rt = oneWay * 2;
+        const landDate = new Date(nowMs + oneWay * 60000);
+        const retDate = new Date(nowMs + rt * 60000);
+        const landTct = landDate.toISOString().slice(11, 16) + ' TCT';
+        const retTct = retDate.toISOString().slice(11, 16) + ' TCT';
+        const age = fmtAge(countryRestockMap[cMeta.code]);
+        const eg = getEnergyGuardMetrics(rt);
+
+        let statusPill = `<span class="mini-badge green">🟢 Leave Now</span>`;
+        if (!inStock.length || age.mins > 20) {
+            statusPill = `<span class="mini-badge red">🔴 Out of Stock / Stale</span>`;
+        } else if (top1 && top1.stockAtRisk) {
+            statusPill = `<span class="mini-badge amber">🟡 Low Stock / Fast Burn</span>`;
+        }
+
+        const renderSlot = (itm, rankLbl, isPrimary) => {
+            if (!itm) return '';
+            const cls = itm.profitPerHr >= 0 ? 'profit-hr' : 'profit-loss';
+            return `
+                <div class="cc-item-slot ${isPrimary ? 'primary' : ''}">
+                    <div style="min-width:0;">
+                        <div style="font-weight:800;font-size:0.82em;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                            ${rankLbl}: ${escHtml(itm.name)} ${itm.isOutOfStock ? '<span class="mini-badge red">OOS</span>' : `<span class="mini-badge green">${itm.stock.toLocaleString()}</span>`}
+                        </div>
+                        <div style="font-size:0.71em;color:var(--text-tertiary);font-family:var(--font-mono);">
+                            Buy ${fmtSignedMoney(itm.cost)} • Trip ${fmtSignedMoney(itm.totalProfit)}
+                        </div>
+                    </div>
+                    <div style="text-align:right;flex-shrink:0;">
+                        <div class="${cls}" style="font-size:0.84em;">${fmtSignedMoney(itm.profitPerHr)}/hr</div>
+                        <div style="font-size:0.68em;color:var(--text-tertiary);">${escHtml(itm.shopType)}</div>
+                    </div>
+                </div>
+            `;
+        };
+
+        const flightsLogged = Number(countryMeritCounts[cMeta.name] || 0);
+
+        return `
+            <div class="country-cmd-card">
+                <div class="cc-top">
+                    <div>
+                        <div class="cc-title">${cMeta.flag} ${escHtml(cMeta.name)} <span style="font-size:0.76em;color:var(--text-tertiary);font-weight:600;">(${escHtml(cMeta.city)})</span></div>
+                        <div class="cc-sub">1W: <strong>${fmtMins(oneWay)}</strong> • RT: <strong>${fmtMins(rt)}</strong> • Land: ${landTct} • Back: ${retTct}</div>
+                    </div>
+                    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
+                        ${statusPill}
+                        <span class="mini-badge ${age.cls}">Updated ${age.label}</span>
+                    </div>
+                </div>
+                ${renderSlot(top1, '#1 Best', true)}
+                ${renderSlot(backup2, '#2 Backup', false)}
+                ${renderSlot(backup3, '#3 Backup', false)}
+                <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;padding-top:4px;border-top:1px solid var(--border-subtle);font-size:0.74em;">
+                    <div style="display:flex;gap:5px;align-items:center;">
+                        <span class="mini-badge ${eg.energyWasted === 0 ? 'green' : 'amber'}">${eg.energyWasted === 0 ? '⚡ 0E Wasted' : `⚡ Wastes ${eg.energyWasted}E`}</span>
+                        <span class="mini-badge cyan" title="50-Flight Honor Bar Progress (${cMeta.merit})">🏅 ${flightsLogged}/50</span>
+                    </div>
+                    <div style="display:flex;gap:5px;">
+                        <button type="button" class="act-link" onclick="focusCountryInTable('${escHtml(cMeta.name)}')">📊 Filter Table</button>
+                        ${top1 ? `<button type="button" class="act-link" onclick="logTripForItem(${top1.id}, '${escHtml(cMeta.name)}')">📝 Log Trip</button>` : ''}
+                        <a href="https://www.torn.com/travelagency.php" target="_blank" rel="noopener" class="act-link">✈️ Fly</a>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+
+    grid.innerHTML = cards.join('');
+}
+
+// ── Museum Set Planner (View 3) ──────────────────────────────────────────────
+const MUSEUM_SETS = {
+    plushie: {
+        name: 'Plushie Set',
+        points: 10,
+        pieces: [
+            { name: 'Jaguar Plushie',    country: 'Mexico',         cost: 10000 },
+            { name: 'Stingray Plushie',  country: 'Cayman Islands', cost: 400 },
+            { name: 'Wolverine Plushie', country: 'Canada',         cost: 30 },
+            { name: 'Nessie Plushie',    country: 'United Kingdom', cost: 200 },
+            { name: 'Red Fox Plushie',   country: 'United Kingdom', cost: 1000 },
+            { name: 'Monkey Plushie',    country: 'Argentina',      cost: 400 },
+            { name: 'Chamois Plushie',   country: 'Switzerland',    cost: 400 },
+            { name: 'Panda Plushie',     country: 'China',          cost: 400 },
+            { name: 'Camel Plushie',     country: 'UAE',            cost: 14000 },
+            { name: 'Lion Plushie',      country: 'South Africa',   cost: 400 },
+            { name: 'Sheep Plushie',     country: 'Torn City',      cost: 25 },
+            { name: 'Teddy Bear Plushie',country: 'Torn City',      cost: 30 },
+            { name: 'Kitten Plushie',    country: 'Torn City',      cost: 35 }
+        ]
+    },
+    flower: {
+        name: 'Flower Set',
+        points: 10,
+        pieces: [
+            { name: 'Dahlia',            country: 'Mexico',         cost: 300 },
+            { name: 'Banana Orchid',     country: 'Cayman Islands', cost: 4000 },
+            { name: 'Crocus',            country: 'Canada',         cost: 600 },
+            { name: 'Orchid',            country: 'Hawaii',         cost: 700 },
+            { name: 'Heather',           country: 'United Kingdom', cost: 5000 },
+            { name: 'Ceibo Flower',      country: 'Argentina',      cost: 500 },
+            { name: 'Edelweiss',         country: 'Switzerland',    cost: 900 },
+            { name: 'Cherry Blossom',    country: 'Japan',          cost: 500 },
+            { name: 'Peony',             country: 'China',          cost: 5000 },
+            { name: 'Tribulus Omanense', country: 'UAE',            cost: 6000 },
+            { name: 'African Violet',    country: 'South Africa',   cost: 2000 }
+        ]
+    },
+    arrowhead: {
+        name: '6× Arrowhead Point Set',
+        points: 25,
+        pieces: [
+            { name: 'Obsidian Point',   country: 'Mexico',         cost: 135905 },
+            { name: 'Quartz Point',     country: 'Canada',         cost: 146379 },
+            { name: 'Basalt Point',     country: 'Hawaii',         cost: 118854 },
+            { name: 'Chert Point',      country: 'United Kingdom', cost: 130728 },
+            { name: 'Chalcedony Point', country: 'Argentina',      cost: 100000 },
+            { name: 'Quartzite Point',  country: 'South Africa',   cost: 122595 }
+        ]
+    },
+    fossil: {
+        name: 'Patagonian Fossil Exchange',
+        points: 20,
+        pieces: [
+            { name: 'Patagonian Fossil', country: 'Argentina', cost: 549000 }
+        ]
+    },
+    meteorite: {
+        name: 'Meteorite Fragment Exchange',
+        points: 15,
+        pieces: [
+            { name: 'Meteorite Fragment', country: 'Argentina', cost: 458000 }
+        ]
+    }
+};
+
+function renderMuseumPlanner() {
+    const setType = document.getElementById('mus-set-type')?.value || 'plushie';
+    const targetSets = Math.max(1, parseInt(document.getElementById('mus-target-sets')?.value || '10', 10));
+    const ptPrice = Math.max(1000, parseInt(document.getElementById('mus-point-price')?.value || String(livePointPrice), 10));
+    const musDay = document.getElementById('mus-day-bonus')?.checked;
+    const setDef = MUSEUM_SETS[setType] || MUSEUM_SETS.plushie;
+
+    updateKPIs();
+
+    const piecesGrid = document.getElementById('museum-pieces-grid');
+    const summaryEl = document.getElementById('museum-arbitrage-summary');
+    const routeEl = document.getElementById('museum-route-breakdown');
+    if (!piecesGrid || !summaryEl || !routeEl) return;
+
+    const effCap = getEffectiveCapacityForCategory(setType === 'flower' ? 'flower' : (setType === 'plushie' ? 'plushie' : 'contraband'));
+
+    let totalBuyCost = 0;
+    let totalMarketSellNet = 0;
+    let totalFlightsNeeded = 0;
+    let totalFlightMins = 0;
+    const countryFlights = [];
+
+    const pieceCardsHtml = setDef.pieces.map(p => {
+        const liveMatch = allItems.find(i => i.name.toLowerCase() === p.name.toLowerCase());
+        const buyCost = liveMatch ? Number(liveMatch.cost || p.cost) : p.cost;
+        const mktVal = liveMatch ? Number(liveMatch.marketPrice || buyCost * 3) : buyCost * 3;
+        const ownedQty = Math.max(0, parseInt(museumOwnedMap[p.name] || 0, 10));
+        const remNeeded = Math.max(0, targetSets - ownedQty);
+
+        totalBuyCost += buyCost * targetSets;
+        totalMarketSellNet += Math.floor(mktVal * 0.95) * targetSets;
+
+        let flights = 0;
+        let rtMins = 0;
+        if (p.country !== 'Torn City' && remNeeded > 0) {
+            flights = Math.ceil(remNeeded / Math.max(1, effCap));
+            const ow = getOneWayFlightMins(p.country);
+            rtMins = flights * ow * 2;
+            totalFlightsNeeded += flights;
+            totalFlightMins += rtMins;
+            countryFlights.push({ piece: p.name, country: p.country, remNeeded, flights, rtMins, stock: liveMatch ? liveMatch.stock : null });
+        }
+
+        return `
+            <div class="museum-piece-card ${remNeeded === 0 ? 'complete' : ''}">
+                <div style="min-width:0;">
+                    <div style="font-weight:800;color:var(--text-primary);">${escHtml(p.name)}</div>
+                    <div style="font-size:0.86em;color:var(--text-tertiary);">${escHtml(p.country)} • Buy ${fmtSignedMoney(buyCost)} • Mkt ${fmtSignedMoney(mktVal)}</div>
+                </div>
+                <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;">
+                    <span style="font-size:0.82em;color:var(--text-secondary);">Own:</span>
+                    <input type="number" class="ctrl-input" style="width:58px;padding:4px 6px;" min="0" max="10000" value="${ownedQty}" onchange="setMuseumOwned('${escHtml(p.name)}', this.value)">
+                </div>
+            </div>
+        `;
+    }).join('');
+    piecesGrid.innerHTML = pieceCardsHtml;
+
+    const ptsEarned = targetSets * setDef.points * (musDay ? 1.1 : 1.0);
+    const museumGrossVal = Math.round(ptsEarned * ptPrice);
+    const museumNetProfit = museumGrossVal - totalBuyCost;
+    const marketNetProfit = totalMarketSellNet - totalBuyCost;
+    const diff = museumNetProfit - marketNetProfit;
+
+    summaryEl.innerHTML = `
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(175px,1fr));gap:10px;background:var(--bg-elevated);padding:12px;border-radius:var(--radius-sm);border:1px solid var(--border-subtle);">
+            <div>
+                <div style="font-size:0.71em;color:var(--text-tertiary);font-weight:800;">FOREIGN BUY COST (${targetSets} SETS)</div>
+                <div style="font-size:1.05em;font-weight:800;font-family:var(--font-mono);">${fmtSignedMoney(totalBuyCost)}</div>
+            </div>
+            <div>
+                <div style="font-size:0.71em;color:var(--text-tertiary);font-weight:800;">MUSEUM REDEMPTION (${ptsEarned.toFixed(0)} PTS)</div>
+                <div style="font-size:1.05em;font-weight:800;font-family:var(--font-mono);color:#38bdf8;">${fmtSignedMoney(museumGrossVal)} <span style="font-size:0.76em;">(Net ${fmtCompactMoney(museumNetProfit)})</span></div>
+            </div>
+            <div>
+                <div style="font-size:0.71em;color:var(--text-tertiary);font-weight:800;">ITEM MARKET (-5% TAX)</div>
+                <div style="font-size:1.05em;font-weight:800;font-family:var(--font-mono);color:#10b981;">${fmtSignedMoney(totalMarketSellNet)} <span style="font-size:0.76em;">(Net ${fmtCompactMoney(marketNetProfit)})</span></div>
+            </div>
+            <div>
+                <div style="font-size:0.71em;color:var(--text-tertiary);font-weight:800;">ARBITRAGE VERDICT</div>
+                <div style="font-size:0.92em;font-weight:800;color:${diff >= 0 ? '#38bdf8' : '#10b981'};">
+                    ${diff >= 0 ? `🏛️ Redeem in Museum (+${fmtCompactMoney(diff)})` : `🏪 Sell on Market (+${fmtCompactMoney(Math.abs(diff))})`}
+                </div>
+            </div>
+        </div>
+    `;
+
+    const badge = document.getElementById('mus-total-flights-badge');
+    if (badge) badge.textContent = `${totalFlightsNeeded} Flights (${fmtMins(totalFlightMins)})`;
+
+    if (!countryFlights.length) {
+        routeEl.innerHTML = `<div style="padding:18px;text-align:center;color:#10b981;font-weight:700;">✅ All foreign pieces complete for ${targetSets} set(s)!</div>`;
+    } else {
+        routeEl.innerHTML = countryFlights.map(cf => {
+            const flag = TRAVEL_2_COUNTRIES[cf.country]?.flag || '🌍';
+            return `
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border-bottom:1px solid var(--border-subtle);font-size:0.81em;">
+                    <div>
+                        <strong>${flag} ${escHtml(cf.piece)}</strong> <span style="color:var(--text-tertiary);">(${escHtml(cf.country)})</span>
+                        <div style="font-size:0.86em;color:var(--text-secondary);">Need ${cf.remNeeded} more @ Cap ${effCap} ${cf.stock !== null ? `• Live Stock: ${cf.stock.toLocaleString()}` : ''}</div>
+                    </div>
+                    <div style="text-align:right;font-family:var(--font-mono);">
+                        <strong style="color:#38bdf8;">${cf.flights} flight${cf.flights > 1 ? 's' : ''}</strong>
+                        <div style="font-size:0.86em;color:var(--text-tertiary);">${fmtMins(cf.rtMins)} total</div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+}
+
+function setMuseumOwned(pieceName, val) {
+    museumOwnedMap[pieceName] = Math.max(0, parseInt(val || '0', 10));
+    localStorage.setItem('travelMuseumOwned', JSON.stringify(museumOwnedMap));
+    renderMuseumPlanner();
+}
+function clearMuseumOwned() {
+    museumOwnedMap = {};
+    localStorage.removeItem('travelMuseumOwned');
+    renderMuseumPlanner();
+}
+
+// ── Scatter Chart & Daily Profit Simulator (View 4) ──────────────────────────
+function renderScatterChart() {
+    const canvas = document.getElementById('travel-scatter-canvas');
+    if (!canvas || !allItems.length) return;
+    const pts = allItems.map(getTravelMetrics).filter(i => !i.isOutOfStock && i.profitPerHr > 0);
+
+    if (typeof window.Chart === 'function') {
+        if (scatterChartInstance) scatterChartInstance.destroy();
+        const catColor = { plushie: '#38bdf8', flower: '#f472b6', contraband: '#c084fc', drug: '#10b981', weapon: '#f59e0b', other: '#94a3b8' };
+        scatterChartInstance = new Chart(canvas.getContext('2d'), {
+            type: 'bubble',
+            data: {
+                datasets: [{
+                    label: 'In-Stock Travel Runs',
+                    data: pts.map(i => ({
+                        x: i.roundTripMins,
+                        y: Math.round(i.profitPerHr),
+                        r: Math.max(5, Math.min(18, Math.sqrt(Math.max(10000, i.totalProfit)) / 95)),
+                        item: i
+                    })),
+                    backgroundColor: pts.map(i => (catColor[i.category] || '#38bdf8') + 'aa'),
+                    borderColor: pts.map(i => catColor[i.category] || '#38bdf8'),
+                    borderWidth: 1.5
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                onClick: (_e, elements) => {
+                    if (elements && elements.length) {
+                        const raw = scatterChartInstance.data.datasets[0].data[elements[0].index];
+                        if (raw && raw.item) focusCountryInTable(raw.item.country);
+                    }
+                },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: (ctx) => {
+                                const itm = ctx.raw.item;
+                                return `${itm.name} (${itm.country}): ${fmtSignedMoney(itm.profitPerHr)}/hr • ${fmtSignedMoney(itm.totalProfit)} trip • ${fmtMins(itm.roundTripMins)} RT`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: { title: { display: true, text: 'Round-Trip Flight Time (Minutes)', color: '#94a3b8' }, ticks: { color: '#94a3b8' }, grid: { color: 'rgba(148,163,184,0.12)' } },
+                    y: { title: { display: true, text: 'Net Profit / Hour ($/hr)', color: '#94a3b8' }, ticks: { color: '#94a3b8', callback: v => fmtCompactMoney(v) }, grid: { color: 'rgba(148,163,184,0.12)' } }
+                }
+            }
+        });
+    }
+}
+
+function applySimulatorPreset() {
+    const p = document.getElementById('sim-preset')?.value;
+    const hEl = document.getElementById('sim-hours-day');
+    if (!hEl) return;
+    if (p === 'casual') hEl.value = 4;
+    else if (p === 'workday') hEl.value = 10;
+    else if (p === 'hardcore') hEl.value = 16;
+    renderDailySimulator();
+}
+
+function renderDailySimulator() {
+    const out = document.getElementById('daily-sim-output');
+    if (!out || !allItems.length) return;
+    const hoursAvail = Math.max(1, parseFloat(document.getElementById('sim-hours-day')?.value || '10'));
+    const deductPi = document.getElementById('sim-pi-upkeep')?.checked;
+    const piUpkeep = deductPi ? 352500 : 0;
+
+    let remMins = Math.round(hoursAvail * 60);
+    const computed = allItems.map(getTravelMetrics).filter(i => !i.isOutOfStock && i.totalProfit > 0 && !i.exceedsBudget);
+    const bestByCountry = [];
+    for (const cName of Object.keys(TRAVEL_2_COUNTRIES)) {
+        const top = computed.filter(i => i.country === cName).sort((a, b) => b.profitPerHr - a.profitPerHr)[0];
+        if (top) bestByCountry.push(top);
+    }
+    bestByCountry.sort((a, b) => b.profitPerHr - a.profitPerHr);
+
+    const schedule = [];
+    let grossDaily = 0;
+    let safety = 0;
+    while (remMins >= 24 && bestByCountry.length && safety < 25) {
+        safety++;
+        const fit = bestByCountry.find(i => i.roundTripMins <= remMins);
+        if (!fit) break;
+        const existing = schedule.find(s => s.item.country === fit.country && s.item.id === fit.id);
+        if (existing) existing.count++;
+        else schedule.push({ item: fit, count: 1 });
+        remMins -= fit.roundTripMins;
+        grossDaily += fit.totalProfit;
+    }
+
+    const netDaily = grossDaily - piUpkeep;
+    const netWeekly = netDaily * 7;
+    const netMonthly = netDaily * 30;
+
+    out.innerHTML = `
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px;">
+            <div style="background:var(--bg-elevated);padding:10px;border-radius:var(--radius-sm);border:1px solid var(--border-subtle);">
+                <div style="font-size:0.7em;color:var(--text-tertiary);font-weight:800;">DAILY NET PROFIT</div>
+                <div style="font-size:1.05em;font-weight:800;font-family:var(--font-mono);color:#10b981;">${fmtSignedMoney(netDaily)}</div>
+            </div>
+            <div style="background:var(--bg-elevated);padding:10px;border-radius:var(--radius-sm);border:1px solid var(--border-subtle);">
+                <div style="font-size:0.7em;color:var(--text-tertiary);font-weight:800;">WEEKLY NET (7D)</div>
+                <div style="font-size:1.05em;font-weight:800;font-family:var(--font-mono);color:#38bdf8;">${fmtCompactMoney(netWeekly)}</div>
+            </div>
+            <div style="background:var(--bg-elevated);padding:10px;border-radius:var(--radius-sm);border:1px solid var(--border-subtle);">
+                <div style="font-size:0.7em;color:var(--text-tertiary);font-weight:800;">MONTHLY NET (30D)</div>
+                <div style="font-size:1.05em;font-weight:800;font-family:var(--font-mono);color:#fbbf24;">${fmtCompactMoney(netMonthly)}</div>
+            </div>
+        </div>
+        <div style="font-size:0.75em;font-weight:800;color:var(--text-tertiary);text-transform:uppercase;margin-bottom:6px;">Recommended Daily Rotation (${hoursAvail}h Window)</div>
+        ${schedule.map(s => `
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 10px;border-bottom:1px solid var(--border-subtle);font-size:0.8em;">
+                <div><strong>${s.count}× ${s.item.flag} ${escHtml(s.item.name)}</strong> <span style="color:var(--text-tertiary);">(${escHtml(s.item.country)} • ${fmtMins(s.item.roundTripMins)} RT ea)</span></div>
+                <div style="font-family:var(--font-mono);font-weight:800;color:#10b981;">+${fmtSignedMoney(s.item.totalProfit * s.count)}</div>
+            </div>
+        `).join('') || '<div style="color:var(--text-dim);font-size:0.8em;">Increase daily hours to fit a round-trip flight.</div>'}
+    `;
+}
+
+// ── 50-Flight Merit Tracker, Trip Log & Restock Alerts (View 5) ──────────────
+function renderMeritTracker() {
+    const grid = document.getElementById('merit-grid');
+    if (!grid) return;
+    let completed = 0;
+    grid.innerHTML = Object.values(TRAVEL_2_COUNTRIES).map(c => {
+        const count = Math.max(0, parseInt(countryMeritCounts[c.name] || 0, 10));
+        if (count >= 50) completed++;
+        const pct = Math.min(100, Math.round((count / 50) * 100));
+        const ow = getOneWayFlightMins(c.name);
+        const remFlights = Math.max(0, 50 - count);
+        const remHrs = ((remFlights * ow * 2) / 60).toFixed(1);
+        return `
+            <div class="merit-card">
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <span style="font-weight:800;font-size:0.86em;">${c.flag} ${escHtml(c.short)} <span style="color:var(--text-tertiary);font-weight:600;">(${escHtml(c.merit)})</span></span>
+                    <span class="mini-badge ${count >= 50 ? 'green' : 'cyan'}">${count} / 50</span>
+                </div>
+                <div class="merit-bar-bg"><div class="merit-bar-fill" style="width:${pct}%"></div></div>
+                <div style="display:flex;justify-content:space-between;align-items:center;font-size:0.73em;color:var(--text-tertiary);">
+                    <span>${remFlights === 0 ? '🏆 Honor Bar Earned!' : `${remFlights} left (~${remHrs}h)`}</span>
+                    <div style="display:flex;gap:4px;">
+                        <button type="button" class="act-link" onclick="adjustMeritCount('${escHtml(c.name)}', -1)">-1</button>
+                        <button type="button" class="act-link" onclick="adjustMeritCount('${escHtml(c.name)}', 1)">+1 Flight</button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+    const badge = document.getElementById('merits-completed-badge');
+    if (badge) badge.textContent = `${completed} / 11 Completed`;
+}
+
+function adjustMeritCount(countryName, delta) {
+    const cur = Math.max(0, parseInt(countryMeritCounts[countryName] || 0, 10));
+    countryMeritCounts[countryName] = Math.max(0, cur + delta);
+    localStorage.setItem('travelMeritCounts', JSON.stringify(countryMeritCounts));
+    renderMeritTracker();
+    renderCountryCommandCards();
+}
+
+function logTripForItem(itemId, countryName) {
+    const cName = normalizeCountryName(countryName);
+    const raw = allItems.find(i => Number(i.id) === Number(itemId) && normalizeCountryName(i.country) === cName);
+    if (!raw) return;
+    const m = getTravelMetrics(raw);
+    personalTripLog.unshift({
+        ts: Date.now(),
+        country: m.country,
+        flag: m.flag,
+        item: m.name,
+        qty: m.tripUnits,
+        profit: m.totalProfit,
+        pph: Math.round(m.profitPerHr)
+    });
+    personalTripLog = personalTripLog.slice(0, 100);
+    localStorage.setItem('travelPersonalTripLog', JSON.stringify(personalTripLog));
+    adjustMeritCount(m.country, 1);
+    renderTripLog();
+}
+
+function renderTripLog() {
+    const sumEl = document.getElementById('trip-log-summary');
+    const listEl = document.getElementById('trip-log-list');
+    if (!sumEl || !listEl) return;
+    const totalProfit = personalTripLog.reduce((s, x) => s + Number(x.profit || 0), 0);
+    sumEl.innerHTML = `<div style="font-size:0.8em;font-family:var(--font-mono);color:var(--text-secondary);">Logged Trips: <strong>${personalTripLog.length}</strong> &nbsp;•&nbsp; Cumulative Net Profit: <strong style="color:#10b981;">${fmtSignedMoney(totalProfit)}</strong></div>`;
+    if (!personalTripLog.length) {
+        listEl.innerHTML = `<div style="font-size:0.78em;color:var(--text-dim);padding:10px 0;">Click 📝 on any item row or Country card to log a flight and track cumulative travel profit.</div>`;
+        return;
+    }
+    listEl.innerHTML = personalTripLog.map(t => `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 8px;border-bottom:1px solid var(--border-subtle);font-size:0.78em;">
+            <div><strong>${t.flag || '✈️'} ${escHtml(t.qty)}× ${escHtml(t.item)}</strong> <span style="color:var(--text-tertiary);">(${escHtml(t.country)} • ${new Date(t.ts).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})})</span></div>
+            <div style="font-family:var(--font-mono);font-weight:800;color:${t.profit >= 0 ? '#10b981' : '#ef4444'};">${fmtSignedMoney(t.profit)}</div>
+        </div>
+    `).join('');
+}
+
+function clearTripLog() {
+    personalTripLog = [];
+    localStorage.removeItem('travelPersonalTripLog');
+    renderTripLog();
+}
+
+function exportTripLogCsv() {
+    if (!personalTripLog.length) return;
+    const rows = [['Timestamp', 'Country', 'Item', 'Quantity', 'Net Profit', 'Profit Per Hour']];
+    personalTripLog.forEach(t => rows.push([new Date(t.ts).toISOString(), t.country, t.item, t.qty, t.profit, t.pph]));
+    const csv = rows.map(r => r.map(x => `"${String(x).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'factionos_travel_ledger.csv';
+    a.click();
+}
+
+// ── Watchlist & Audio Restock Sentinel ───────────────────────────────────────
+function toggleWatchItem(watchKey) {
+    if (watchedItemKeys.has(watchKey)) watchedItemKeys.delete(watchKey);
+    else watchedItemKeys.add(watchKey);
+    localStorage.setItem('travelWatchedItems', JSON.stringify([...watchedItemKeys]));
+    updateWatchedBadge();
+    renderTable();
+    renderAlertWatchedList();
+}
+
+function updateWatchedBadge() {
+    const el = document.getElementById('watched-count');
+    if (el) el.textContent = String(watchedItemKeys.size);
+}
+
+function renderAlertWatchedList() {
+    const el = document.getElementById('alert-watched-list');
+    if (!el) return;
+    if (!watchedItemKeys.size) {
+        el.textContent = 'Star (☆) any items in the profit table to monitor them for restocks and $/hr spikes.';
+        return;
+    }
+    el.innerHTML = `Monitoring <strong>${watchedItemKeys.size}</strong> pinned item(s). Keep this tab open to receive instant audio &amp; browser alerts on restock.`;
+}
+
+function testTravelAlertChime() {
+    try {
+        const Ctx = window.AudioContext || window.webkitAudioContext;
+        if (!Ctx) return;
+        const ctx = new Ctx();
+        [880, 1174.66, 1567.98].forEach((f, idx) => {
+            const osc = ctx.createOscillator();
+            const g = ctx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.value = f;
+            const t = ctx.currentTime + idx * 0.09;
+            g.gain.setValueAtTime(0.001, t);
+            g.gain.exponentialRampToValueAtTime(0.18, t + 0.03);
+            g.gain.exponentialRampToValueAtTime(0.0001, t + 0.35);
+            osc.connect(g);
+            g.connect(ctx.destination);
+            osc.start(t);
+            osc.stop(t + 0.36);
+        });
+    } catch (_) {}
+}
+
+function toggleRestockAlertSentinel() {
+    const chk = document.getElementById('chk-restock-alerts');
+    if (chk && chk.checked && 'Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission().catch(() => {});
+    }
+    saveAlertPrefs();
+}
+
+function saveAlertPrefs() {
+    const pph = document.getElementById('alert-min-pph')?.value || '250000';
+    localStorage.setItem('travelAlertMinPph', pph);
+}
+
+function checkRestockAlertsOnRefresh() {
+    const chk = document.getElementById('chk-restock-alerts');
+    if (!chk || !chk.checked || !watchedItemKeys.size) return;
+    const minPph = parseInt(document.getElementById('alert-min-pph')?.value || '250000', 10) || 0;
+    const hits = allItems.map(getTravelMetrics).filter(i => i.isWatched && !i.isOutOfStock && i.profitPerHr >= minPph);
+    if (hits.length) {
+        testTravelAlertChime();
+    }
+}
+
+// ── Controls & Interactive Capacity Builder ──────────────────────────────────
+function toggleCapacityBuilder() {
+    const dr = document.getElementById('capacity-builder-drawer');
+    if (dr) dr.classList.toggle('open');
+}
+
+function recalcCapacityFromBuilder() {
+    const base = parseInt(document.getElementById('cb-base')?.value || '15', 10);
+    const suit = parseInt(document.getElementById('cb-suitcase')?.value || '3', 10);
+    const exc = Math.max(0, Math.min(10, parseInt(document.getElementById('cb-excursion')?.value || '10', 10)));
+    const comp = document.getElementById('cb-company')?.value || 'none';
+    const outbound = Math.max(0, parseInt(document.getElementById('cb-outbound')?.value || '0', 10));
+    const bookSmug = Boolean(document.getElementById('cb-book-smuggling')?.checked);
+    const tourism = Boolean(document.getElementById('cb-tourism-day')?.checked);
+
+    let genComp = 0;
+    if (comp === 'lingerie_3' || comp === 'lingerie_10' || comp === 'cruise_3') genComp = 2;
+    else if (comp === 'cruise_10') genComp = 5;
+
+    if (comp === 'lingerie_10') {
+        freeBct = true;
+        const fb = document.getElementById('chk-free-bct');
+        if (fb) fb.checked = true;
+        localStorage.setItem('travelFreeBct', '1');
+    }
+
+    const subtotal = base + suit + exc + genComp + (bookSmug ? 10 : 0);
+    const doubled = tourism ? subtotal * 2 : subtotal;
+    const finalCap = Math.max(1, doubled - outbound);
+
+    capacity = finalCap;
+    const capEl = document.getElementById('capacity');
+    if (capEl) capEl.value = finalCap;
+    const noteEl = document.getElementById('cap-builder-note');
+    if (noteEl) noteEl.textContent = `(${finalCap})`;
+    localStorage.setItem('travelCapacity', String(finalCap));
+    localStorage.setItem('travelBuilderState', JSON.stringify({ base, suit, exc, comp, outbound, bookSmug, tourism }));
+
+    const shopExtra = comp === 'flower_7' ? ' (+5 Flowers = ' + (finalCap + 5) + ')' : (comp === 'toy_7' ? ' (+5 Plushies = ' + (finalCap + 5) + ')' : '');
+    const rEl = document.getElementById('cb-formula-readout');
+    if (rEl) {
+        rEl.textContent = `Effective Capacity: (${base} Base + ${suit} Suitcase + ${exc} Excursion${genComp ? ' + ' + genComp + ' Company' : ''}${bookSmug ? ' + 10 Book' : ''})${tourism ? ' × 2 Tourism Day' : ''}${outbound ? ' - ' + outbound + ' Gear' : ''} = ${finalCap} items${shopExtra}`;
+    }
+
+    refreshAllViews();
+}
+
+function restoreCapacityBuilderInputs() {
+    try {
+        const raw = localStorage.getItem('travelBuilderState');
+        if (!raw) return;
+        const st = JSON.parse(raw);
+        if (st.base) document.getElementById('cb-base').value = String(st.base);
+        if (st.suit !== undefined) document.getElementById('cb-suitcase').value = String(st.suit);
+        if (st.exc !== undefined) document.getElementById('cb-excursion').value = String(st.exc);
+        if (st.comp) document.getElementById('cb-company').value = st.comp;
+        if (st.outbound !== undefined) document.getElementById('cb-outbound').value = String(st.outbound);
+        if (st.bookSmug !== undefined) document.getElementById('cb-book-smuggling').checked = Boolean(st.bookSmug);
+        if (st.tourism !== undefined) document.getElementById('cb-tourism-day').checked = Boolean(st.tourism);
+    } catch (_) {}
+}
+
+function resetCapacityDefault() {
+    document.getElementById('cb-base').value = '15';
+    document.getElementById('cb-suitcase').value = '3';
+    document.getElementById('cb-excursion').value = '10';
+    document.getElementById('cb-company').value = 'none';
+    document.getElementById('cb-outbound').value = '0';
+    document.getElementById('cb-book-smuggling').checked = false;
+    document.getElementById('cb-tourism-day').checked = false;
+    recalcCapacityFromBuilder();
+}
+
+function autoPopulateCapacityFromApi() {
+    if (livePlayerContext && livePlayerContext.detectedPerks) {
+        const dp = livePlayerContext.detectedPerks;
+        document.getElementById('cb-base').value = dp.hasAirstrip !== false ? '15' : '10';
+        document.getElementById('cb-suitcase').value = dp.hasSuitcaseLarge !== false ? '3' : '3';
+        document.getElementById('cb-excursion').value = String(dp.factionExcursion ?? 10);
+        document.getElementById('cb-book-smuggling').checked = Boolean(dp.hasSmugglingBook);
+    }
+    recalcCapacityFromBuilder();
+}
+
 function applyFlightProfile() {
     const sel = document.getElementById('flight-profile');
     if (!sel) return;
     flightProfile = sel.value || 'airstrip';
     localStorage.setItem('travelFlightProfile', flightProfile);
-    renderTable();
-    updateKPIs();
+    const cbBase = document.getElementById('cb-base');
+    if (cbBase) cbBase.value = flightProfile === 'standard' ? '10' : '15';
+    const lblFreeBct = document.getElementById('lbl-free-bct');
+    if (lblFreeBct) lblFreeBct.style.display = flightProfile === 'bct' ? 'inline-flex' : 'none';
+    refreshAllViews();
+}
+
+function onFlightModifierChange() {
+    bookMailing = Boolean(document.getElementById('chk-book-mailing')?.checked);
+    freeBct = Boolean(document.getElementById('chk-free-bct')?.checked);
+    localStorage.setItem('travelBookMailing', bookMailing ? '1' : '0');
+    localStorage.setItem('travelFreeBct', freeBct ? '1' : '0');
+    refreshAllViews();
+}
+
+function onSellBasisChange() {
+    const sbEl = document.getElementById('sell-basis');
+    const ctEl = document.getElementById('custom-trader-pct');
+    if (sbEl) sellBasis = sbEl.value || 'market_5';
+    if (ctEl) {
+        ctEl.style.display = sellBasis === 'custom_trader' ? 'inline-block' : 'none';
+        customTraderPct = parseFloat(ctEl.value || '97') || 97;
+    }
+    localStorage.setItem('travelSellBasis', sellBasis);
+    localStorage.setItem('travelCustomTraderPct', String(customTraderPct));
+    refreshAllViews();
 }
 
 function applyCapacity() {
-    const val = parseInt(document.getElementById('capacity').value);
+    const val = parseInt(document.getElementById('capacity')?.value || '28', 10);
     if (!val || val < 1) return;
     capacity = val;
-    localStorage.setItem('travelCapacity', val);
-    renderTable();
-    updateKPIs();
+    const noteEl = document.getElementById('cap-builder-note');
+    if (noteEl) noteEl.textContent = `(${val})`;
+    localStorage.setItem('travelCapacity', String(val));
+    refreshAllViews();
 }
 
 function applySort() {
-    sortKey = document.getElementById('sort-select').value;
-    sortAsc = false;
+    const val = document.getElementById('sort-select')?.value || 'profitPerHr';
+    sortKey = val;
+    sortAsc = val === 'flightTimeMins' || val === 'name' || val === 'country' || val === 'rank';
+    renderTable();
+}
+
+function sortBy(key) {
+    if (sortKey === key) {
+        sortAsc = !sortAsc;
+    } else {
+        sortKey = key;
+        sortAsc = ['flightTimeMins', 'name', 'country', 'rank'].includes(key);
+    }
+    const sel = document.getElementById('sort-select');
+    if (sel && [...sel.options].some(o => o.value === key)) {
+        sel.value = key;
+    }
     renderTable();
 }
 
@@ -741,40 +2693,164 @@ function setFilter(filter, btn, forceState) {
     }
     activeCategory = filter || 'all';
     currentFilter = activeCategory;
-    document.querySelectorAll('.pill-btn:not([data-filter="instock"])').forEach(b => b.classList.remove('active'));
-    const targetBtn = btn || document.querySelector(`.pill-btn[data-filter="${activeCategory}"]`);
-    if (targetBtn) targetBtn.classList.add('active');
+    document.querySelectorAll('#filter-pills .pill-btn[data-filter]').forEach(b => {
+        const df = b.getAttribute('data-filter');
+        if (!['instock', 'profitable', 'watched'].includes(df)) {
+            b.classList.toggle('active', df === activeCategory);
+        }
+    });
     renderTable();
 }
 
-function sortBy(key) {
-    if (sortKey === key) { sortAsc = !sortAsc; }
-    else { sortKey = key; sortAsc = key === 'flightTimeMins'; }
-
-    document.querySelectorAll('thead th').forEach(th => th.classList.remove('sorted'));
-    document.getElementById('sort-select').value = ['profitPerHr','totalProfit','profit','flightTimeMins','stock'].includes(key) ? key : 'profitPerHr';
+function toggleGuardFilter(key, btn, forceVal) {
+    guardFilters[key] = typeof forceVal === 'boolean' ? forceVal : !guardFilters[key];
+    if (btn) btn.classList.toggle('active', guardFilters[key]);
     renderTable();
 }
+
+function onSearchInput() {
+    searchQuery = (document.getElementById('travel-search')?.value || '').trim();
+    renderTable();
+}
+
+function onGuardrailInputChange() {
+    maxFlightRtMins = parseInt(document.getElementById('max-flight-mins')?.value || '0', 10) || 0;
+    energyCapSetting = parseInt(document.getElementById('guard-energy-cap')?.value || '150', 10) || 150;
+    localStorage.setItem('travelEnergyCap', String(energyCapSetting));
+    refreshAllViews();
+}
+
+function parseShorthandMoney(raw) {
+    const s = String(raw || '').trim().toLowerCase().replace(/[,$\s]/g, '');
+    if (!s) return 0;
+    const m = s.match(/^(\d+(?:\.\d+)?)([kmb])?$/);
+    if (!m) return parseInt(s, 10) || 0;
+    const mult = m[2] === 'b' ? 1e9 : (m[2] === 'm' ? 1e6 : (m[2] === 'k' ? 1e3 : 1));
+    return Math.round(parseFloat(m[1]) * mult);
+}
+
+function onBudgetInputChange() {
+    const raw = document.getElementById('budget-input')?.value || '';
+    budgetCap = parseShorthandMoney(raw);
+    localStorage.setItem('travelBudgetCap', String(budgetCap));
+    refreshAllViews();
+}
+
+function applyWalletBudget() {
+    if (!livePlayerContext || !livePlayerContext.wallet) return;
+    budgetCap = Math.max(0, Number(livePlayerContext.wallet));
+    const inp = document.getElementById('budget-input');
+    if (inp) inp.value = budgetCap.toLocaleString();
+    localStorage.setItem('travelBudgetCap', String(budgetCap));
+    refreshAllViews();
+}
+
+function renderCountryChips() {
+    const bar = document.getElementById('country-chips-bar');
+    if (!bar) return;
+    const allActive = selectedCountries.size === 0;
+    let html = `<span style="font-size:0.71em;font-weight:800;color:var(--text-tertiary);text-transform:uppercase;margin-right:4px;">🌍 Destinations:</span>`;
+    html += `<button type="button" class="country-chip ${allActive ? 'active' : ''}" onclick="toggleCountryChip('ALL')">All (11)</button>`;
+    for (const c of Object.values(TRAVEL_2_COUNTRIES)) {
+        const act = selectedCountries.has(c.name);
+        html += `<button type="button" class="country-chip ${act ? 'active' : ''}" onclick="toggleCountryChip('${escHtml(c.name)}')">${c.flag} ${escHtml(c.short)}</button>`;
+    }
+    bar.innerHTML = html;
+}
+
+function toggleCountryChip(countryName) {
+    if (countryName === 'ALL') {
+        selectedCountries.clear();
+    } else {
+        if (selectedCountries.has(countryName)) selectedCountries.delete(countryName);
+        else selectedCountries.add(countryName);
+    }
+    renderCountryChips();
+    renderTable();
+}
+
+function focusCountryInTable(countryName) {
+    const norm = normalizeCountryName(countryName);
+    selectedCountries.clear();
+    selectedCountries.add(norm);
+    renderCountryChips();
+    switchTravelView('items');
+    renderTable();
+}
+
+function switchTravelView(viewName, tabBtn) {
+    currentViewMode = viewName || 'items';
+    document.querySelectorAll('.tv-tab').forEach(b => {
+        b.classList.toggle('active', b.getAttribute('data-view') === currentViewMode);
+    });
+    document.querySelectorAll('.view-pane').forEach(p => {
+        p.classList.toggle('active', p.id === 'pane-' + currentViewMode);
+    });
+    const tblFilters = document.getElementById('table-only-filters');
+    if (tblFilters) {
+        tblFilters.style.display = currentViewMode === 'items' ? 'flex' : 'none';
+    }
+    if (currentViewMode === 'analytics') {
+        setTimeout(renderScatterChart, 60);
+    }
+}
+
+// ── F.R.I.D.A.Y. Co-Pilot Direct Command Hook ────────────────────────────────
+window.applyFridayTravelCommand = function(action) {
+    if (!action) return;
+    if (action.viewMode) switchTravelView(action.viewMode);
+    if (action.capacity) {
+        const capEl = document.getElementById('capacity');
+        if (capEl) { capEl.value = action.capacity; applyCapacity(); }
+    }
+    if (action.flightProfile) {
+        const fpEl = document.getElementById('flight-profile');
+        if (fpEl) { fpEl.value = action.flightProfile; applyFlightProfile(); }
+    }
+    if (action.maxRtMins) {
+        maxFlightRtMins = Number(action.maxRtMins);
+        const sel = document.getElementById('max-flight-mins');
+        if (sel) sel.value = [...sel.options].some(o => Number(o.value) === maxFlightRtMins) ? String(maxFlightRtMins) : '0';
+    }
+    if (action.budget) {
+        budgetCap = Number(action.budget);
+        const bInp = document.getElementById('budget-input');
+        if (bInp) bInp.value = budgetCap.toLocaleString();
+    }
+    if (typeof action.lowMugRisk === 'boolean') {
+        toggleGuardFilter('lowMugRisk', document.getElementById('btn-guard-mug'), action.lowMugRisk);
+    }
+    if (typeof action.noEnergyWaste === 'boolean') {
+        toggleGuardFilter('noEnergyWaste', document.getElementById('btn-guard-0e'), action.noEnergyWaste);
+    }
+    if (action.filter) {
+        setFilter(action.filter, document.querySelector(`.pill-btn[data-filter="${action.filter}"]`));
+    }
+    if (action.inStockOnly) {
+        setFilter('instock', document.querySelector('.pill-btn[data-filter="instock"]'), true);
+    }
+    refreshAllViews();
+};
 
 // ── Restock Timer ─────────────────────────────────────────────────────────────
 function updateRestockTimer() {
     const now = new Date();
     const mins = now.getUTCMinutes();
-    const secs = now.getUTCSeconds();
     const nextQuarter = Math.ceil((mins + 0.01) / 15) * 15;
     const target = new Date(now);
     target.setUTCMinutes(nextQuarter >= 60 ? 60 : nextQuarter, 0, 0);
     const diff = target - now;
     const m = Math.floor(diff / 60000);
     const s = Math.floor((diff % 60000) / 1000);
-    const label = `${m.toString().padStart(2,'0')}m ${s.toString().padStart(2,'0')}s`;
+    const label = `${m.toString().padStart(2, '0')}m ${s.toString().padStart(2, '0')}s`;
     const isUrgent = m === 0;
 
-    document.getElementById('kpi-restock').textContent = label;
+    const kpiRestock = document.getElementById('kpi-restock');
+    if (kpiRestock) kpiRestock.textContent = label;
     const pill = document.getElementById('restock-pill');
     const restockLabel = document.getElementById('restock-label');
-    restockLabel.textContent = `RESTOCK IN ${label}`;
-    pill.className = 'restock-pill' + (isUrgent ? ' urgent' : '');
+    if (restockLabel) restockLabel.textContent = `RESTOCK IN ${label}`;
+    if (pill) pill.className = 'restock-pill' + (isUrgent ? ' urgent' : '');
 }
 </script>
 </body>

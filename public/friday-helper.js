@@ -390,31 +390,35 @@
 
                 // TRAVEL PROFIT DESK (/travel.html)
                 if (action.type === 'travel_action') {
-                    if (action.capacity) {
-                        const capEl = document.getElementById('capacity');
-                        if (capEl && typeof window.applyCapacity === 'function') {
-                            capEl.value = action.capacity;
-                            window.applyCapacity();
+                    if (typeof window.applyFridayTravelCommand === 'function') {
+                        window.applyFridayTravelCommand(action);
+                    } else {
+                        if (action.capacity) {
+                            const capEl = document.getElementById('capacity');
+                            if (capEl && typeof window.applyCapacity === 'function') {
+                                capEl.value = action.capacity;
+                                window.applyCapacity();
+                            }
                         }
-                    }
-                    if (action.flightProfile) {
-                        const fpEl = document.getElementById('flight-profile');
-                        if (fpEl && typeof window.applyFlightProfile === 'function') {
-                            fpEl.value = action.flightProfile;
-                            window.applyFlightProfile();
+                        if (action.flightProfile) {
+                            const fpEl = document.getElementById('flight-profile');
+                            if (fpEl && typeof window.applyFlightProfile === 'function') {
+                                fpEl.value = action.flightProfile;
+                                window.applyFlightProfile();
+                            }
                         }
-                    }
-                    if (action.filter && typeof window.setFilter === 'function') {
-                        const btn = document.querySelector(`.pill-btn[data-filter="${action.filter}"]`);
-                        if (btn) {
-                            window.setFilter(action.filter, btn);
-                            if (!isFollowupPass) flashElement(btn);
+                        if (action.filter && typeof window.setFilter === 'function') {
+                            const btn = document.querySelector(`.pill-btn[data-filter="${action.filter}"]`);
+                            if (btn) {
+                                window.setFilter(action.filter, btn);
+                                if (!isFollowupPass) flashElement(btn);
+                            }
                         }
-                    }
-                    if (action.inStockOnly && typeof window.setFilter === 'function') {
-                        const stockBtn = document.querySelector('.pill-btn[data-filter="instock"]');
-                        if (stockBtn) {
-                            window.setFilter('instock', stockBtn, true);
+                        if (action.inStockOnly && typeof window.setFilter === 'function') {
+                            const stockBtn = document.querySelector('.pill-btn[data-filter="instock"]');
+                            if (stockBtn) {
+                                window.setFilter('instock', stockBtn, true);
+                            }
                         }
                     }
                 }
@@ -1219,6 +1223,65 @@
             saveHistory(hist);
             renderMessages();
             executeHelperAction(localAction);
+            return;
+        }
+
+        // Fast client-side Travel Co-Pilot intent parser ("best run under 2 hours with $2M budget and low mug risk", "museum set planner", "contraband in stock")
+        const qLow = text.trim().toLowerCase();
+        if (/\b(best\s+run|best\s+flight|museum\s+set|set\s+planner|fly\s+for\s+a\s+set|contraband|mug\s+risk|50[\s-]*flight|travel\s+merit|country\s+cards)\b/.test(qLow)) {
+            let filter = null;
+            if (/\bplushie/.test(qLow)) filter = 'plushie';
+            else if (/\bflower/.test(qLow)) filter = 'flower';
+            else if (/\bcontraband|black\s*market/.test(qLow)) filter = 'contraband';
+            else if (/\bweapon|temp/.test(qLow)) filter = 'weapon';
+            else if (/\bdrug|xanax/.test(qLow)) filter = 'drug';
+
+            let viewMode = null;
+            if (/\bmuseum|set\s*planner|fly\s*for\s*a\s*set/.test(qLow)) viewMode = 'museum';
+            else if (/\bcountry\s*card|by\s*country/.test(qLow)) viewMode = 'countries';
+            else if (/\bmerit|50[\s-]*flight|trip\s*log/.test(qLow)) viewMode = 'merits';
+            else if (/\bscatter|chart|simulator/.test(qLow)) viewMode = 'analytics';
+
+            const hrM = qLow.match(/(?:under|max|within|<=?)\s*(\d+(?:\.\d+)?)\s*(?:h|hr|hrs|hour|hours)\b/);
+            const minM = qLow.match(/(?:under|max|within|<=?)\s*(\d+)\s*(?:m|min|mins|minutes)\b/);
+            const maxRtMins = hrM ? Math.round(parseFloat(hrM[1]) * 60) : (minM ? parseInt(minM[1], 10) : null);
+
+            let budget = null;
+            const bM = qLow.match(/\$\s*(\d+(?:\.\d+)?)\s*([mkb])?\b/) || qLow.match(/\b(\d+(?:\.\d+)?)\s*([mkb])\s*budget\b/);
+            if (bM) {
+                const mult = bM[2] === 'b' ? 1e9 : (bM[2] === 'm' ? 1e6 : (bM[2] === 'k' ? 1e3 : 1));
+                budget = Math.round(parseFloat(bM[1]) * mult);
+            }
+            const lowMugRisk = /\blow\s*mug|\bno\s*mug|\bsafe\s*mug/.test(qLow);
+            const noEnergyWaste = /\bno\s*energy\s*waste|\b0e\s*waste|\benergy\s*guard/.test(qLow);
+
+            const travelAct = {
+                type: 'travel_action',
+                page: '/travel.html',
+                filter,
+                viewMode,
+                maxRtMins,
+                budget,
+                lowMugRisk,
+                noEnergyWaste,
+                inStockOnly: true,
+                label: 'Applied Travel Tactical Plan'
+            };
+            const summaryParts = [];
+            if (viewMode) summaryParts.push(`switched to **${viewMode.toUpperCase()}** view`);
+            if (filter) summaryParts.push(`filtered to **${filter}**`);
+            if (maxRtMins) summaryParts.push(`max flight time **≤${maxRtMins}m RT**`);
+            if (budget) summaryParts.push(`budget cap **$${budget.toLocaleString()}**`);
+            if (lowMugRisk) summaryParts.push(`**Low Mug Risk (<$1M)**`);
+            if (noEnergyWaste) summaryParts.push(`**0 Energy Waste Guard**`);
+            hist.push({
+                role: 'assistant',
+                text: `Executing on **Travel Profit Desk**: ${summaryParts.length ? summaryParts.join(', ') : 'showing optimal in-stock travel runs'}.`,
+                action: travelAct
+            });
+            saveHistory(hist);
+            renderMessages();
+            executeHelperAction(travelAct);
             return;
         }
 

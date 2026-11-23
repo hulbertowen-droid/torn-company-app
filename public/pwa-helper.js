@@ -76,8 +76,33 @@
     }
 
     // Render Install Banner
+    function isPwaBannerDismissed() {
+        try {
+            if (sessionStorage.getItem('factionos_pwa_dismissed') === '1') return true;
+            const d1 = parseInt(localStorage.getItem('factionos_pwa_dismissed') || '0', 10);
+            const d2 = parseInt(localStorage.getItem('factionos_ios_prompt_dismissed') || '0', 10);
+            const latest = Math.max(d1 || 0, d2 || 0);
+            if (latest > 0 && (Date.now() - latest < 7 * 24 * 3600 * 1000)) return true;
+        } catch (_) {}
+        return false;
+    }
+
+    function dismissInstallBannerPermanently(e) {
+        if (e) {
+            try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
+        }
+        try {
+            const nowStr = Date.now().toString();
+            localStorage.setItem('factionos_pwa_dismissed', nowStr);
+            localStorage.setItem('factionos_ios_prompt_dismissed', nowStr);
+            sessionStorage.setItem('factionos_pwa_dismissed', '1');
+        } catch (_) {}
+        removeInstallBanner();
+    }
+    window.dismissPwaInstallBanner = dismissInstallBannerPermanently;
+
     function renderInstallBanner(platform) {
-        if (document.getElementById('pwa-install-banner') || isStandalone) return;
+        if (document.getElementById('pwa-install-banner') || isStandalone || isPwaBannerDismissed()) return;
 
         const banner = document.createElement('div');
         banner.id = 'pwa-install-banner';
@@ -93,8 +118,8 @@
                     </div>
                 </div>
                 <div class="pwa-banner-actions">
-                    <button id="pwa-install-btn" class="pwa-btn-primary">Install</button>
-                    <button id="pwa-dismiss-btn" class="pwa-btn-close" title="Dismiss">&times;</button>
+                    <button type="button" id="pwa-install-btn" class="pwa-btn-primary">Install</button>
+                    <button type="button" id="pwa-dismiss-btn" class="pwa-btn-close" aria-label="Dismiss install banner" title="Dismiss" onclick="window.dismissPwaInstallBanner && window.dismissPwaInstallBanner(event)">&times;</button>
                 </div>
             `;
         } else if (platform === 'ios') {
@@ -107,7 +132,7 @@
                     </div>
                 </div>
                 <div class="pwa-banner-actions">
-                    <button id="pwa-dismiss-btn" class="pwa-btn-close" title="Dismiss">&times;</button>
+                    <button type="button" id="pwa-dismiss-btn" class="pwa-btn-close" aria-label="Dismiss install banner" title="Dismiss" onclick="window.dismissPwaInstallBanner && window.dismissPwaInstallBanner(event)">&times;</button>
                 </div>
             `;
         }
@@ -119,7 +144,7 @@
             document.body.appendChild(banner);
         }
 
-        const installBtn = document.getElementById('pwa-install-btn');
+        const installBtn = banner.querySelector('#pwa-install-btn');
         if (installBtn && deferredPrompt) {
             installBtn.addEventListener('click', async () => {
                 deferredPrompt.prompt();
@@ -131,25 +156,20 @@
             });
         }
 
-        const dismissBtn = document.getElementById('pwa-dismiss-btn');
+        const dismissBtn = banner.querySelector('#pwa-dismiss-btn');
         if (dismissBtn) {
-            dismissBtn.addEventListener('click', () => {
-                if (platform === 'ios') {
-                    localStorage.setItem('factionos_ios_prompt_dismissed', Date.now().toString());
-                } else {
-                    localStorage.setItem('factionos_pwa_dismissed', Date.now().toString());
-                }
-                removeInstallBanner();
-            });
+            dismissBtn.addEventListener('click', dismissInstallBannerPermanently);
         }
     }
 
     function removeInstallBanner() {
         const banner = document.getElementById('pwa-install-banner');
         if (banner) {
+            banner.classList.remove('animate-slide-up');
+            banner.style.pointerEvents = 'none';
             banner.style.opacity = '0';
-            banner.style.transform = window.innerWidth <= 768 ? 'translateY(-8px)' : 'translateY(20px)';
-            setTimeout(() => banner.remove(), 250);
+            banner.style.setProperty('display', 'none', 'important');
+            banner.remove();
         }
     }
 
