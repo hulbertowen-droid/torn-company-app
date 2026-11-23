@@ -199,6 +199,48 @@ const globalSettingsHTML = `
             <input type="number" id="gs-api-cpm" aria-label="API Calls Per Minute" min="1" max="60" placeholder="12 calls/min">
         </div>
 
+        <details style="margin: 14px 0 16px; border: 1px solid rgba(56,189,248,0.22); border-radius: 8px; background: rgba(15,23,42,0.55); padding: 10px 12px;">
+            <summary style="cursor:pointer; font-size:0.78em; font-weight:800; text-transform:uppercase; letter-spacing:0.5px; color:#38bdf8; list-style:none; display:flex; justify-content:space-between; align-items:center;">
+                <span>🔌 Torn Userscripts &amp; PDA Hub</span>
+                <span style="font-size:0.9em; color:#94a3b8;">Tampermonkey / TornPDA ▾</span>
+            </summary>
+            <div style="margin-top:10px; display:flex; flex-direction:column; gap:8px; font-size:0.8em;">
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding:7px 9px; border-radius:6px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06);">
+                    <div>
+                        <div style="font-weight:800; color:#f8fafc;">🎯 Torn Dibs &amp; Attack Overlay</div>
+                        <div style="font-size:0.84em; color:#94a3b8;">Shows Discord &amp; Warboard claims live on Torn attack, profile &amp; faction pages.</div>
+                    </div>
+                    <div style="display:flex; gap:5px; flex-shrink:0;">
+                        <a href="/torn-dibs.user.js" target="_blank" style="padding:4px 8px; border-radius:5px; background:rgba(16,185,129,0.16); color:#34d399; border:1px solid rgba(16,185,129,0.35); text-decoration:none; font-weight:700;">Install</a>
+                        <button type="button" onclick="window.copyGsScriptUrl('/torn-dibs.user.js')" style="padding:4px 7px; border-radius:5px; background:rgba(255,255,255,0.06); color:#cbd5e1; border:1px solid rgba(255,255,255,0.12); cursor:pointer;">📋</button>
+                    </div>
+                </div>
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding:7px 9px; border-radius:6px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06);">
+                    <div>
+                        <div style="font-weight:800; color:#f8fafc;">⛓️ Chain Target Lineup</div>
+                        <div style="font-size:0.84em; color:#94a3b8;">Quick sequential chain target overlay inside Torn.</div>
+                    </div>
+                    <div style="display:flex; gap:5px; flex-shrink:0;">
+                        <a href="/torn-chain-lineup.user.js" target="_blank" style="padding:4px 8px; border-radius:5px; background:rgba(16,185,129,0.16); color:#34d399; border:1px solid rgba(16,185,129,0.35); text-decoration:none; font-weight:700;">Install</a>
+                        <button type="button" onclick="window.copyGsScriptUrl('/torn-chain-lineup.user.js')" style="padding:4px 7px; border-radius:5px; background:rgba(255,255,255,0.06); color:#cbd5e1; border:1px solid rgba(255,255,255,0.12); cursor:pointer;">📋</button>
+                    </div>
+                </div>
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding:7px 9px; border-radius:6px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06);">
+                    <div>
+                        <div style="font-weight:800; color:#f8fafc;">💊 Armory &amp; Vault Auto-Fill</div>
+                        <div style="font-size:0.84em; color:#94a3b8;">1-click prefill for Torn Vault payouts &amp; Armory actions.</div>
+                    </div>
+                    <div style="display:flex; gap:5px; flex-shrink:0;">
+                        <a href="/torn-armory-autofill.user.js" target="_blank" style="padding:4px 8px; border-radius:5px; background:rgba(16,185,129,0.16); color:#34d399; border:1px solid rgba(16,185,129,0.35); text-decoration:none; font-weight:700;">Install</a>
+                        <button type="button" onclick="window.copyGsScriptUrl('/torn-armory-autofill.user.js')" style="padding:4px 7px; border-radius:5px; background:rgba(255,255,255,0.06); color:#cbd5e1; border:1px solid rgba(255,255,255,0.12); cursor:pointer;">📋</button>
+                    </div>
+                </div>
+                <div style="font-size:0.78em; color:#94a3b8; line-height:1.4;">
+                    📱 <strong>TornPDA Setup:</strong> Tap 📋 to copy any script URL → TornPDA Settings → Advanced Browser → Userscripts → Add from URL.
+                </div>
+            </div>
+        </details>
+
         <button class="global-btn-save" id="gs-btn-save" onclick="saveGlobalSettings()">Save Preferences</button>
         <button type="button" class="global-btn-logout" id="gs-btn-logout" onclick="window.svAuth ? window.svAuth.logout() : (window.svLogout ? window.svLogout() : location.reload())" style="background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.45); color: #ef4444; padding: 11px; width: 100%; border-radius: var(--radius-sm, 6px); cursor: pointer; font-weight: 800; font-size: 0.88em; text-transform: uppercase; letter-spacing: 0.8px; margin-top: 8px; transition: all 0.15s; font-family: inherit;">🚪 Disconnect Account &amp; Log Out</button>
     </div>
@@ -206,6 +248,14 @@ const globalSettingsHTML = `
 `;
 
 function injectGlobalSettings() {
+    if (!window.copyGsScriptUrl) {
+        window.copyGsScriptUrl = function(relPath) {
+            const fullUrl = location.origin + relPath;
+            navigator.clipboard?.writeText(fullUrl).then(() => {
+                alert('Userscript URL copied for TornPDA / Tampermonkey:\n' + fullUrl);
+            }).catch(() => {});
+        };
+    }
     if (document.getElementById('global-settings-modal')) return;
     const div = document.createElement('div');
     div.innerHTML = globalSettingsHTML;

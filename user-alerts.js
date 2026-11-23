@@ -35,8 +35,19 @@ const DEFAULT_PREFS = {
     travel: false,
     energy: false,
     nerve: false,
-    hospital: false
+    hospital: false,
+    booster: false,
+    medical: false,
+    education: false,
+    reset_reminder: false,
+    travel_restock: false
 };
+
+const DEFAULT_TRAVEL_WATCH = Object.freeze({
+    country: 'zaf',
+    itemQuery: 'Xanax',
+    minQty: 500
+});
 
 /**
  * Load preferences from local disk on startup.
@@ -136,53 +147,240 @@ function toggleUserAlertPref(discordUserId, featureKey) {
     return current;
 }
 
+function getTravelWatchRule(discordUserId) {
+    if (!discordUserId) return { ...DEFAULT_TRAVEL_WATCH };
+    const stored = alertPrefsStore.get(String(discordUserId));
+    return {
+        ...DEFAULT_TRAVEL_WATCH,
+        ...(stored?.travelWatch && typeof stored.travelWatch === 'object' ? stored.travelWatch : {})
+    };
+}
+
+function setTravelWatchRule(discordUserId, rule = {}) {
+    if (!discordUserId) return null;
+    const dId = String(discordUserId);
+    const existing = alertPrefsStore.get(dId) || { ...DEFAULT_PREFS };
+    const nextRule = {
+        country: String(rule.country || existing.travelWatch?.country || 'zaf').toLowerCase().trim(),
+        itemQuery: String(rule.itemQuery || existing.travelWatch?.itemQuery || 'Xanax').trim(),
+        minQty: Math.max(1, Number(rule.minQty ?? existing.travelWatch?.minQty ?? 500) || 500)
+    };
+    const updated = {
+        ...DEFAULT_PREFS,
+        ...existing,
+        travel_restock: rule.enable === false ? existing.travel_restock : true,
+        travelWatch: nextRule
+    };
+    alertPrefsStore.set(dId, updated);
+    savePrefsToDisk();
+    return updated;
+}
+
 /**
  * Build interactive Discord embed and buttons for user alert preferences.
  */
 function buildAlertsControlCard(discordUserId, playerInfo = null) {
     const prefs = getUserAlertPrefs(discordUserId);
+    const watchRule = getTravelWatchRule(discordUserId);
     const nameLabel = playerInfo?.playerName 
         ? `**[${playerInfo.playerName} [${playerInfo.playerId}]](https://www.torn.com/profiles.php?XID=${playerInfo.playerId})**`
         : `Your Account`;
 
-    const statusBadge = (on) => on ? '`🟢 ENABLED`' : '`⚪ DISABLED`';
+    const statusBadge = (on) => on ? '`🟢 ON`' : '`⚪ OFF`';
 
     const embed = {
         title: '🔔 Personal Discord DM Notification Sentinel',
-        description: `Configure personal direct messages from **F.R.I.D.A.Y.** for ${nameLabel}.\n\n` +
-            `🔒 **Strict Opt-In Privacy:** All notifications are **disabled by default**. Only features you explicitly turn on below will send you private direct messages.\n\n` +
-            `**Your Current Alert Settings:**\n` +
-            `• 💊 **Drug / Xanax Cooldown:** ${statusBadge(prefs.drug)}\n` +
-            `  *Alerts the second your drug cooldown expires so you can take Xanax with zero downtime.*\n\n` +
-            `• ✈️ **Flight Landing Imminent:** ${statusBadge(prefs.travel)}\n` +
-            `  *Alerts ~2-3 minutes before touchdown abroad or back in Torn so you never get mugged.*\n\n` +
-            `• ⚡ **Natural Energy Full:** ${statusBadge(prefs.energy)}\n` +
-            `  *Alerts when natural energy bar hits max cap (100/150) so regen isn't wasted.*\n\n` +
-            `• 🎯 **Nerve Bar Full:** ${statusBadge(prefs.nerve)}\n` +
-            `  *Alerts when nerve bar is maxed so you can commit crimes without wasting ticks.*\n\n` +
-            `• 🏥 **Hospital Discharge:** ${statusBadge(prefs.hospital)}\n` +
-            `  *Alerts the moment you leave the hospital or get revived.*\n\n` +
-            `_Click the buttons below to toggle each notification on or off:_`,
+        description: `Configure private direct messages from **F.R.I.D.A.Y.** for ${nameLabel}.\n` +
+            `🔒 **Strict Opt-In Privacy:** All notifications start **OFF** until you enable them.\n\n` +
+            `**Core Vitals & Travel Alerts:**\n` +
+            `• 💊 **Drug / Xanax CD:** ${statusBadge(prefs.drug)} — DMs when drug CD hits \`0:00\`\n` +
+            `• ✈️ **Flight Landing:** ${statusBadge(prefs.travel)} — DMs ~2-3m before touchdown\n` +
+            `• ⚡ **Natural Energy Full:** ${statusBadge(prefs.energy)} — DMs at max energy cap\n` +
+            `• 🎯 **Nerve Bar Full:** ${statusBadge(prefs.nerve)} — DMs at max nerve cap\n` +
+            `• 🏥 **Hospital Discharge:** ${statusBadge(prefs.hospital)} — DMs when revived/discharged\n\n` +
+            `**Daily Loop & Restock Alerts (New):**\n` +
+            `• 🥤 **Booster CD:** ${statusBadge(prefs.booster)} — DMs when Beer/Candy/FHC CD clears\n` +
+            `• 🩸 **Medical CD:** ${statusBadge(prefs.medical)} — DMs when Med CD hits \`0:00\`\n` +
+            `• 🎓 **Education Finish:** ${statusBadge(prefs.education)} — DMs when course finishes\n` +
+            `• ⏰ **23:30 TCT Reset:** ${statusBadge(prefs.reset_reminder)} — Pre-reset nudge if refill/Xanax unused\n` +
+            `• 🌍 **Travel Restock:** ${statusBadge(prefs.travel_restock)} — Watching **${watchRule.country.toUpperCase()}** \`${watchRule.itemQuery}\` >= **${watchRule.minQty}x**`,
         color: UI.COLORS.BRAND,
         footer: UI.FOOTER,
         timestamp: new Date().toISOString()
     };
 
-    // Button rows
     const row1 = UI.actionRow(
-        prefs.drug ? UI.successBtn('toggle_alert_drug', 'Drug: ON', '💊') : UI.secondaryBtn('toggle_alert_drug', 'Drug: OFF', '💊'),
-        prefs.travel ? UI.successBtn('toggle_alert_travel', 'Flight: ON', '✈️') : UI.secondaryBtn('toggle_alert_travel', 'Flight: OFF', '✈️'),
-        prefs.energy ? UI.successBtn('toggle_alert_energy', 'Energy: ON', '⚡') : UI.secondaryBtn('toggle_alert_energy', 'Energy: OFF', '⚡')
+        prefs.drug ? UI.successBtn('toggle_alert_drug', 'Drug', '💊') : UI.secondaryBtn('toggle_alert_drug', 'Drug', '💊'),
+        prefs.travel ? UI.successBtn('toggle_alert_travel', 'Flight', '✈️') : UI.secondaryBtn('toggle_alert_travel', 'Flight', '✈️'),
+        prefs.energy ? UI.successBtn('toggle_alert_energy', 'Energy', '⚡') : UI.secondaryBtn('toggle_alert_energy', 'Energy', '⚡'),
+        prefs.nerve ? UI.successBtn('toggle_alert_nerve', 'Nerve', '🎯') : UI.secondaryBtn('toggle_alert_nerve', 'Nerve', '🎯'),
+        prefs.hospital ? UI.successBtn('toggle_alert_hospital', 'Hosp', '🏥') : UI.secondaryBtn('toggle_alert_hospital', 'Hosp', '🏥')
     );
 
     const row2 = UI.actionRow(
-        prefs.nerve ? UI.successBtn('toggle_alert_nerve', 'Nerve: ON', '🎯') : UI.secondaryBtn('toggle_alert_nerve', 'Nerve: OFF', '🎯'),
-        prefs.hospital ? UI.successBtn('toggle_alert_hospital', 'Hosp: ON', '🏥') : UI.secondaryBtn('toggle_alert_hospital', 'Hosp: OFF', '🏥'),
-        UI.primaryBtn('test_user_dm', 'Test DM', '🧪')
+        prefs.booster ? UI.successBtn('toggle_alert_booster', 'Booster', '🥤') : UI.secondaryBtn('toggle_alert_booster', 'Booster', '🥤'),
+        prefs.medical ? UI.successBtn('toggle_alert_medical', 'Medical', '🩸') : UI.secondaryBtn('toggle_alert_medical', 'Medical', '🩸'),
+        prefs.education ? UI.successBtn('toggle_alert_education', 'Edu', '🎓') : UI.secondaryBtn('toggle_alert_education', 'Edu', '🎓'),
+        prefs.reset_reminder ? UI.successBtn('toggle_alert_reset_reminder', 'Reset', '⏰') : UI.secondaryBtn('toggle_alert_reset_reminder', 'Reset', '⏰'),
+        prefs.travel_restock ? UI.successBtn('toggle_alert_travel_restock', 'Restock', '🌍') : UI.secondaryBtn('toggle_alert_travel_restock', 'Restock', '🌍')
     );
 
-    return { embed, components: [row1, row2] };
+    const row3 = UI.actionRow(
+        UI.primaryBtn('test_user_dm', 'Test DM', '🧪'),
+        UI.secondaryBtn('alert_preset_zaf_xanax', 'ZA Xanax >=500', '🇿🇦'),
+        UI.secondaryBtn('alert_preset_plushie_200', 'Plush/Flower >=200', '🧸')
+    );
+
+    return { embed, components: [row1, row2, row3] };
 }
+
+function evaluateExtendedAlertEvents(prefs = {}, rState = {}, stats = {}, options = {}) {
+    const events = [];
+    const now = Number(options.nowMs) || Date.now();
+    const cds = stats?.cooldowns || {};
+    const edu = stats?.education || {};
+    const refills = stats?.refills || {};
+
+    // 1. Booster cooldown clear
+    const curBoost = Number(cds.booster ?? 0);
+    if (prefs.booster && typeof rState.lastBoosterSec === 'number' && rState.lastBoosterSec > 0 && curBoost === 0) {
+        if (!rState.lastBoosterAlertTs || (now - rState.lastBoosterAlertTs) > 10 * 60 * 1000) {
+            rState.lastBoosterAlertTs = now;
+            events.push({
+                type: 'booster',
+                embed: UI.embed({
+                    color: UI.COLORS.SUCCESS,
+                    title: '🥤 Booster Cooldown Ready!',
+                    description: 'Your **Booster Cooldown** just hit `00:00` — ready for Beer, Candy, or Feathery Hotel Coupons!',
+                    fields: [
+                        { name: '⚡ Energy', value: `${stats.energy?.current ?? 0}/${stats.energy?.maximum ?? 150}`, inline: true },
+                        { name: '😁 Happy', value: `${stats.happy?.current ?? 0}/${stats.happy?.maximum ?? 100}`, inline: true }
+                    ]
+                })
+            });
+        }
+    }
+    rState.lastBoosterSec = curBoost;
+
+    // 2. Medical cooldown clear
+    const curMed = Number(cds.medical ?? 0);
+    if (prefs.medical && typeof rState.lastMedSec === 'number' && rState.lastMedSec > 0 && curMed === 0) {
+        if (!rState.lastMedAlertTs || (now - rState.lastMedAlertTs) > 10 * 60 * 1000) {
+            rState.lastMedAlertTs = now;
+            events.push({
+                type: 'medical',
+                embed: UI.embed({
+                    color: UI.COLORS.SUCCESS,
+                    title: '🩸 Medical Cooldown Cleared!',
+                    description: 'Your **Medical Cooldown** reached `00:00` — safe to use Blood Bags or Medkits again.'
+                })
+            });
+        }
+    }
+    rState.lastMedSec = curMed;
+
+    // 3. Education course completion
+    const curEduCourse = Number(edu.current_course ?? 0);
+    const curEduLeft = Number(edu.time_left_seconds ?? 0);
+    const completedTransition =
+        (typeof rState.lastEduLeftSec === 'number' && rState.lastEduLeftSec > 0 && curEduLeft === 0) ||
+        (typeof rState.lastEduCourse === 'number' && rState.lastEduCourse > 0 && curEduCourse === 0);
+    if (prefs.education && completedTransition) {
+        if (!rState.lastEduAlertTs || (now - rState.lastEduAlertTs) > 60 * 60 * 1000) {
+            rState.lastEduAlertTs = now;
+            events.push({
+                type: 'education',
+                embed: UI.embed({
+                    color: UI.COLORS.INFO,
+                    title: '🎓 Education Course Completed!',
+                    description: 'Your Torn Education course has finished! Start your next course immediately so zero study hours go wasted.\n[Open Torn Education](https://www.torn.com/education.php)'
+                })
+            });
+        }
+    }
+    rState.lastEduCourse = curEduCourse;
+    rState.lastEduLeftSec = curEduLeft;
+
+    // 4. Daily TCT Reset Reminder (23:30 - 23:59 TCT)
+    const d = new Date(now);
+    const utcH = d.getUTCHours();
+    const utcM = d.getUTCMinutes();
+    const todayTct = d.toISOString().slice(0, 10);
+    if (prefs.reset_reminder && utcH === 23 && utcM >= 30 && rState.lastResetReminderDate !== todayTct) {
+        rState.lastResetReminderDate = todayTct;
+        const unusedRefill = refills && refills.energy_refill_used === false;
+        const clearDrug = Number(cds.drug ?? 0) === 0;
+        if (unusedRefill || clearDrug) {
+            const notes = [];
+            if (unusedRefill) notes.push('• ⚡ Daily **Energy Refill** is still unused!');
+            if (clearDrug) notes.push('• 💊 Your **Drug Cooldown** is `00:00` — Xanax window open!');
+            events.push({
+                type: 'reset_reminder',
+                embed: UI.embed({
+                    color: UI.COLORS.GOLD,
+                    title: '⏰ Daily TCT Reset Reminder (<30m Left!)',
+                    description: `New Torn day rolls over at \`00:00 TCT\`:\n\n${notes.join('\n')}`
+                })
+            });
+        }
+    }
+
+    // 5. Overseas Travel Restock Surge via YATA cache
+    const yataStocks = options.yataStocks;
+    if (prefs.travel_restock && yataStocks && yataStocks.stocks) {
+        const rule = prefs.travelWatch && typeof prefs.travelWatch === 'object'
+            ? { ...DEFAULT_TRAVEL_WATCH, ...prefs.travelWatch }
+            : { ...DEFAULT_TRAVEL_WATCH };
+        const minQty = Math.max(1, Number(rule.minQty) || 500);
+        const query = String(rule.itemQuery || 'Xanax').trim().toLowerCase();
+        const isPlushFlowerPreset = query === 'plushies' || query === 'plushie|flower';
+        const countryEntries = rule.country === 'all'
+            ? Object.entries(yataStocks.stocks)
+            : (yataStocks.stocks[rule.country] ? [[rule.country, yataStocks.stocks[rule.country]]] : []);
+
+        if (!rState.lastRestockAlertTs) rState.lastRestockAlertTs = {};
+        if (!rState.lastRestockAbove) rState.lastRestockAbove = {};
+
+        for (const [cCode, cObj] of countryEntries) {
+            const stockList = Array.isArray(cObj?.stocks) ? cObj.stocks : [];
+            for (const item of stockList) {
+                const iName = String(item?.name || '').trim();
+                const iLower = iName.toLowerCase();
+                const nameMatches = isPlushFlowerPreset
+                    ? (iLower.includes('plushie') || iLower.includes('flower') || iLower.includes('orchid') || iLower.includes('peony') || iLower.includes('rose') || iLower.includes('lotus') || iLower.includes('protea') || iLower.includes('dahlia'))
+                    : iLower.includes(query);
+                if (!nameMatches) continue;
+
+                const qty = Number(item.quantity || 0);
+                const k = `${cCode}_${item.id || iLower}`;
+                const wasAbove = Boolean(rState.lastRestockAbove[k]);
+                const lastSent = Number(rState.lastRestockAlertTs[k] || 0);
+                if (qty >= minQty) {
+                    rState.lastRestockAbove[k] = true;
+                    if (!wasAbove || (now - lastSent) > 30 * 60 * 1000) {
+                        rState.lastRestockAlertTs[k] = now;
+                        events.push({
+                            type: 'travel_restock',
+                            embed: UI.embed({
+                                color: UI.COLORS.SUCCESS,
+                                title: `🌍 Overseas Restock Surge: ${iName}`,
+                                description: `**${String(cCode).toUpperCase()}** just restocked **${qty.toLocaleString()}x ${iName}** (cost: \`$${Number(item.cost || 0).toLocaleString()}\`)!\n[Open Travel Agency](https://www.torn.com/travelagency.php)`
+                            })
+                        });
+                    }
+                } else {
+                    rState.lastRestockAbove[k] = false;
+                }
+            }
+        }
+    }
+
+    return events;
+}
+
+startUserAlertsWorker.evaluateExtendedAlertEvents = evaluateExtendedAlertEvents;
+startUserAlertsWorker.getTravelWatchRule = getTravelWatchRule;
+startUserAlertsWorker.setTravelWatchRule = setTravelWatchRule;
 
 /**
  * Background Alert Poller:
@@ -190,7 +388,7 @@ function buildAlertsControlCard(discordUserId, playerInfo = null) {
  */
 let isWorkerRunning = false;
 
-function startUserAlertsWorker(discordClient, userKeys) {
+function startUserAlertsWorker(discordClient, userKeys, workerOpts = {}) {
     if (isWorkerRunning) return;
     isWorkerRunning = true;
     console.log('[UserAlerts] Personal DM notification worker active (30s cadence for opted-in users).');
@@ -199,24 +397,27 @@ function startUserAlertsWorker(discordClient, userKeys) {
         try {
             if (!discordClient || !discordClient.isReady()) return;
 
-            // Find all users who have at least one alert turned ON
             const activeSubscribers = [];
             for (const [discordId, prefs] of alertPrefsStore.entries()) {
-                if (prefs.drug || prefs.travel || prefs.energy || prefs.nerve || prefs.hospital) {
+                if (prefs.drug || prefs.travel || prefs.energy || prefs.nerve || prefs.hospital ||
+                    prefs.booster || prefs.medical || prefs.education || prefs.reset_reminder || prefs.travel_restock) {
                     activeSubscribers.push({ discordId, prefs });
                 }
             }
 
             if (activeSubscribers.length === 0) return;
 
+            let yataStocksCache = null;
+            if (activeSubscribers.some(s => s.prefs?.travel_restock) && typeof workerOpts.getLiveYataStocks === 'function') {
+                yataStocksCache = await workerOpts.getLiveYataStocks().catch(() => null);
+            }
+
             for (const sub of activeSubscribers) {
                 const { discordId, prefs } = sub;
 
-                // Resolve user's API key
                 const resolved = userKeys.resolveUserApiKey(discordId);
                 if (!resolved || !resolved.key) continue;
 
-                // Get or initialize runtime state
                 if (!alertRuntimeStates.has(discordId)) {
                     alertRuntimeStates.set(discordId, {
                         lastDrugSec: null,
@@ -225,24 +426,47 @@ function startUserAlertsWorker(discordClient, userKeys) {
                         lastEnergyFull: false,
                         lastNerveFull: false,
                         lastHospitalState: null,
+                        lastBoosterSec: null,
+                        lastMedSec: null,
+                        lastEduLeftSec: null,
+                        lastEduCourse: null,
+                        lastResetReminderDate: null,
+                        lastRestockAlertTs: {},
+                        lastRestockAbove: {},
                         initialized: false
                     });
                 }
                 const rState = alertRuntimeStates.get(discordId);
 
-                // Fetch live stats (respects 10s memory cache)
                 const stats = await userKeys.fetchUserLiveStats(resolved.key);
                 if (!stats) continue;
 
-                // If first time seeing user this session, initialize states without false alerts
                 if (!rState.initialized) {
                     rState.lastDrugSec = stats.cooldowns.drug;
                     rState.lastTravelFlight = stats.travel.isTraveling ? stats.travel.destination : null;
                     rState.lastEnergyFull = stats.energy.isFull || (stats.energy.current >= stats.energy.maximum);
                     rState.lastNerveFull = stats.nerve.isFull || (stats.nerve.current >= stats.nerve.maximum);
                     rState.lastHospitalState = stats.status.state;
+                    rState.lastBoosterSec = stats.cooldowns?.booster ?? 0;
+                    rState.lastMedSec = stats.cooldowns?.medical ?? 0;
+                    rState.lastEduLeftSec = stats.education?.time_left_seconds ?? 0;
+                    rState.lastEduCourse = stats.education?.current_course ?? 0;
                     rState.initialized = true;
                     continue;
+                }
+
+                // Extended daily-loop & travel restock alerts (Package C)
+                const extEvents = evaluateExtendedAlertEvents(prefs, rState, stats, {
+                    nowMs: Date.now(),
+                    yataStocks: yataStocksCache
+                });
+                if (extEvents.length > 0) {
+                    const user = await discordClient.users.fetch(discordId).catch(() => null);
+                    if (user) {
+                        for (const ev of extEvents) {
+                            await user.send({ embeds: [ev.embed] }).catch(() => {});
+                        }
+                    }
                 }
 
                 // Helper to send DM safely

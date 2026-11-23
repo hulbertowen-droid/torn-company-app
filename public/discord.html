@@ -2662,6 +2662,27 @@
                                 </div>
                             </div>
                         </div>
+
+                        <div class="trigger-row" id="ti-preWarStackAlertsEnabled" data-tags="war prewar energy stack xanax booster cooldown countdown dm">
+                            <div class="trigger-row-left">
+                                <span class="trigger-icon">⚡</span>
+                                <div class="trigger-info">
+                                    <div class="trigger-name">Pre-War Energy Stack Countdowns (T-12h / T-4h / T-1h) <span class="tag war">WAR</span></div>
+                                    <div class="trigger-desc">Posts faction stack readiness audits ahead of Ranked Wars and optionally DMs linked members who are &lt;750e, still flying, or have Revives set to Everyone.</div>
+                                    <div style="margin-top:6px; display:flex; align-items:center; gap:10px; flex-wrap:wrap; font-size:0.8em; color:var(--text-secondary);">
+                                        <label style="display:inline-flex; align-items:center; gap:5px; cursor:pointer;">
+                                            <input type="checkbox" id="preWarDmUnstacked" onchange="trackDirty();">
+                                            <span>📩 Auto-DM unstacked / flying / public-revive members</span>
+                                        </label>
+                                    </div>
+                                    <span class="trigger-route-tag">📍 Main Alert Channel / Member DMs</span>
+                                </div>
+                            </div>
+                            <div class="trigger-controls">
+                                <button class="btn-test" id="btn-test-prewar_stack" onclick="testAlert('prewar_stack')">▷ Test</button>
+                                <label class="switch"><input type="checkbox" id="preWarStackAlertsEnabled" onchange="onToggle(this); trackDirty();"><span class="slider"></span></label>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -2875,6 +2896,31 @@
                                 </div>
                             </div>
                         </div>
+
+                        <div class="trigger-row" id="ti-armoryLoanOverdueAlert" data-tags="defense armory loan overdue weapons armor quartermaster dm">
+                            <div class="trigger-row-left">
+                                <span class="trigger-icon">🔫</span>
+                                <div class="trigger-info">
+                                    <div class="trigger-name">Auto-Quartermaster Armory Loan Nudger <span class="tag faction">DEFENSE</span></div>
+                                    <div class="trigger-desc">Scans loaned weapons/armor held by offline members beyond threshold (excluding Hospital &amp; LOA/exempt roles). Sends a consolidated return reminder on a 7-day cooldown.</div>
+                                    <div style="margin-top:6px; display:flex; align-items:center; gap:12px; flex-wrap:wrap; font-size:0.8em; color:var(--text-secondary);">
+                                        <label style="display:inline-flex; align-items:center; gap:5px;">
+                                            <span>Offline Threshold (hrs):</span>
+                                            <input type="number" id="armoryLoanThresholdHours" min="6" max="720" value="48" onchange="trackDirty();" style="width:68px; padding:2px 6px; border-radius:5px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
+                                        </label>
+                                        <label style="display:inline-flex; align-items:center; gap:5px; cursor:pointer;">
+                                            <input type="checkbox" id="armoryLoanDmBorrowers" checked onchange="trackDirty();">
+                                            <span>📩 DM offline borrowers directly</span>
+                                        </label>
+                                    </div>
+                                    <span class="trigger-route-tag">📍 Main Alert Channel / Borrower DMs</span>
+                                </div>
+                            </div>
+                            <div class="trigger-controls">
+                                <button class="btn-test" id="btn-test-armory_loan_overdue" onclick="testAlert('armory_loan_overdue')">▷ Test</button>
+                                <label class="switch"><input type="checkbox" id="armoryLoanOverdueAlert" onchange="onToggle(this); trackDirty();"><span class="slider"></span></label>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -2960,6 +3006,21 @@
                                         <option value="cd5m">⏳ 5m Cooldown</option>
                                     </select>
                                 </div>
+                            </div>
+                        </div>
+
+                        <div class="trigger-row" id="ti-weeklyDigestEnabled" data-tags="members weekly digest report sunday tct gym xanax oc keys">
+                            <div class="trigger-row-left">
+                                <span class="trigger-icon">📊</span>
+                                <div class="trigger-info">
+                                    <div class="trigger-name">Automated Weekly Faction Digest (Sunday 00:05 TCT) <span class="tag faction">FACTION</span></div>
+                                    <div class="trigger-desc">Posts a Sunday 00:05 TCT scorecard featuring Top 7d Gym Gainers, Xanax Leaders, OC 2.0 Net Cash &amp; Pass Rate, Overdue Armory Gear, and Key Migration %.</div>
+                                    <span class="trigger-route-tag">📍 Main Alert Channel</span>
+                                </div>
+                            </div>
+                            <div class="trigger-controls">
+                                <button class="btn-test" id="btn-test-weekly_digest" onclick="testAlert('weekly_digest')">▷ Test</button>
+                                <label class="switch"><input type="checkbox" id="weeklyDigestEnabled" onchange="onToggle(this); trackDirty();"><span class="slider"></span></label>
                             </div>
                         </div>
                     </div>
@@ -4614,7 +4675,21 @@
                                 <div class="cmd-card-title"><span>🕵️</span><code>/enemy</code></div>
                                 <label class="switch-sm"><input type="checkbox" class="cmd-toggle" data-cmd="enemy" checked onchange="onCommandToggle(this); trackDirty();"><span class="slider"></span></label>
                             </div>
-                            <div class="cmd-card-desc">Full breakdown of enemy faction roster, hospital timers & stats.</div>
+                            <div class="cmd-card-desc">Full breakdown of enemy faction roster, hospital timers &amp; stats.</div>
+                        </div>
+                        <div class="cmd-card on" id="cmd-card-stack">
+                            <div class="cmd-card-top">
+                                <div class="cmd-card-title"><span>⚡</span><code>/stack</code></div>
+                                <label class="switch-sm"><input type="checkbox" class="cmd-toggle" data-cmd="stack" checked onchange="onCommandToggle(this); trackDirty();"><span class="slider"></span></label>
+                            </div>
+                            <div class="cmd-card-desc">Pre-war stacked energy, booster/drug CDs, travel &amp; public revive audit.</div>
+                        </div>
+                        <div class="cmd-card on" id="cmd-card-watch">
+                            <div class="cmd-card-top">
+                                <div class="cmd-card-title"><span>🎯</span><code>/watch</code></div>
+                                <label class="switch-sm"><input type="checkbox" class="cmd-toggle" data-cmd="watch" checked onchange="onCommandToggle(this); trackDirty();"><span class="slider"></span></label>
+                            </div>
+                            <div class="cmd-card-desc">Pin non-war Torn targets for landing, hosp-out &amp; online sniper alerts.</div>
                         </div>
                     </div>
                 </div>
@@ -6486,6 +6561,21 @@ function applyConfigToDOM(cfg) {
         }
     });
 
+    // Apply Opt-In Package A/E/G Automation Triggers
+    ['preWarStackAlertsEnabled', 'armoryLoanOverdueAlert', 'weeklyDigestEnabled'].forEach(tid => {
+        const el = document.getElementById(tid);
+        if (el) {
+            el.checked = cfg[tid] === true;
+            el.closest('.trigger-row')?.classList.toggle('on', el.checked);
+        }
+    });
+    const elPreWarDm = document.getElementById('preWarDmUnstacked');
+    if (elPreWarDm) elPreWarDm.checked = cfg.preWarDmUnstacked === true;
+    const elLoanHrs = document.getElementById('armoryLoanThresholdHours');
+    if (elLoanHrs) elLoanHrs.value = Math.max(6, Number(cfg.armoryLoanThresholdHours) || 48);
+    const elLoanDm = document.getElementById('armoryLoanDmBorrowers');
+    if (elLoanDm) elLoanDm.checked = cfg.armoryLoanDmBorrowers !== false;
+
     // Apply trigger routing overrides
     if (cfg.triggerRouting && typeof cfg.triggerRouting === 'object') {
         for (const [tid, route] of Object.entries(cfg.triggerRouting)) {
@@ -6868,6 +6958,12 @@ async function saveDiscordConfig() {
             warLeadDecay: document.getElementById('warLeadDecay')?.checked ?? true,
             armoryMedsLow: document.getElementById('armoryMedsLow')?.checked ?? true,
             vaultGhostTrade: document.getElementById('vaultGhostTrade')?.checked ?? true,
+            preWarStackAlertsEnabled: document.getElementById('preWarStackAlertsEnabled')?.checked === true,
+            preWarDmUnstacked: document.getElementById('preWarDmUnstacked')?.checked === true,
+            armoryLoanOverdueAlert: document.getElementById('armoryLoanOverdueAlert')?.checked === true,
+            armoryLoanThresholdHours: Math.max(6, Number(document.getElementById('armoryLoanThresholdHours')?.value) || 48),
+            armoryLoanDmBorrowers: document.getElementById('armoryLoanDmBorrowers')?.checked !== false,
+            weeklyDigestEnabled: document.getElementById('weeklyDigestEnabled')?.checked === true,
             triggerRouting: (() => {
                 const map = {};
                 document.querySelectorAll('.trigger-grid .trigger-row').forEach(row => {

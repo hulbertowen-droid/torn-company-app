@@ -1,11 +1,13 @@
 // ==UserScript==
-// @name         Torn Dibs Integration (Render App)
-// @namespace    http://tampermonkey.net/
-// @version      2.5
-// @description  Integrates the Torn Company App Dibs system directly into the Torn Faction page, with a live "who's dibbing on who" overview.
+// @name         Torn Dibs Integration (FactionOS Live Sync)
+// @namespace    https://faction-os.duckdns.org/
+// @version      2.6
+// @description  Integrates FactionOS Web & Discord claims directly into Torn Faction, Profile, and Attack pages with live claim age & 1-click claim/release.
 // @author       Torn Operations
 // @match        https://www.torn.com/factions.php*
 // @match        https://www.torn.com/profiles.php*
+// @match        https://www.torn.com/loader.php*
+// @match        https://www.torn.com/page.php*
 // @grant        GM_xmlhttpRequest
 // @grant        GM_setValue
 // @grant        GM_getValue
@@ -911,6 +913,87 @@
 
         updateSettingsButtonStatus(stale);
         renderClaimsList(stale);
+        updateAttackPageBanner(stale);
+    }
+
+    function formatClaimAge(tsMs) {
+        if (!tsMs || typeof tsMs !== 'number') return 'just now';
+        const sec = Math.max(0, Math.floor((Date.now() - tsMs) / 1000));
+        if (sec < 60) return `${sec}s ago`;
+        const mins = Math.floor(sec / 60);
+        if (mins < 60) return `${mins}m ago`;
+        return `${Math.floor(mins / 60)}h ago`;
+    }
+
+    function detectPageTargetId() {
+        try {
+            const params = new URLSearchParams(window.location.search || '');
+            const sid = (params.get('sid') || '').toLowerCase();
+            if (sid === 'attack' && params.get('user2ID')) {
+                return String(params.get('user2ID')).replace(/[^0-9]/g, '');
+            }
+            if (window.location.pathname.includes('profiles.php') && params.get('XID')) {
+                return String(params.get('XID')).replace(/[^0-9]/g, '');
+            }
+        } catch (_) {}
+        return null;
+    }
+
+    function updateAttackPageBanner(stale) {
+        const targetId = detectPageTargetId();
+        let banner = document.getElementById('dibs-attack-banner');
+        if (!targetId) {
+            if (banner) banner.remove();
+            return;
+        }
+        if (!banner) {
+            banner = document.createElement('div');
+            banner.id = 'dibs-attack-banner';
+            banner.style.cssText = 'position:fixed; top:12px; left:50%; transform:translateX(-50%); z-index:999999; display:flex; align-items:center; gap:10px; padding:8px 14px; border-radius:8px; font-family:system-ui,sans-serif; font-size:13px; font-weight:800; box-shadow:0 8px 24px rgba(0,0,0,0.65); backdrop-filter:blur(8px);';
+            document.body.appendChild(banner);
+        }
+        const claim = activeClaims[targetId];
+        if (!hasEverSucceeded) {
+            banner.style.background = 'rgba(15,23,42,0.92)';
+            banner.style.border = '1px solid rgba(148,163,184,0.35)';
+            banner.style.color = '#cbd5e1';
+            banner.innerText = '⏳ Syncing FactionOS target claims...';
+            return;
+        }
+        if (claim) {
+            const isMine = !!playerName && claim.playerName.toLowerCase() === playerName.toLowerCase();
+            const ageStr = formatClaimAge(claim.time);
+            const staleTag = stale ? ' (Offline/Stale)' : '';
+            banner.style.background = isMine ? 'rgba(6,78,59,0.94)' : 'rgba(127,29,29,0.94)';
+            banner.style.border = isMine ? '1px solid #34d399' : '1px solid #f87171';
+            banner.style.color = '#fff';
+            banner.innerHTML = '';
+            const span = document.createElement('span');
+            span.innerText = isMine
+                ? `★ YOUR DIBS ON [${targetId}] — ${ageStr}${staleTag}`
+                : `⚔️ Claimed by ${claim.playerName} — ${ageStr}${staleTag}`;
+            banner.appendChild(span);
+            if (isMine) {
+                const relBtn = document.createElement('button');
+                relBtn.innerText = 'Release';
+                relBtn.style.cssText = 'padding:3px 9px; border-radius:5px; border:1px solid rgba(255,255,255,0.3); background:rgba(0,0,0,0.28); color:#fff; cursor:pointer; font-weight:800;';
+                relBtn.onclick = () => unclaimTarget(targetId);
+                banner.appendChild(relBtn);
+            }
+        } else {
+            banner.style.background = 'rgba(15,23,42,0.92)';
+            banner.style.border = '1px solid rgba(56,189,248,0.45)';
+            banner.style.color = '#e2e8f0';
+            banner.innerHTML = '';
+            const span = document.createElement('span');
+            span.innerText = `🟢 Target [${targetId}] Unclaimed`;
+            const claimBtn = document.createElement('button');
+            claimBtn.innerText = '🎯 Claim Dibs';
+            claimBtn.style.cssText = 'padding:3px 10px; border-radius:5px; border:1px solid #38bdf8; background:rgba(56,189,248,0.22); color:#fff; cursor:pointer; font-weight:800;';
+            claimBtn.onclick = () => claimTarget(targetId);
+            banner.appendChild(span);
+            banner.appendChild(claimBtn);
+        }
     }
 
     // ---- Timers, paused while the tab/page is hidden ----

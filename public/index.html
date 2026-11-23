@@ -1164,6 +1164,42 @@
                 </div>
             </details>
 
+            <!-- 6B. CUSTOM TARGET WATCHLIST DRAWER (Package D) -->
+            <details id="watchlist-drawer" class="card" style="margin-top:16px; margin-bottom:16px; padding:0;">
+                <summary style="list-style:none; cursor:pointer; padding:14px 18px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; font-weight:800; font-size:0.92rem; color:var(--text-primary);">
+                    <span style="display:flex; align-items:center; gap:8px;">
+                        <span>🎯 Custom Sniper Watchlist</span>
+                        <span id="watchlist-count-badge" style="font-size:0.75em; padding:2px 8px; border-radius:999px; background:rgba(56,189,248,0.14); color:#38bdf8; border:1px solid rgba(56,189,248,0.3);">0 pinned</span>
+                    </span>
+                    <span style="font-size:0.78em; color:var(--text-tertiary); font-weight:600;">Pin non-war targets or rivals for Discord landing, hosp-out &amp; online pings ▾</span>
+                </summary>
+                <div style="padding:0 18px 16px 18px; border-top:1px solid var(--border-subtle);">
+                    <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin:14px 0;">
+                        <input type="text" id="watch-target-input" placeholder="Torn ID or profile URL (e.g. 3776908)" class="scouter-search" style="flex:1; min-width:190px; padding:7px 10px;">
+                        <input type="text" id="watch-note-input" placeholder="Note (e.g. Mug target, RW rival)" class="scouter-search" style="flex:1.2; min-width:190px; padding:7px 10px;">
+                        <button type="button" class="btn-filter active" style="padding:7px 14px; font-weight:800;" onclick="addWatchlistTarget()">📌 Pin Target</button>
+                        <button type="button" class="btn-filter" style="padding:7px 12px;" onclick="loadWatchlist()">↻ Refresh</button>
+                    </div>
+                    <div style="overflow-x:auto; border:1px solid var(--border-subtle); border-radius:8px;">
+                        <table style="width:100%; border-collapse:collapse; font-size:0.84rem;">
+                            <thead>
+                                <tr style="background:rgba(255,255,255,0.03); text-align:left; font-size:0.74rem; text-transform:uppercase; color:var(--text-tertiary);">
+                                    <th style="padding:8px 10px;">Target</th>
+                                    <th style="padding:8px 10px;">Note</th>
+                                    <th style="padding:8px 10px;">Status</th>
+                                    <th style="padding:8px 10px;">Online</th>
+                                    <th style="padding:8px 10px;">Stats</th>
+                                    <th style="padding:8px 10px; text-align:right;">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="watchlist-tbody">
+                                <tr><td colspan="6" style="text-align:center; padding:16px; color:var(--text-tertiary);">No custom targets pinned yet.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </details>
+
             <!-- ══════════════════════════════════════════════════════════════════════════
                7. MODALS: STAT OVERRIDE, TARGET INTEL, SETTINGS, ARCHIVE
                ══════════════════════════════════════════════════════════════════════════ -->
@@ -3004,6 +3040,95 @@ async function saveWarToArchive() {
     showToast("War archived successfully!", "green");
 }
 
+// ─── Package D: Custom Target Watchlist Controller ──────────────────────────
+function escWatchHtml(s) {
+    return String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+}
+
+function renderWatchlistRows(targets) {
+    const badge = document.getElementById('watchlist-count-badge');
+    if (badge) badge.textContent = `${(targets || []).length} pinned`;
+    const tbody = document.getElementById('watchlist-tbody');
+    if (!tbody) return;
+    if (!targets || targets.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:16px; color:var(--text-tertiary);">No custom targets pinned yet. Use the form above or `/watch add` in Discord.</td></tr>';
+        return;
+    }
+    tbody.innerHTML = targets.map(t => {
+        const stColor = t.lastState === 'Okay' ? '#34d399' : (t.lastState === 'Hospital' ? '#f87171' : (t.lastState === 'Traveling' || t.lastState === 'Abroad' ? '#fbbf24' : '#94a3b8'));
+        const onlColor = t.lastOnline === 'Online' ? '#34d399' : (t.lastOnline === 'Idle' ? '#fbbf24' : '#64748b');
+        const statsTxt = t.estStats > 0 ? Number(t.estStats).toLocaleString() : '—';
+        return `
+            <tr style="border-top:1px solid rgba(255,255,255,0.05);">
+                <td style="padding:8px 10px; font-weight:700;">
+                    <a href="https://www.torn.com/profiles.php?XID=${encodeURIComponent(t.targetId)}" target="_blank" rel="noopener noreferrer" style="color:var(--text-primary); text-decoration:none;">${escWatchHtml(t.name)}</a>
+                    <span style="font-size:0.78em; color:var(--text-tertiary);">[${escWatchHtml(t.targetId)}] Lv ${t.level || '?'}</span>
+                    ${t.factionName ? `<div style="font-size:0.74em; color:var(--text-tertiary);">${escWatchHtml(t.factionName)}</div>` : ''}
+                </td>
+                <td style="padding:8px 10px; color:var(--text-secondary);">${escWatchHtml(t.note || '—')}</td>
+                <td style="padding:8px 10px; font-weight:700; color:${stColor};">${escWatchHtml(t.lastState || 'Pending')}</td>
+                <td style="padding:8px 10px; font-weight:700; color:${onlColor};">${escWatchHtml(t.lastOnline || '—')}</td>
+                <td style="padding:8px 10px; font-family:var(--font-mono); font-size:0.8em;">${statsTxt}</td>
+                <td style="padding:8px 10px; text-align:right; white-space:nowrap;">
+                    <a href="https://www.torn.com/loader.php?sid=attack&user2ID=${encodeURIComponent(t.targetId)}" target="_blank" rel="noopener noreferrer" class="btn-filter" style="text-decoration:none; padding:4px 8px; margin-right:4px;">⚔️ Attack</a>
+                    <button type="button" class="btn-filter" style="padding:4px 8px; color:#f87171;" onclick="removeWatchlistTarget('${escWatchHtml(t.targetId)}')">✕</button>
+                </td>
+            </tr>`;
+    }).join('');
+}
+
+async function loadWatchlist() {
+    try {
+        const res = await fetch('/api/watchlist');
+        const data = await res.json();
+        if (data && data.success) {
+            renderWatchlistRows(data.targets || []);
+        }
+    } catch (_) {}
+}
+
+async function addWatchlistTarget() {
+    const idInp = document.getElementById('watch-target-input');
+    const noteInp = document.getElementById('watch-note-input');
+    const targetId = idInp?.value?.trim();
+    if (!targetId) {
+        if (typeof showToast === 'function') showToast('Enter a Torn ID or profile URL first', 'amber');
+        return;
+    }
+    try {
+        const key = localStorage.getItem('torn_api_key') || '';
+        const headers = { 'Content-Type': 'application/json' };
+        if (key) headers['x-api-key'] = key;
+        const res = await fetch('/api/watchlist', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ targetId, note: noteInp?.value?.trim() || '' })
+        });
+        const data = await res.json();
+        if (!data.success) {
+            if (typeof showToast === 'function') showToast(data.error || 'Could not pin target', 'red');
+            return;
+        }
+        if (idInp) idInp.value = '';
+        if (noteInp) noteInp.value = '';
+        renderWatchlistRows(data.targets || []);
+        if (typeof showToast === 'function') showToast(`Pinned ${data.target?.name || targetId} to watchlist!`, 'green');
+    } catch (e) {
+        if (typeof showToast === 'function') showToast(`Watchlist error: ${e.message}`, 'red');
+    }
+}
+
+async function removeWatchlistTarget(targetId) {
+    try {
+        const res = await fetch(`/api/watchlist/${encodeURIComponent(targetId)}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (data && data.success) {
+            renderWatchlistRows(data.targets || []);
+            if (typeof showToast === 'function') showToast('Removed target from watchlist', 'blue');
+        }
+    } catch (_) {}
+}
+
 // ─── Document Ready Initialization ──────────────────────────────────────────
 document.addEventListener("DOMContentLoaded", () => {
     // Ensure Mini HUD starts hidden on normal page load
@@ -3020,7 +3145,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Start polling loop
     fetchWarboard();
+    loadWatchlist();
     setInterval(fetchWarboard, 12000);
+    setInterval(loadWatchlist, 45000);
 });
 </script>
 </body>

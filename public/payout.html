@@ -1491,6 +1491,12 @@
                         
                         <!-- Multi-Format Export Action Group -->
                         <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+                            <button class="btn btn-primary btn-sm" id="btn-sync-fundsnews" onclick="syncFundsNewsPaid()" title="Check Torn faction fundsnews and auto-verify matching payouts">
+                                🔄 Sync Torn Paid
+                            </button>
+                            <button class="btn btn-secondary btn-sm" id="btn-post-discord-payout" onclick="postPayoutsToDiscord()" title="Post finalized payout breakdown to Discord channel">
+                                📢 Post to Discord
+                            </button>
                             <button class="btn btn-secondary btn-sm" onclick="copyDiscordSummary()" title="Format for Discord channels with codeblocks">
                                 💬 Copy Discord
                             </button>
@@ -1550,6 +1556,57 @@
                             </tr>
                         </tbody>
                     </table>
+                </div>
+            </div>
+
+            <!-- 5B. PERSONAL VAULT STATEMENT (Package B) -->
+            <div class="table-card" style="margin-top:20px;">
+                <div class="table-head-bar" style="cursor:pointer;" onclick="toggleMyVaultDrawer()">
+                    <h3 style="display:flex; align-items:center; gap:8px; margin:0;">
+                        <span>🏦 My Personal Vault Statement</span>
+                        <span id="my-vault-badge" style="font-size:0.72em; font-weight:700; padding:2px 8px; border-radius:999px; background:rgba(16,185,129,0.12); color:var(--accent-emerald); border:1px solid rgba(16,185,129,0.28);">Player-Scoped Privacy</span>
+                    </h3>
+                    <div style="display:flex; gap:8px; align-items:center;">
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); loadMyVaultLedger(true);">↻ Sync Statement</button>
+                        <span id="my-vault-chevron" style="font-size:0.9em; color:var(--text-muted);">▼ Expand</span>
+                    </div>
+                </div>
+                <div id="my-vault-body" style="display:none; padding:16px 20px;">
+                    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:10px; margin-bottom:14px;">
+                        <div style="background:var(--bg-elevated); border:1px solid var(--border-subtle); border-radius:8px; padding:10px 12px;">
+                            <div style="font-size:0.72em; color:var(--text-muted); font-weight:700;">Total Deposited</div>
+                            <div id="vault-tot-dep" style="font-family:var(--font-mono); font-size:1.15em; font-weight:800; color:var(--accent-emerald); margin-top:2px;">$0</div>
+                        </div>
+                        <div style="background:var(--bg-elevated); border:1px solid var(--border-subtle); border-radius:8px; padding:10px 12px;">
+                            <div style="font-size:0.72em; color:var(--text-muted); font-weight:700;">War &amp; Vault Payouts</div>
+                            <div id="vault-tot-paid" style="font-family:var(--font-mono); font-size:1.15em; font-weight:800; color:#38bdf8; margin-top:2px;">$0</div>
+                        </div>
+                        <div style="background:var(--bg-elevated); border:1px solid var(--border-subtle); border-radius:8px; padding:10px 12px;">
+                            <div style="font-size:0.72em; color:var(--text-muted); font-weight:700;">Self Withdrawn</div>
+                            <div id="vault-tot-with" style="font-family:var(--font-mono); font-size:1.15em; font-weight:800; color:var(--accent-amber); margin-top:2px;">$0</div>
+                        </div>
+                        <div style="background:var(--bg-elevated); border:1px solid var(--border-subtle); border-radius:8px; padding:10px 12px;">
+                            <div style="font-size:0.72em; color:var(--text-muted); font-weight:700;">Open /withdraw Queue</div>
+                            <div id="vault-tot-pend" style="font-family:var(--font-mono); font-size:1.15em; font-weight:800; color:var(--text-primary); margin-top:2px;">0</div>
+                        </div>
+                    </div>
+                    <div id="my-vault-status-note" style="font-size:0.8em; color:var(--text-muted); margin-bottom:10px;"></div>
+                    <div class="table-wrap" style="max-height:260px;">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Time (UTC)</th>
+                                    <th>Type</th>
+                                    <th>Counterparty / Detail</th>
+                                    <th style="text-align:right;">Amount</th>
+                                    <th>Source</th>
+                                </tr>
+                            </thead>
+                            <tbody id="my-vault-tbody">
+                                <tr><td colspan="5" style="text-align:center; padding:16px; color:var(--text-muted);">Expand to load your personal Torn vault &amp; banker history.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </main>
@@ -1879,6 +1936,7 @@
                 }
 
                 showToast(`Loaded war report #${id} with ${rawMembers.length} members!`, "green");
+                await loadVerifiedPayoutStatus(id);
                 recalc();
 
                 if (isBountyReimburseOn) {
@@ -2326,8 +2384,10 @@
             let totalLedgerPayout = 0;
 
             filteredRows.forEach(r => {
-                const isPaid = localStorage.getItem(`paid_${warId}_${r.id}`) === '1';
+                const verifiedRec = window.verifiedPaidMap ? window.verifiedPaidMap[String(r.id)] : null;
+                const isPaid = Boolean(verifiedRec) || (localStorage.getItem(`paid_${warId}_${r.id}`) === '1');
                 r.isPaid = isPaid;
+                r.autoVerified = verifiedRec || null;
                 totalLedgerPayout += r.finalPayout;
                 if (isPaid) {
                     paidCount++;
@@ -2362,6 +2422,7 @@
                             ${m.name}
                         </a>
                         <span style="color:var(--text-muted); font-size:0.8em; margin-left:4px;">[${m.id}]</span>
+                        ${m.autoVerified ? `<span title="Auto-Verified via Torn fundsnews (${new Date((m.autoVerified.txTimestamp || 0) * 1000).toLocaleString()}): ${String(m.autoVerified.rawText || '').replace(/"/g, '&quot;')}" style="display:inline-block; margin-left:6px; padding:1px 6px; border-radius:999px; font-size:0.7em; font-weight:700; background:rgba(16,185,129,0.16); color:var(--accent-emerald); border:1px solid rgba(16,185,129,0.32);">✅ Vault Verified</span>` : ''}
                     </td>
 
                     <!-- 3. WAR HITS + FF + SCORE -->
@@ -2559,6 +2620,175 @@
             navigator.clipboard.writeText(text).then(() => {
                 showToast('📋 Tab-separated payout ledger copied to clipboard!', 'green');
             });
+        }
+
+        // ─── Package B: fundsnews Auto-Reconciliation, Discord Export & Personal Vault Statement ───
+        window.verifiedPaidMap = {};
+
+        async function loadVerifiedPayoutStatus(warId) {
+            try {
+                const wid = warId || window.currentReportId || 'default';
+                const headers = myKey ? { 'x-api-key': myKey } : {};
+                const res = await fetch(`/api/payout/verified-status?warId=${encodeURIComponent(wid)}`, { headers });
+                const data = await res.json();
+                if (data && data.success) {
+                    window.verifiedPaidMap = data.verifiedMap || {};
+                }
+            } catch (_) {}
+        }
+
+        async function syncFundsNewsPaid() {
+            const rows = window.lastRenderedLedgerRows || [];
+            if (!rows.length) {
+                showToast('Load a war report first before syncing Torn fundsnews.', 'amber');
+                return;
+            }
+            const btn = document.getElementById('btn-sync-fundsnews');
+            if (btn) btn.disabled = true;
+            try {
+                const warId = window.currentReportId || 'default';
+                const headers = { 'Content-Type': 'application/json' };
+                if (myKey) headers['x-api-key'] = myKey;
+                const res = await fetch('/api/payout/reconcile-fundsnews', {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify({
+                        warId,
+                        rows: rows.map(r => ({
+                            playerId: r.id,
+                            playerName: r.name,
+                            expectedAmount: r.finalPayout
+                        }))
+                    })
+                });
+                const data = await res.json();
+                if (!data.success) {
+                    showToast(`Sync failed: ${data.error || 'Unknown error'}`, 'red');
+                    return;
+                }
+                window.verifiedPaidMap = data.verifiedMap || {};
+                for (const m of (data.matched || [])) {
+                    localStorage.setItem(`paid_${warId}_${m.playerId}`, '1');
+                }
+                recalc();
+                showToast(`✅ Matched & Auto-Verified ${data.matchedCount || 0} payment(s) totaling ${fmt(data.totalMatchedAmt || 0)}!`, 'green');
+            } catch (err) {
+                showToast(`Sync failed: ${err.message}`, 'red');
+            } finally {
+                if (btn) btn.disabled = false;
+            }
+        }
+
+        async function postPayoutsToDiscord() {
+            const rows = window.lastRenderedLedgerRows || [];
+            if (!rows.length) {
+                showToast('Load a war report first before posting to Discord.', 'amber');
+                return;
+            }
+            const btn = document.getElementById('btn-post-discord-payout');
+            if (btn) btn.disabled = true;
+            try {
+                const headers = { 'Content-Type': 'application/json' };
+                if (myKey) headers['x-api-key'] = myKey;
+                const res = await fetch('/api/payout/post-discord', {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify({
+                        warId: window.currentReportId || 'Latest',
+                        enemyName: window.currentWarMetadata?.enemyName || 'Enemy Faction',
+                        cacheSales: parseMoney(document.getElementById('inp-cache')?.value),
+                        deductions: parseMoney(document.getElementById('kpi-deductions')?.innerText),
+                        memberPool: parseMoney(document.getElementById('kpi-pool')?.innerText),
+                        totalHits: document.getElementById('kpi-hits')?.innerText || '0',
+                        effectivePph: document.getElementById('kpi-pph')?.innerText || '$0',
+                        rows: rows.slice(0, 25).map(r => ({
+                            id: r.id,
+                            name: r.name,
+                            warH: r.warH,
+                            finalPayout: r.finalPayout,
+                            isPaid: Boolean(r.isPaid),
+                            autoVerified: Boolean(r.autoVerified)
+                        }))
+                    })
+                });
+                const data = await res.json();
+                if (!data.success) {
+                    showToast(`Discord post failed: ${data.error || 'Unknown error'}`, 'red');
+                    return;
+                }
+                showToast('📢 Finalized payout summary posted to Discord!', 'green');
+            } catch (err) {
+                showToast(`Discord post failed: ${err.message}`, 'red');
+            } finally {
+                if (btn) btn.disabled = false;
+            }
+        }
+
+        let myVaultLoaded = false;
+        function toggleMyVaultDrawer() {
+            const body = document.getElementById('my-vault-body');
+            const chev = document.getElementById('my-vault-chevron');
+            if (!body) return;
+            const willOpen = body.style.display === 'none';
+            body.style.display = willOpen ? 'block' : 'none';
+            if (chev) chev.textContent = willOpen ? '▲ Collapse' : '▼ Expand';
+            if (willOpen && !myVaultLoaded) {
+                loadMyVaultLedger(false);
+            }
+        }
+
+        async function loadMyVaultLedger(force = false) {
+            const tbody = document.getElementById('my-vault-tbody');
+            const noteEl = document.getElementById('my-vault-status-note');
+            if (tbody) tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:16px; color:var(--text-muted);">⏳ Fetching your personal Torn fundsnews &amp; queue...</td></tr>';
+            try {
+                const headers = myKey ? { 'x-api-key': myKey } : {};
+                const res = await fetch(`/api/vault/my-ledger${force ? '?refresh=1' : ''}`, { headers });
+                const data = await res.json();
+                if (!data.success) {
+                    if (noteEl) noteEl.textContent = data.error || 'Authentication required to inspect your personal vault history.';
+                    if (tbody) tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:16px; color:var(--accent-amber);">${data.error || 'Please connect your Torn API key in Settings.'}</td></tr>`;
+                    return;
+                }
+                myVaultLoaded = true;
+                const l = data.ledger || {};
+                const t = l.totals || {};
+                const elDep = document.getElementById('vault-tot-dep');
+                const elPaid = document.getElementById('vault-tot-paid');
+                const elWith = document.getElementById('vault-tot-with');
+                const elPend = document.getElementById('vault-tot-pend');
+                if (elDep) elDep.textContent = fmt(t.deposited || 0);
+                if (elPaid) elPaid.textContent = fmt(t.payoutsReceived || 0);
+                if (elWith) elWith.textContent = fmt(t.withdrawn || 0);
+                if (elPend) elPend.textContent = String((l.pendingRequests || []).length);
+
+                const badge = document.getElementById('my-vault-badge');
+                if (badge) badge.textContent = `${data.playerName} [${data.playerId}]`;
+                if (noteEl) noteEl.textContent = data.fundsNewsWarning ? `⚠️ ${data.fundsNewsWarning}` : `Showing strictly ${data.playerName}'s vault movements & Discord /withdraw requests.`;
+
+                const entries = l.entries || [];
+                if (!entries.length) {
+                    if (tbody) tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:16px; color:var(--text-muted);">No recent vault transactions found for your account.</td></tr>';
+                    return;
+                }
+                if (tbody) {
+                    tbody.innerHTML = entries.map(e => {
+                        const dt = e.timestamp ? new Date(e.timestamp).toISOString().replace('T', ' ').slice(0, 16) : '—';
+                        const isCredit = e.direction === 'in' || e.direction === 'out_paid';
+                        const color = e.direction === 'in' ? 'var(--accent-emerald)' : (e.direction === 'out_paid' ? '#38bdf8' : 'var(--accent-amber)');
+                        return `
+                            <tr>
+                                <td style="font-family:var(--font-mono); font-size:0.82em; color:var(--text-muted);">${dt}</td>
+                                <td><span style="font-weight:700; color:${color};">${e.label}</span></td>
+                                <td style="font-size:0.86em;">${e.rawText ? e.rawText.replace(/</g, '&lt;') : e.counterparty}</td>
+                                <td style="text-align:right; font-family:var(--font-mono); font-weight:800; color:${color};">${isCredit ? '+' : '-'}${fmt(e.amount)}</td>
+                                <td style="font-size:0.78em; color:var(--text-muted);">${e.source === 'torn_fundsnews' ? 'Torn Vault' : '/withdraw Bot'}</td>
+                            </tr>`;
+                    }).join('');
+                }
+            } catch (err) {
+                if (tbody) tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:16px; color:var(--accent-rose);">Error loading statement: ${err.message}</td></tr>`;
+            }
         }
     </script>
 </body>

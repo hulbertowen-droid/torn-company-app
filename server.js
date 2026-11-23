@@ -45,6 +45,11 @@ const { buildSlashCommands } = require('./discord-slash-builder');
 const tornKnowledge = require('./torn-knowledge');
 const ocDmEngineModule = require('./oc-dm-engine');
 const welcomeGatekeeperModule = require('./welcome-gatekeeper');
+const warReadinessModule = require('./war-readiness');
+const vaultReconcilerModule = require('./vault-reconciler');
+const sniperWatchlistModule = require('./sniper-watchlist');
+const armoryLoanNudgerModule = require('./armory-loan-nudger');
+const weeklyDigestModule = require('./weekly-digest');
 const sessionManager = require('./session-manager');
 const tornApiManager = require('./torn-api-manager');
 const warboardBroadcaster = require('./warboard-broadcaster');
@@ -119,7 +124,13 @@ let discordConfig = {
     welcomeChannelId: "",
     postWelcomeRulesOnJoin: true,
     welcomeRulesTitle: "📜 Welcome to the Faction & Server Rules",
-    welcomeRulesContent: DEFAULT_WELCOME_RULES
+    welcomeRulesContent: DEFAULT_WELCOME_RULES,
+    preWarStackAlertsEnabled: false,
+    preWarDmUnstacked: false,
+    armoryLoanOverdueAlert: false,
+    armoryLoanThresholdHours: 48,
+    armoryLoanDmBorrowers: true,
+    weeklyDigestEnabled: false
 };
 let companyConfig = { apiKey: "", companyId: "", globalChannelId: "", threshold: 0, alertedItems: {} };
 let marketConfig = { globalChannelId: "", autoDefense: false, sniperTargets: [] };
@@ -322,6 +333,12 @@ function sanitizeConfigForClient(rawConfig) {
         nonFactionAlsoGrantVerified: rawConfig.nonFactionAlsoGrantVerified === true,
         approvalChannelId: rawConfig.approvalChannelId || "",
         approvalAdminRoleId: rawConfig.approvalAdminRoleId || "",
+        preWarStackAlertsEnabled: rawConfig.preWarStackAlertsEnabled === true,
+        preWarDmUnstacked: rawConfig.preWarDmUnstacked === true,
+        armoryLoanOverdueAlert: rawConfig.armoryLoanOverdueAlert === true,
+        armoryLoanThresholdHours: Math.max(6, Number(rawConfig.armoryLoanThresholdHours) || 48),
+        armoryLoanDmBorrowers: rawConfig.armoryLoanDmBorrowers !== false,
+        weeklyDigestEnabled: rawConfig.weeklyDigestEnabled === true,
         rev: rawConfig.rev || 1,
         updatedAt: rawConfig.updatedAt || Date.now(),
         updatedBy: rawConfig.updatedBy || 'System',
@@ -549,6 +566,21 @@ async function loadConfigFromMongo() {
                     fs.writeFileSync(BATTLESTATS_HISTORY_FILE, JSON.stringify(battleStatsHistory, null, 2), 'utf8');
                 } catch(e) {}
                 console.log(`[Mongo] Restored battle stats history for ${Object.keys(battleStatsHistory).filter(k => !k.startsWith('discord_')).length} player(s) from MongoDB Atlas.`);
+            }
+            if (saved.warReadinessState && typeof warReadinessEngine?.importState === 'function') {
+                warReadinessEngine.importState(saved.warReadinessState);
+            }
+            if (saved.warPayoutVerified && typeof vaultReconciler?.importState === 'function') {
+                vaultReconciler.importState(saved.warPayoutVerified);
+            }
+            if (saved.sniperWatchlist && typeof sniperWatchlistEngine?.importState === 'function') {
+                sniperWatchlistEngine.importState(saved.sniperWatchlist);
+            }
+            if (saved.armoryLoanNudgeState && typeof armoryLoanNudger?.importState === 'function') {
+                armoryLoanNudger.importState(saved.armoryLoanNudgeState);
+            }
+            if (saved.weeklyDigestState && typeof weeklyDigestEngine?.importState === 'function') {
+                weeklyDigestEngine.importState(saved.weeklyDigestState);
             }
             if (saved.verifiedDiscordUsers) {
                 verifiedDiscordToTorn = { ...(verifiedDiscordToTorn || {}), ...saved.verifiedDiscordUsers };
@@ -1060,7 +1092,13 @@ discordConfig = {
     welcomeChannelId: "",
     postWelcomeRulesOnJoin: true,
     welcomeRulesTitle: "📜 Welcome to the Faction & Server Rules",
-    welcomeRulesContent: DEFAULT_WELCOME_RULES
+    welcomeRulesContent: DEFAULT_WELCOME_RULES,
+    preWarStackAlertsEnabled: false,
+    preWarDmUnstacked: false,
+    armoryLoanOverdueAlert: false,
+    armoryLoanThresholdHours: 48,
+    armoryLoanDmBorrowers: true,
+    weeklyDigestEnabled: false
 };
 marketConfig = { globalChannelId: "", autoDefense: false, sniperTargets: [] };
 let marketMemory = { defense: {}, sniper: {} };
@@ -1253,6 +1291,11 @@ function saveToMongo() {
                 ocMemberHistory: (typeof ocMemberHistory !== 'undefined' ? ocMemberHistory : {}),
                 ocDmState: (typeof ocDmEngine !== 'undefined' ? ocDmEngine.exportForMongo() : undefined),
                 nonFactionGatekeeper: (typeof welcomeGatekeeper !== 'undefined' ? welcomeGatekeeper.exportState() : undefined),
+                warReadinessState: (typeof warReadinessEngine !== 'undefined' ? warReadinessEngine.exportState() : undefined),
+                warPayoutVerified: (typeof vaultReconciler !== 'undefined' ? vaultReconciler.exportState() : undefined),
+                sniperWatchlist: (typeof sniperWatchlistEngine !== 'undefined' ? sniperWatchlistEngine.exportState() : undefined),
+                armoryLoanNudgeState: (typeof armoryLoanNudger !== 'undefined' ? armoryLoanNudger.exportState() : undefined),
+                weeklyDigestState: (typeof weeklyDigestEngine !== 'undefined' ? weeklyDigestEngine.exportState() : undefined),
                 giveaways: (typeof activeGiveaways !== 'undefined' ? activeGiveaways : {}),
                 warFlightArchive,
                 warAuditArchive,
@@ -1290,6 +1333,98 @@ function saveApiPool() {
     saveToMongo();
 }
 function saveCompanyConfig() { fs.writeFileSync('company_config.json', JSON.stringify(companyConfig)); saveToMongo(); }
+
+const warReadinessEngine = warReadinessModule.createWarReadinessEngine({
+    dataDir: path.join(__dirname, 'data'),
+    getCandidateKeys: (fid) => [discordConfig.apiKey, ...(apiPoolConfig?.keys || []), TORN_API_KEY, process.env.TORN_API_KEY].filter(Boolean),
+    getCachedWarboard: (fid) => (fid && lastGoodWarboardByFaction[fid]) || lastGoodWarboardPayload || null,
+    getBattleStatsHistory: () => battleStatsHistory,
+    getDefaultFactionId: () => discordConfig.factionId || dynamicFactionId || '52355',
+    getFactionName: (fid) => (String(fid) === String(discordConfig.factionId) ? discordConfig.factionName : null),
+    getDiscordConfig: () => ({ ...discordConfig, botToken: discordConfig.globalBotToken }),
+    getFallbackApiKey: () => discordConfig.apiKey || TORN_API_KEY || getNextApiKey(),
+    pollConnectedXanaxAndCooldowns: (opts) => pollConnectedXanaxAndCooldowns(opts),
+    computeEnergyXanaxInference: (e, b, r) => userKeys.computeEnergyXanaxInference(e, b, r),
+    resolveMemberDiscord: (...args) => ocDmEngine.resolveMemberDiscord(...args),
+    sendDirectMessage: (...args) => sendDirectMessageToUser(...args),
+    sendChannelMessage: (...args) => sendChannelMessage(...args),
+    onStateChange: () => saveToMongo()
+});
+global.warReadinessEngine = warReadinessEngine;
+setInterval(() => { warReadinessEngine.evaluateAndDispatchPreWarAlerts().catch(() => {}); }, 5 * 60 * 1000);
+
+const vaultReconciler = vaultReconcilerModule.createVaultReconcilerEngine({
+    dataDir: path.join(__dirname, 'data'),
+    getFactionKeys: (fid, callerKey) => getFactionArmoryCandidateKeys(fid, callerKey),
+    onStateChange: () => saveToMongo()
+});
+global.vaultReconciler = vaultReconciler;
+
+const sniperWatchlistEngine = sniperWatchlistModule.createSniperWatchlistEngine({
+    dataDir: path.join(__dirname, 'data'),
+    isNotificationsPaused: () => Boolean(global.isNotificationsKilled),
+    getFactionApiKey: (fid) => {
+        const cfg = getFactionDiscordConfig(fid);
+        return cfg.apiKey || getFactionArmoryCandidateKeys(fid)?.[0] || null;
+    },
+    getFallbackApiKey: () => discordConfig.apiKey || TORN_API_KEY || getNextApiKey(),
+    resolvePlayerBattleStats: (pid, lvl) => resolvePlayerBattleStats(pid, lvl),
+    dispatchWatchAlert: async (fid, embed) => {
+        const cfg = getFactionDiscordConfig(fid);
+        const token = cfg.globalBotToken || discordConfig.globalBotToken;
+        const chanId = cfg.alertChannelId || cfg.channelId || discordConfig.channelId;
+        if (token && chanId) {
+            await sendChannelMessage(token, chanId, embed, '', false);
+        }
+    },
+    onStateChange: () => saveToMongo()
+});
+global.sniperWatchlistEngine = sniperWatchlistEngine;
+setInterval(() => { sniperWatchlistEngine.pollAllWatchlists().catch(() => {}); }, 40 * 1000);
+
+const armoryLoanNudger = armoryLoanNudgerModule.createArmoryLoanNudger({
+    dataDir: path.join(__dirname, 'data'),
+    isNotificationsPaused: () => Boolean(global.isNotificationsKilled),
+    getDiscordConfig: () => ({ ...discordConfig, botToken: discordConfig.globalBotToken }),
+    getDefaultFactionId: () => discordConfig.factionId || dynamicFactionId || '52355',
+    getFallbackApiKey: () => discordConfig.apiKey || TORN_API_KEY || getNextApiKey(),
+    getOcDmConfig: () => ocDmEngine.getConfig(),
+    resolveMemberDiscord: (...args) => ocDmEngine.resolveMemberDiscord(...args),
+    sendDirectMessage: (...args) => sendDirectMessageToUser(...args),
+    sendChannelMessage: (...args) => sendChannelMessage(...args),
+    onStateChange: () => saveToMongo()
+});
+global.armoryLoanNudger = armoryLoanNudger;
+setInterval(() => { armoryLoanNudger.runAudit().catch(() => {}); }, 30 * 60 * 1000);
+
+const weeklyDigestEngine = weeklyDigestModule.createWeeklyDigestEngine({
+    dataDir: path.join(__dirname, 'data'),
+    isNotificationsPaused: () => Boolean(global.isNotificationsKilled),
+    getDiscordConfig: () => ({ ...discordConfig, botToken: discordConfig.globalBotToken }),
+    getDefaultFactionId: () => discordConfig.factionId || dynamicFactionId || '52355',
+    getFactionName: (fid) => (String(fid) === String(discordConfig.factionId) ? discordConfig.factionName : null),
+    getFallbackApiKey: () => discordConfig.apiKey || TORN_API_KEY || getNextApiKey(),
+    getBattleStatsHistory: () => battleStatsHistory,
+    getConnectedTornIds: () => new Set((userKeys.getAllConnectedMembers?.() || []).map(m => String(m.tornId))),
+    getCachedMembers: (fid) => {
+        const wb = (fid && lastGoodWarboardByFaction[fid]) || lastGoodWarboardPayload;
+        const map = {};
+        for (const m of (wb?.friendly || [])) {
+            const id = String(m.id || m.playerId || '');
+            if (id) map[id] = m;
+        }
+        return map;
+    },
+    getOverdueLoansCount: async () => {
+        const audit = await armoryLoanNudger.runAudit({ force: true, dryRun: true });
+        return Number(audit?.overdueHoldersCount || 0);
+    },
+    getRecentWarHitsCount: () => Object.values(liveWarHits || {}).reduce((acc, v) => acc + Number(v || 0), 0),
+    sendChannelMessage: (...args) => sendChannelMessage(...args),
+    onStateChange: () => saveToMongo()
+});
+global.weeklyDigestEngine = weeklyDigestEngine;
+setInterval(() => { weeklyDigestEngine.tickWeeklyDigest().catch(() => {}); }, 5 * 60 * 1000);
 
 const ocDmEngine = ocDmEngineModule.createOcDmEngine({
     dataDir: path.join(__dirname, 'data'),
@@ -5959,6 +6094,12 @@ app.post('/api/save-discord-config', async (req, res) => {
     if (payload.factionRoleId !== undefined) payload.factionRoleId = String(payload.factionRoleId || '').replace(/[^0-9]/g, '');
     if (payload.leaderRoleId !== undefined) payload.leaderRoleId = String(payload.leaderRoleId || '').replace(/[^0-9]/g, '');
     if (payload.autoVerifyOnJoin !== undefined) payload.autoVerifyOnJoin = !!payload.autoVerifyOnJoin;
+    if (payload.preWarStackAlertsEnabled !== undefined) payload.preWarStackAlertsEnabled = (payload.preWarStackAlertsEnabled === true || payload.preWarStackAlertsEnabled === 'true');
+    if (payload.preWarDmUnstacked !== undefined) payload.preWarDmUnstacked = (payload.preWarDmUnstacked === true || payload.preWarDmUnstacked === 'true');
+    if (payload.armoryLoanOverdueAlert !== undefined) payload.armoryLoanOverdueAlert = (payload.armoryLoanOverdueAlert === true || payload.armoryLoanOverdueAlert === 'true');
+    if (payload.armoryLoanThresholdHours !== undefined) payload.armoryLoanThresholdHours = Math.max(6, Number(payload.armoryLoanThresholdHours) || 48);
+    if (payload.armoryLoanDmBorrowers !== undefined) payload.armoryLoanDmBorrowers = (payload.armoryLoanDmBorrowers !== false && payload.armoryLoanDmBorrowers !== 'false');
+    if (payload.weeklyDigestEnabled !== undefined) payload.weeklyDigestEnabled = (payload.weeklyDigestEnabled === true || payload.weeklyDigestEnabled === 'true');
     if (payload.disabledCommands !== undefined && Array.isArray(payload.disabledCommands)) {
         payload.disabledCommands = payload.disabledCommands.map(c => String(c).toLowerCase().trim()).filter(Boolean);
     }
@@ -7340,6 +7481,25 @@ app.post('/api/test-discord-alert', async (req, res) => {
             footer: { text: "F.R.I.D.A.Y. • Faction Logistics & Armory Sentinel" },
             timestamp: new Date().toISOString()
         };
+    } else if (t === 'prewar_stack' || t === 'prewarstack' || t === 'war_readiness') {
+        const summary = await warReadinessEngine.computeLiveReadiness(
+            discordConfig.factionId || dynamicFactionId || '52355',
+            discordConfig.apiKey || TORN_API_KEY || getNextApiKey(),
+            { targetEnergy: 750, refreshBars: false }
+        );
+        embed = warReadinessModule.buildWarReadinessEmbed(summary, { checkpointLabel: 'Test Check' });
+    } else if (t === 'armory_loan_overdue' || t === 'armoryloanoverdue') {
+        const auditRes = await armoryLoanNudger.runAudit({ force: true, dryRun: true });
+        embed = armoryLoanNudgerModule.buildQuartermasterSummaryEmbed(
+            auditRes.factionName || discordConfig.factionName || 'Faction',
+            auditRes.holders || [],
+            auditRes.thresholdHours || 48,
+            null
+        );
+    } else if (t === 'weekly_digest' || t === 'weeklydigest' || t === 'weeklydigestenabled') {
+        const fid = discordConfig.factionId || dynamicFactionId || '52355';
+        const report = await weeklyDigestEngine.generateReport(fid, discordConfig.apiKey || TORN_API_KEY || getNextApiKey());
+        embed = weeklyDigestModule.buildWeeklyDigestEmbed(report);
     } else if (t === 'vault_ghost_trade' || t === 'vaultghosttrade') {
         embed = {
             title: "💰 Vault Payout & Ghost Trade Sentinel",
@@ -10001,6 +10161,17 @@ app.get('/api/past-war', async (req, res) => {
     } catch (err) { res.status(403).json({ error: err.message }); }
 });
 
+app.use(['/api/claims', '/api/claim', '/api/unclaim'], (req, res, next) => {
+    const origin = req.headers.origin || '';
+    if (origin === 'https://www.torn.com' || origin === 'https://faction-os.duckdns.org' || !origin) {
+        res.setHeader('Access-Control-Allow-Origin', origin || '*');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, If-None-Match, x-faction-id, x-api-key');
+    }
+    if (req.method === 'OPTIONS') return res.status(204).end();
+    next();
+});
+
 app.get('/api/claims', (req, res) => {
     const facId = String(req.query.factionId || req.headers['x-faction-id'] || req.userSession?.factionId || discordConfig.factionId || dynamicFactionId || '');
     if (!facId) return res.status(400).json({ error: "Faction ID required" });
@@ -10023,6 +10194,7 @@ app.post('/api/claim', (req, res) => {
     if (!facId) return res.status(400).json({ error: "Faction ID required" });
     const state = getFactionWarState(facId);
     state.claims[enemyId] = { playerName: playerName || req.userSession?.playerName || "Agent", time: Date.now() };
+    try { warboardBroadcaster.broadcast('claims_update', { factionId: facId, claims: state.claims }); } catch(_) {}
     res.json({ success: true });
 });
 app.post('/api/unclaim', (req, res) => {
@@ -10032,6 +10204,7 @@ app.post('/api/unclaim', (req, res) => {
     const state = getFactionWarState(facId);
     const claimingUser = playerName || req.userSession?.playerName;
     if (!claimingUser || state.claims[enemyId]?.playerName === claimingUser) delete state.claims[enemyId];
+    try { warboardBroadcaster.broadcast('claims_update', { factionId: facId, claims: state.claims }); } catch(_) {}
     res.json({ success: true });
 });
 app.post('/api/backup', (req, res) => {
@@ -12714,6 +12887,178 @@ app.use('/api/bazaar', bazaarRoutes);
 
 const gymTrackerRoutes = require('./routes/gym-tracker');
 app.use('/api/gym-tracker', gymTrackerRoutes);
+
+// Package A: Pre-War Energy Stacking & Booster Readiness API
+app.get('/api/war-readiness', async (req, res) => {
+    try {
+        const targetFacId = resolveFactionId(req);
+        const userKey = req.userTornKey || req.headers?.['x-api-key'] || req.query?.apiKey || discordConfig.apiKey || TORN_API_KEY || getNextApiKey();
+        const targetEnergy = Math.max(250, Number(req.query?.target) || 750);
+        const refreshBars = req.query?.refresh === '1' || req.query?.force === '1';
+        const summary = await warReadinessEngine.computeLiveReadiness(targetFacId, userKey, { targetEnergy, refreshBars });
+        res.json(summary);
+    } catch (err) {
+        console.error('[WarReadiness API] Error:', err.message);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Package B: Personal Vault Statement (strictly scoped to caller's Torn Player ID & Faction)
+app.get('/api/vault/my-ledger', async (req, res) => {
+    try {
+        const targetFacId = resolveFactionId(req);
+        const callerKey = req.userTornKey || req.headers?.['x-api-key'] || req.query?.apiKey || null;
+        let playerId = req.userSession?.playerId ? String(req.userSession.playerId) : null;
+        let playerName = req.userSession?.playerName || null;
+
+        if (!playerId && callerKey) {
+            try {
+                const uRes = await fetch(`https://api.torn.com/user/?selections=profile&key=${encodeURIComponent(callerKey)}`, { signal: AbortSignal.timeout(5000) });
+                const uData = await uRes.json();
+                if (uData && uData.player_id) {
+                    playerId = String(uData.player_id);
+                    playerName = uData.name || playerName;
+                }
+            } catch (_) {}
+        }
+
+        if (!playerId) {
+            return res.status(401).json({ success: false, error: 'Sign in with Torn or provide your personal Torn API key to view your vault statement.' });
+        }
+
+        const force = req.query?.refresh === '1' || req.query?.force === '1';
+        const newsRes = await vaultReconciler.fetchParsedFundsNews(targetFacId, callerKey, force);
+        const ledger = vaultReconciler.buildMemberVaultLedger(newsRes.parsedNews || [], bankRequests || {}, playerId, targetFacId);
+
+        res.json({
+            success: true,
+            playerId: Number(playerId),
+            playerName: playerName || `Player [${playerId}]`,
+            factionId: targetFacId,
+            fundsNewsOk: newsRes.ok,
+            fundsNewsWarning: newsRes.ok ? null : newsRes.error,
+            ledger
+        });
+    } catch (err) {
+        console.error('[Vault MyLedger API] Error:', err.message);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Package B: Get persisted auto-verified payout receipts for a War ID
+app.get('/api/payout/verified-status', (req, res) => {
+    const targetFacId = resolveFactionId(req);
+    const warId = String(req.query?.warId || 'default').trim();
+    res.json({
+        success: true,
+        factionId: targetFacId,
+        warId,
+        verifiedMap: vaultReconciler.getVerifiedMap(targetFacId, warId)
+    });
+});
+
+// Package B: Auto-Reconcile War Payout Ledger rows against Torn fundsnews
+app.post('/api/payout/reconcile-fundsnews', async (req, res) => {
+    try {
+        const targetFacId = resolveFactionId(req);
+        const callerKey = req.userTornKey || req.headers?.['x-api-key'] || req.body?.apiKey || null;
+        if (!req.userSession && !callerKey) {
+            return res.status(401).json({ success: false, error: 'Authentication required to reconcile faction payouts.' });
+        }
+        const warId = String(req.body?.warId || 'default').trim();
+        const rows = Array.isArray(req.body?.rows) ? req.body.rows : [];
+        const sinceTsSec = Math.max(0, Number(req.body?.sinceTsSec) || 0);
+        const result = await vaultReconciler.reconcileWarPayouts(targetFacId, warId, rows, callerKey, {
+            sinceTsSec,
+            force: Boolean(req.body?.force !== false)
+        });
+        if (!result.success) {
+            return res.status(400).json(result);
+        }
+        res.json(result);
+    } catch (err) {
+        console.error('[Payout Reconcile API] Error:', err.message);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Package B: Post Finalized Payout Summary to Discord Channel
+app.post('/api/payout/post-discord', async (req, res) => {
+    try {
+        const targetFacId = resolveFactionId(req);
+        const callerKey = req.userTornKey || req.headers?.['x-api-key'] || null;
+        if (!req.userSession && !callerKey) {
+            return res.status(401).json({ success: false, error: 'Authentication required to post to Discord.' });
+        }
+        const cfg = getFactionDiscordConfig(targetFacId);
+        const botToken = cfg.globalBotToken || discordConfig.globalBotToken;
+        const chanId = cfg.payoutChannelId || cfg.alertChannelId || cfg.channelId || discordConfig.channelId;
+        if (!botToken || !chanId) {
+            return res.status(400).json({ success: false, error: 'Discord Bot Token or Payout/Alert Channel is not configured.' });
+        }
+        const payload = {
+            ...(req.body || {}),
+            factionName: cfg.factionName || discordConfig.factionName || `Faction [${targetFacId}]`
+        };
+        const embed = vaultReconciler.buildPayoutSummaryDiscordEmbed(payload);
+        const sent = await sendChannelMessage(botToken, chanId, embed, '', false);
+        if (sent && sent.success === false) {
+            return res.status(502).json({ success: false, error: sent.error || 'Discord dispatch failed' });
+        }
+        res.json({ success: true, channelId: chanId });
+    } catch (err) {
+        console.error('[Payout Post Discord] Error:', err.message);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Package D: Custom Sniper Watchlist API (Strictly Faction-Isolated)
+app.get('/api/watchlist', (req, res) => {
+    const targetFacId = resolveFactionId(req);
+    res.json({
+        success: true,
+        factionId: targetFacId,
+        targets: sniperWatchlistEngine.listTargets(targetFacId)
+    });
+});
+
+app.post('/api/watchlist', async (req, res) => {
+    try {
+        const targetFacId = resolveFactionId(req);
+        const callerKey = req.userTornKey || req.headers?.['x-api-key'] || discordConfig.apiKey || TORN_API_KEY || getNextApiKey();
+        const { targetId, note, alertOn } = req.body || {};
+        if (!targetId) {
+            return res.status(400).json({ success: false, error: 'targetId is required' });
+        }
+        const entry = await sniperWatchlistEngine.addTarget(targetFacId, targetId, {
+            note: note || '',
+            alertOn,
+            addedBy: req.userSession?.playerName || 'Warboard User'
+        }, callerKey);
+        res.json({
+            success: true,
+            factionId: targetFacId,
+            target: entry,
+            targets: sniperWatchlistEngine.listTargets(targetFacId)
+        });
+    } catch (err) {
+        res.status(400).json({ success: false, error: err.message });
+    }
+});
+
+app.delete('/api/watchlist/:targetId', (req, res) => {
+    const targetFacId = resolveFactionId(req);
+    const removed = sniperWatchlistEngine.removeTarget(targetFacId, req.params.targetId);
+    if (!removed) {
+        return res.status(404).json({ success: false, error: 'Target not found on your faction watchlist' });
+    }
+    res.json({
+        success: true,
+        factionId: targetFacId,
+        removed,
+        targets: sniperWatchlistEngine.listTargets(targetFacId)
+    });
+});
 
 const ocCommandRoutes = require('./routes/oc-command');
 ocCommandRoutes.setDeps({
@@ -26056,7 +26401,9 @@ const TUTORIAL_CATALOG = [
             { name: 'elim', text: '`/elim` — Alias for `/snipe` to find beatable targets around your stats.' },
             { name: 'enemy', text: '`/enemy` — Pulls a full breakdown of an enemy faction\'s roster, hospital timers, flyers, and stats.' },
             { name: 'bounties', text: '`/bounties` — Checks active war bounties placed on enemies or faction mates.' },
-            { name: 'flights', text: '`/flights` — Shows who is flying right now and when enemies are landing.' }
+            { name: 'flights', text: '`/flights` — Shows who is flying right now and when enemies are landing.' },
+            { name: 'stack', text: '`/stack` — Audits pre-war stacked energy, booster/drug cooldowns, flying & public revive risk.' },
+            { name: 'watch', text: '`/watch` — Pins non-war Torn targets for landing, hospital exit, and online sniper pings.' }
         ]
     },
     {
@@ -26078,7 +26425,7 @@ const TUTORIAL_CATALOG = [
         key: 'faction',
         title: '👥 Faction & Roster',
         commands: [
-            { name: 'faction', text: '`/faction` — All-in-one command for checking the roster, hospital, revives, retals, inactives, OCs, payouts, MVPs, stats, bounties, and flights.' },
+            { name: 'faction', text: '`/faction` — All-in-one command for roster, hospital, revives, retals, readiness stack check, weekly digest, OCs, payouts, MVPs, stats, bounties, and flights.' },
             { name: 'roster', text: '`/roster` — Shows who in the faction is online, idle, flying, or in the hospital.' },
             { name: 'hospital', text: '`/hospital` — Lists faction mates currently in the hospital and when they get out.' },
             { name: 'revive', text: '`/revive` — Checks which members have their revives open or locked down.' },
@@ -26271,7 +26618,7 @@ function setupSlashBotEvents(bot, token) {
 
         // Start Personal Opt-In DM Notifications Worker
         try {
-            userAlerts.startUserAlertsWorker(bot, userKeys);
+            userAlerts.startUserAlertsWorker(bot, userKeys, { getLiveYataStocks });
         } catch(e) {
             console.warn('[UserAlerts] Startup error for alerts worker:', e.message);
         }
@@ -27513,7 +27860,27 @@ function setupSlashBotEvents(bot, token) {
                 return await interaction.showModal(modal);
             }
 
-            // ── Personal Alert Toggles (Opt-in DM notifications) ──
+            // ── Personal Alert Toggles & Travel Restock Presets ──
+            if (customId === 'alert_preset_zaf_xanax' || customId === 'alert_preset_plushie_200') {
+                const invokerName = interaction.member?.displayName || interaction.user?.username || 'Member';
+                const resolved = userKeys.resolveUserApiKey(interaction.user.id, invokerName, interaction.user.username);
+                if (!resolved) {
+                    return interaction.reply({
+                        content: '⚠️ Link your Torn Limited API key via `/linkkey` first.',
+                        ephemeral: true
+                    }).catch(() => {});
+                }
+                const preset = customId === 'alert_preset_zaf_xanax'
+                    ? { country: 'zaf', itemQuery: 'Xanax', minQty: 500, enable: true }
+                    : { country: 'all', itemQuery: 'plushie|flower', minQty: 200, enable: true };
+                userAlerts.startUserAlertsWorker.setTravelWatchRule(interaction.user.id, preset);
+                const card = userAlerts.buildAlertsControlCard(interaction.user.id, {
+                    playerName: resolved.playerName,
+                    playerId: resolved.playerId
+                });
+                return interaction.update({ embeds: [sanitizeEmbed(card.embed)], components: card.components }).catch(() => {});
+            }
+
             if (customId.startsWith('toggle_alert_')) {
                 const feature = customId.replace('toggle_alert_', ''); // 'drug', 'travel', 'energy', 'nerve', 'hospital'
                 const invokerName = interaction.member?.displayName || interaction.user?.username || 'Member';
@@ -28041,6 +28408,7 @@ function setupSlashBotEvents(bot, token) {
 
                 fState.claims[targetId] = { playerName: claimerName, time: nowMs, discordId: interaction.user.id };
                 claims[targetId] = { playerName: claimerName, time: nowMs, discordId: interaction.user.id };
+                try { warboardBroadcaster.broadcast('claims_update', { factionId: facId, claims: fState.claims }); } catch(_) {}
 
                 const baseEmbed = interaction.message?.embeds?.[0]?.toJSON ? interaction.message.embeds[0].toJSON() : (interaction.message?.embeds?.[0] || {});
                 const updatedFields = (Array.isArray(baseEmbed.fields) ? baseEmbed.fields : []).filter(f => !String(f.name || '').includes('Claim Status'));
@@ -28594,6 +28962,31 @@ function setupSlashBotEvents(bot, token) {
                 }
             }
 
+            // ── Package A: Pre-War Energy Stack DM Unstacked / Flying Members ──
+            if (customId.startsWith('warstack_dm_unstacked:')) {
+                const isMgr = ocDmEngine.isMemberOcManager(interaction.member, interaction.user.id, interaction.guild)
+                    || Boolean(interaction.member?.permissions?.has?.('ManageGuild'));
+                if (!isMgr) {
+                    return interaction.reply({
+                        content: '⛔ Only faction **Leadership / Administrators** can dispatch batch pre-war stack DMs.',
+                        flags: MessageFlags.Ephemeral
+                    }).catch(() => {});
+                }
+                await interaction.deferReply({ flags: MessageFlags.Ephemeral }).catch(() => {});
+                const targetFacIdRaw = customId.split(':')[1];
+                const invokerKeyRec = userKeys?.resolveUserApiKey?.(interaction.user.id, interaction.member?.displayName, interaction.user.username);
+                const targetFacId = (targetFacIdRaw && targetFacIdRaw !== 'default') ? targetFacIdRaw : (invokerKeyRec?.factionId || discordConfig.factionId || dynamicFactionId || '52355');
+                const k = invokerKeyRec?.key || discordConfig.apiKey || TORN_API_KEY || getNextApiKey();
+                const actorName = interaction.member?.displayName || interaction.user?.username || 'Leadership';
+                const summary = await warReadinessEngine.computeLiveReadiness(targetFacId, k, { targetEnergy: 750, refreshBars: false });
+                const dmResult = await warReadinessEngine.dmActionNeededMembers(summary, actorName);
+                return interaction.editReply({
+                    embeds: [sanitizeEmbed(UI.success('📩 Pre-War Stack DMs Dispatched',
+                        `Evaluated **${dmResult.total}** member(s) needing stack / flight / revive action:\n✅ Delivered: **${dmResult.sent}**\n⚠️ DMs Closed / Failed: **${dmResult.failed}**\n❌ Unlinked Discord: **${dmResult.unlinked}**`
+                    ))]
+                }).catch(() => {});
+            }
+
             // Safety fallback: ensure any unhandled button is acknowledged immediately so Discord never times out
             if (!interaction.deferred && !interaction.replied) {
                 await interaction.deferUpdate().catch(() => {});
@@ -28867,6 +29260,18 @@ function setupSlashBotEvents(bot, token) {
                     [UI.linkBtn('https://www.torn.com/preferences.php#tab=api?step=addNewKey&title=FRIDAY&type=2', 'Create Key on Torn', '🌐')]
                 );
                 return await interaction.editReply({ embeds: [sanitizeEmbed(linkEmbed)], components: buttonRows });
+            }
+
+            const restockCountry = interaction.options?.getString?.('restock_country');
+            const restockItem = interaction.options?.getString?.('restock_item');
+            const restockMin = interaction.options?.getInteger?.('restock_min');
+            if (restockCountry || restockItem || restockMin) {
+                userAlerts.startUserAlertsWorker.setTravelWatchRule(interaction.user.id, {
+                    country: restockCountry || undefined,
+                    itemQuery: restockItem || undefined,
+                    minQty: restockMin || undefined,
+                    enable: true
+                });
             }
 
             const card = userAlerts.buildAlertsControlCard(interaction.user.id, {
@@ -30215,6 +30620,14 @@ function setupSlashBotEvents(bot, token) {
                     embed = await buildRevivesEmbed(apiKey, setting);
                 } else if (subcommand === 'retal' || subcommand === 'retaliate' || subcommand === 'retaliations') {
                     embed = await buildRetaliationsEmbed(apiKey);
+                } else if (subcommand === 'readiness' || subcommand === 'stack') {
+                    const targetFacId = invokerKeyRecord?.factionId || discordConfig.factionId || dynamicFactionId || '52355';
+                    const summary = await warReadinessEngine.computeLiveReadiness(targetFacId, apiKey, { targetEnergy: 750, refreshBars: true });
+                    embed = warReadinessModule.buildWarReadinessEmbed(summary);
+                } else if (subcommand === 'digest') {
+                    const targetFacId = invokerKeyRecord?.factionId || discordConfig.factionId || dynamicFactionId || '52355';
+                    const report = await weeklyDigestEngine.generateReport(targetFacId, apiKey);
+                    embed = weeklyDigestModule.buildWeeklyDigestEmbed(report);
                 }
             }
             // ── Alert Bot Controls ──
@@ -30312,6 +30725,39 @@ function setupSlashBotEvents(bot, token) {
                 embed = await buildHospitalEmbed(apiKey);
             } else if (cmd === 'online' || cmd === 'roster') {
                 embed = await buildOnlineRosterEmbed(apiKey);
+            } else if (cmd === 'stack') {
+                const targetE = interaction.options.getInteger('target') || 750;
+                const targetFacId = invokerKeyRecord?.factionId || discordConfig.factionId || dynamicFactionId || '52355';
+                const summary = await warReadinessEngine.computeLiveReadiness(targetFacId, apiKey, { targetEnergy: targetE, refreshBars: true });
+                embed = warReadinessModule.buildWarReadinessEmbed(summary);
+            } else if (cmd === 'watch') {
+                const targetFacId = invokerKeyRecord?.factionId || discordConfig.factionId || dynamicFactionId || '52355';
+                const facLabel = discordConfig.factionName || `Faction [${targetFacId}]`;
+                if (subcommand === 'add') {
+                    const rawTarget = interaction.options.getString('target');
+                    const note = interaction.options.getString('note') || '';
+                    try {
+                        const entry = await sniperWatchlistEngine.addTarget(targetFacId, rawTarget, {
+                            note,
+                            addedBy: interaction.member?.displayName || interaction.user?.username || 'Discord'
+                        }, apiKey);
+                        embed = UI.success(
+                            `🎯 Watchlist Target Pinned: ${entry.name} [${entry.targetId}]`,
+                            `Now monitoring **${entry.name}** for flight landings, hospital exits, and online activity.${entry.note ? `\n📝 **Note:** ${entry.note}` : ''}`
+                        );
+                    } catch (wErr) {
+                        embed = UI.error('❌ Invalid Target', wErr.message);
+                    }
+                } else if (subcommand === 'remove') {
+                    const rawTarget = interaction.options.getString('target');
+                    const removed = sniperWatchlistEngine.removeTarget(targetFacId, rawTarget);
+                    embed = removed
+                        ? UI.success('🔓 Watchlist Target Removed', `Unpinned **${removed.name} [${removed.targetId}]** from the watchlist.`)
+                        : UI.warning('⚠️ Not Found', `Target \`${rawTarget}\` was not pinned on your faction watchlist.`);
+                } else {
+                    const list = sniperWatchlistEngine.listTargets(targetFacId);
+                    embed = sniperWatchlistModule.buildWatchlistListEmbed(facLabel, list);
+                }
             } else if (cmd === 'oc') {
                 embed = await buildOCStatusEmbed(apiKey);
             } else if (cmd === 'myoc') {

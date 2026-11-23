@@ -114,7 +114,9 @@ function buildSlashCommands() {
                     { name: '🛡️ Our Faction', value: 'friendly' }
                 )))
             .addSubcommand(sub => sub.setName('bounties').setDescription('Track active war bounties placed and claimed'))
-            .addSubcommand(sub => sub.setName('flights').setDescription('Audit war flight uptime and travel sentinel')).toJSON(),
+            .addSubcommand(sub => sub.setName('flights').setDescription('Audit war flight uptime and travel sentinel'))
+            .addSubcommand(sub => sub.setName('readiness').setDescription('Pre-war energy stacking, booster CD & revive audit'))
+            .addSubcommand(sub => sub.setName('digest').setDescription('Generate 7-day faction health digest (Gym, Xanax, OC 2.0, Armory & Keys)')).toJSON(),
 
         // 7. Travel & Item Stocks
         new SlashCommandBuilder().setName('travel').setDescription('Overseas destination status & item stock (Plushies & Flowers)')
@@ -240,7 +242,10 @@ function buildSlashCommands() {
             ).toJSON(),
 
         // 18. Personal Account Vitals & Secure API Key Linking
-        new SlashCommandBuilder().setName('notifications').setDescription('Configure your personal Discord DM alerts (Xanax timer, travel, full energy/nerve, hosp)').toJSON(),
+        new SlashCommandBuilder().setName('notifications').setDescription('Configure personal Discord DM alerts & daily/travel restock rules')
+            .addStringOption(opt => opt.setName('restock_country').setDescription('YATA country code for restock DM alerts (e.g. zaf, uni, jpn, all)').setRequired(false))
+            .addStringOption(opt => opt.setName('restock_item').setDescription('Item filter (e.g. Xanax or Plushies)').setRequired(false))
+            .addIntegerOption(opt => opt.setName('restock_min').setDescription('Minimum stock threshold (default 500)').setRequired(false)).toJSON(),
         new SlashCommandBuilder().setName('dmalerts').setDescription('Quick shortcut: Manage personal Discord DM alerts & notifications').toJSON(),
         new SlashCommandBuilder().setName('energy').setDescription('Check your live energy, nerve, bars, and cooldowns (uses linked Limited API key)').toJSON(),
         new SlashCommandBuilder().setName('bars').setDescription('Check your live energy, nerve, bars, and cooldowns (alias of /energy)').toJSON(),
@@ -296,7 +301,24 @@ function buildSlashCommands() {
 
         // 21. Enemy Faction Intelligence
         new SlashCommandBuilder().setName('enemy').setDescription('Full intelligence report on an enemy faction — stats, activity, war hitters, roster')
-            .addStringOption(opt => opt.setName('faction_id').setDescription('Torn faction ID to inspect (omit to auto-detect current RW opponent)').setRequired(false)).toJSON()
+            .addStringOption(opt => opt.setName('faction_id').setDescription('Torn faction ID to inspect (omit to auto-detect current RW opponent)').setRequired(false)).toJSON(),
+
+        // 22. Pre-War Energy Stacking & Booster Readiness
+        new SlashCommandBuilder().setName('stack').setDescription('Audit pre-war stacked energy, booster/drug cooldowns, flying & revive risk')
+            .addIntegerOption(opt => opt.setName('target').setDescription('Stacked energy target threshold (default 750)')
+                .addChoices(
+                    { name: '750e War Ready (3 Xanax)', value: 750 },
+                    { name: '1,000e Hard Cap (4 Xanax)', value: 1000 }
+                )).toJSON(),
+
+        // 23. Persistent Custom Sniper Watchlist
+        new SlashCommandBuilder().setName('watch').setDescription('Pin non-war Torn targets for landing, hosp-out & online sniper alerts')
+            .addSubcommand(sub => sub.setName('add').setDescription('Pin a Torn target to your faction watchlist')
+                .addStringOption(opt => opt.setName('target').setDescription('Torn Player ID or profile link').setRequired(true))
+                .addStringOption(opt => opt.setName('note').setDescription('Optional note (e.g. Mug target, Rival leader)').setRequired(false)))
+            .addSubcommand(sub => sub.setName('remove').setDescription('Remove a target from your faction watchlist')
+                .addStringOption(opt => opt.setName('target').setDescription('Torn Player ID to unpin').setRequired(true)))
+            .addSubcommand(sub => sub.setName('list').setDescription('List all pinned watchlist targets and their live status')).toJSON()
     ];
 }
 
