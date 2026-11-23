@@ -43,6 +43,7 @@ const userAlerts = require('./user-alerts');
 const bugManager = require('./bug-manager');
 const { buildSlashCommands } = require('./discord-slash-builder');
 const tornKnowledge = require('./torn-knowledge');
+const ocDmEngineModule = require('./oc-dm-engine');
 const sessionManager = require('./session-manager');
 const tornApiManager = require('./torn-api-manager');
 const warboardBroadcaster = require('./warboard-broadcaster');
@@ -136,7 +137,8 @@ let ocConfig = {
     lowCprDefaultThreshold: 40,
     lowCprLevels: { 1: 0, 2: 0, 3: 50, 4: 50, 5: 40, 6: 40, 7: 80, 8: 85 },
     alertNoParticipation: true,
-    noParticipationDays: 1
+    noParticipationDays: 1,
+    ocDm: ocDmEngineModule.getDefaultOcDmConfig({ lowCprDefaultThreshold: 40 })
 };
 let subscriptions = {};
 let spyDatabase = {};
@@ -301,6 +303,10 @@ function sanitizeConfigForClient(rawConfig) {
         lowCprLevels: ocConfig.lowCprLevels || { 1: 0, 2: 0, 3: 50, 4: 50, 5: 40, 6: 40, 7: 80, 8: 85 },
         alertOcNoParticipation: ocConfig.alertNoParticipation !== false,
         noParticipationDays: ocConfig.noParticipationDays || 1,
+        ocDm: ocDmEngineModule.mergeOcDmConfig(ocConfig, rawConfig?.ocDm || null),
+        ocManagerRoleIds: (ocDmEngineModule.mergeOcDmConfig(ocConfig, rawConfig?.ocDm || null)).ocManagerRoleIds,
+        ocDmReceiptChannelId: (ocDmEngineModule.mergeOcDmConfig(ocConfig, rawConfig?.ocDm || null)).receiptChannelId,
+        ocDmReceiptsEnabled: (ocDmEngineModule.mergeOcDmConfig(ocConfig, rawConfig?.ocDm || null)).receiptsEnabled,
         welcomeChannelId: rawConfig.welcomeChannelId || "",
         postWelcomeRulesOnJoin: rawConfig.postWelcomeRulesOnJoin !== false,
         welcomeRulesTitle: rawConfig.welcomeRulesTitle || "📜 Welcome to the Faction & Server Rules",
@@ -426,7 +432,13 @@ async function loadConfigFromMongo() {
                 }
             }
             if (saved.companyConfig) companyConfig = { ...companyConfig, ...saved.companyConfig };
-            if (saved.ocConfig) ocConfig = { ...ocConfig, ...saved.ocConfig };
+            if (saved.ocConfig) {
+                ocConfig = { ...ocConfig, ...saved.ocConfig };
+                ocConfig.ocDm = ocDmEngineModule.mergeOcDmConfig(ocConfig, saved.ocConfig.ocDm || null);
+            }
+            if (saved.ocDmState && typeof ocDmEngine !== 'undefined') {
+                ocDmEngine.importFromMongo(saved.ocDmState);
+            }
             if (saved.marketConfig) marketConfig = { ...marketConfig, ...saved.marketConfig };
             if (saved.spyDatabase) spyDatabase = { ...spyDatabase, ...saved.spyDatabase };
             if (saved.userTracking) userTracking = { ...userTracking, ...saved.userTracking };
@@ -1057,7 +1069,8 @@ ocConfig = {
         8: 85
     },
     alertNoParticipation: true,
-    noParticipationDays: 1
+    noParticipationDays: 1,
+    ocDm: ocDmEngineModule.getDefaultOcDmConfig({ lowCprDefaultThreshold: 40 })
 };
 
 let tornItemsCache = null;
@@ -1115,6 +1128,7 @@ for (const chan of activeConversationChannels) {
 }
 try { if (fs.existsSync('market_config.json')) marketConfig = { ...marketConfig, ...JSON.parse(fs.readFileSync('market_config.json')) }; } catch(e) {}
 try { if (fs.existsSync('oc_config.json')) ocConfig = { ...ocConfig, ...JSON.parse(fs.readFileSync('oc_config.json')) }; } catch(e) {}
+ocConfig.ocDm = ocDmEngineModule.mergeOcDmConfig(ocConfig, ocConfig.ocDm || null);
 
 try {
     const bankFile = path.join(__dirname, 'data', 'bank_requests.json');
@@ -1213,6 +1227,7 @@ function saveToMongo() {
                 ocAlertTracker: (typeof ocAlertTracker !== 'undefined' ? ocAlertTracker : {}),
                 ocMemory: (typeof ocMemory !== 'undefined' ? ocMemory : {}),
                 ocMemberHistory: (typeof ocMemberHistory !== 'undefined' ? ocMemberHistory : {}),
+                ocDmState: (typeof ocDmEngine !== 'undefined' ? ocDmEngine.exportForMongo() : undefined),
                 giveaways: (typeof activeGiveaways !== 'undefined' ? activeGiveaways : {}),
                 warFlightArchive,
                 warAuditArchive,
@@ -1250,6 +1265,30 @@ function saveApiPool() {
     saveToMongo();
 }
 function saveCompanyConfig() { fs.writeFileSync('company_config.json', JSON.stringify(companyConfig)); saveToMongo(); }
+
+const ocDmEngine = ocDmEngineModule.createOcDmEngine({
+    dataDir: path.join(__dirname, 'data'),
+    getOcConfig: () => ocConfig,
+    saveOcConfig: () => saveOcConfig(),
+    getDiscordConfig: () => discordConfig,
+    getClient: () => getAnyActiveDiscordClient(),
+    getVerifiedDiscordMap: () => verifiedDiscordToTorn,
+    saveVerifiedDiscordMap: () => saveVerifiedDiscordUsers(),
+    userKeys,
+    getNextApiKey: () => getNextApiKey(),
+    getTornItemInfo: (itemId, apiKey) => getTornItemInfo(itemId, apiKey),
+    sendChannelMessage: (token, channelId, embed, content, priority) => sendChannelMessage(token, channelId, embed, content, priority),
+    sendDirectMessageToUser: (discordUserId, embed, content) => sendDirectMessageToUser(discordUserId, embed, content),
+    getOcMemberHistory: () => ocMemberHistory,
+    saveOcMemberHistory: (hist) => {
+        if (hist && typeof hist === 'object') ocMemberHistory = hist;
+        saveOcMemberHistory(ocMemberHistory);
+    },
+    discordIdCache,
+    UI,
+    sanitizeEmbed: (e) => sanitizeEmbed(e),
+    saveToMongo: () => saveToMongo()
+});
 
 // --- CENTRALIZED DISCORD RATE-LIMIT QUEUE ---
 let discordSendQueue = [];
@@ -1571,10 +1610,11 @@ async function executeDiscordSend(token, channelId, embed, content = "") {
 
             let errMsg = data.message || `Discord API error (${res.status})`;
             if (data.code === 50001) errMsg = "Missing Access (50001) — This channel is private or hidden. In Discord channel settings -> Permissions, add the bot (or 'SV Bot' role) and give it 'View Channel' and 'Send Messages' permissions.";
+            if (data.code === 50007) errMsg = "Cannot send messages to this user (50007) — User has Server DMs disabled.";
             if (data.code === 50013) errMsg = "Missing Permissions (50013) — Please ensure your bot role has 'Embed Links' and 'Send Messages' enabled in your Discord server.";
             if (data.code === 10003) errMsg = "Unknown Channel — verify your Alert Channel ID is correct.";
             if (res.status === 401) errMsg = "Unauthorized — your Bot Token is invalid. Please reset it in the Discord Developer Portal.";
-            return { success: false, error: errMsg };
+            return { success: false, code: data.code || res.status, closedDms: data.code === 50007, error: errMsg };
         }
 
         console.log(`[Discord Bot] '${embed?.title || 'alert'}' delivered to channel ${cleanChannelId}.`);
@@ -5605,6 +5645,28 @@ app.post('/api/save-discord-config', async (req, res) => {
     }
     if (payload.alertOcNoParticipation !== undefined) ocConfig.alertNoParticipation = !!payload.alertOcNoParticipation;
     if (payload.noParticipationDays !== undefined) ocConfig.noParticipationDays = Math.max(0.1, parseFloat(payload.noParticipationDays) || 1);
+    if (payload.ocDm && typeof payload.ocDm === 'object') {
+        ocConfig.ocDm = ocDmEngineModule.mergeOcDmConfig(ocConfig, payload.ocDm);
+        // Keep shared OC fields cleanly bidirectionally synced
+        if (ocConfig.ocDm.triggers?.low_cpr_dm) {
+            if (payload.lowCprDefaultThreshold === undefined && ocConfig.ocDm.triggers.low_cpr_dm.globalMinCpr) {
+                ocConfig.lowCprDefaultThreshold = ocConfig.ocDm.triggers.low_cpr_dm.globalMinCpr;
+            } else if (payload.lowCprDefaultThreshold !== undefined) {
+                ocConfig.ocDm.triggers.low_cpr_dm.globalMinCpr = ocConfig.lowCprDefaultThreshold;
+            }
+            if (ocConfig.ocDm.triggers.low_cpr_dm.tierFloors && !payload.lowCprLevels) {
+                ocConfig.lowCprLevels = { ...ocConfig.lowCprLevels, ...ocConfig.ocDm.triggers.low_cpr_dm.tierFloors };
+            } else if (payload.lowCprLevels) {
+                ocConfig.ocDm.triggers.low_cpr_dm.tierFloors = { ...ocConfig.lowCprLevels };
+            }
+        }
+        if (ocConfig.ocDm.ocManagerRoleIds?.length > 0 && !ocConfig.ocManagerRoleId) {
+            ocConfig.ocManagerRoleId = ocConfig.ocDm.ocManagerRoleIds[0];
+        }
+        payload.ocDm = ocConfig.ocDm;
+    } else {
+        ocConfig.ocDm = ocDmEngineModule.mergeOcDmConfig(ocConfig, null);
+    }
     saveOcConfig();
 
     if (payload.globalBotToken !== undefined) {
@@ -7146,6 +7208,159 @@ app.post('/api/test-oc-manager-dm', async (req, res) => {
             });
         }
     } catch(e) {
+        return res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// ── OC Personal DM Engine: Receipts, Test DM, Unlinked Roster & Account Links ──
+app.get('/api/discord/oc-dm-receipts', (req, res) => {
+    const callerKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey;
+    const isAuthed = Boolean(req.userSession || (callerKey && callerKey.length >= 10));
+    if (!isAuthed) return res.status(401).json({ success: false, error: 'Authentication required' });
+    const status = String(req.query.status || 'all').toLowerCase();
+    const limit = Math.min(200, Math.max(1, parseInt(req.query.limit, 10) || 100));
+    return res.json({ success: true, receipts: ocDmEngine.queryReceipts({ status, limit }) });
+});
+
+app.post('/api/discord/oc-dm-test', async (req, res) => {
+    try {
+        const callerKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey;
+        const isOwner = callerKey && (callerKey === discordConfig.apiKey || callerKey === ADMIN_API_KEY || callerKey === TORN_API_KEY);
+        const isMember = Boolean(req.userSession && (req.userSession.isSpiderVerse || (req.userSession.factionId && req.userSession.factionId !== '0')));
+        if (!isOwner && !isMember) {
+            return res.status(403).json({ success: false, error: 'Authorization required to send test OC DMs.' });
+        }
+
+        const { triggerType = 'low_cpr_dm', targetDiscordId = '', customTemplate = '' } = req.body || {};
+        const ocDm = ocDmEngine.getConfig();
+        const trigCfg = ocDm.triggers?.[triggerType] || ocDm.triggers?.low_cpr_dm || {};
+        const tpl = (customTemplate && String(customTemplate).trim()) || trigCfg.template || ocDmEngineModule.DEFAULT_TEMPLATES[triggerType] || ocDmEngineModule.DEFAULT_TEMPLATES.low_cpr_dm;
+
+        const playerName = req.userSession?.playerName || 'Owen777';
+        const playerId = String(req.userSession?.playerId || '3776908');
+        let resolvedDiscordId = String(targetDiscordId || '').replace(/[^0-9]/g, '');
+        if (!resolvedDiscordId) {
+            const look = await ocDmEngine.resolveMemberDiscord(playerId, playerName, { allowTornApiFallback: true });
+            resolvedDiscordId = look.discordId || String(discordConfig.personalDiscordId || '').replace(/[^0-9]/g, '');
+        }
+        if (!resolvedDiscordId || resolvedDiscordId.length < 15) {
+            return res.status(400).json({
+                success: false,
+                error: 'No Discord User ID linked to your account yet. Paste your Discord User ID or run /oc-link in Discord first.'
+            });
+        }
+
+        const sampleVars = {
+            player_name: playerName,
+            crime_name: 'Leave No Trace',
+            tier: 6,
+            role: 'Techie',
+            cpr: 48,
+            min_cpr: trigCfg.globalMinCpr || 70,
+            grace_hours: trigCfg.graceHours || 6,
+            hours_idle: trigCfg.idleHours || 36,
+            open_ocs_summary: 'T6 Leave No Trace (1 open), T5 Counter Offer (2 open)',
+            item_name: 'Lockpicks',
+            item_price: '47,182',
+            time_remaining: '3h 20m',
+            status: 'Traveling to Switzerland'
+        };
+        const renderedMsg = `[TEST] ${ocDmEngineModule.renderTemplate(tpl, sampleVars)}`;
+
+        const result = await ocDmEngine.dispatchTrackedOcDm({
+            tornId: playerId,
+            playerName,
+            explicitDiscordId: resolvedDiscordId,
+            triggerType: 'test_dm',
+            triggerLabel: `Test DM (${ocDmEngineModule.TRIGGER_LABELS[triggerType] || triggerType})`,
+            context: `Admin Preview • Trigger: ${triggerType} • Sent by ${playerName}`,
+            messageText: renderedMsg,
+            embedTitle: `🧪 [TEST] ${ocDmEngineModule.TRIGGER_LABELS[triggerType] || 'OC Personal DM'}`,
+            embedColor: 0x38bdf8,
+            cooldownMs: 0,
+            allowFallbackPing: false,
+            source: 'admin_test'
+        });
+
+        return res.json({
+            success: result.success,
+            status: result.status,
+            discordId: resolvedDiscordId,
+            receipt: result.receipt,
+            message: result.success
+                ? `Test DM delivered to <@${resolvedDiscordId}> and logged to Delivery Receipts.`
+                : `DM attempt recorded with status ${result.status}${result.errorCode === 50007 ? ' (Closed DMs 50007)' : ''}.`
+        });
+    } catch (e) {
+        return res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+app.get('/api/discord/oc-unlinked-members', async (req, res) => {
+    try {
+        const callerKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey;
+        const isAuthed = Boolean(req.userSession || (callerKey && callerKey.length >= 10));
+        if (!isAuthed) return res.status(401).json({ success: false, error: 'Authentication required' });
+
+        const key = callerKey || discordConfig.apiKey || TORN_API_KEY || getNextApiKey();
+        const fid = String(resolveFactionId(req) || discordConfig.factionId || '52355');
+        let members = {};
+        if (key) {
+            const fRes = await fetch(`https://api.torn.com/faction/${fid}?selections=basic&key=${encodeURIComponent(key)}`, {
+                signal: AbortSignal.timeout(8000)
+            }).then(r => r.json()).catch(() => ({}));
+            if (fRes && fRes.members) members = fRes.members;
+        }
+        const rows = await ocDmEngine.getFactionMemberLinkStatus(members);
+        return res.json({
+            success: true,
+            factionId: fid,
+            total: rows.length,
+            unlinkedCount: rows.filter(r => !r.linked).length,
+            members: rows
+        });
+    } catch (e) {
+        return res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+app.post('/api/discord/oc-link-member', async (req, res) => {
+    try {
+        const callerKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey;
+        const isOwner = callerKey && (callerKey === discordConfig.apiKey || callerKey === ADMIN_API_KEY || callerKey === TORN_API_KEY);
+        const isMember = Boolean(req.userSession && (req.userSession.isSpiderVerse || (req.userSession.factionId && req.userSession.factionId !== '0')));
+        if (!isOwner && !isMember) {
+            return res.status(403).json({ success: false, error: 'Authorization required.' });
+        }
+        const { tornId, discordId, tornName = '' } = req.body || {};
+        const actor = req.userSession?.playerName || 'Dashboard Admin';
+        const link = ocDmEngine.saveLink(tornId, discordId, tornName, 'manual', actor);
+        return res.json({ success: true, link });
+    } catch (e) {
+        return res.status(400).json({ success: false, error: e.message });
+    }
+});
+
+app.post('/api/discord/oc-scan-nicknames', async (req, res) => {
+    try {
+        const callerKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey;
+        const isOwner = callerKey && (callerKey === discordConfig.apiKey || callerKey === ADMIN_API_KEY || callerKey === TORN_API_KEY);
+        const isMember = Boolean(req.userSession && (req.userSession.isSpiderVerse || (req.userSession.factionId && req.userSession.factionId !== '0')));
+        if (!isOwner && !isMember) {
+            return res.status(403).json({ success: false, error: 'Authorization required.' });
+        }
+        const key = callerKey || discordConfig.apiKey || TORN_API_KEY || getNextApiKey();
+        const fid = String(resolveFactionId(req) || discordConfig.factionId || '52355');
+        let members = {};
+        if (key) {
+            const fRes = await fetch(`https://api.torn.com/faction/${fid}?selections=basic&key=${encodeURIComponent(key)}`, {
+                signal: AbortSignal.timeout(8000)
+            }).then(r => r.json()).catch(() => ({}));
+            if (fRes && fRes.members) members = fRes.members;
+        }
+        const scan = await ocDmEngine.scanGuildNicknamesForLinks(members);
+        return res.json({ success: true, ...scan });
+    } catch (e) {
         return res.status(500).json({ success: false, error: e.message });
     }
 });
@@ -21734,6 +21949,35 @@ async function checkFactionOrganizedCrimes() {
 
         if (v2Data && v2Data.crimes && Array.isArray(v2Data.crimes)) {
             for (const v2Crime of v2Data.crimes) {
+                for (const slot of (v2Crime.slots || [])) {
+                    if (!slot.user) continue;
+                    const pId = String(slot.user.id);
+                    activeOcMemberIds.add(pId);
+                    if (ocMemberHistory[pId] !== now) {
+                        ocMemberHistory[pId] = now;
+                        historyChanged = true;
+                    }
+                }
+            }
+        }
+
+        const dmTickResult = await ocDmEngine.processOcMonitoringTick({
+            fid: fid || myFacId,
+            apiKey,
+            v1Crimes: data.crimes || {},
+            v2Crimes: (v2Data && Array.isArray(v2Data.crimes)) ? v2Data.crimes : [],
+            members: data.members || {},
+            activeOcMemberIds,
+            channelId,
+            mention,
+            botToken
+        }).catch(err => {
+            console.warn('[OC-DM Engine] Tick error:', err?.message);
+            return { handledLowCpr: false, handledMissingItems: false, handledInactive: false, handledReadyBlocker: false };
+        });
+
+        if (v2Data && v2Data.crimes && Array.isArray(v2Data.crimes)) {
+            for (const v2Crime of v2Data.crimes) {
                 const diffLvl = v2Crime.difficulty || 1;
                 const minCpr = (ocConfig.lowCprLevels && ocConfig.lowCprLevels[diffLvl] !== undefined)
                     ? Number(ocConfig.lowCprLevels[diffLvl])
@@ -21753,8 +21997,8 @@ async function checkFactionOrganizedCrimes() {
                         historyChanged = true;
                     }
 
-                    // Trigger 6: Missing Required Items Check (At most ONCE per crime per item)
-                    if (ocConfig.alertMissingItems !== false && slot.item_requirement && !slot.item_requirement.is_available) {
+                    // Trigger 6: Legacy Missing Required Items Check (skipped when OC DM Engine handles missing_item_dm)
+                    if (!dmTickResult.handledMissingItems && ocConfig.alertMissingItems !== false && slot.item_requirement && !slot.item_requirement.is_available) {
                         const itemId = slot.item_requirement.id;
                         const itemInfo = await getTornItemInfo(itemId, apiKey);
                         const itemName = itemInfo.name || `Item #${itemId}`;
@@ -21777,8 +22021,8 @@ async function checkFactionOrganizedCrimes() {
                         }
                     }
 
-                    // Trigger 7: Low CPR (Crime Pass Rate) Alert (At most ONCE per crime per player)
-                    if (ocConfig.alertLowCpr !== false && slot.checkpoint_pass_rate !== undefined && slot.checkpoint_pass_rate !== null) {
+                    // Trigger 7: Legacy Low CPR Alert (skipped when OC DM Engine handles low_cpr_dm)
+                    if (!dmTickResult.handledLowCpr && ocConfig.alertLowCpr !== false && slot.checkpoint_pass_rate !== undefined && slot.checkpoint_pass_rate !== null) {
                         const passRate = Number(slot.checkpoint_pass_rate);
                         if (passRate < minCpr) {
                             const trackingId = `lowcpr_${v2Crime.id}_${pId}`;
@@ -21863,12 +22107,13 @@ async function checkFactionOrganizedCrimes() {
             }
         }
 
-        // ── TRIGGER 8: No OC Participation for 1 Day (24 Hours) ──────────
-        if (ocConfig.alertNoParticipation !== false && members && Object.keys(members).length > 0) {
+        // ── TRIGGER 8: Legacy No OC Participation (uses data.members; skipped when OC DM Engine handles inactive_oc_dm) ──────────
+        const factionMembersMap = data.members || {};
+        if (!dmTickResult.handledInactive && ocConfig.alertNoParticipation !== false && Object.keys(factionMembersMap).length > 0) {
             const thresholdDays = Math.max(0.1, Number(ocConfig.noParticipationDays) || 1);
             const thresholdSec = thresholdDays * 86400;
 
-            for (const [mId, member] of Object.entries(members)) {
+            for (const [mId, member] of Object.entries(factionMembersMap)) {
                 // Skip recruits (in Torn, recruits cannot join or participate in Organized Crimes)
                 const position = String(member.position || '').trim().toLowerCase();
                 if (position.includes('recruit') || position.includes('trial') || position.includes('probation')) continue;
@@ -24517,6 +24762,9 @@ async function sendDirectMessageToUser(discordUserId, embed, content = "") {
                 return { success: true };
             }
         } catch(e) {
+            if (Number(e?.code) === 50007 || String(e?.message || '').includes('50007')) {
+                return { success: false, code: 50007, closedDms: true, error: 'Cannot send messages to this user (50007)' };
+            }
             console.warn(`[Discord DM] Client user.send failed for ${cleanId}:`, e.message);
         }
     }
@@ -24534,6 +24782,9 @@ async function sendDirectMessageToUser(discordUserId, embed, content = "") {
                 body: JSON.stringify({ recipient_id: cleanId })
             });
             const dmChanData = await dmChanRes.json();
+            if (dmChanData && Number(dmChanData.code) === 50007) {
+                return { success: false, code: 50007, closedDms: true, error: dmChanData.message || 'Cannot send messages to this user (50007)' };
+            }
             if (dmChanData && dmChanData.id) {
                 return await executeDiscordSend(botToken, dmChanData.id, embed, content);
             }
@@ -24542,10 +24793,10 @@ async function sendDirectMessageToUser(discordUserId, embed, content = "") {
         }
     }
 
-    return { success: false, error: `Could not reach user ${cleanId} via DM. Check Discord DM privacy settings.` };
+    return { success: false, code: 'DM_UNREACHABLE', closedDms: false, error: `Could not reach user ${cleanId} via DM. Check Discord DM privacy settings.` };
 }
 
-// ── Resolve OC Manager User IDs (Role + Explicit IDs) ──
+// ── Resolve OC Manager User IDs (Multi-Role + Explicit IDs) ──
 async function getOcManagerDiscordUserIds() {
     const userIds = new Set();
     // 1. Explicit user IDs from config
@@ -24563,24 +24814,30 @@ async function getOcManagerDiscordUserIds() {
         }
     }
 
-    // 2. Role-based resolution
-    const roleId = (ocConfig.ocManagerRoleId || '').replace(/[^0-9]/g, '');
-    if (roleId) {
+    // 2. Multi-role resolution (supports ocDm.ocManagerRoleIds array + legacy ocManagerRoleId)
+    const roleIds = new Set();
+    const legacyRoleId = (ocConfig.ocManagerRoleId || '').replace(/[^0-9]/g, '');
+    if (legacyRoleId) roleIds.add(legacyRoleId);
+    for (const rId of (ocConfig.ocDm?.ocManagerRoleIds || [])) {
+        const cleanR = String(rId || '').replace(/[^0-9]/g, '');
+        if (cleanR) roleIds.add(cleanR);
+    }
+
+    if (roleIds.size > 0) {
         const client = getAnyActiveDiscordClient();
         if (client) {
             const guildId = discordConfig.guildId || client.guilds.cache.firstKey();
             const guild = guildId ? client.guilds.cache.get(guildId) : client.guilds.cache.first();
             if (guild) {
                 try {
-                    const role = guild.roles.cache.get(roleId) || (await guild.roles.fetch(roleId).catch(() => null));
-                    if (role) {
-                        if (guild.members.cache.size <= 1) {
-                            await guild.members.fetch().catch(() => null);
-                        }
+                    if (guild.members.cache.size <= 1) {
+                        await guild.members.fetch().catch(() => null);
+                    }
+                    for (const roleId of roleIds) {
+                        const role = guild.roles.cache.get(roleId) || (await guild.roles.fetch(roleId).catch(() => null));
+                        if (!role) continue;
                         for (const [mId, member] of role.members) {
-                            if (!member.user?.bot) {
-                                userIds.add(mId);
-                            }
+                            if (!member.user?.bot) userIds.add(mId);
                         }
                     }
                 } catch(e) {
@@ -25166,7 +25423,12 @@ const TUTORIAL_CATALOG = [
             { name: 'chain', text: '`/chain` — Checks the live chain count, timer, and bonus multiplier.' },
             { name: 'chainwatch', text: '`/chainwatch` — Shows who is watching the chain and whether drop alerts are on.' },
             { name: 'oc', text: '`/oc` — Shows which Organized Crimes are ready to launch and who is holding up a team.' },
-            { name: 'myoc', text: '`/myoc` — Checks the timer and status of your own Organized Crime.' }
+            { name: 'myoc', text: '`/myoc` — Checks the timer and status of your own Organized Crime.' },
+            { name: 'oc-items', text: '`/oc-items` — Audits all missing required role items across active OCs (OC Manager).' },
+            { name: 'oc-lowcpr', text: '`/oc-lowcpr` — Lists slotted OC members below minimum CPR floor & kick eligibility (OC Manager).' },
+            { name: 'oc-bench', text: '`/oc-bench` — Audits unassigned faction members and open Recruiting slots (OC Manager).' },
+            { name: 'oc-check', text: '`/oc-check` — Checks a member OC slot, CPR %, missing items, and last 3 DM receipts.' },
+            { name: 'oc-link', text: '`/oc-link` — Links a Torn Player ID to a Discord account for automated OC DMs.' }
         ]
     },
     {
@@ -27477,6 +27739,101 @@ function setupSlashBotEvents(bot, token) {
                 return;
             }
 
+            // ── OC Manager Interactive Action Buttons (/oc-items, /oc-lowcpr, /oc-bench) ──
+            if (customId.startsWith('ocitems_dm_all:') || customId.startsWith('ocitems_refresh:') || customId === 'oclowcpr_dm_all' || customId === 'ocbench_dm_all') {
+                const isMgr = ocDmEngine.isMemberOcManager(interaction.member, interaction.user.id, interaction.guild);
+                if (!isMgr) {
+                    return interaction.reply({
+                        content: '⛔ Only designated **OC Managers** or **Server Administrators** can run this OC action.',
+                        flags: MessageFlags.Ephemeral
+                    }).catch(() => {});
+                }
+
+                const actorName = interaction.member?.displayName || interaction.user?.username || 'OC Manager';
+                const invokerKeyRec = userKeys?.resolveUserApiKey?.(interaction.user.id, interaction.member?.displayName, interaction.user.username);
+                const apiKey = invokerKeyRec?.key || discordConfig.apiKey || TORN_API_KEY || getNextApiKey();
+
+                if (customId.startsWith('ocitems_refresh:')) {
+                    const filterVal = customId.split(':')[1] || 'all';
+                    await interaction.deferUpdate().catch(() => {});
+                    const report = await ocDmEngine.buildOcItemsReport(apiKey, filterVal);
+                    await interaction.editReply({ embeds: report.embeds, components: report.components }).catch(() => {});
+                    return;
+                }
+
+                await interaction.deferReply({ flags: MessageFlags.Ephemeral }).catch(() => {});
+                const ocDmCfg = ocDmEngine.getConfig();
+
+                if (customId.startsWith('ocitems_dm_all:')) {
+                    const filterVal = customId.split(':')[1] || 'all';
+                    const { rows } = await ocDmEngine.collectMissingItemsData(apiKey, filterVal);
+                    const missTpl = ocDmCfg.triggers?.missing_item_dm?.template;
+                    const summary = await ocDmEngine.sendBatchManualDms(rows, r => ({
+                        context: `${r.crimeName} (T${r.tier}) • Slot: ${r.role} • Needs: ${r.itemName}`,
+                        embedTitle: `🛠️ Missing OC Item: ${r.itemName}`,
+                        messageText: ocDmEngineModule.renderTemplate(missTpl, {
+                            player_name: r.playerName,
+                            role: r.role,
+                            crime_name: r.crimeName,
+                            tier: r.tier,
+                            item_name: r.itemName,
+                            item_price: r.price > 0 ? r.price.toLocaleString('en-US') : 'Market',
+                            time_remaining: r.timeLeftSec !== null ? `${Math.max(1, Math.floor(r.timeLeftSec / 3600))}h` : 'Soon'
+                        })
+                    }), 'manual_items_dm', actorName);
+
+                    return interaction.editReply({
+                        embeds: [sanitizeEmbed(UI.success('📩 Missing Item DMs Dispatched',
+                            `Attempted **${summary.total}** member(s):\n✅ Delivered: **${summary.sent}**\n⚠️ DMs Closed / Failed: **${summary.failed}**\n❌ Unlinked Discord: **${summary.unlinked}**`
+                        ))]
+                    }).catch(() => {});
+                }
+
+                if (customId === 'oclowcpr_dm_all') {
+                    const { rows, lowCfg } = await ocDmEngine.collectLowCprData(apiKey);
+                    const unwarned = rows.filter(r => !r.dmedAt);
+                    const summary = await ocDmEngine.sendBatchManualDms(unwarned, r => ({
+                        context: `${r.crimeName} (T${r.tier}) • Slot: ${r.role} • CPR: ${r.cpr}% (Min ${r.minCpr}%)`,
+                        embedTitle: `⚠️ Low CPR Warning — ${r.crimeName} (T${r.tier})`,
+                        messageText: ocDmEngineModule.renderTemplate(lowCfg.template, {
+                            player_name: r.playerName,
+                            crime_name: r.crimeName,
+                            tier: r.tier,
+                            role: r.role,
+                            cpr: r.cpr,
+                            min_cpr: r.minCpr,
+                            grace_hours: lowCfg.graceHours
+                        })
+                    }), 'manual_lowcpr_dm', actorName);
+
+                    return interaction.editReply({
+                        embeds: [sanitizeEmbed(UI.success('📩 Low CPR Warnings Dispatched',
+                            `Attempted **${summary.total}** unwarned member(s):\n✅ Delivered: **${summary.sent}**\n⚠️ DMs Closed / Failed: **${summary.failed}**\n❌ Unlinked Discord: **${summary.unlinked}**`
+                        ))]
+                    }).catch(() => {});
+                }
+
+                if (customId === 'ocbench_dm_all') {
+                    const { available, openSummary } = await ocDmEngine.collectBenchData(apiKey);
+                    const inactCfg = ocDmCfg.triggers?.inactive_oc_dm || {};
+                    const summary = await ocDmEngine.sendBatchManualDms(available, m => ({
+                        context: `Bench Idle (${m.hoursUnassigned !== null ? `${m.hoursUnassigned}h` : 'Unknown'})`,
+                        embedTitle: '⏳ Organized Crime Bench Reminder',
+                        messageText: ocDmEngineModule.renderTemplate(inactCfg.template, {
+                            player_name: m.playerName,
+                            hours_idle: m.hoursUnassigned !== null ? m.hoursUnassigned : '24+',
+                            open_ocs_summary: openSummary
+                        })
+                    }), 'manual_bench_dm', actorName);
+
+                    return interaction.editReply({
+                        embeds: [sanitizeEmbed(UI.success('📩 Bench Reminders Dispatched',
+                            `Attempted **${summary.total}** idle available member(s):\n✅ Delivered: **${summary.sent}**\n⚠️ DMs Closed / Failed: **${summary.failed}**\n❌ Unlinked Discord: **${summary.unlinked}**`
+                        ))]
+                    }).catch(() => {});
+                }
+            }
+
             // Safety fallback: ensure any unhandled button is acknowledged immediately so Discord never times out
             if (!interaction.deferred && !interaction.replied) {
                 await interaction.deferUpdate().catch(() => {});
@@ -27529,7 +27886,13 @@ function setupSlashBotEvents(bot, token) {
                 'linkkey', 'unlinkkey', 'openrouter', 'bug', 'tutorial',
                 'snipe', 'elim', 'remindkeys'
             ]);
-            const isEphemeral = ephemeralCmds.has(cmd);
+            const ocMgrEphemeralCmds = new Set(['oc-items', 'oc-lowcpr', 'oc-bench', 'oc-check', 'oc-link']);
+            let isEphemeral = ephemeralCmds.has(cmd);
+            if (ocMgrEphemeralCmds.has(cmd)) {
+                const optEph = interaction.options?.getBoolean?.('ephemeral');
+                const cmdDefaults = ocDmEngine.getConfig().commandSettings?.[cmd];
+                isEphemeral = (optEph !== null && optEph !== undefined) ? optEph : Boolean(cmdDefaults?.defaultEphemeral);
+            }
             await interaction.deferReply({ flags: isEphemeral ? MessageFlags.Ephemeral : undefined }).catch(err => {
                 console.error(`[Slash Bot] Failed to deferReply for /${cmd}:`, err.message);
             });
@@ -29192,6 +29555,46 @@ function setupSlashBotEvents(bot, token) {
             } else if (cmd === 'myoc') {
                 const player = interaction.options.getString('player');
                 embed = await buildMyOCEmbed(player, apiKey, interaction.user.username);
+            } else if (cmd === 'oc-items' || cmd === 'oc-lowcpr' || cmd === 'oc-bench') {
+                const isMgr = ocDmEngine.isMemberOcManager(interaction.member, interaction.user.id, interaction.guild);
+                if (!isMgr) {
+                    embed = UI.permission('OC Manager Role or Server Administrator');
+                } else if (cmd === 'oc-items') {
+                    const statusFilter = interaction.options.getString('status') || 'all';
+                    embed = await ocDmEngine.buildOcItemsReport(apiKey, statusFilter);
+                } else if (cmd === 'oc-lowcpr') {
+                    embed = await ocDmEngine.buildOcLowCprReport(apiKey);
+                } else {
+                    embed = await ocDmEngine.buildOcBenchReport(apiKey);
+                }
+            } else if (cmd === 'oc-check') {
+                const targetMember = interaction.options.getString('member');
+                embed = await ocDmEngine.buildOcCheckReport(targetMember, apiKey, interaction.user.id);
+            } else if (cmd === 'oc-link') {
+                const rawTornId = String(interaction.options.getString('torn_id') || '').replace(/[^0-9]/g, '');
+                const targetUser = interaction.options.getUser('user');
+                const isLinkingOther = targetUser && targetUser.id !== interaction.user.id;
+                if (isLinkingOther && !ocDmEngine.isMemberOcManager(interaction.member, interaction.user.id, interaction.guild)) {
+                    embed = UI.permission('OC Manager Role or Server Administrator');
+                } else if (!rawTornId || rawTornId.length < 3) {
+                    embed = UI.error('Invalid Torn ID', 'Please provide a valid numeric Torn Player ID.');
+                } else {
+                    const discUser = targetUser || interaction.user;
+                    let tName = discUser.username;
+                    try {
+                        const pRes = await fetch(`https://api.torn.com/user/${rawTornId}?selections=profile&key=${encodeURIComponent(apiKey)}`, { signal: AbortSignal.timeout(6000) });
+                        const pData = await pRes.json();
+                        if (pData?.error) throw new Error(pData.error.error || 'Torn API error');
+                        if (pData?.name) tName = pData.name;
+                    } catch (err) {
+                        embed = UI.error('Torn Lookup Failed', `Could not verify Torn ID **${rawTornId}**: ${err.message}`);
+                    }
+                    if (!embed) {
+                        const actorName = interaction.member?.displayName || interaction.user.username;
+                        ocDmEngine.saveLink(rawTornId, discUser.id, tName, 'slash_oc_link', actorName);
+                        embed = UI.success('🔗 Torn <-> Discord Account Linked', `Successfully mapped **${tName} [${rawTornId}]** to <@${discUser.id}> for OC DM automations & receipts.`);
+                    }
+                }
             } else if (cmd === 'stocks' || cmd === 'forecast' || cmd === 'takeoff' || cmd === 'arrival') {
                 const country = interaction.options.getString('country');
                 embed = await buildStocksEmbed(country, apiKey, { discordUserId: interaction.user.id });

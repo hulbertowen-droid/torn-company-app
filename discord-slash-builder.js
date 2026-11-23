@@ -164,6 +164,27 @@ function buildSlashCommands() {
         new SlashCommandBuilder().setName('chainwatch').setDescription('Live chain drop watcher and alert status').toJSON(),
         new SlashCommandBuilder().setName('myoc').setDescription('Check your personal assigned Organized Crime status')
             .addStringOption(opt => opt.setName('player').setDescription('Player name or ID (optional)')).toJSON(),
+        new SlashCommandBuilder().setName('oc-items').setDescription('Manager: Audit all active OC role items missing right now')
+            .addStringOption(opt => opt.setName('status').setDescription('Filter OCs by status or urgency')
+                .setRequired(false)
+                .addChoices(
+                    { name: '📋 All Active OCs', value: 'all' },
+                    { name: '🚨 Urgent (<=24h or Ready)', value: 'urgent' },
+                    { name: '🟡 Recruiting Only', value: 'recruiting' },
+                    { name: '🔵 Planning Only', value: 'planning' }
+                )
+            )
+            .addBooleanOption(opt => opt.setName('ephemeral').setDescription('Show only to you (True) or post publicly (False)').setRequired(false)).toJSON(),
+        new SlashCommandBuilder().setName('oc-lowcpr').setDescription('Manager: Audit all slotted OC members below minimum CPR floor')
+            .addBooleanOption(opt => opt.setName('ephemeral').setDescription('Show only to you (True) or post publicly (False)').setRequired(false)).toJSON(),
+        new SlashCommandBuilder().setName('oc-bench').setDescription('Manager: Inspect unassigned idle faction members and available OC bench')
+            .addBooleanOption(opt => opt.setName('ephemeral').setDescription('Show only to you (True) or post publicly (False)').setRequired(false)).toJSON(),
+        new SlashCommandBuilder().setName('oc-check').setDescription('Look up a member OC assignment, CPR %, missing item, and last 3 DM receipts')
+            .addStringOption(opt => opt.setName('member').setDescription('Discord @user, Torn Name, or Torn Player ID').setRequired(true))
+            .addBooleanOption(opt => opt.setName('ephemeral').setDescription('Show only to you (True) or post publicly (False)').setRequired(false)).toJSON(),
+        new SlashCommandBuilder().setName('oc-link').setDescription('Link your Discord account (or another user if Manager) to a Torn Player ID for OC DMs')
+            .addStringOption(opt => opt.setName('torn_id').setDescription('Numeric Torn Player ID').setRequired(true))
+            .addUserOption(opt => opt.setName('user').setDescription('Discord user to link (OC Managers only; omit for yourself)').setRequired(false)).toJSON(),
 
         // 12. Economy & Utilities Standalone
         new SlashCommandBuilder().setName('stocks').setDescription('Quick check overseas plushie and flower stocks')

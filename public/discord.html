@@ -2019,6 +2019,99 @@
         .hero-sync-pill.reconnecting {
             background: rgba(255, 165, 2, 0.12); color: #ffa502; border-color: rgba(255, 165, 2, 0.3);
         }
+
+        /* ─── OC Personal DM & Receipt Engine Styles ─── */
+        .oc-dm-status-pill {
+            display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px;
+            border-radius: 999px; font-size: 0.76em; font-weight: 800;
+            border: 1px solid rgba(255, 165, 2, 0.35); background: rgba(255, 165, 2, 0.12); color: #fbbf24;
+        }
+        .oc-dm-status-pill.active {
+            border-color: rgba(46, 213, 115, 0.4); background: rgba(46, 213, 115, 0.14); color: #2ed573;
+        }
+        .oc-dm-toolbar {
+            display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;
+            padding: 12px 14px; border-radius: var(--radius-md); background: rgba(88, 101, 242, 0.08);
+            border: 1px solid rgba(88, 101, 242, 0.25); margin-bottom: 16px;
+        }
+        .oc-dm-trigger-grid {
+            display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px;
+        }
+        @media (max-width: 1080px) { .oc-dm-trigger-grid { grid-template-columns: 1fr; } }
+        .oc-dm-card {
+            background: var(--bg-subtle); border: 1px solid var(--border-subtle); border-radius: var(--radius-md);
+            padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .oc-dm-card.mode-active { border-color: rgba(0, 206, 201, 0.42); box-shadow: 0 4px 18px rgba(0, 206, 201, 0.07); }
+        .oc-dm-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+        .oc-dm-card-title { font-size: 0.96em; font-weight: 800; color: var(--text-main); display: flex; align-items: center; gap: 8px; }
+        .oc-dm-card-desc { font-size: 0.78em; color: var(--text-muted); margin-top: 2px; line-height: 1.4; }
+        .oc-dm-mode-select {
+            padding: 5px 10px; border-radius: var(--radius-sm); background: var(--bg-card); color: var(--text-main);
+            border: 1px solid var(--border-strong); font-size: 0.8em; font-weight: 700; min-width: 145px;
+        }
+        .oc-dm-fields-row {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px;
+        }
+        .oc-dm-mini-field {
+            background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-sm); padding: 7px 9px; display: flex; flex-direction: column; gap: 4px;
+        }
+        .oc-dm-mini-field label { font-size: 0.71em; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.4px; }
+        .oc-dm-mini-field input {
+            width: 100%; background: var(--bg-card); border: 1px solid var(--border-subtle); color: var(--text-main);
+            border-radius: 4px; padding: 4px 7px; font-size: 0.84em; font-weight: 700;
+        }
+        .oc-dm-exempt-list { display: flex; flex-wrap: wrap; gap: 8px; }
+        .oc-dm-check-pill {
+            display: inline-flex; align-items: center; gap: 6px; padding: 5px 9px; border-radius: var(--radius-sm);
+            background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-subtle); font-size: 0.77em; color: var(--text-main); cursor: pointer;
+        }
+        .oc-dm-details summary {
+            cursor: pointer; font-size: 0.8em; font-weight: 700; color: var(--spider-blue);
+            list-style: none; display: inline-flex; align-items: center; gap: 6px; user-select: none;
+        }
+        .oc-dm-details[open] summary { margin-bottom: 10px; }
+        .oc-dm-chips-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+        .oc-dm-textarea {
+            width: 100%; min-height: 92px; padding: 9px 10px; border-radius: var(--radius-sm);
+            background: var(--bg-card); border: 1px solid var(--border-strong); color: var(--text-main);
+            font-size: 0.8em; font-family: inherit; line-height: 1.45; resize: vertical;
+        }
+        .oc-dm-preview {
+            margin-top: 8px; padding: 10px 12px; border-radius: var(--radius-sm); background: #2b2d31;
+            border-left: 3px solid #f59e0b; color: #e2e8f0; font-size: 0.78em; line-height: 1.45; white-space: pre-wrap; word-break: break-word;
+        }
+        .oc-dm-test-bar {
+            margin-top: 16px; padding: 12px 14px; border-radius: var(--radius-md); background: rgba(0, 206, 201, 0.06);
+            border: 1px solid rgba(0, 206, 201, 0.25); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;
+        }
+        .oc-role-chip-picker {
+            display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; max-height: 145px; overflow-y: auto;
+            padding: 8px; border-radius: var(--radius-sm); background: var(--bg-subtle); border: 1px solid var(--border-subtle);
+        }
+        .oc-role-chip {
+            padding: 4px 10px; border-radius: 999px; font-size: 0.76em; font-weight: 700; cursor: pointer;
+            border: 1px solid var(--border-subtle); background: var(--bg-card); color: var(--text-muted); transition: all 0.15s;
+        }
+        .oc-role-chip.selected {
+            border-color: rgba(88, 101, 242, 0.65); background: rgba(88, 101, 242, 0.22); color: #ffffff;
+        }
+        .cmd-ephemeral-row {
+            margin-top: 8px; padding-top: 7px; border-top: 1px dashed var(--border-subtle);
+            display: flex; align-items: center; justify-content: space-between; font-size: 0.73em; color: var(--text-dim);
+        }
+        .oc-receipt-expand {
+            margin-top: 5px; padding: 7px 9px; border-radius: 6px; background: rgba(0, 0, 0, 0.28);
+            border-left: 2px solid var(--spider-blue); font-size: 0.85em; white-space: pre-wrap; word-break: break-word;
+        }
+        body.light-mode .oc-dm-card, body.light-mode .oc-dm-mini-field, body.light-mode .oc-dm-check-pill, body.light-mode .oc-role-chip-picker {
+            background: #f8fafc; border-color: #cbd5e1;
+        }
+        body.light-mode .oc-dm-mode-select, body.light-mode .oc-dm-mini-field input, body.light-mode .oc-dm-textarea, body.light-mode .oc-role-chip {
+            background: #ffffff; color: #0f172a; border-color: #cbd5e1;
+        }
+        body.light-mode .oc-role-chip.selected { background: #5865f2; color: #ffffff; border-color: #4752c4; }
     </style>
 
     <script src="/pwa-helper.js?v=1.2.0" defer></script>
@@ -3430,6 +3523,231 @@
                 </div>
             </div>
         </div>
+
+                <!-- OC PERSONAL DM & RECEIPT ENGINE -->
+                <div class="card" id="card-oc-dm-engine" style="margin-top:20px;">
+                    <div class="card-header">
+                        <div>
+                            <p class="card-title">📬 OC Personal DM &amp; Receipt Engine <span class="oc-dm-status-pill" id="ocdm-master-status-pill">⏸️ Paused</span></p>
+                            <span class="card-subtitle">Automated member DMs for Low CPR slots, Bench inactivity, Missing items, and Ready blockers — with Delivery Receipts &amp; 50007 fallback</span>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:10px;">
+                            <span style="font-size:0.78em; font-weight:700; color:var(--text-muted);">Enable OC DM Automations</span>
+                            <label class="switch"><input type="checkbox" id="ocdm-master-enabled" onchange="onOcDmMasterToggle(); trackDirty();"><span class="slider"></span></label>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="oc-dm-toolbar">
+                            <label class="oc-dm-check-pill" style="border:none; background:transparent; padding:0;">
+                                <input type="checkbox" id="ocdm-fallback-ping" checked onchange="trackDirty();">
+                                <span><strong>Fallback to OC Channel Ping</strong> if Member Has Closed DMs (Error 50007) or is Unlinked</span>
+                            </label>
+                            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                                <button type="button" class="btn-action" onclick="switchDeckTab('routing')" style="font-size:0.78em; padding:5px 10px;">⚙️ Receipt Channel &amp; Roles</button>
+                                <button type="button" class="btn-action" onclick="switchDeckTab('gateway')" style="font-size:0.78em; padding:5px 10px;">📜 View DM Receipts &amp; Links</button>
+                            </div>
+                        </div>
+
+                        <div class="oc-dm-trigger-grid">
+                            <!-- Trigger A: Low CPR Warning -->
+                            <div class="oc-dm-card" id="ocdm-card-low_cpr_dm">
+                                <div class="oc-dm-card-head">
+                                    <div>
+                                        <div class="oc-dm-card-title">⚠️ Low CPR Slot Entry Warning</div>
+                                        <div class="oc-dm-card-desc">Warns members joining a role below min CPR and escalates to Leadership after grace period.</div>
+                                    </div>
+                                    <select class="oc-dm-mode-select" id="ocdm-mode-low_cpr_dm" onchange="updateOcDmCardStyles(); trackDirty();">
+                                        <option value="off">Off</option>
+                                        <option value="channel_only">Channel Only</option>
+                                        <option value="dm_only">DM Only</option>
+                                        <option value="both">Channel + DM</option>
+                                    </select>
+                                </div>
+                                <div class="oc-dm-fields-row">
+                                    <div class="oc-dm-mini-field">
+                                        <label>Global Min CPR %</label>
+                                        <input type="number" id="ocdm-lowcpr-min" min="1" max="100" value="70" oninput="syncLowCprThresholdFromDmCard(); trackDirty();">
+                                    </div>
+                                    <div class="oc-dm-mini-field">
+                                        <label>Grace Hours</label>
+                                        <input type="number" id="ocdm-lowcpr-grace" min="1" max="168" value="6" oninput="renderOcDmPreview('low_cpr_dm'); trackDirty();">
+                                    </div>
+                                    <div class="oc-dm-mini-field">
+                                        <label>Cooldown Hours</label>
+                                        <input type="number" id="ocdm-lowcpr-cd" min="1" max="336" value="12" oninput="trackDirty();">
+                                    </div>
+                                </div>
+                                <div class="oc-dm-exempt-list">
+                                    <label class="oc-dm-check-pill">
+                                        <input type="checkbox" id="ocdm-lowcpr-escalate" checked onchange="trackDirty();">
+                                        <span>Escalate after grace (Final DM + Admin Kick Alert)</span>
+                                    </label>
+                                </div>
+                                <details class="oc-dm-details">
+                                    <summary>▸ Per-Tier 1–4 / 5–8 Overrides</summary>
+                                    <div class="oc-dm-fields-row">
+                                        <div class="oc-dm-mini-field"><label>Apply Tier 1–4 Floor %</label><input type="number" id="ocdm-floor-t14" min="0" max="100" placeholder="e.g. 50" onchange="applyQuickTierFloor(1,4,this.value); trackDirty();"></div>
+                                        <div class="oc-dm-mini-field"><label>Apply Tier 5–8 Floor %</label><input type="number" id="ocdm-floor-t58" min="0" max="100" placeholder="e.g. 70" onchange="applyQuickTierFloor(5,8,this.value); trackDirty();"></div>
+                                    </div>
+                                </details>
+                                <details class="oc-dm-details">
+                                    <summary>▸ Customize DM Message &amp; Live Preview</summary>
+                                    <div class="oc-dm-chips-row">
+                                        <button type="button" class="template-chip" onclick="insertOcDmVar('low_cpr_dm','{player_name}')">{player_name}</button>
+                                        <button type="button" class="template-chip" onclick="insertOcDmVar('low_cpr_dm','{crime_name}')">{crime_name}</button>
+                                        <button type="button" class="template-chip" onclick="insertOcDmVar('low_cpr_dm','{tier}')">{tier}</button>
+                                        <button type="button" class="template-chip" onclick="insertOcDmVar('low_cpr_dm','{role}')">{role}</button>
+                                        <button type="button" class="template-chip" onclick="insertOcDmVar('low_cpr_dm','{cpr}')">{cpr}</button>
+                                        <button type="button" class="template-chip" onclick="insertOcDmVar('low_cpr_dm','{min_cpr}')">{min_cpr}</button>
+                                        <button type="button" class="template-chip" onclick="insertOcDmVar('low_cpr_dm','{grace_hours}')">{grace_hours}</button>
+                                    </div>
+                                    <textarea class="oc-dm-textarea" id="ocdm-tpl-low_cpr_dm" oninput="renderOcDmPreview('low_cpr_dm'); trackDirty();"></textarea>
+                                    <div class="oc-dm-preview" id="ocdm-prev-low_cpr_dm"></div>
+                                </details>
+                            </div>
+
+                            <!-- Trigger B: OC Inactivity / Bench Reminder -->
+                            <div class="oc-dm-card" id="ocdm-card-inactive_oc_dm">
+                                <div class="oc-dm-card-head">
+                                    <div>
+                                        <div class="oc-dm-card-title">🪑 OC Inactivity / Bench Reminder</div>
+                                        <div class="oc-dm-card-desc">DMs unassigned members idle beyond threshold with current open Recruiting OCs.</div>
+                                    </div>
+                                    <select class="oc-dm-mode-select" id="ocdm-mode-inactive_oc_dm" onchange="updateOcDmCardStyles(); trackDirty();">
+                                        <option value="off">Off</option>
+                                        <option value="channel_only">Channel Only</option>
+                                        <option value="dm_only">DM Only</option>
+                                        <option value="both">Channel + DM</option>
+                                    </select>
+                                </div>
+                                <div class="oc-dm-fields-row">
+                                    <div class="oc-dm-mini-field">
+                                        <label>Idle Hours</label>
+                                        <input type="number" id="ocdm-inactive-hours" min="1" max="720" value="24" oninput="renderOcDmPreview('inactive_oc_dm'); trackDirty();">
+                                    </div>
+                                    <div class="oc-dm-mini-field">
+                                        <label>Cooldown Hours</label>
+                                        <input type="number" id="ocdm-inactive-cd" min="1" max="336" value="48" oninput="trackDirty();">
+                                    </div>
+                                    <div class="oc-dm-mini-field">
+                                        <label>Offline Exempt &gt; Days</label>
+                                        <input type="number" id="ocdm-inactive-offline-days" min="1" max="365" value="7" oninput="trackDirty();">
+                                    </div>
+                                </div>
+                                <div class="oc-dm-exempt-list">
+                                    <label class="oc-dm-check-pill"><input type="checkbox" id="ocdm-ex-fed" checked onchange="trackDirty();"><span>Exempt Fed / Fallen</span></label>
+                                    <label class="oc-dm-check-pill"><input type="checkbox" id="ocdm-ex-offline" checked onchange="trackDirty();"><span>Exempt Offline &gt; Xd</span></label>
+                                    <label class="oc-dm-check-pill"><input type="checkbox" id="ocdm-ex-recruit" checked onchange="trackDirty();"><span>Exempt Recruits (&lt;3d)</span></label>
+                                    <label class="oc-dm-check-pill"><input type="checkbox" id="ocdm-ex-roles" checked onchange="trackDirty();"><span>Exempt Whitelist &amp; Roles</span></label>
+                                </div>
+                                <div class="oc-dm-mini-field">
+                                    <label>Whitelisted Exempt Torn IDs (comma-separated)</label>
+                                    <input type="text" id="ocdm-exempt-tornids" placeholder="e.g. 3776908, 2500112" oninput="syncExemptTornIds(this.value, 'ocdm-exempt-tornids-routing'); trackDirty();">
+                                </div>
+                                <details class="oc-dm-details">
+                                    <summary>▸ Customize DM Message &amp; Live Preview</summary>
+                                    <div class="oc-dm-chips-row">
+                                        <button type="button" class="template-chip" onclick="insertOcDmVar('inactive_oc_dm','{player_name}')">{player_name}</button>
+                                        <button type="button" class="template-chip" onclick="insertOcDmVar('inactive_oc_dm','{hours_idle}')">{hours_idle}</button>
+                                        <button type="button" class="template-chip" onclick="insertOcDmVar('inactive_oc_dm','{open_ocs_summary}')">{open_ocs_summary}</button>
+                                    </div>
+                                    <textarea class="oc-dm-textarea" id="ocdm-tpl-inactive_oc_dm" oninput="renderOcDmPreview('inactive_oc_dm'); trackDirty();"></textarea>
+                                    <div class="oc-dm-preview" id="ocdm-prev-inactive_oc_dm"></div>
+                                </details>
+                            </div>
+
+                            <!-- Trigger C: Missing Role Item -->
+                            <div class="oc-dm-card" id="ocdm-card-missing_item_dm">
+                                <div class="oc-dm-card-head">
+                                    <div>
+                                        <div class="oc-dm-card-title">🛠️ Missing Required Role Item</div>
+                                        <div class="oc-dm-card-desc">DMs slotted members missing tools/consumables before crime execution.</div>
+                                    </div>
+                                    <select class="oc-dm-mode-select" id="ocdm-mode-missing_item_dm" onchange="updateOcDmCardStyles(); trackDirty();">
+                                        <option value="off">Off</option>
+                                        <option value="channel_only">Channel Only</option>
+                                        <option value="dm_only">DM Only</option>
+                                        <option value="both">Channel + DM</option>
+                                    </select>
+                                </div>
+                                <div class="oc-dm-fields-row">
+                                    <div class="oc-dm-mini-field">
+                                        <label>Hours Before Exec (0=Immediate)</label>
+                                        <input type="number" id="ocdm-missing-hours" min="0" max="336" value="24" oninput="trackDirty();">
+                                    </div>
+                                    <div class="oc-dm-mini-field">
+                                        <label>Cooldown Hours</label>
+                                        <input type="number" id="ocdm-missing-cd" min="1" max="168" value="24" oninput="trackDirty();">
+                                    </div>
+                                </div>
+                                <details class="oc-dm-details">
+                                    <summary>▸ Customize DM Message &amp; Live Preview</summary>
+                                    <div class="oc-dm-chips-row">
+                                        <button type="button" class="template-chip" onclick="insertOcDmVar('missing_item_dm','{player_name}')">{player_name}</button>
+                                        <button type="button" class="template-chip" onclick="insertOcDmVar('missing_item_dm','{crime_name}')">{crime_name}</button>
+                                        <button type="button" class="template-chip" onclick="insertOcDmVar('missing_item_dm','{tier}')">{tier}</button>
+                                        <button type="button" class="template-chip" onclick="insertOcDmVar('missing_item_dm','{role}')">{role}</button>
+                                        <button type="button" class="template-chip" onclick="insertOcDmVar('missing_item_dm','{item_name}')">{item_name}</button>
+                                        <button type="button" class="template-chip" onclick="insertOcDmVar('missing_item_dm','{item_price}')">{item_price}</button>
+                                        <button type="button" class="template-chip" onclick="insertOcDmVar('missing_item_dm','{time_remaining}')">{time_remaining}</button>
+                                    </div>
+                                    <textarea class="oc-dm-textarea" id="ocdm-tpl-missing_item_dm" oninput="renderOcDmPreview('missing_item_dm'); trackDirty();"></textarea>
+                                    <div class="oc-dm-preview" id="ocdm-prev-missing_item_dm"></div>
+                                </details>
+                            </div>
+
+                            <!-- Trigger D: Ready OC Blocker -->
+                            <div class="oc-dm-card" id="ocdm-card-ready_blocker_dm">
+                                <div class="oc-dm-card-head">
+                                    <div>
+                                        <div class="oc-dm-card-title">🚦 Ready OC Blocker Reminder</div>
+                                        <div class="oc-dm-card-desc">DMs members Traveling, Abroad, Hospitalized, or Jailed when crew is ready to initiate.</div>
+                                    </div>
+                                    <select class="oc-dm-mode-select" id="ocdm-mode-ready_blocker_dm" onchange="updateOcDmCardStyles(); trackDirty();">
+                                        <option value="off">Off</option>
+                                        <option value="channel_only">Channel Only</option>
+                                        <option value="dm_only">DM Only</option>
+                                        <option value="both">Channel + DM</option>
+                                    </select>
+                                </div>
+                                <div class="oc-dm-fields-row">
+                                    <div class="oc-dm-mini-field">
+                                        <label>Within Mins Before Ready</label>
+                                        <input type="number" id="ocdm-blocker-mins" min="0" max="1440" value="60" oninput="trackDirty();">
+                                    </div>
+                                    <div class="oc-dm-mini-field">
+                                        <label>Cooldown Hours</label>
+                                        <input type="number" id="ocdm-blocker-cd" min="1" max="168" value="4" oninput="trackDirty();">
+                                    </div>
+                                </div>
+                                <details class="oc-dm-details">
+                                    <summary>▸ Customize DM Message &amp; Live Preview</summary>
+                                    <div class="oc-dm-chips-row">
+                                        <button type="button" class="template-chip" onclick="insertOcDmVar('ready_blocker_dm','{player_name}')">{player_name}</button>
+                                        <button type="button" class="template-chip" onclick="insertOcDmVar('ready_blocker_dm','{crime_name}')">{crime_name}</button>
+                                        <button type="button" class="template-chip" onclick="insertOcDmVar('ready_blocker_dm','{status}')">{status}</button>
+                                    </div>
+                                    <textarea class="oc-dm-textarea" id="ocdm-tpl-ready_blocker_dm" oninput="renderOcDmPreview('ready_blocker_dm'); trackDirty();"></textarea>
+                                    <div class="oc-dm-preview" id="ocdm-prev-ready_blocker_dm"></div>
+                                </details>
+                            </div>
+                        </div>
+
+                        <div class="oc-dm-test-bar">
+                            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; flex:1;">
+                                <select class="oc-dm-mode-select" id="ocdm-test-trigger" style="min-width:190px;">
+                                    <option value="low_cpr_dm">Sample: Low CPR Warning</option>
+                                    <option value="inactive_oc_dm">Sample: OC Inactivity</option>
+                                    <option value="missing_item_dm">Sample: Missing Role Item</option>
+                                    <option value="ready_blocker_dm">Sample: Ready OC Blocker</option>
+                                </select>
+                                <input type="text" id="ocdm-test-discordid" class="field-input" placeholder="Your Discord User ID (blank = auto-linked)" style="max-width:250px; padding:6px 10px;">
+                                <button type="button" class="btn-action teal" id="btn-ocdm-send-test" onclick="sendOcDmTest()">🧪 Send Test DM to Me</button>
+                            </div>
+                            <button type="button" class="btn-action primary" id="btn-ocdm-save" onclick="saveDiscordConfig()">💾 Save OC DM Settings</button>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- ========================================================
@@ -3799,6 +4117,9 @@
                                             <option value="">-- Select Role (or leave blank) --</option>
                                         </select>
                                         <input type="text" id="oc-roleid" class="field-input" style="display:none;" oninput="trackDirty()">
+                                        <select class="field-select role-picker" id="oc-manager-roleid-select" style="margin-top:6px;" onchange="onRoleSelectChange(this, 'oc-manager-roleid'); syncPrimaryOcMgrChip(this.value); trackDirty();">
+                                            <option value="">-- Primary OC Manager Role --</option>
+                                        </select>
                                         <input type="text" id="oc-manager-roleid" class="field-input" style="display:none;" oninput="trackDirty()">
                                     </td>
                                     <td>
@@ -3954,6 +4275,52 @@
                                     <option value="">-- Select Role --</option>
                                 </select>
                                 <input type="text" id="unverified-roleid" class="field-input" style="display:none;" oninput="trackDirty()">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- OC DM Receipt Channel, Manager Roles & Exempt Roles -->
+                <div class="card" id="card-oc-dm-routing" style="margin-top:20px;">
+                    <div class="card-header">
+                        <div>
+                            <p class="card-title">📬 OC DM Receipts, Manager Command Roles &amp; Exemptions</p>
+                            <span class="card-subtitle">Route Delivery Receipt Audit Embeds, authorize /oc-items &amp; /oc-lowcpr roles, and exclude LOA/Vacation roles from automated DMs</span>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="field-grid">
+                            <div class="field-group">
+                                <label class="field-label">DM Delivery Receipt / Audit Log Channel</label>
+                                <select class="field-select channel-picker" id="ocdm-receipt-channelid-select" onchange="onChannelSelectChange(this, 'ocdm-receipt-channelid'); trackDirty();">
+                                    <option value="">-- Select Receipt Channel (Disabled if blank) --</option>
+                                </select>
+                                <input type="text" id="ocdm-receipt-channelid" class="field-input" style="display:none;" oninput="trackDirty()">
+                                <label class="oc-dm-check-pill" style="margin-top:8px;">
+                                    <input type="checkbox" id="ocdm-receipts-enabled" checked onchange="trackDirty();">
+                                    <span>Post DM Delivery Receipts (Success / 50007 Closed DMs / Unlinked / Escalations)</span>
+                                </label>
+                            </div>
+                            <div class="field-group">
+                                <label class="field-label">Whitelisted Exempt Torn IDs (Protected from Bench/Idle DMs)</label>
+                                <input type="text" id="ocdm-exempt-tornids-routing" class="field-input" placeholder="e.g. 3776908, 2500112" oninput="syncExemptTornIds(this.value, 'ocdm-exempt-tornids'); trackDirty();">
+                                <span class="field-hint">Comma-separated Torn Player IDs that should never receive inactivity reminders.</span>
+                            </div>
+                        </div>
+                        <div class="field-grid" style="margin-top:14px;">
+                            <div class="field-group">
+                                <label class="field-label">OC Manager Command Roles (Multi-Select — Click to Toggle)</label>
+                                <div class="oc-role-chip-picker" id="ocdm-manager-roles-picker">
+                                    <span style="font-size:0.78em; color:var(--text-dim);">Connect Bot Token / refresh guild roles to select OC Manager roles...</span>
+                                </div>
+                                <span class="field-hint">Authorized to run /oc-items, /oc-lowcpr, /oc-bench, and interactive [DM All] buttons.</span>
+                            </div>
+                            <div class="field-group">
+                                <label class="field-label">DM Exempt / LOA / Vacation Roles (Multi-Select — Click to Toggle)</label>
+                                <div class="oc-role-chip-picker" id="ocdm-exempt-roles-picker">
+                                    <span style="font-size:0.78em; color:var(--text-dim);">Connect Bot Token / refresh guild roles to select Exempt/LOA roles...</span>
+                                </div>
+                                <span class="field-hint">Discord members holding any selected role are exempt from OC inactivity DM reminders.</span>
                             </div>
                         </div>
                     </div>
@@ -4174,6 +4541,46 @@
                                 <label class="switch-sm"><input type="checkbox" class="cmd-toggle" data-cmd="myoc" checked onchange="onCommandToggle(this); trackDirty();"><span class="slider"></span></label>
                             </div>
                             <div class="cmd-card-desc">Check your personal assigned Organized Crime.</div>
+                        </div>
+                        <div class="cmd-card on" id="cmd-card-oc-items">
+                            <div class="cmd-card-top">
+                                <div class="cmd-card-title"><span>🛠️</span><code>/oc-items</code></div>
+                                <label class="switch-sm"><input type="checkbox" class="cmd-toggle" data-cmd="oc-items" checked onchange="onCommandToggle(this); trackDirty();"><span class="slider"></span></label>
+                            </div>
+                            <div class="cmd-card-desc">Priority missing role item audit sorted by urgency with live prices &amp; 1-click DM All.</div>
+                            <div class="cmd-ephemeral-row"><span>Default Ephemeral (Private)</span><input type="checkbox" class="cmd-ephemeral-toggle" id="cmd-eph-oc-items" onchange="trackDirty();"></div>
+                        </div>
+                        <div class="cmd-card on" id="cmd-card-oc-lowcpr">
+                            <div class="cmd-card-top">
+                                <div class="cmd-card-title"><span>⚠️</span><code>/oc-lowcpr</code></div>
+                                <label class="switch-sm"><input type="checkbox" class="cmd-toggle" data-cmd="oc-lowcpr" checked onchange="onCommandToggle(this); trackDirty();"><span class="slider"></span></label>
+                            </div>
+                            <div class="cmd-card-desc">Lists slotted members below min CPR floor, warning age &amp; kick eligibility.</div>
+                            <div class="cmd-ephemeral-row"><span>Default Ephemeral (Private)</span><input type="checkbox" class="cmd-ephemeral-toggle" id="cmd-eph-oc-lowcpr" onchange="trackDirty();"></div>
+                        </div>
+                        <div class="cmd-card on" id="cmd-card-oc-bench">
+                            <div class="cmd-card-top">
+                                <div class="cmd-card-title"><span>🪑</span><code>/oc-bench</code></div>
+                                <label class="switch-sm"><input type="checkbox" class="cmd-toggle" data-cmd="oc-bench" checked onchange="onCommandToggle(this); trackDirty();"><span class="slider"></span></label>
+                            </div>
+                            <div class="cmd-card-desc">Unassigned bench grouped by Available Now, Blocked (Fly/Hosp), &amp; Exempt + DM Idle.</div>
+                            <div class="cmd-ephemeral-row"><span>Default Ephemeral (Private)</span><input type="checkbox" class="cmd-ephemeral-toggle" id="cmd-eph-oc-bench" onchange="trackDirty();"></div>
+                        </div>
+                        <div class="cmd-card on" id="cmd-card-oc-check">
+                            <div class="cmd-card-top">
+                                <div class="cmd-card-title"><span>🔍</span><code>/oc-check</code></div>
+                                <label class="switch-sm"><input type="checkbox" class="cmd-toggle" data-cmd="oc-check" checked onchange="onCommandToggle(this); trackDirty();"><span class="slider"></span></label>
+                            </div>
+                            <div class="cmd-card-desc">Single-member OC dossier: current slot, CPR %, missing items &amp; last 3 DM receipts.</div>
+                            <div class="cmd-ephemeral-row"><span>Default Ephemeral (Private)</span><input type="checkbox" class="cmd-ephemeral-toggle" id="cmd-eph-oc-check" onchange="trackDirty();"></div>
+                        </div>
+                        <div class="cmd-card on" id="cmd-card-oc-link">
+                            <div class="cmd-card-top">
+                                <div class="cmd-card-title"><span>🔗</span><code>/oc-link</code></div>
+                                <label class="switch-sm"><input type="checkbox" class="cmd-toggle" data-cmd="oc-link" checked onchange="onCommandToggle(this); trackDirty();"><span class="slider"></span></label>
+                            </div>
+                            <div class="cmd-card-desc">Bind a Discord user account to a Torn Player ID for personal OC DM routing.</div>
+                            <div class="cmd-ephemeral-row"><span>Default Ephemeral (Private)</span><input type="checkbox" class="cmd-ephemeral-toggle" id="cmd-eph-oc-link" checked onchange="trackDirty();"></div>
                         </div>
                     </div>
                 </div>
@@ -4645,6 +5052,75 @@
                 </div>
             </div>
         </div>
+
+                <!-- LIVE OC DM DELIVERY RECEIPT LOG -->
+                <div class="card" id="card-oc-dm-receipts" style="margin-top:24px;">
+                    <div class="card-header">
+                        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                            <p class="card-title" style="margin:0;"><span>📬</span> Live OC DM Delivery Receipts &amp; Audit Log</p>
+                            <span class="count-badge" id="ocdm-receipts-count-badge">0 Receipts</span>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                            <button type="button" class="tab-pill active" onclick="filterOcDmReceipts('all', this)">All</button>
+                            <button type="button" class="tab-pill" onclick="filterOcDmReceipts('delivered', this)">✅ Delivered</button>
+                            <button type="button" class="tab-pill" onclick="filterOcDmReceipts('failed', this)">⚠️ DMs Closed</button>
+                            <button type="button" class="tab-pill" onclick="filterOcDmReceipts('unlinked', this)">❌ Unlinked</button>
+                            <button type="button" class="btn-action" onclick="fetchOcDmReceipts(true)" style="font-size:0.78em; padding:4px 10px;">🔄 Refresh</button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div style="overflow-x:auto;">
+                            <table class="outbound-table" style="width:100%; border-collapse:collapse; font-size:0.82em; text-align:left;">
+                                <thead>
+                                    <tr style="border-bottom:1px solid var(--border-subtle); color:var(--text-dim); text-transform:uppercase; font-size:0.75em; letter-spacing:0.5px;">
+                                        <th style="padding:8px 10px;">TCT Time</th>
+                                        <th style="padding:8px 10px;">Member</th>
+                                        <th style="padding:8px 10px;">Trigger</th>
+                                        <th style="padding:8px 10px;">Context</th>
+                                        <th style="padding:8px 10px;">Status</th>
+                                        <th style="padding:8px 10px; text-align:right;">Preview</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="ocdm-receipts-tbody">
+                                    <tr><td colspan="6" style="padding:16px; text-align:center; color:var(--text-dim);">Loading DM receipts...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- UNLINKED MEMBERS HELPER & DISCORD NICKNAME SCANNER -->
+                <div class="card" id="card-oc-unlinked-members" style="margin-top:24px;">
+                    <div class="card-header">
+                        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                            <p class="card-title" style="margin:0;"><span>🔗</span> Torn ↔ Discord Mapping &amp; Unlinked Members Helper</p>
+                            <span class="count-badge" id="ocdm-unlinked-badge">0 Unlinked</span>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                            <label class="oc-dm-check-pill"><input type="checkbox" id="ocdm-unlinked-only" checked onchange="renderOcUnlinkedTable()"><span>Unlinked Only</span></label>
+                            <input type="text" id="ocdm-member-search" class="field-input" placeholder="Search name or ID..." oninput="renderOcUnlinkedTable()" style="max-width:170px; padding:5px 9px;">
+                            <button type="button" class="btn-action teal" id="btn-ocdm-scan-nicknames" onclick="scanOcGuildNicknames()" style="font-size:0.78em; padding:5px 10px;">🔍 Auto-Scan Server Nicknames</button>
+                            <button type="button" class="btn-action" onclick="fetchOcUnlinkedMembers(true)" style="font-size:0.78em; padding:5px 10px;">🔄 Refresh</button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div style="overflow-x:auto;">
+                            <table class="outbound-table" style="width:100%; border-collapse:collapse; font-size:0.82em; text-align:left;">
+                                <thead>
+                                    <tr style="border-bottom:1px solid var(--border-subtle); color:var(--text-dim); text-transform:uppercase; font-size:0.75em; letter-spacing:0.5px;">
+                                        <th style="padding:8px 10px;">Torn Member</th>
+                                        <th style="padding:8px 10px;">Role / Lvl</th>
+                                        <th style="padding:8px 10px;">Mapping Status</th>
+                                        <th style="padding:8px 10px; text-align:right;">Manual Discord User ID Link</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="ocdm-unlinked-tbody">
+                                    <tr><td colspan="4" style="padding:16px; text-align:center; color:var(--text-dim);">Open Gateway tab or click Refresh to inspect Torn ↔ Discord links...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- ========================================================
@@ -5401,6 +5877,7 @@ function populateChannelSelects() {
         { id: 'overdose-channelid', defaultLabel: '-- Same as Main Alert Channel --' },
         { id: 'retal-channelid', defaultLabel: '-- Same as Main Alert Channel --' },
         { id: 'oc-channelid', defaultLabel: '-- Same as Main Alert Channel --' },
+        { id: 'ocdm-receipt-channelid', defaultLabel: '-- Select Receipt Channel (Disabled if blank) --' },
         { id: 'welcome-channelid', defaultLabel: '-- Select Welcome Channel (e.g. #welcome-and-rules) --' },
         { id: 'verification-channelid', defaultLabel: '-- Select Channel --' },
         { id: 'banking-channelid', defaultLabel: '-- Post in Command Channel --' },
@@ -5495,6 +5972,7 @@ function populateRoleSelects() {
             }
         }
     });
+    if (typeof renderOcDmRolePickers === 'function') renderOcDmRolePickers();
 }
 
 function onChannelSelectChange(sel, targetId) {
@@ -5872,6 +6350,7 @@ function applyConfigToDOM(cfg) {
     calculateSetupProgress();
     populateChannelSelects();
     populateRoleSelects();
+    if (typeof applyOcDmConfigToDOM === 'function') applyOcDmConfigToDOM(cfg.ocDm || null, cfg);
 
     const tokenBadge = document.getElementById('token-server-badge');
     const gatewayStatus = document.getElementById('gateway-token-status');
@@ -6007,6 +6486,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         el.addEventListener('change', trackDirty);
         el.addEventListener('input', trackDirty);
     });
+    const lowThreshInp = document.getElementById('lowCprDefaultThreshold');
+    if (lowThreshInp) {
+        lowThreshInp.addEventListener('input', () => {
+            const dmMin = document.getElementById('ocdm-lowcpr-min');
+            if (dmMin && lowThreshInp.value) {
+                dmMin.value = lowThreshInp.value;
+                renderOcDmPreview('low_cpr_dm');
+            }
+        });
+    }
 
     try {
         const hashTab = (window.location.hash || '').replace('#', '').toLowerCase();
@@ -6231,6 +6720,7 @@ async function saveDiscordConfig() {
                 .filter(el => !el.checked)
                 .map(el => (el.dataset.cmd || '').toLowerCase().trim())
                 .filter(Boolean),
+            ocDm: typeof collectOcDmConfigFromDOM === 'function' ? collectOcDmConfigFromDOM() : undefined,
             clientId: window.myClientId
         };
 
@@ -7385,7 +7875,11 @@ function switchDeckTab(tabId) {
     });
     try { localStorage.setItem('sv_discord_active_tab', tabId); } catch(e) {}
     if (tabId === 'broadcast' && typeof updateBroadcastPreview === 'function') updateBroadcastPreview();
-    if (tabId === 'gateway' && typeof fetchOutboundLogs === 'function') fetchOutboundLogs();
+    if (tabId === 'gateway') {
+        if (typeof fetchOutboundLogs === 'function') fetchOutboundLogs();
+        if (typeof fetchOcDmReceipts === 'function') fetchOcDmReceipts();
+        if (typeof fetchOcUnlinkedMembers === 'function') fetchOcUnlinkedMembers();
+    }
     if (tabId === 'market' && typeof initMarketSniperTab === 'function') initMarketSniperTab();
 }
 
@@ -7655,6 +8149,477 @@ async function saveMarketConfig() {
             status.style.color = 'var(--spider-red)';
             status.textContent = '❌ Sync failed: ' + e.message;
         }
+    }
+}
+
+// ── OC Personal DM & Receipt Engine Controls ──
+const OCDM_DEFAULT_TEMPLATES = {
+    low_cpr_dm: "Hi {player_name}, you joined **{crime_name} (Tier {tier})** in the **{role}** slot with a **{cpr}% CPR**, which is below the faction's **{min_cpr}%** minimum for this crime. Please leave this OC slot within **{grace_hours} hours** and join a lower-level OC (or a role where you meet the CPR floor), otherwise leadership will need to kick you from the crime so it doesn't fail.\nManage your OC here: https://www.torn.com/factions.php?step=your#/tab=crimes",
+    inactive_oc_dm: "Hi {player_name}, you haven't joined an Organized Crime in **{hours_idle} hours**. Please head to the Faction Crimes tab and join an open OC that matches your CPR, or leadership may follow up.\nCurrently open Recruiting OCs: {open_ocs_summary}\nJoin here: https://www.torn.com/factions.php?step=your#/tab=crimes",
+    missing_item_dm: "Hi {player_name}, your **{role}** slot in **{crime_name} (Tier {tier})** requires **{item_name}** (~${item_price} on Market), which is currently missing. Please acquire or borrow it before the crime executes ({time_remaining}) so the OC isn't delayed or failed.",
+    ready_blocker_dm: "Hi {player_name}, your OC **{crime_name}** is ready to launch, and the crew is waiting on you (current status: **{status}**). Please return/med out when able so leadership can initiate!"
+};
+
+let ocDmSelectedManagerRoleIds = [];
+let ocDmSelectedExemptRoleIds = [];
+let ocDmReceiptsCache = [];
+let ocDmReceiptsFilter = 'all';
+let ocUnlinkedMembersCache = [];
+
+function escapeHtmlOc(str) {
+    return String(str ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function onOcDmMasterToggle() {
+    const enabled = Boolean(document.getElementById('ocdm-master-enabled')?.checked);
+    const pill = document.getElementById('ocdm-master-status-pill');
+    if (pill) {
+        pill.textContent = enabled ? '🟢 Active' : '⏸️ Paused';
+        pill.classList.toggle('active', enabled);
+    }
+    updateOcDmCardStyles();
+}
+
+function updateOcDmCardStyles() {
+    const masterOn = Boolean(document.getElementById('ocdm-master-enabled')?.checked);
+    ['low_cpr_dm', 'inactive_oc_dm', 'missing_item_dm', 'ready_blocker_dm'].forEach(key => {
+        const card = document.getElementById(`ocdm-card-${key}`);
+        const mode = document.getElementById(`ocdm-mode-${key}`)?.value || 'off';
+        if (card) card.classList.toggle('mode-active', masterOn && mode !== 'off');
+    });
+}
+
+function syncLowCprThresholdFromDmCard() {
+    const val = document.getElementById('ocdm-lowcpr-min')?.value;
+    const legacy = document.getElementById('lowCprDefaultThreshold');
+    if (legacy && val) legacy.value = val;
+    renderOcDmPreview('low_cpr_dm');
+}
+
+function applyQuickTierFloor(minLvl, maxLvl, val) {
+    const num = parseInt(val, 10);
+    if (isNaN(num)) return;
+    document.querySelectorAll('.cpr-lvl-input').forEach(inp => {
+        const lvl = parseInt(inp.dataset.lvl, 10);
+        if (lvl >= minLvl && lvl <= maxLvl) {
+            inp.value = Math.max(0, Math.min(100, num));
+        }
+    });
+    showToast(`Applied ${num}% CPR floor to Tiers ${minLvl}–${maxLvl}. Click Save to persist.`, 'info');
+}
+
+function syncExemptTornIds(val, otherId) {
+    const other = document.getElementById(otherId);
+    if (other && other.value !== val) other.value = val;
+}
+
+function renderOcDmRolePickers() {
+    const mgrWrap = document.getElementById('ocdm-manager-roles-picker');
+    const exWrap = document.getElementById('ocdm-exempt-roles-picker');
+    if (!mgrWrap || !exWrap) return;
+
+    if (!Array.isArray(serverRoles) || serverRoles.length === 0) {
+        const fallback = '<span style="font-size:0.78em; color:var(--text-dim);">No Discord server roles loaded yet — verify Bot Token in Gateway tab.</span>';
+        mgrWrap.innerHTML = fallback;
+        exWrap.innerHTML = fallback;
+        return;
+    }
+
+    mgrWrap.innerHTML = serverRoles.map(r => {
+        const sel = ocDmSelectedManagerRoleIds.includes(r.id);
+        return `<button type="button" class="oc-role-chip${sel ? ' selected' : ''}" data-role-id="${escapeHtmlOc(r.id)}" onclick="toggleOcDmRoleChip('manager', '${escapeHtmlOc(r.id)}')">@${escapeHtmlOc(r.name)}</button>`;
+    }).join('');
+
+    exWrap.innerHTML = serverRoles.map(r => {
+        const sel = ocDmSelectedExemptRoleIds.includes(r.id);
+        return `<button type="button" class="oc-role-chip${sel ? ' selected' : ''}" data-role-id="${escapeHtmlOc(r.id)}" onclick="toggleOcDmRoleChip('exempt', '${escapeHtmlOc(r.id)}')">@${escapeHtmlOc(r.name)}</button>`;
+    }).join('');
+}
+
+function toggleOcDmRoleChip(listType, roleId) {
+    const arr = listType === 'manager' ? ocDmSelectedManagerRoleIds : ocDmSelectedExemptRoleIds;
+    const idx = arr.indexOf(roleId);
+    if (idx >= 0) arr.splice(idx, 1);
+    else arr.push(roleId);
+
+    if (listType === 'manager') {
+        const primaryInp = document.getElementById('oc-manager-roleid');
+        const primarySel = document.getElementById('oc-manager-roleid-select');
+        if (primaryInp && !primaryInp.value && ocDmSelectedManagerRoleIds[0]) {
+            primaryInp.value = ocDmSelectedManagerRoleIds[0];
+            if (primarySel) primarySel.value = ocDmSelectedManagerRoleIds[0];
+        }
+    }
+    renderOcDmRolePickers();
+    trackDirty();
+}
+
+function syncPrimaryOcMgrChip(roleId) {
+    if (roleId && !ocDmSelectedManagerRoleIds.includes(roleId)) {
+        ocDmSelectedManagerRoleIds.push(roleId);
+        renderOcDmRolePickers();
+    }
+}
+
+function insertOcDmVar(triggerKey, token) {
+    const ta = document.getElementById(`ocdm-tpl-${triggerKey}`);
+    if (!ta) return;
+    const start = ta.selectionStart ?? ta.value.length;
+    const end = ta.selectionEnd ?? ta.value.length;
+    ta.value = ta.value.slice(0, start) + token + ta.value.slice(end);
+    ta.focus();
+    ta.selectionStart = ta.selectionEnd = start + token.length;
+    renderOcDmPreview(triggerKey);
+    trackDirty();
+}
+
+function renderOcDmPreview(triggerKey) {
+    const ta = document.getElementById(`ocdm-tpl-${triggerKey}`);
+    const prev = document.getElementById(`ocdm-prev-${triggerKey}`);
+    if (!ta || !prev) return;
+    const vars = {
+        player_name: 'Owen777',
+        crime_name: 'Leave No Trace',
+        tier: '6',
+        role: 'Techie',
+        cpr: '48',
+        min_cpr: document.getElementById('ocdm-lowcpr-min')?.value || '70',
+        grace_hours: document.getElementById('ocdm-lowcpr-grace')?.value || '6',
+        hours_idle: document.getElementById('ocdm-inactive-hours')?.value || '36',
+        open_ocs_summary: 'T6 Leave No Trace (1 open), T5 Counter Offer (2 open)',
+        item_name: 'Lockpicks',
+        item_price: '47,182',
+        time_remaining: '3h 20m',
+        status: 'Traveling to Switzerland'
+    };
+    const rendered = (ta.value || OCDM_DEFAULT_TEMPLATES[triggerKey] || '').replace(/\{([a-z0-9_]+)\}/gi, (_, k) => vars[k] ?? `{${k}}`);
+    prev.textContent = rendered;
+}
+
+function renderAllOcDmPreviews() {
+    ['low_cpr_dm', 'inactive_oc_dm', 'missing_item_dm', 'ready_blocker_dm'].forEach(renderOcDmPreview);
+}
+
+function applyOcDmConfigToDOM(ocDm, cfg = {}) {
+    const d = ocDm || {};
+    const trig = d.triggers || {};
+    const low = trig.low_cpr_dm || {};
+    const inact = trig.inactive_oc_dm || {};
+    const miss = trig.missing_item_dm || {};
+    const blk = trig.ready_blocker_dm || {};
+
+    if (document.getElementById('ocdm-master-enabled')) document.getElementById('ocdm-master-enabled').checked = d.enabled === true;
+    if (document.getElementById('ocdm-fallback-ping')) document.getElementById('ocdm-fallback-ping').checked = d.fallbackChannelPingOnClosedDms !== false;
+    if (document.getElementById('ocdm-receipts-enabled')) document.getElementById('ocdm-receipts-enabled').checked = d.receiptsEnabled !== false;
+    if (document.getElementById('ocdm-receipt-channelid')) document.getElementById('ocdm-receipt-channelid').value = (d.receiptChannelId || cfg.ocDmReceiptChannelId || '').replace(/[^0-9]/g, '');
+
+    const rawExemptIds = Array.isArray(d.exemptTornIds) ? d.exemptTornIds.join(', ') : (d.exemptTornIds || '');
+    if (document.getElementById('ocdm-exempt-tornids')) document.getElementById('ocdm-exempt-tornids').value = rawExemptIds;
+    if (document.getElementById('ocdm-exempt-tornids-routing')) document.getElementById('ocdm-exempt-tornids-routing').value = rawExemptIds;
+
+    ocDmSelectedManagerRoleIds = Array.isArray(d.ocManagerRoleIds) ? [...d.ocManagerRoleIds] : [];
+    const legacyMgr = (cfg.ocManagerRoleId || '').replace(/[^0-9]/g, '');
+    if (legacyMgr && !ocDmSelectedManagerRoleIds.includes(legacyMgr)) ocDmSelectedManagerRoleIds.unshift(legacyMgr);
+    ocDmSelectedExemptRoleIds = Array.isArray(d.exemptRoleIds) ? [...d.exemptRoleIds] : [];
+
+    // Trigger A
+    if (document.getElementById('ocdm-mode-low_cpr_dm')) document.getElementById('ocdm-mode-low_cpr_dm').value = low.mode || 'off';
+    if (document.getElementById('ocdm-lowcpr-min')) document.getElementById('ocdm-lowcpr-min').value = low.globalMinCpr ?? cfg.lowCprDefaultThreshold ?? 70;
+    if (document.getElementById('ocdm-lowcpr-grace')) document.getElementById('ocdm-lowcpr-grace').value = low.graceHours ?? 6;
+    if (document.getElementById('ocdm-lowcpr-cd')) document.getElementById('ocdm-lowcpr-cd').value = low.cooldownHours ?? 12;
+    if (document.getElementById('ocdm-lowcpr-escalate')) document.getElementById('ocdm-lowcpr-escalate').checked = low.escalationEnabled !== false;
+    if (document.getElementById('ocdm-tpl-low_cpr_dm')) document.getElementById('ocdm-tpl-low_cpr_dm').value = low.template || OCDM_DEFAULT_TEMPLATES.low_cpr_dm;
+
+    // Trigger B
+    if (document.getElementById('ocdm-mode-inactive_oc_dm')) document.getElementById('ocdm-mode-inactive_oc_dm').value = inact.mode || 'off';
+    if (document.getElementById('ocdm-inactive-hours')) document.getElementById('ocdm-inactive-hours').value = inact.idleHours ?? 24;
+    if (document.getElementById('ocdm-inactive-cd')) document.getElementById('ocdm-inactive-cd').value = inact.cooldownHours ?? 48;
+    if (document.getElementById('ocdm-inactive-offline-days')) document.getElementById('ocdm-inactive-offline-days').value = inact.offlineExemptDays ?? 7;
+    if (document.getElementById('ocdm-ex-fed')) document.getElementById('ocdm-ex-fed').checked = inact.exemptFedJailAndFallen !== false;
+    if (document.getElementById('ocdm-ex-offline')) document.getElementById('ocdm-ex-offline').checked = inact.exemptOffline !== false;
+    if (document.getElementById('ocdm-ex-recruit')) document.getElementById('ocdm-ex-recruit').checked = inact.exemptNewRecruits !== false;
+    if (document.getElementById('ocdm-ex-roles')) document.getElementById('ocdm-ex-roles').checked = inact.exemptIdsAndRoles !== false;
+    if (document.getElementById('ocdm-tpl-inactive_oc_dm')) document.getElementById('ocdm-tpl-inactive_oc_dm').value = inact.template || OCDM_DEFAULT_TEMPLATES.inactive_oc_dm;
+
+    // Trigger C
+    if (document.getElementById('ocdm-mode-missing_item_dm')) document.getElementById('ocdm-mode-missing_item_dm').value = miss.mode || 'off';
+    if (document.getElementById('ocdm-missing-hours')) document.getElementById('ocdm-missing-hours').value = miss.hoursBeforeExecution ?? 24;
+    if (document.getElementById('ocdm-missing-cd')) document.getElementById('ocdm-missing-cd').value = miss.cooldownHours ?? 24;
+    if (document.getElementById('ocdm-tpl-missing_item_dm')) document.getElementById('ocdm-tpl-missing_item_dm').value = miss.template || OCDM_DEFAULT_TEMPLATES.missing_item_dm;
+
+    // Trigger D
+    if (document.getElementById('ocdm-mode-ready_blocker_dm')) document.getElementById('ocdm-mode-ready_blocker_dm').value = blk.mode || 'off';
+    if (document.getElementById('ocdm-blocker-mins')) document.getElementById('ocdm-blocker-mins').value = blk.withinMinutesBeforeReady ?? 60;
+    if (document.getElementById('ocdm-blocker-cd')) document.getElementById('ocdm-blocker-cd').value = blk.cooldownHours ?? 4;
+    if (document.getElementById('ocdm-tpl-ready_blocker_dm')) document.getElementById('ocdm-tpl-ready_blocker_dm').value = blk.template || OCDM_DEFAULT_TEMPLATES.ready_blocker_dm;
+
+    // Command default ephemeral flags
+    const cmdSet = d.commandSettings || {};
+    ['oc-items', 'oc-lowcpr', 'oc-bench', 'oc-check', 'oc-link'].forEach(cName => {
+        const el = document.getElementById(`cmd-eph-${cName}`);
+        if (el && cmdSet[cName] && cmdSet[cName].defaultEphemeral !== undefined) {
+            el.checked = cmdSet[cName].defaultEphemeral === true;
+        }
+    });
+
+    populateChannelSelects();
+    onOcDmMasterToggle();
+    renderOcDmRolePickers();
+    renderAllOcDmPreviews();
+}
+
+function collectOcDmConfigFromDOM() {
+    const tierFloors = {};
+    document.querySelectorAll('.cpr-lvl-input').forEach(inp => {
+        if (inp.dataset.lvl) tierFloors[inp.dataset.lvl] = parseInt(inp.value || '40', 10);
+    });
+    const exemptIdsRaw = document.getElementById('ocdm-exempt-tornids')?.value || document.getElementById('ocdm-exempt-tornids-routing')?.value || '';
+    const exemptTornIds = exemptIdsRaw.split(/[\s,;]+/).map(s => s.replace(/[^0-9]/g, '')).filter(s => s.length >= 3);
+    const commandSettings = {};
+    ['oc-items', 'oc-lowcpr', 'oc-bench', 'oc-check', 'oc-link'].forEach(cName => {
+        commandSettings[cName] = { defaultEphemeral: Boolean(document.getElementById(`cmd-eph-${cName}`)?.checked) };
+    });
+
+    return {
+        enabled: Boolean(document.getElementById('ocdm-master-enabled')?.checked),
+        fallbackChannelPingOnClosedDms: document.getElementById('ocdm-fallback-ping')?.checked !== false,
+        receiptsEnabled: document.getElementById('ocdm-receipts-enabled')?.checked !== false,
+        receiptChannelId: (document.getElementById('ocdm-receipt-channelid')?.value || '').replace(/[^0-9]/g, ''),
+        ocManagerRoleIds: [...ocDmSelectedManagerRoleIds],
+        exemptRoleIds: [...ocDmSelectedExemptRoleIds],
+        exemptTornIds,
+        commandSettings,
+        triggers: {
+            low_cpr_dm: {
+                mode: document.getElementById('ocdm-mode-low_cpr_dm')?.value || 'off',
+                globalMinCpr: parseInt(document.getElementById('ocdm-lowcpr-min')?.value || '70', 10),
+                tierFloors,
+                graceHours: parseFloat(document.getElementById('ocdm-lowcpr-grace')?.value || '6'),
+                cooldownHours: parseFloat(document.getElementById('ocdm-lowcpr-cd')?.value || '12'),
+                escalationEnabled: document.getElementById('ocdm-lowcpr-escalate')?.checked !== false,
+                template: document.getElementById('ocdm-tpl-low_cpr_dm')?.value || OCDM_DEFAULT_TEMPLATES.low_cpr_dm
+            },
+            inactive_oc_dm: {
+                mode: document.getElementById('ocdm-mode-inactive_oc_dm')?.value || 'off',
+                idleHours: parseInt(document.getElementById('ocdm-inactive-hours')?.value || '24', 10),
+                cooldownHours: parseFloat(document.getElementById('ocdm-inactive-cd')?.value || '48'),
+                offlineExemptDays: parseInt(document.getElementById('ocdm-inactive-offline-days')?.value || '7', 10),
+                exemptFedJailAndFallen: document.getElementById('ocdm-ex-fed')?.checked !== false,
+                exemptOffline: document.getElementById('ocdm-ex-offline')?.checked !== false,
+                exemptNewRecruits: document.getElementById('ocdm-ex-recruit')?.checked !== false,
+                exemptIdsAndRoles: document.getElementById('ocdm-ex-roles')?.checked !== false,
+                template: document.getElementById('ocdm-tpl-inactive_oc_dm')?.value || OCDM_DEFAULT_TEMPLATES.inactive_oc_dm
+            },
+            missing_item_dm: {
+                mode: document.getElementById('ocdm-mode-missing_item_dm')?.value || 'off',
+                hoursBeforeExecution: parseFloat(document.getElementById('ocdm-missing-hours')?.value || '24'),
+                cooldownHours: parseFloat(document.getElementById('ocdm-missing-cd')?.value || '24'),
+                template: document.getElementById('ocdm-tpl-missing_item_dm')?.value || OCDM_DEFAULT_TEMPLATES.missing_item_dm
+            },
+            ready_blocker_dm: {
+                mode: document.getElementById('ocdm-mode-ready_blocker_dm')?.value || 'off',
+                withinMinutesBeforeReady: parseInt(document.getElementById('ocdm-blocker-mins')?.value || '60', 10),
+                cooldownHours: parseFloat(document.getElementById('ocdm-blocker-cd')?.value || '4'),
+                template: document.getElementById('ocdm-tpl-ready_blocker_dm')?.value || OCDM_DEFAULT_TEMPLATES.ready_blocker_dm
+            }
+        }
+    };
+}
+
+async function sendOcDmTest() {
+    const btn = document.getElementById('btn-ocdm-send-test');
+    const triggerType = document.getElementById('ocdm-test-trigger')?.value || 'low_cpr_dm';
+    const targetDiscordId = (document.getElementById('ocdm-test-discordid')?.value || '').replace(/[^0-9]/g, '');
+    const customTemplate = document.getElementById(`ocdm-tpl-${triggerType}`)?.value || '';
+
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Sending Test DM...'; }
+    try {
+        const res = await fetch('/api/discord/oc-dm-test', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ triggerType, targetDiscordId, customTemplate })
+        });
+        const data = await res.json();
+        if (data.success) {
+            showToast(data.message || 'Test DM delivered & logged!', 'success');
+        } else {
+            showToast(data.error || data.message || 'Test DM failed.', 'warning');
+        }
+        fetchOcDmReceipts(true);
+    } catch (e) {
+        showToast('Network error sending test DM: ' + e.message, 'error');
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = '🧪 Send Test DM to Me'; }
+    }
+}
+
+async function fetchOcDmReceipts(manual = false) {
+    try {
+        const res = await fetch('/api/discord/oc-dm-receipts?limit=150');
+        const data = await res.json();
+        if (data.success && Array.isArray(data.receipts)) {
+            ocDmReceiptsCache = data.receipts;
+            renderOcDmReceiptsTable();
+            if (manual) showToast(`Loaded ${ocDmReceiptsCache.length} DM receipt(s).`, 'info');
+        }
+    } catch (_) {}
+}
+
+function filterOcDmReceipts(status, btnEl) {
+    ocDmReceiptsFilter = status || 'all';
+    if (btnEl && btnEl.parentElement) {
+        btnEl.parentElement.querySelectorAll('.tab-pill').forEach(b => b.classList.toggle('active', b === btnEl));
+    }
+    renderOcDmReceiptsTable();
+}
+
+function toggleOcReceiptExpand(id) {
+    const el = document.getElementById(`ocrec-msg-${id}`);
+    if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
+function renderOcDmReceiptsTable() {
+    const tbody = document.getElementById('ocdm-receipts-tbody');
+    const badge = document.getElementById('ocdm-receipts-count-badge');
+    if (!tbody) return;
+
+    const rows = ocDmReceiptsCache.filter(r => {
+        if (ocDmReceiptsFilter === 'delivered') return r.status === 'DELIVERED';
+        if (ocDmReceiptsFilter === 'failed') return r.status === 'FAILED_50007' || r.status === 'FAILED_ERROR';
+        if (ocDmReceiptsFilter === 'unlinked') return r.status === 'UNLINKED';
+        return true;
+    });
+    if (badge) badge.textContent = `${rows.length} Receipts`;
+
+    if (rows.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="padding:18px; text-align:center; color:var(--text-dim);">No OC DM receipts match this filter yet.</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = rows.map(r => {
+        let statusPill = '<span class="status-pill-ok">✅ Delivered</span>';
+        if (r.status === 'FAILED_50007') statusPill = '<span class="status-pill-err" style="background:rgba(255,165,2,0.16); color:#fbbf24; border-color:rgba(255,165,2,0.4);">⚠️ DMs Closed (50007)</span>';
+        else if (r.status === 'UNLINKED') statusPill = '<span class="status-pill-err">❌ Unlinked</span>';
+        else if (r.status === 'ESCALATION') statusPill = '<span class="status-pill-err" style="background:rgba(255,165,2,0.16); color:#fbbf24;">⚠️ Escalation</span>';
+        else if (r.status === 'FAILED_ERROR') statusPill = `<span class="status-pill-err">❌ Failed</span>`;
+
+        const rid = escapeHtmlOc(r.id);
+        return `
+            <tr style="border-bottom:1px solid var(--border-subtle);">
+                <td style="padding:9px 10px; font-family:var(--font-mono); font-size:0.88em; white-space:nowrap;">${escapeHtmlOc(r.tctTime || '')}</td>
+                <td style="padding:9px 10px;"><strong>${escapeHtmlOc(r.playerName)}</strong> <span style="color:var(--text-dim);">[${escapeHtmlOc(r.tornId)}]</span></td>
+                <td style="padding:9px 10px;">${escapeHtmlOc(r.triggerLabel || r.triggerType)}</td>
+                <td style="padding:9px 10px; max-width:260px;">${escapeHtmlOc(r.context || '—')}</td>
+                <td style="padding:9px 10px; white-space:nowrap;">${statusPill}</td>
+                <td style="padding:9px 10px; text-align:right;">
+                    <button type="button" class="btn-test" onclick="toggleOcReceiptExpand('${rid}')" style="font-size:0.85em; padding:3px 8px;">👁️ Message</button>
+                    <div id="ocrec-msg-${rid}" class="oc-receipt-expand" style="display:none; text-align:left;">${escapeHtmlOc(r.messagePreview || '')}</div>
+                </td>
+            </tr>`;
+    }).join('');
+}
+
+async function fetchOcUnlinkedMembers(manual = false) {
+    try {
+        const res = await fetch('/api/discord/oc-unlinked-members');
+        const data = await res.json();
+        if (data.success && Array.isArray(data.members)) {
+            ocUnlinkedMembersCache = data.members;
+            renderOcUnlinkedTable();
+            if (manual) showToast(`Checked ${data.total} faction members (${data.unlinkedCount} unlinked).`, 'info');
+        }
+    } catch (_) {}
+}
+
+function renderOcUnlinkedTable() {
+    const tbody = document.getElementById('ocdm-unlinked-tbody');
+    const badge = document.getElementById('ocdm-unlinked-badge');
+    if (!tbody) return;
+
+    const unlinkedTotal = ocUnlinkedMembersCache.filter(m => !m.linked).length;
+    if (badge) badge.textContent = `${unlinkedTotal} Unlinked`;
+
+    const onlyUnlinked = Boolean(document.getElementById('ocdm-unlinked-only')?.checked);
+    const q = String(document.getElementById('ocdm-member-search')?.value || '').trim().toLowerCase();
+
+    const filtered = ocUnlinkedMembersCache.filter(m => {
+        if (onlyUnlinked && m.linked) return false;
+        if (q && !m.playerName.toLowerCase().includes(q) && !String(m.tornId).includes(q)) return false;
+        return true;
+    });
+
+    if (filtered.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" style="padding:18px; text-align:center; color:var(--text-dim);">🎉 No matching unlinked faction members found!</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = filtered.map(m => {
+        const tid = escapeHtmlOc(m.tornId);
+        const tname = escapeHtmlOc(m.playerName);
+        const statusHtml = m.linked
+            ? `<span class="status-pill-ok">✅ Linked (<@${escapeHtmlOc(m.discordId)}> • ${escapeHtmlOc(m.source || 'verified')})</span>`
+            : `<span class="status-pill-err">❌ Unlinked</span>`;
+        return `
+            <tr style="border-bottom:1px solid var(--border-subtle);">
+                <td style="padding:8px 10px;"><strong>${tname}</strong> <span style="color:var(--text-dim);">[${tid}]</span></td>
+                <td style="padding:8px 10px; color:var(--text-muted);">${escapeHtmlOc(m.position)} • Lv ${escapeHtmlOc(m.level)}</td>
+                <td style="padding:8px 10px;">${statusHtml}</td>
+                <td style="padding:8px 10px; text-align:right;">
+                    <div style="display:inline-flex; gap:6px; align-items:center;">
+                        <input type="text" id="oclink-inp-${tid}" class="field-input" value="${escapeHtmlOc(m.discordId || '')}" placeholder="Discord User ID..." style="width:165px; padding:4px 8px; font-size:0.9em;">
+                        <button type="button" class="btn-action primary" onclick="saveManualOcMemberLink('${tid}', '${tname.replace(/'/g, "\\'")}')" style="padding:4px 10px; font-size:0.86em;">Link</button>
+                    </div>
+                </td>
+            </tr>`;
+    }).join('');
+}
+
+async function scanOcGuildNicknames() {
+    const btn = document.getElementById('btn-ocdm-scan-nicknames');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Scanning...'; }
+    try {
+        const res = await fetch('/api/discord/oc-scan-nicknames', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+        const data = await res.json();
+        if (data.success) {
+            showToast(`Scanned ${data.scannedGuildMembers} server member(s): ${data.newlyLinked} newly linked (${data.matched?.length || 0} total matched).`, 'success');
+            fetchOcUnlinkedMembers(false);
+        } else {
+            showToast(data.error || 'Guild nickname scan failed.', 'error');
+        }
+    } catch (e) {
+        showToast('Error scanning nicknames: ' + e.message, 'error');
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = '🔍 Auto-Scan Server Nicknames'; }
+    }
+}
+
+async function saveManualOcMemberLink(tornId, tornName) {
+    const inp = document.getElementById(`oclink-inp-${tornId}`);
+    const discordId = (inp?.value || '').replace(/[^0-9]/g, '');
+    if (discordId.length < 15) {
+        showToast('Please paste a valid 15–22 digit Discord User ID.', 'error');
+        return;
+    }
+    try {
+        const res = await fetch('/api/discord/oc-link-member', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tornId, discordId, tornName })
+        });
+        const data = await res.json();
+        if (data.success) {
+            showToast(`Linked ${tornName} [${tornId}] to Discord ID ${discordId}!`, 'success');
+            fetchOcUnlinkedMembers(false);
+        } else {
+            showToast(data.error || 'Failed to save link.', 'error');
+        }
+    } catch (e) {
+        showToast('Network error saving link: ' + e.message, 'error');
     }
 }
 
