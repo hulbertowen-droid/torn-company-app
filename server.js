@@ -589,14 +589,17 @@ async function loadConfigFromMongo() {
                 } catch(e) {}
             }
 
-            // Start Retaliation Risk Engine with real-time alert callback
+            // Start Torn Retaliation Watcher (real-time in-Torn retal alerts)
             try {
                 if (mongoose.connection.readyState === 1) {
-                    retalEngine.startRetaliationEngine(
-                        () => getNextApiKey() || discordConfig.apiKey || TORN_API_KEY,
+                    const getKeys = () => typeof getFactionArmoryCandidateKeys === 'function'
+                        ? getFactionArmoryCandidateKeys(discordConfig.factionId || dynamicFactionId || '52355', getNextApiKey() || discordConfig.apiKey || TORN_API_KEY)
+                        : [getNextApiKey(), discordConfig.apiKey, TORN_API_KEY].filter(Boolean);
+                    retalEngine.startRetalWatcher(
+                        getKeys,
                         mongoose.connection.db,
                         handleMemberAttackedAlert
-                    ).catch(e => console.warn('[RetalEngine] Start error in loadConfig:', e.message));
+                    ).catch(e => console.warn('[RetalWatcher] Start error in loadConfig:', e.message));
                 }
             } catch(e) {}
         }
@@ -2101,18 +2104,30 @@ setInterval(async () => {
 }, 120000);
 */
 
-// ── Retaliation & Member Attacked Real-time Alerts ──
+// ── Retaliation & Member Attacked Real-time Alerts (In-Torn Only) ──
 const processedAlertedAttacks = new Set();
+const processingRetalAlerts = new Set();
+const _retalProfileCache = new Map(); // playerId -> { snap, fetchedAt }
+
+function formatCompactBattleStats(val) {
+    const n = Number(val || 0);
+    if (!n || Number.isNaN(n) || n <= 0) return 'Unknown';
+    if (n >= 1e12) return `${(n / 1e12).toFixed(2)}T`;
+    if (n >= 1e9) return `${(n / 1e9).toFixed(2)}B`;
+    if (n >= 1e6) return `${(n / 1e6).toFixed(1)}M`;
+    if (n >= 1e3) return `${Math.round(n / 1e3).toLocaleString('en-US')}k`;
+    return n.toLocaleString('en-US');
+}
 
 async function getPlayerStatsFromFFScouter(targetId) {
     if (!targetId || targetId === '0') return null;
     const sId = String(targetId).trim();
-    const ffKey = (typeof getGlobalFFKey === 'function' ? getGlobalFFKey() : null) || discordConfig.ffKey;
+    const ffKey = (typeof getGlobalFFKey === 'function' ? getGlobalFFKey() : null) || discordConfig.ffKey || process.env.FFSCOUTER_KEY;
     if (!ffKey) return null;
 
     try {
         const url = `https://ffscouter.com/api/v1/get-stats?key=${encodeURIComponent(ffKey)}&targets=${encodeURIComponent(sId)}`;
-        const res = await fetch(url, { signal: AbortSignal.timeout(5000), headers: { 'Accept': 'application/json' } });
+        const res = await fetch(url, { signal: AbortSignal.timeout(4500), headers: { 'Accept': 'application/json' } });
         const data = await res.json().catch(() => null);
         if (!data) return null;
 
@@ -2120,11 +2135,11 @@ async function getPlayerStatsFromFFScouter(targetId) {
         const p = list.find(item => String(item.player_id || item.id) === sId) || list[0];
         if (p && (p.bs_estimate || p.total || p.bs_estimate_human)) {
             const rawVal = Number(p.bs_estimate || p.total || 0);
-            const humanStr = p.bs_estimate_human || (rawVal > 0 ? `~${rawVal.toLocaleString()}` : null);
+            const humanStr = p.bs_estimate_human || (rawVal > 0 ? formatCompactBattleStats(rawVal) : null);
             const ff = p.fair_fight ? Number(p.fair_fight).toFixed(2) : null;
-            
+
             if (rawVal > 0) {
-                statsCache[sId] = { stats: rawVal, time: Date.now() };
+                statsCache[sId] = { stats: rawVal, time: Date.now(), fairFight: ff };
                 if (!spyDatabase[sId]) {
                     spyDatabase[sId] = {
                         total: rawVal,
@@ -2147,66 +2162,236 @@ async function getPlayerStatsFromFFScouter(targetId) {
     return null;
 }
 
+async function getBatchPlayerStatsFromFFScouter(targetIds = []) {
+    const cleanIds = Array.from(new Set((targetIds || []).map(id => String(id || '').trim()).filter(id => /^\d+$/.test(id))));
+    const out = new Map();
+    if (!cleanIds.length) return out;
+    const ffKey = (typeof getGlobalFFKey === 'function' ? getGlobalFFKey() : null) || discordConfig.ffKey || process.env.FFSCOUTER_KEY;
+    if (!ffKey) return out;
+
+    try {
+        const url = `https://ffscouter.com/api/v1/get-stats?key=${encodeURIComponent(ffKey)}&targets=${encodeURIComponent(cleanIds.slice(0, 100).join(','))}`;
+        const res = await fetch(url, { signal: AbortSignal.timeout(4500), headers: { 'Accept': 'application/json' } });
+        const data = await res.json().catch(() => null);
+        const list = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : (data ? [data] : []));
+        for (const p of list) {
+            const pid = String(p?.player_id || p?.id || '').trim();
+            if (!pid) continue;
+            const rawVal = Number(p.bs_estimate || p.total || 0);
+            const humanStr = p.bs_estimate_human || (rawVal > 0 ? formatCompactBattleStats(rawVal) : null);
+            const ff = p.fair_fight ? Number(p.fair_fight).toFixed(2) : null;
+            if (rawVal > 0) {
+                statsCache[pid] = { stats: rawVal, time: Date.now(), fairFight: ff };
+            }
+            if (rawVal > 0 || humanStr) {
+                out.set(pid, { total: rawVal, human: humanStr, fairFight: ff, source: p.source || 'FF Scouter' });
+            }
+        }
+    } catch (_) {}
+    return out;
+}
+
+function classifyAttackerLocation(status = {}) {
+    const state = String(status?.state || 'Okay').trim();
+    const desc = String(status?.description || '').trim();
+    const descLower = desc.toLowerCase();
+    if (state === 'Abroad') return 'abroad';
+    if (state === 'Federal' || state === 'Fallen') return 'federal';
+    if (state === 'Traveling') {
+        return descLower.includes('returning to torn') ? 'returning' : 'traveling_away';
+    }
+    if (state === 'Hospital') return 'hospital';
+    if (state === 'Jail') return 'jail';
+    return 'in_torn';
+}
+
+async function fetchLiveAttackerSnapshot(playerId, apiKey = null, force = false) {
+    const pid = String(playerId || '').trim();
+    if (!pid || pid === '0') return null;
+
+    if (!force) {
+        const cached = _retalProfileCache.get(pid);
+        if (cached && (Date.now() - cached.fetchedAt) < 15_000) {
+            return cached.snap;
+        }
+    }
+
+    const keys = [];
+    if (apiKey) keys.push(apiKey);
+    const hostFac = discordConfig.factionId || dynamicFactionId || '52355';
+    if (typeof getFactionArmoryCandidateKeys === 'function') {
+        getFactionArmoryCandidateKeys(hostFac).forEach(k => { if (k && !keys.includes(k)) keys.push(k); });
+    }
+    if (discordConfig.apiKey && !keys.includes(discordConfig.apiKey)) keys.push(discordConfig.apiKey);
+    if (TORN_API_KEY && !keys.includes(TORN_API_KEY)) keys.push(TORN_API_KEY);
+
+    for (const k of keys.slice(0, 3)) {
+        try {
+            const res = await fetch(`https://api.torn.com/user/${encodeURIComponent(pid)}?selections=profile&key=${encodeURIComponent(k)}`, {
+                signal: AbortSignal.timeout(4500)
+            });
+            const p = await res.json();
+            if (!p || p.error || !p.player_id) continue;
+
+            const status = p.status || {};
+            const loc = classifyAttackerLocation(status);
+            const snap = {
+                id: String(p.player_id),
+                name: p.name || '',
+                level: Number(p.level || 0),
+                rank: p.rank || '',
+                statusState: String(status.state || 'Okay'),
+                statusDesc: String(status.description || 'Okay'),
+                statusUntil: Number(status.until || 0),
+                lastActionStatus: String(p.last_action?.status || 'Offline'),
+                lastActionRel: String(p.last_action?.relative || ''),
+                lifeCur: Number(p.life?.current ?? 0),
+                lifeMax: Number(p.life?.maximum ?? 0),
+                factionId: Number(p.faction?.faction_id || 0),
+                factionName: String(p.faction?.faction_name || ''),
+                revivable: Number(p.revivable || 0) === 1,
+                locationCategory: loc
+            };
+            _retalProfileCache.set(pid, { snap, fetchedAt: Date.now() });
+            while (_retalProfileCache.size > 400) {
+                const oldest = _retalProfileCache.keys().next().value;
+                _retalProfileCache.delete(oldest);
+            }
+            return snap;
+        } catch (_) {}
+    }
+    return null;
+}
+
+async function buildRetalAttackerStatsInfo(attackerId, defenderId = null, attackerLevel = 0, preFetchedFF = null) {
+    const ffStats = preFetchedFF !== undefined ? preFetchedFF : await getPlayerStatsFromFFScouter(attackerId);
+    const resolved = resolvePlayerBattleStats(attackerId, attackerLevel);
+
+    let total = 0;
+    let statLine = 'Unknown';
+    let sourceLabel = '';
+    const ffVal = ffStats?.fairFight || statsCache[String(attackerId)]?.fairFight || null;
+
+    if (resolved && resolved.total > 0 && !resolved.isEstimated && (resolved.source === 'api_key' || resolved.source === 'verified' || resolved.source === 'spy' || resolved.source === 'manual')) {
+        total = Number(resolved.total);
+        sourceLabel = resolved.source === 'spy' ? 'Spy DB'
+            : resolved.source === 'manual' ? 'Leadership'
+            : 'Verified /bs';
+        const ffPart = ffVal ? ` · FF ${ffVal}` : '';
+        statLine = `**${formatCompactBattleStats(total)}** (${sourceLabel}${ffPart})`;
+    } else if (ffStats && (ffStats.total > 0 || ffStats.human)) {
+        total = Number(ffStats.total || 0);
+        const humanDisplay = ffStats.human || formatCompactBattleStats(total);
+        const ffPart = ffStats.fairFight ? ` · FF ${ffStats.fairFight}` : '';
+        statLine = `**~${String(humanDisplay).replace(/^~/, '')}** (FF Scouter${ffPart})`;
+    } else if (resolved && resolved.total > 0) {
+        total = Number(resolved.total);
+        const lvlNote = attackerLevel > 0 ? `Lv ${attackerLevel} Est.` : 'Est.';
+        statLine = `~${formatCompactBattleStats(total)} (${lvlNote})`;
+    }
+
+    let breakdownLine = '';
+    if (resolved && (resolved.strength > 0 || resolved.defense > 0 || resolved.speed > 0 || resolved.dexterity > 0)) {
+        breakdownLine = `STR \`${formatCompactBattleStats(resolved.strength)}\` · DEF \`${formatCompactBattleStats(resolved.defense)}\`\nSPD \`${formatCompactBattleStats(resolved.speed)}\` · DEX \`${formatCompactBattleStats(resolved.dexterity)}\``;
+    }
+
+    let matchupLine = '';
+    if (defenderId && total > 0) {
+        const defStats = resolvePlayerBattleStats(defenderId);
+        if (defStats && defStats.total > 0 && !defStats.isEstimated) {
+            const ratio = total / defStats.total;
+            if (ratio >= 2.0) matchupLine = `⚠️ ~${ratio.toFixed(1)}x stronger than defender`;
+            else if (ratio <= 0.75) matchupLine = `🟢 Lower than defender (${formatCompactBattleStats(defStats.total)})`;
+            else matchupLine = `⚖️ Comparable to defender (${formatCompactBattleStats(defStats.total)})`;
+        }
+    }
+
+    return { total, statLine, breakdownLine, fairFight: ffVal, matchupLine };
+}
+
+function formatAttackerLiveStatusLine(snap) {
+    if (!snap) return '⚪ Checking in Torn...';
+    const actIcon = snap.lastActionStatus === 'Online' ? '🟢'
+        : snap.lastActionStatus === 'Idle' ? '🟡' : '⚪';
+    const actStr = `${actIcon} ${snap.lastActionStatus}${snap.lastActionRel ? ` (${snap.lastActionRel})` : ''}`;
+    const hpStr = snap.lifeMax > 0 ? ` · HP ${snap.lifeCur.toLocaleString()}/${snap.lifeMax.toLocaleString()}` : '';
+
+    if (snap.locationCategory === 'hospital') {
+        const outTimer = snap.statusUntil > 0 ? `<t:${snap.statusUntil}:R>` : 'Soon';
+        return `🔴 **In Hospital** — Out ${outTimer}\n${actStr}${hpStr}`;
+    }
+    if (snap.locationCategory === 'jail') {
+        const outTimer = snap.statusUntil > 0 ? `<t:${snap.statusUntil}:R>` : 'Soon';
+        return `🟠 **In Jail** — Out ${outTimer}\n${actStr}`;
+    }
+    if (snap.locationCategory === 'returning') {
+        return `✈️ **Returning to Torn**${snap.statusUntil > 0 ? ` (<t:${snap.statusUntil}:R>)` : ''}\n${actStr}`;
+    }
+    if (snap.locationCategory === 'abroad' || snap.locationCategory === 'traveling_away') {
+        return `✈️ **Overseas / Left Torn** (${snap.statusDesc})`;
+    }
+    return `🟢 **Okay — Ready in Torn!**\n${actStr}${hpStr}`;
+}
+
 async function handleMemberAttackedAlert(atk) {
+    let lockKey = '';
     try {
         if (!atk) return;
         if (global.isNotificationsKilled) return;
+        if (discordConfig.friendlyAttacked === false) return;
 
-        const retalTargetChannel = (discordConfig.retalChannelId && String(discordConfig.retalChannelId).trim()) 
-            || "1491499332044591176" 
+        const retalTargetChannel = (discordConfig.retalChannelId && String(discordConfig.retalChannelId).trim())
+            || "1491499332044591176"
             || discordConfig.globalChannelId;
         if (!retalTargetChannel || !discordConfig.globalBotToken) return;
-        if (discordConfig.friendlyAttacked === false && !discordConfig.retalChannelId) return;
+
+        // Strictly reject overseas attacks (modifiers.overseas > 1, e.g. 1.25)
+        if (retalEngine.isOverseasAttack(atk)) return;
 
         const attackerId = atk.attacker_id ? String(atk.attacker_id).trim() : "0";
         const defenderId = atk.defender_id ? String(atk.defender_id).trim() : "0";
         const atkFac = Number(atk.attacker_faction || atk.attacker_faction_id || 0);
         const defFac = Number(atk.defender_faction || atk.defender_faction_id || 0);
 
-        // Skip self attacks
-        if (attackerId && defenderId && attackerId === defenderId) return;
+        // Skip self hits & stealthed hits (cannot retaliate anonymous hits)
+        if (!attackerId || attackerId === "0" || attackerId === defenderId) return;
 
-        const isStealthed = (attackerId === "0" || !attackerId);
-        // Skip stealthed hits — unretaliatable because the assailant is anonymous
-        if (isStealthed) return;
-
+        // Strict Faction Isolation + skip internal faction sparring
         const myFacIdNum = Number(discordConfig.factionId || dynamicFactionId || 52355);
         const isInternal = (myFacIdNum > 0 && atkFac === myFacIdNum && defFac === myFacIdNum);
+        if (isInternal) return;
 
-        // Strict Faction Isolation: Ensure the defender belongs to our faction!
-        if (defFac > 0 && myFacIdNum > 0 && defFac !== myFacIdNum) {
-            return;
-        }
+        if (defFac > 0 && myFacIdNum > 0 && defFac !== myFacIdNum) return;
         if (defenderId && defenderId !== "0" && friendlyMembersCache && Object.keys(friendlyMembersCache).length > 0) {
             const isFriendly = Boolean(friendlyMembersCache[defenderId]) ||
                 (lastGoodWarboardPayload?.friendly?.some(m => String(m.id || m.playerId || m._id) === defenderId));
-            if (!isFriendly && defFac !== myFacIdNum) {
-                return;
-            }
+            if (!isFriendly && defFac !== myFacIdNum) return;
         }
+
+        // Only alert on hits that actually open a 1.5x Retaliation window in Torn (Attacked / Mugged / Hospitalized / Arrested)
+        const result = String(atk.result || "Attacked").trim();
+        if (!retalEngine.isRetaliatableResult(result)) return;
 
         const atkTs = Number(atk.timestamp || atk.timestamp_ended || Math.floor(Date.now() / 1000));
         const nowSec = Math.floor(Date.now() / 1000);
         const retalExpireTs = atkTs + 300; // 5-minute retaliation window in Torn
 
-        // Discard expired attacks (> 5 minutes old)
-        if (atkTs > 0 && (nowSec - atkTs >= 300)) {
-            return;
-        }
+        if (atkTs > 0 && (nowSec - atkTs >= 300)) return;
+        if (retalEngine.hasRecentRetalWin(attackerId, atkTs)) return;
 
-        // Deterministic Composite Keys for Deduplication
         const hexCode = atk.code ? String(atk.code).trim() : '';
         const idCode = (atk.attack_id || atk._id || atk.id) ? String(atk.attack_id || atk._id || atk.id).trim() : '';
         const compKey = `hit_${attackerId}_${defenderId}_${atkTs}`;
+        lockKey = compKey;
 
-        // In-memory dedup check
-        if (processedAlertedAttacks.has(compKey) ||
+        if (processingRetalAlerts.has(compKey) ||
+            processedAlertedAttacks.has(compKey) ||
             (hexCode && processedAlertedAttacks.has(hexCode)) ||
             (idCode && processedAlertedAttacks.has(idCode))) {
             return;
         }
+        processingRetalAlerts.add(compKey);
 
-        // MongoDB persistent dedup check
         if (mongoose.connection.readyState === 1) {
             const orQueries = [
                 { comp_key: compKey },
@@ -2224,20 +2409,34 @@ async function handleMemberAttackedAlert(atk) {
                     if (idCode) processedAlertedAttacks.add(idCode);
                     return;
                 }
-            } catch(e) {}
+            } catch(_) {}
         }
 
-        // Pre-register all keys to prevent race conditions during async Discord API send
+        // Fetch live attacker profile + location (in-Torn guard) & stats in parallel
+        const [liveSnap, ffPre] = await Promise.all([
+            fetchLiveAttackerSnapshot(attackerId, atk.workingApiKey || null, true),
+            getPlayerStatsFromFFScouter(attackerId)
+        ]);
+
+        // Skip if attacker is physically overseas/abroad or flying away / fedded (cannot retaliate in Torn)
+        if (liveSnap && ['abroad', 'traveling_away', 'federal'].includes(liveSnap.locationCategory)) {
+            processedAlertedAttacks.add(compKey);
+            if (hexCode) processedAlertedAttacks.add(hexCode);
+            if (idCode) processedAlertedAttacks.add(idCode);
+            console.log(`[Discord Retal Sentinel] Skipped alert for ${attackerId}: target is ${liveSnap.locationCategory} (${liveSnap.statusDesc})`);
+            return;
+        }
+
+        // Pre-register dedup keys now that we verified in-Torn eligibility
         processedAlertedAttacks.add(compKey);
         if (hexCode) processedAlertedAttacks.add(hexCode);
         if (idCode) processedAlertedAttacks.add(idCode);
-
         while (processedAlertedAttacks.size > 5000) {
             const oldest = processedAlertedAttacks.values().next().value;
             processedAlertedAttacks.delete(oldest);
         }
 
-        let attackerName = atk.attacker_name;
+        let attackerName = (liveSnap?.name) || atk.attacker_name;
         if (!attackerName || attackerName === 'Unknown') {
             attackerName = await resolvePlayerName(attackerId, `Player [${attackerId}]`);
         }
@@ -2247,63 +2446,49 @@ async function handleMemberAttackedAlert(atk) {
             defenderName = await resolvePlayerName(defenderId, `Member [${defenderId}]`);
         }
 
-        let attackerFactionName = atk.attacker_faction_name || atk.attacker_factionname || atk.attackerFactionName;
-        if (!attackerFactionName || attackerFactionName === `Faction ${atkFac}` || attackerFactionName.startsWith('Faction ')) {
-            if (isInternal) {
-                attackerFactionName = discordConfig.factionName || "Spider-Verse";
-            } else if (atkFac > 0) {
-                attackerFactionName = await resolveFactionName(atkFac, `Faction [${atkFac}]`);
+        let attackerFactionName = (liveSnap?.factionName) || atk.attacker_faction_name || atk.attacker_factionname || atk.attackerFactionName;
+        const resolvedAtkFac = atkFac || Number(liveSnap?.factionId || 0);
+        if (!attackerFactionName || attackerFactionName === `Faction ${resolvedAtkFac}` || attackerFactionName.startsWith('Faction ')) {
+            if (resolvedAtkFac > 0) {
+                attackerFactionName = await resolveFactionName(resolvedAtkFac, `Faction [${resolvedAtkFac}]`);
             } else {
                 attackerFactionName = "Factionless";
             }
         }
 
-        const result = atk.result || "Attacked";
-        const isDefended = ["Lost", "Defended", "Stalemate", "Escape", "Timeout", "Interrupted"].includes(result);
+        const attackerLevel = Number(liveSnap?.level || atk.attacker_level || 0);
+        const statsInfo = await buildRetalAttackerStatsInfo(attackerId, defenderId, attackerLevel, ffPre);
+        const statusDisplay = formatAttackerLiveStatusLine(liveSnap);
+        const respectNum = Number(atk.respect || atk.respect_gain || 0);
+        const resultLabel = respectNum > 0 ? `**${result}** (+${respectNum.toFixed(2)} resp)` : `**${result}**`;
+        const lvlBadge = attackerLevel > 0 ? ` · Lv **${attackerLevel}**` : '';
 
-        const title = isDefended 
-            ? "🛡️ Faction Member Defended Attack" 
-            : (isInternal ? "⚔️ Internal Sparring Hit" : "🚨 Faction Member Attacked — Retaliate!");
-        const color = isDefended ? (UI.COLORS?.SUCCESS || 0x2ECC71) : (UI.COLORS?.ERROR || 0xE74C3C);
+        const facValue = resolvedAtkFac > 0
+            ? `[${attackerFactionName}](https://www.torn.com/factions.php?step=profile&ID=${resolvedAtkFac}) \`[${resolvedAtkFac}]\``
+            : 'Factionless';
 
-        let desc = isInternal
-            ? `**${defenderName}** was attacked by fellow faction member **${attackerName}** [${attackerId}] (Friendly Sparring / Test Hit).`
-            : `**${defenderName}** was attacked by **${attackerName}** [${attackerId}] from \`${attackerFactionName}\`.`;
-
+        const defStatsStr = statsInfo.matchupLine ? `\n${statsInfo.matchupLine}` : '';
         const fields = [
-            { name: "Result", value: `**${result}**`, inline: true }
+            { name: "⚔️ Hit Outcome", value: resultLabel, inline: true },
+            { name: "⏱️ Retal Window (1.5x)", value: `🟢 Closes **<t:${retalExpireTs}:R>** (<t:${retalExpireTs}:T>)`, inline: true },
+            { name: "📍 Torn Status", value: statusDisplay, inline: true },
+            {
+                name: "💪 Attacker Stats",
+                value: `${statsInfo.statLine}${statsInfo.breakdownLine ? `\n${statsInfo.breakdownLine}` : ''}`,
+                inline: true
+            },
+            {
+                name: "🛡️ Member Attacked",
+                value: `[**${defenderName}** \`[${defenderId}]\`](https://www.torn.com/profiles.php?XID=${defenderId})${defStatsStr}`,
+                inline: true
+            },
+            { name: "🏢 Attacker Faction", value: facValue, inline: true }
         ];
 
-        // Attacker Estimated Battle Stats (from FF Scouter, Spy DB, or Battle Stats Resolver)
-        let statDisplay = "Unknown";
-        const ffStats = await getPlayerStatsFromFFScouter(attackerId);
-        if (ffStats && (ffStats.total > 0 || ffStats.human)) {
-            const ffPart = ffStats.fairFight ? ` (FF: ${ffStats.fairFight})` : '';
-            statDisplay = `~${ffStats.human || ffStats.total.toLocaleString()}${ffPart}`;
-        } else {
-            const resolved = resolvePlayerBattleStats(attackerId);
-            if (resolved && resolved.total > 0) {
-                const srcLabel = resolved.source === 'verified' ? ' (Verified)' :
-                    resolved.source === 'spy' ? ' (Spy DB)' :
-                    resolved.source === 'manual' ? ' (Leadership)' : '';
-                statDisplay = `~${resolved.total.toLocaleString()}${srcLabel}`;
-            } else {
-                const rawEst = (spyDatabase[attackerId]?.total) || (statsCache[attackerId]?.stats) || (manualStats[attackerId]?.stats) || 0;
-                if (rawEst > 0) {
-                    statDisplay = `~${rawEst.toLocaleString()}`;
-                }
-            }
-        }
-        fields.push({ name: "Attacker Est. Stats", value: statDisplay, inline: true });
-
-        // 5-minute Retaliation Window Live Countdown Timer
-        if (!isInternal) {
-            fields.push({
-                name: "⏱️ Retaliation Window",
-                value: `🟢 **Active** — <t:${retalExpireTs}:R> (<t:${retalExpireTs}:T>)`,
-                inline: true
-            });
-        }
+        const buttons = [
+            { type: 2, style: 3, custom_id: `retal_claim:${attackerId}:${retalExpireTs}:${defenderId}`, label: 'Claim Retal', emoji: { name: '🎯' } },
+            { type: 2, style: 2, custom_id: `retal_refresh:${attackerId}:${retalExpireTs}`, label: 'Live Status Check', emoji: { name: '🔄' } }
+        ];
 
         const links = [
             { label: "⚔️ Retaliate / Attack", url: `https://www.torn.com/page.php?sid=attack&user2ID=${attackerId}` },
@@ -2313,7 +2498,7 @@ async function handleMemberAttackedAlert(atk) {
             links.push({ label: "🛡️ Defender Profile", url: `https://www.torn.com/profiles.php?XID=${defenderId}` });
         }
 
-        // Ping Retaliator Target (configurable in website) + optional Defender
+        // Ping Retaliator Role + optional Defender
         let pingStr = "";
         if (discordConfig.retalPingDefender && defenderId !== "0" && defenderId) {
             const dId = await getDiscordId(defenderId);
@@ -2326,30 +2511,27 @@ async function handleMemberAttackedAlert(atk) {
         if (roleId && String(roleId).trim()) {
             const val = String(roleId).trim();
             let rPing = "";
-            if (val === '@here' || val === '@everyone') {
-                rPing = val;
-            } else if (val.startsWith('<@')) {
-                rPing = val;
-            } else {
+            if (val === '@here' || val === '@everyone') rPing = val;
+            else if (val.startsWith('<@')) rPing = val;
+            else {
                 const numOnly = val.replace(/\D/g, '');
-                if (numOnly.length >= 15 && numOnly.length <= 22) {
-                    rPing = `<@&${numOnly}>`;
-                }
+                if (numOnly.length >= 15 && numOnly.length <= 22) rPing = `<@&${numOnly}>`;
             }
             if (rPing) pingStr = pingStr ? `${pingStr} ${rPing}` : rPing;
         }
 
         const embed = {
-            title,
-            description: desc,
-            color,
-            footer: UI.FOOTER,
+            title: `🚨 Retaliate in Torn: ${attackerName} [${attackerId}]`,
+            description: `**[${defenderName}](https://www.torn.com/profiles.php?XID=${defenderId})** \`[${defenderId}]\` was **${result.toLowerCase()}** in **Torn City** by **[${attackerName}](https://www.torn.com/profiles.php?XID=${attackerId})** \`[${attackerId}]\`${lvlBadge}`,
+            color: liveSnap?.locationCategory === 'hospital' ? (UI.COLORS?.WARNING || 0xf59e0b) : (UI.COLORS?.ERROR || 0xE74C3C),
+            footer: { text: 'F.R.I.D.A.Y Torn Retaliation Sentinel · In-Torn Only' },
             timestamp: new Date().toISOString(),
             fields,
+            buttons,
             links
         };
 
-        console.log(`[Discord Retal Sentinel] Sending member attacked alert to channel ${retalTargetChannel}: ${desc}`);
+        console.log(`[Discord Retal Sentinel] Sending in-Torn retal alert to ${retalTargetChannel}: ${defenderName} hit by ${attackerName} [${attackerId}]`);
         await sendChannelMessage(discordConfig.globalBotToken, retalTargetChannel, embed, pingStr, true);
 
         if (mongoose.connection.readyState === 1) {
@@ -2389,6 +2571,8 @@ async function handleMemberAttackedAlert(atk) {
         }
     } catch(err) {
         console.warn('[Discord Retal Sentinel] Error sending member attacked alert:', err.message);
+    } finally {
+        if (lockKey) processingRetalAlerts.delete(lockKey);
     }
 }
 
@@ -2521,7 +2705,7 @@ setInterval(async () => {
                         }
                     }
                     
-                    if (isRecent) {
+                    if (isRecent && !retalEngine.isOverseasAttack(atk) && retalEngine.isRetaliatableResult(atk.result)) {
                         handleMemberAttackedAlert({
                             code: atk.code || atkId,
                             attack_id: String(atkId),
@@ -2534,6 +2718,9 @@ setInterval(async () => {
                             defender_faction: atk.defender_faction,
                             defender_faction_name: atk.defender_factionname || atk.defender_faction_name || '',
                             result: atk.result,
+                            respect: Number(atk.respect_gain || atk.respect || 0),
+                            modifiers: atk.modifiers || {},
+                            workingApiKey: watchKey,
                             timestamp: atk.timestamp_ended
                         }).catch(e => console.warn('[Retal Alert War] Error:', e.message));
                     }
@@ -6744,22 +6931,30 @@ app.post('/api/test-discord-alert', async (req, res) => {
             if (numOnly.length >= 15 && numOnly.length <= 22) pingStr = `<@&${numOnly}>`;
             else if (roleId === '@here' || roleId === '@everyone') pingStr = roleId;
         }
+        const fakeExp = Math.floor(Date.now() / 1000) + 270;
         embed = {
-            title: "🚨 Faction Member Attacked • Retaliation Alert",
-            description: "**[Friendly Member]** [100001] was attacked by **[Hostile Enemy]** [999999] from `Enemy Syndicate`.",
+            title: "🚨 Retaliate in Torn: Hostile Enemy [999999]",
+            description: "**[Friendly Member]** `[100001]` was **hospitalized** in **Torn City** by **[Hostile Enemy]** `[999999]` · Lv **62**",
             color: UI.COLORS.ERROR,
             targetId: "999999",
             fields: [
-                { name: "Result", value: "Hospitalized", inline: true },
-                { name: "Attacker Est. Stats", value: "~820k (FF: 3.63) [FF Scouter]", inline: true },
-                { name: "⏱️ Retaliation Window", value: "⚡ **Active — 4m 30s left**", inline: true }
+                { name: "⚔️ Hit Outcome", value: "**Hospitalized** (+3.45 resp)", inline: true },
+                { name: "⏱️ Retal Window (1.5x)", value: `🟢 Closes **<t:${fakeExp}:R>** (<t:${fakeExp}:T>)`, inline: true },
+                { name: "📍 Torn Status", value: "🟢 **Okay — Ready in Torn!**\n🟢 Online (1m ago) · HP 3,450/3,450", inline: true },
+                { name: "💪 Attacker Stats", value: "**~820.0M** (Spy DB · FF 2.85)\nSTR `240.0M` · DEF `205.0M`\nSPD `210.0M` · DEX `165.0M`", inline: true },
+                { name: "🛡️ Member Attacked", value: "**Friendly Member** `[100001]`\n⚖️ Comparable to defender (790.0M)", inline: true },
+                { name: "🏢 Attacker Faction", value: "Enemy Syndicate `[88888]`", inline: true }
+            ],
+            buttons: [
+                { type: 2, style: 3, custom_id: "retal_claim:999999:" + fakeExp + ":100001", label: "Claim Retal", emoji: { name: "🎯" } },
+                { type: 2, style: 2, custom_id: "retal_refresh:999999:" + fakeExp, label: "Live Status Check", emoji: { name: "🔄" } }
             ],
             links: [
                 { label: "⚔️ Retaliate / Attack", url: "https://www.torn.com/page.php?sid=attack&user2ID=999999" },
                 { label: "👤 Attacker Profile", url: "https://www.torn.com/profiles.php?XID=999999" },
                 { label: "🛡️ Defender Profile", url: "https://www.torn.com/profiles.php?XID=100001" }
             ],
-            footer: UI.FOOTER,
+            footer: { text: "F.R.I.D.A.Y Torn Retaliation Sentinel · In-Torn Only" },
             timestamp: new Date().toISOString()
         };
     } else if (t === 'inactivity') {
@@ -17440,7 +17635,7 @@ async function buildRetaliationsEmbed(apiKey) {
     if (!key) {
         const embed = UI.sleekCard({
             color: UI.COLORS.RED,
-            title: "⚔️ Active Retaliations",
+            title: "⚔️ Active Torn Retaliations",
             heroValue: "API Key Required",
             subtitle: "`Configuration Required`",
             note: "⚠️ No Torn API key configured."
@@ -17449,7 +17644,7 @@ async function buildRetaliationsEmbed(apiKey) {
     }
 
     try {
-        const res = await fetch(`https://api.torn.com/faction/?selections=attacks,basic&key=${key}`, {
+        const res = await fetch(`https://api.torn.com/faction/?selections=attacks,basic&key=${encodeURIComponent(key)}`, {
             signal: AbortSignal.timeout(8000)
         });
         const data = await res.json();
@@ -17465,52 +17660,153 @@ async function buildRetaliationsEmbed(apiKey) {
         const attacks = Object.values(data.attacks || {});
         const now = Math.floor(Date.now() / 1000);
 
-        // Find incoming attacks on our faction in the last 15 minutes (skip stealthed hits)
+        // Track recent winning outgoing hits by our faction so already-avenged attackers are marked cleanly
+        const ourWinTsByTarget = new Map();
+        for (const atk of attacks) {
+            const ts = Number(atk.timestamp_ended || 0);
+            if (!ts || (now - ts) > 900) continue;
+            const atkFac = Number(atk.attacker_faction || 0);
+            const defFac = Number(atk.defender_faction || 0);
+            const atkId = Number(atk.attacker_id || 0);
+            const defId = Number(atk.defender_id || 0);
+            const isOurAtk = (ourFacId > 0 && atkFac === ourFacId) || Boolean(data.members?.[atkId]);
+            const isOurDef = (ourFacId > 0 && defFac === ourFacId) || Boolean(data.members?.[defId]);
+            if (isOurAtk && !isOurDef && defId > 0 && retalEngine.isRetaliatableResult(atk.result)) {
+                const prev = ourWinTsByTarget.get(defId) || 0;
+                if (ts > prev) ourWinTsByTarget.set(defId, ts);
+            }
+        }
+
+        // Strict in-Torn filter: last 15m, non-internal, non-stealth, non-overseas, retaliatable outcome
         const incoming = attacks.filter(atk => {
+            if (retalEngine.isOverseasAttack(atk)) return false;
+            if (!retalEngine.isRetaliatableResult(atk.result)) return false;
+            const atkFac = Number(atk.attacker_faction || 0);
             const defFac = Number(atk.defender_faction || 0);
             const atkId = Number(atk.attacker_id || 0);
             const defId = Number(atk.defender_id || 0);
             const ts = Number(atk.timestamp_ended || 0);
-            const isOurDef = (ourFacId > 0 && defFac === ourFacId) || (data.members && Boolean(data.members[defId]));
-            return isOurDef && atkId !== defId && atkId > 0 && (now - ts) <= 900;
+            if (!ts || (now - ts) > 900 || atkId <= 0 || atkId === defId) return false;
+            const isOurDef = (ourFacId > 0 && defFac === ourFacId) || Boolean(data.members?.[defId]);
+            const isOurAtk = (ourFacId > 0 && atkFac === ourFacId) || Boolean(data.members?.[atkId]);
+            return isOurDef && !isOurAtk;
         });
 
-        const activeRetals = incoming.filter(atk => (now - atk.timestamp_ended) <= 300);
-        const expiredRetals = incoming.filter(atk => (now - atk.timestamp_ended) > 300);
+        // Deduplicate by attacker_id keeping latest hit
+        const dedupActiveMap = new Map();
+        const expiredList = [];
+        for (const atk of incoming) {
+            const ts = Number(atk.timestamp_ended || 0);
+            const aid = String(atk.attacker_id);
+            if ((now - ts) <= 300) {
+                const prev = dedupActiveMap.get(aid);
+                if (!prev || ts > Number(prev.timestamp_ended || 0)) dedupActiveMap.set(aid, atk);
+            } else {
+                expiredList.push(atk);
+            }
+        }
 
-        if (activeRetals.length === 0 && expiredRetals.length === 0) {
+        const rawActive = Array.from(dedupActiveMap.values()).sort((a, b) => Number(b.timestamp_ended) - Number(a.timestamp_ended));
+        const activeIds = rawActive.map(a => String(a.attacker_id));
+
+        // Fetch battle stats & live Torn location/status concurrently
+        const [ffMap, ...snaps] = await Promise.all([
+            getBatchPlayerStatsFromFFScouter(activeIds),
+            ...activeIds.slice(0, 6).map(id => fetchLiveAttackerSnapshot(id, key, false))
+        ]);
+        const snapMap = new Map();
+        activeIds.slice(0, 6).forEach((id, i) => {
+            if (snaps[i]) snapMap.set(id, snaps[i]);
+        });
+
+        const inTornReady = [];
+        const skippedOverseasOrDead = [];
+        for (const atk of rawActive) {
+            const aid = String(atk.attacker_id);
+            const snap = snapMap.get(aid) || null;
+            if (snap && ['abroad', 'traveling_away', 'federal'].includes(snap.locationCategory)) {
+                skippedOverseasOrDead.push({ atk, snap });
+                continue;
+            }
+            const ts = Number(atk.timestamp_ended || 0);
+            const alreadyRetaliated = Boolean(
+                (ourWinTsByTarget.get(Number(aid)) || 0) >= ts ||
+                retalEngine.hasRecentRetalWin(aid, ts)
+            );
+            inTornReady.push({ atk, snap, alreadyRetaliated });
+        }
+
+        const expiredRetals = expiredList.sort((a, b) => Number(b.timestamp_ended) - Number(a.timestamp_ended));
+
+        if (inTornReady.length === 0 && expiredRetals.length === 0) {
+            const extraNote = skippedOverseasOrDead.length > 0
+                ? `${skippedOverseasOrDead.length} recent attacker(s) left Torn / flew overseas and were excluded.`
+                : "No faction members were hit in Torn within the last 15 minutes.";
             const embed = UI.sleekCard({
                 color: UI.COLORS.GREEN,
-                title: "⚔️ Retaliation Opportunities",
-                heroValue: "0 Pending Retals",
+                title: "⚔️ Torn Retaliation Opportunities",
+                heroValue: "0 In-Torn Retals",
                 subtitle: `\`All Clear\`  ·  ${data.name || discordConfig.factionName || 'Faction Shield'}`,
-                note: "No faction members have been attacked in the last 15 minutes."
+                note: extraNote
             });
-            return { embeds: [sanitizeEmbed(embed)], components: [] };
+            return {
+                embeds: [sanitizeEmbed(embed)],
+                components: [{
+                    type: 1,
+                    components: [{ type: 2, style: 2, custom_id: 'btn_refresh_retals', label: 'Refresh Retals', emoji: { name: '🔄' } }]
+                }]
+            };
         }
 
         const fields = [];
-        if (activeRetals.length > 0) {
-            const lines = activeRetals.map((atk, idx) => {
+        if (inTornReady.length > 0) {
+            const lines = [];
+            for (let idx = 0; idx < Math.min(inTornReady.length, 6); idx++) {
+                const { atk, snap, alreadyRetaliated } = inTornReady[idx];
+                const aid = String(atk.attacker_id);
                 const expireTs = Number(atk.timestamp_ended) + 300;
-                const atkLink = `https://www.torn.com/page.php?sid=attack&user2ID=${atk.attacker_id}`;
+                const atkLink = `https://www.torn.com/page.php?sid=attack&user2ID=${aid}`;
                 const defName = atk.defender_name || data.members?.[atk.defender_id]?.name || `Member [${atk.defender_id}]`;
-                return `${idx + 1}. **[${atk.attacker_name || 'Attacker'} [${atk.attacker_id}]](https://www.torn.com/profiles.php?XID=${atk.attacker_id})** from \`${atk.attacker_factionname || 'Faction'}\`\n` +
-                       `   └ Hit **${defName}** (${atk.result || 'Attacked'}) · ⏱️ Window closes <t:${expireTs}:R>\n` +
-                       `   └ [⚔️ Retaliate Now](${atkLink}) · [👤 Profile](https://www.torn.com/profiles.php?XID=${atk.attacker_id})`;
-            });
+                const attackerName = snap?.name || atk.attacker_name || `Player [${aid}]`;
+                const facName = snap?.factionName || atk.attacker_factionname || atk.attacker_faction_name || 'Factionless';
+                const statsInfo = await buildRetalAttackerStatsInfo(aid, atk.defender_id, snap?.level || 0, ffMap.get(aid) || null);
+
+                const statusTag = alreadyRetaliated
+                    ? '✅ Already Retaliated'
+                    : (snap?.locationCategory === 'hospital'
+                        ? `🔴 Hosp (out <t:${snap.statusUntil || expireTs}:R>)`
+                        : snap?.locationCategory === 'returning'
+                            ? '✈️ Returning to Torn'
+                            : '🟢 In Torn (Ready)');
+
+                lines.push(
+                    `${idx + 1}. **[${attackerName} [${aid}]](https://www.torn.com/profiles.php?XID=${aid})** (${facName}${snap?.level ? ` · Lv ${snap.level}` : ''})\n` +
+                    `   └ 💪 ${statsInfo.statLine} · ${statusTag}\n` +
+                    `   └ Hit **${defName}** (${atk.result}) · ⏱️ Closes <t:${expireTs}:R> · [⚔️ Retaliate](${atkLink})`
+                );
+            }
             fields.push({
-                name: `⚡ Active Retaliations (${activeRetals.length})`,
+                name: `⚡ Active In-Torn Retaliations (${inTornReady.length})`,
                 value: lines.join('\n'),
                 inline: false
             });
         }
 
-        if (expiredRetals.length > 0 && activeRetals.length < 5) {
-            const lines = expiredRetals.slice(0, 5).map((atk, idx) => {
+        if (skippedOverseasOrDead.length > 0) {
+            fields.push({
+                name: `✈️ Excluded (${skippedOverseasOrDead.length} Overseas / Left Torn)`,
+                value: skippedOverseasOrDead.slice(0, 4).map(({ atk, snap }) =>
+                    `• **${snap?.name || atk.attacker_name || atk.attacker_id}** — ${snap?.statusDesc || 'Abroad'}`
+                ).join('\n'),
+                inline: false
+            });
+        }
+
+        if (expiredRetals.length > 0 && inTornReady.length < 5) {
+            const lines = expiredRetals.slice(0, 4).map((atk, idx) => {
                 const agoMin = Math.floor((now - atk.timestamp_ended) / 60);
                 const defName = atk.defender_name || data.members?.[atk.defender_id]?.name || `Member [${atk.defender_id}]`;
-                return `${idx + 1}. **[${atk.attacker_name || 'Attacker'} [${atk.attacker_id}]](https://www.torn.com/profiles.php?XID=${atk.attacker_id})** hit **${defName}** (${atk.result}) — ⌛ *${agoMin}m ago (Expired)*`;
+                return `${idx + 1}. **[${atk.attacker_name || 'Attacker'} [${atk.attacker_id}]](https://www.torn.com/profiles.php?XID=${atk.attacker_id})** hit **${defName}** (${atk.result}) — ⌛ *${agoMin}m ago*`;
             });
             fields.push({
                 name: `⌛ Recently Expired (${expiredRetals.length})`,
@@ -17520,19 +17816,25 @@ async function buildRetaliationsEmbed(apiKey) {
         }
 
         const embed = UI.sleekCard({
-            color: activeRetals.length > 0 ? UI.COLORS.RED : UI.COLORS.BLUE,
-            title: "⚔️ Retaliation Opportunities",
-            heroValue: `${activeRetals.length} Live Retaliation${activeRetals.length === 1 ? '' : 's'}`,
-            subtitle: `\`5-Minute Window\`  ·  ${data.name || discordConfig.factionName || 'Faction Retaliations'}`,
+            color: inTornReady.length > 0 ? UI.COLORS.RED : UI.COLORS.BLUE,
+            title: "⚔️ Torn Retaliation Opportunities",
+            heroValue: `${inTornReady.length} In-Torn Retal${inTornReady.length === 1 ? '' : 's'}`,
+            subtitle: `\`5-Minute 1.5x Window\`  ·  ${data.name || discordConfig.factionName || 'Faction Retaliations'}`,
             fields,
-            note: "Retaliate within 5 minutes of attack for bonus respect and revenge multiplier."
+            note: "Strictly filters for in-Torn hits (overseas hits & enemy losses excluded)."
         });
 
-        return { embeds: [sanitizeEmbed(embed)], components: [] };
+        return {
+            embeds: [sanitizeEmbed(embed)],
+            components: [{
+                type: 1,
+                components: [{ type: 2, style: 2, custom_id: 'btn_refresh_retals', label: 'Refresh Retals', emoji: { name: '🔄' } }]
+            }]
+        };
     } catch(e) {
         const embed = UI.sleekCard({
             color: UI.COLORS.RED,
-            title: "⚔️ Retaliation Opportunities",
+            title: "⚔️ Torn Retaliation Opportunities",
             heroValue: "Error",
             subtitle: "`Telemetry Error`",
             note: `⚠️ Error fetching attacks: ${e.message}`
@@ -26010,25 +26312,28 @@ function setupSlashBotEvents(bot, token) {
             });
         });
 
-        // ── Start Retaliation Risk Engine (background jobs) ──
+        // ── Start Torn Retaliation Watcher (In-Torn only) ──
         try {
+            const getKeys = () => typeof getFactionArmoryCandidateKeys === 'function'
+                ? getFactionArmoryCandidateKeys(discordConfig.factionId || dynamicFactionId || '52355', getNextApiKey() || discordConfig.apiKey || TORN_API_KEY)
+                : [getNextApiKey(), discordConfig.apiKey, TORN_API_KEY].filter(Boolean);
             if (mongoose.connection.readyState === 1) {
-                retalEngine.startRetaliationEngine(
-                    () => getNextApiKey() || discordConfig.apiKey || TORN_API_KEY,
+                retalEngine.startRetalWatcher(
+                    getKeys,
                     mongoose.connection.db,
                     handleMemberAttackedAlert
-                ).catch(e => console.warn('[RetalEngine] Start error:', e.message));
+                ).catch(e => console.warn('[RetalWatcher] Start error:', e.message));
             } else {
                 mongoose.connection.once('connected', () => {
-                    retalEngine.startRetaliationEngine(
-                        () => getNextApiKey() || discordConfig.apiKey || TORN_API_KEY,
+                    retalEngine.startRetalWatcher(
+                        getKeys,
                         mongoose.connection.db,
                         handleMemberAttackedAlert
-                    ).catch(e => console.warn('[RetalEngine] Start error:', e.message));
+                    ).catch(e => console.warn('[RetalWatcher] Start error:', e.message));
                 });
             }
         } catch(e) {
-            console.warn('[RetalEngine] Startup hook error:', e.message);
+            console.warn('[RetalWatcher] Startup hook error:', e.message);
         }
     });
 
@@ -27712,6 +28017,111 @@ function setupSlashBotEvents(bot, token) {
                     isPublic: true
                 });
                 return;
+            }
+
+            // Interactive Torn Retaliation Alert Buttons (Claim Retal / Live Check / /retal Refresh)
+            if (customId.startsWith('retal_claim:')) {
+                const [, targetIdRaw, expireRaw] = customId.split(':');
+                const targetId = String(targetIdRaw || '').replace(/[^0-9]/g, '');
+                const expireTs = Number(expireRaw || 0);
+                if (!targetId) return interaction.reply({ content: '⚠️ Invalid target ID.', ephemeral: true }).catch(() => {});
+
+                const claimerName = interaction.member?.displayName || interaction.user.username;
+                const nowMs = Date.now();
+                const facId = String(discordConfig.factionId || dynamicFactionId || 'default');
+                const fState = getFactionWarState(facId);
+                const existingClaim = fState.claims[targetId] || claims[targetId];
+
+                if (existingClaim && existingClaim.playerName && existingClaim.playerName !== claimerName && (nowMs - existingClaim.time < 5 * 60 * 1000)) {
+                    return interaction.reply({
+                        content: `⚠️ Retaliation on **[${targetId}]** is already claimed by **${existingClaim.playerName}** (${Math.round((nowMs - existingClaim.time) / 1000)}s ago)!`,
+                        ephemeral: true
+                    }).catch(() => {});
+                }
+
+                fState.claims[targetId] = { playerName: claimerName, time: nowMs, discordId: interaction.user.id };
+                claims[targetId] = { playerName: claimerName, time: nowMs, discordId: interaction.user.id };
+
+                const baseEmbed = interaction.message?.embeds?.[0]?.toJSON ? interaction.message.embeds[0].toJSON() : (interaction.message?.embeds?.[0] || {});
+                const updatedFields = (Array.isArray(baseEmbed.fields) ? baseEmbed.fields : []).filter(f => !String(f.name || '').includes('Claim Status'));
+                updatedFields.push({ name: '🎯 Claim Status', value: `Claimed by <@${interaction.user.id}> (<t:${Math.floor(nowMs / 1000)}:R>)`, inline: false });
+
+                const attackLink = `https://www.torn.com/page.php?sid=attack&user2ID=${targetId}`;
+                const updatedRows = [
+                    {
+                        type: 1,
+                        components: [
+                            { type: 2, style: 3, custom_id: customId, label: `Claimed by ${claimerName.slice(0, 24)}`, emoji: { name: '🎯' }, disabled: true },
+                            { type: 2, style: 2, custom_id: `retal_refresh:${targetId}:${expireTs}`, label: 'Live Status Check', emoji: { name: '🔄' } }
+                        ]
+                    },
+                    {
+                        type: 1,
+                        components: [
+                            { type: 2, style: 5, label: '⚔️ Retaliate / Attack', url: attackLink },
+                            { type: 2, style: 5, label: '👤 Attacker Profile', url: `https://www.torn.com/profiles.php?XID=${targetId}` }
+                        ]
+                    }
+                ];
+
+                await interaction.update({
+                    embeds: [sanitizeEmbed({ ...baseEmbed, fields: updatedFields })],
+                    components: updatedRows
+                }).catch(() => {});
+
+                return interaction.followUp({
+                    content: `🎯 You claimed retaliation on **Target [${targetId}]**! [Click here to attack](${attackLink})`,
+                    ephemeral: true
+                }).catch(() => {});
+            }
+
+            if (customId.startsWith('retal_refresh:')) {
+                const [, targetIdRaw, expireRaw] = customId.split(':');
+                const targetId = String(targetIdRaw || '').replace(/[^0-9]/g, '');
+                const expireTs = Number(expireRaw || 0);
+                if (!targetId) return interaction.reply({ content: '⚠️ Invalid target ID.', ephemeral: true }).catch(() => {});
+
+                await interaction.deferReply({ ephemeral: true }).catch(() => {});
+                const [snap, statsInfo] = await Promise.all([
+                    fetchLiveAttackerSnapshot(targetId, null, true),
+                    buildRetalAttackerStatsInfo(targetId, null, 0)
+                ]);
+                const nowSec = Math.floor(Date.now() / 1000);
+                const expired = expireTs > 0 && nowSec >= expireTs;
+                const alreadyHit = expireTs > 0 && retalEngine.hasRecentRetalWin(targetId, expireTs - 300);
+
+                const statusText = alreadyHit
+                    ? '✅ **Already Retaliated** by a faction member!'
+                    : formatAttackerLiveStatusLine(snap);
+                const windowText = expired
+                    ? '⌛ **5m Retaliation Window Expired**'
+                    : (expireTs > 0 ? `🟢 **Active** — Closes <t:${expireTs}:R>` : '🟢 Active');
+
+                return interaction.editReply({
+                    embeds: [sanitizeEmbed({
+                        title: `🔄 Live Retal Check: ${snap?.name || 'Target'} [${targetId}]`,
+                        color: (expired || alreadyHit) ? 0x64748b : (snap?.locationCategory === 'in_torn' ? 0x10b981 : 0xf59e0b),
+                        fields: [
+                            { name: '⏱️ Window', value: windowText, inline: true },
+                            { name: '💪 Stats', value: `${statsInfo.statLine}${statsInfo.breakdownLine ? `\n${statsInfo.breakdownLine}` : ''}`, inline: true },
+                            { name: '📍 Torn Status', value: statusText, inline: false }
+                        ],
+                        footer: { text: 'F.R.I.D.A.Y Torn Retaliation Sentinel' },
+                        timestamp: new Date().toISOString()
+                    })],
+                    components: !expired && snap && ['in_torn', 'returning', 'hospital'].includes(snap.locationCategory) ? [{
+                        type: 1,
+                        components: [{ type: 2, style: 5, label: '⚔️ Attack in Torn', url: `https://www.torn.com/page.php?sid=attack&user2ID=${targetId}` }]
+                    }] : []
+                }).catch(() => {});
+            }
+
+            if (customId === 'btn_refresh_retals') {
+                await interaction.deferUpdate().catch(() => {});
+                const invokerRec = userKeys?.resolveUserApiKey?.(interaction.user.id, interaction.member?.displayName, interaction.user.username);
+                const apiKey = invokerRec?.key || discordConfig.apiKey || TORN_API_KEY || getNextApiKey();
+                const refreshed = await buildRetaliationsEmbed(apiKey);
+                return interaction.editReply(refreshed).catch(() => {});
             }
 
             // Warboard Target Claim (Protected from collision with withdrawal buttons)

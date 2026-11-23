@@ -2270,7 +2270,7 @@
                     <div class="hero-kpi-pill" onclick="switchDeckTab('sentinel')" style="cursor:pointer;" title="View Alert Sentinel Triggers">
                         <span class="hero-kpi-icon">🚨</span>
                         <div>
-                            <span class="hero-kpi-val" id="kpi-triggers-text">13 / 27</span>
+                            <span class="hero-kpi-val" id="kpi-triggers-text">13 / 26</span>
                             <span class="hero-kpi-label">Active Triggers</span>
                         </div>
                     </div>
@@ -2319,7 +2319,7 @@
                 <div class="deck-tabs-container">
                     <button type="button" class="deck-tab-btn active" data-tab="sentinel" onclick="switchDeckTab('sentinel')">
                         <span>🚨 Alert Sentinel</span>
-                        <span class="deck-tab-badge" id="tab-badge-triggers">27</span>
+                        <span class="deck-tab-badge" id="tab-badge-triggers">26</span>
                     </button>
                     <button type="button" class="deck-tab-btn" data-tab="broadcast" onclick="switchDeckTab('broadcast')">
                         <span>📢 Broadcast & Rules Studio</span>
@@ -2798,18 +2798,18 @@
                         <span class="count-badge">2 Triggers</span>
                     </div>
                     <div class="trigger-grid">
-                        <div class="trigger-row" id="ti-friendlyAttacked" data-tags="defense member attack friendly retaliate">
+                        <div class="trigger-row" id="ti-friendlyAttacked" data-tags="defense member attack friendly retaliate torn stats">
                             <div class="trigger-row-left">
                                 <span class="trigger-icon">🚨</span>
                                 <div class="trigger-info">
-                                    <div class="trigger-name">Faction Member Under Attack <span class="tag war">WAR</span></div>
-                                    <div class="trigger-desc">Fires immediately when an enemy attacks any friendly alliance member — includes enemy stats & retaliate button.</div>
+                                    <div class="trigger-name">Torn Retaliation Alerts (In-Torn Only) <span class="tag war">RETAL</span></div>
+                                    <div class="trigger-desc">Fires immediately when an enemy defeats or hospitalizes a faction member inside Torn City (skips overseas &amp; stealthed hits) — shows attacker stats, live status/HP, Claim Retal &amp; 1-click Attack buttons.</div>
                                     <span class="trigger-route-tag">📍 Retaliator / Main Alert Channel</span>
                                 </div>
                             </div>
                             <div class="trigger-controls">
                                 <button class="btn-test" id="btn-test-friendlyAttacked" onclick="testAlert('friendlyAttacked')">▷ Test</button>
-                                <label class="switch"><input type="checkbox" id="friendlyAttacked" onchange="onToggle(this); trackDirty();"><span class="slider"></span></label>
+                                <label class="switch"><input type="checkbox" id="friendlyAttacked" checked onchange="onToggle(this); trackDirty();"><span class="slider"></span></label>
                             </div>
                         
                             <div class="trigger-routing-bar">
@@ -2828,45 +2828,6 @@
                                 <div class="trigger-routing-item">
                                     <span class="trigger-routing-label">Throttle:</span>
                                     <select class="trigger-override-select trigger-throttle-select" id="override-throttle-friendlyAttacked" onchange="trackDirty()">
-                                        <option value="instant">⚡ Instant</option>
-                                        <option value="batch30s">⏱️ Batch 30s</option>
-                                        <option value="cd1m">⏳ 1m Cooldown</option>
-                                        <option value="cd5m">⏳ 5m Cooldown</option>
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="trigger-row on" id="ti-retalSentinel" data-tags="defense retal retaliation risk attack incoming warning counter">
-                            <div class="trigger-row-left">
-                                <span class="trigger-icon">🛡️</span>
-                                <div class="trigger-info">
-                                    <div class="trigger-name">Retaliation Risk Engine <span class="tag war">AUTONOMOUS</span></div>
-                                    <div class="trigger-desc">Autonomous retaliation prediction: ingests combat logs, correlates 0–6h retal pairs, calculates empirical Bayes risk (k=7), and alerts members before attacking.</div>
-                                    <span class="trigger-route-tag">📍 Retaliator Channel & Slash Commands</span>
-                                </div>
-                            </div>
-                            <div class="trigger-controls">
-                                <button class="btn-test" id="btn-test-retalSentinel" onclick="testAlert('retalSentinel')">▷ Test</button>
-                                <label class="switch"><input type="checkbox" id="retalSentinel" checked onchange="onToggle(this); trackDirty();"><span class="slider"></span></label>
-                            </div>
-                        
-                            <div class="trigger-routing-bar">
-                                <div class="trigger-routing-item">
-                                    <span class="trigger-routing-label">Channel:</span>
-                                    <select class="trigger-override-select trigger-chan-select" id="override-chan-retalSentinel" onchange="trackDirty()">
-                                        <option value="">Default (Category)</option>
-                                    </select>
-                                </div>
-                                <div class="trigger-routing-item">
-                                    <span class="trigger-routing-label">Role Ping:</span>
-                                    <select class="trigger-override-select trigger-role-select" id="override-role-retalSentinel" onchange="trackDirty()">
-                                        <option value="">No Role Ping</option>
-                                    </select>
-                                </div>
-                                <div class="trigger-routing-item">
-                                    <span class="trigger-routing-label">Throttle:</span>
-                                    <select class="trigger-override-select trigger-throttle-select" id="override-throttle-retalSentinel" onchange="trackDirty()">
                                         <option value="instant">⚡ Instant</option>
                                         <option value="batch30s">⏱️ Batch 30s</option>
                                         <option value="cd1m">⏳ 1m Cooldown</option>
@@ -4144,11 +4105,11 @@
                                     </td>
                                 </tr>
 
-                                <!-- Row 2: Retaliation Engine -->
+                                <!-- Row 2: Torn Retaliation Alerts -->
                                 <tr>
                                     <td>
-                                        <div class="routing-stream-name">🩸 Retaliation & Defend Engine</div>
-                                        <div class="routing-stream-desc">Fires when members are attacked or retals become available</div>
+                                        <div class="routing-stream-name">⚔️ Torn Retaliation Alerts</div>
+                                        <div class="routing-stream-desc">Fires when an enemy hits a faction member in Torn (overseas hits excluded) — includes stats &amp; Retaliate buttons</div>
                                     </td>
                                     <td>
                                         <select class="field-select channel-picker" id="retal-channelid-select" onchange="onChannelSelectChange(this, 'retal-channelid'); trackDirty();">
@@ -4168,7 +4129,7 @@
                                         </label>
                                     </td>
                                     <td style="text-align:right;">
-                                        <button type="button" class="btn-test" onclick="testAlert('retalSentinel')">▷ Test</button>
+                                        <button type="button" class="btn-test" onclick="testAlert('friendlyAttacked')">▷ Test</button>
                                     </td>
                                 </tr>
 
@@ -6469,8 +6430,7 @@ function applyConfigToDOM(cfg) {
         targetOutHosp: cfg.targetOutHosp === true,
         chainUnder90: cfg.chainUnder90 === true || cfg.chainUnder90 === undefined,
         chainMilestone: cfg.chainMilestone === true || cfg.chainMilestone === undefined,
-        friendlyAttacked: cfg.friendlyAttacked === true,
-        retalSentinel: cfg.retalSentinel !== false,
+        friendlyAttacked: cfg.friendlyAttacked !== false,
         medOutSniper: cfg.medOutSniper === true || cfg.medOutSniper === undefined,
         travelWarnings: cfg.travelWarnings === true || cfg.travelWarnings === undefined,
         chainWarnings: cfg.chainWarnings === true || cfg.chainWarnings === undefined,
@@ -6892,7 +6852,6 @@ async function saveDiscordConfig() {
             chainUnder90: document.getElementById('chainUnder90').checked,
             chainMilestone: document.getElementById('chainMilestone').checked,
             friendlyAttacked: document.getElementById('friendlyAttacked').checked,
-            retalSentinel: document.getElementById('retalSentinel')?.checked ?? true,
             medOutSniper: document.getElementById('medOutSniper').checked,
             travelWarnings: document.getElementById('travelWarnings').checked,
             chainWarnings: document.getElementById('chainWarnings').checked,

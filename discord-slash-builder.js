@@ -63,7 +63,7 @@ function buildSlashCommands() {
             .addStringOption(opt => opt.setName('note').setDescription('Optional emergency backup note')).toJSON(),
         new SlashCommandBuilder().setName('spy').setDescription('Look up battle stats & spy records for a player')
             .addStringOption(opt => opt.setName('target').setDescription('Torn Player ID or Name').setRequired(true)).toJSON(),
-        new SlashCommandBuilder().setName('retal').setDescription('List active retaliation targets against players who recently attacked our faction').toJSON(),
+        new SlashCommandBuilder().setName('retal').setDescription('List active in-Torn retaliation targets with battle stats and live status').toJSON(),
         new SlashCommandBuilder().setName('revive').setDescription('Audit faction member revive settings: Everyone, Friends & Faction, or No One')
             .addStringOption(opt =>
                 opt.setName('setting')
@@ -101,7 +101,7 @@ function buildSlashCommands() {
                             { name: '🔴 No One', value: 'no_one' }
                         )
                 ))
-            .addSubcommand(sub => sub.setName('retal').setDescription('List active retaliation targets against enemies who attacked our faction'))
+            .addSubcommand(sub => sub.setName('retal').setDescription('List active in-Torn retaliation targets with attacker stats and live status'))
             .addSubcommand(sub => sub.setName('inactive').setDescription('List faction members inactive for 1+ days'))
             .addSubcommand(sub => sub.setName('notindiscord').setDescription('List faction members not in this Discord server'))
             .addSubcommand(sub => sub.setName('oc').setDescription('Summary of Organized Crimes status and ready teams'))
