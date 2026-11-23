@@ -433,8 +433,10 @@ async function loadConfigFromMongo() {
             }
             if (saved.companyConfig) companyConfig = { ...companyConfig, ...saved.companyConfig };
             if (saved.ocConfig) {
-                ocConfig = { ...ocConfig, ...saved.ocConfig };
-                ocConfig.ocDm = ocDmEngineModule.mergeOcDmConfig(ocConfig, saved.ocConfig.ocDm || null);
+                const { ocDm: savedOcDm, ...savedOcBase } = saved.ocConfig;
+                ocConfig = { ...ocConfig, ...savedOcBase };
+                delete ocConfig.ocDm;
+                ocConfig.ocDm = ocDmEngineModule.mergeOcDmConfig(ocConfig, savedOcDm || null);
             }
             if (saved.ocDmState && typeof ocDmEngine !== 'undefined') {
                 ocDmEngine.importFromMongo(saved.ocDmState);
@@ -7297,6 +7299,11 @@ app.post('/api/discord/oc-dm-test', async (req, res) => {
 });
 
 async function fetchFactionBasicMembersSafe(fid, callerKey = '') {
+    const cacheKey = `fac_basic_safe_${fid}`;
+    const cached = globalTornCache[cacheKey];
+    if (cached && (Date.now() - cached.timestamp) < 30000 && cached.data?.members) {
+        return cached.data.members;
+    }
     const candidates = Array.from(new Set([
         callerKey,
         discordConfig.apiKey,
@@ -7308,14 +7315,15 @@ async function fetchFactionBasicMembersSafe(fid, callerKey = '') {
     for (const k of candidates) {
         try {
             const fRes = await fetch(`https://api.torn.com/faction/${encodeURIComponent(fid)}?selections=basic&key=${encodeURIComponent(k)}`, {
-                signal: AbortSignal.timeout(8000)
+                signal: AbortSignal.timeout(4000)
             }).then(r => r.json());
             if (fRes && !fRes.error && fRes.members && Object.keys(fRes.members).length > 0) {
+                globalTornCache[cacheKey] = { timestamp: Date.now(), data: fRes };
                 return fRes.members;
             }
         } catch (_) {}
     }
-    return {};
+    return cached?.data?.members || {};
 }
 
 app.get('/api/discord/oc-unlinked-members', async (req, res) => {

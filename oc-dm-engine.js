@@ -268,6 +268,7 @@ function createOcDmEngine(injectedDeps = {}) {
     };
 
     let lastGuildMemberFetchTs = 0;
+    let guildFetchInFlight = null;
     let lastCompletedSeedTs = 0;
     let cachedCompletedSeedFac = '';
     let itemsCatalogCache = { ts: 0, items: {} };
@@ -377,19 +378,26 @@ function createOcDmEngine(injectedDeps = {}) {
     async function ensureGuildMembers(guild, forceFetch = false) {
         if (!guild || !guild.members) return null;
         const cache = guild.members.cache;
-        if (!forceFetch && cache && cache.size > 1 && (Date.now() - lastGuildMemberFetchTs) < GUILD_FETCH_TTL_MS) {
+        if (!forceFetch && (Date.now() - lastGuildMemberFetchTs) < GUILD_FETCH_TTL_MS) {
+            return cache || null;
+        }
+        if (!forceFetch && cache && cache.size > 10) {
+            lastGuildMemberFetchTs = Date.now();
             return cache;
         }
-        try {
-            const fetched = await Promise.race([
-                guild.members.fetch(),
-                new Promise(resolve => setTimeout(() => resolve(null), 3500))
-            ]);
-            if (fetched) {
-                lastGuildMemberFetchTs = Date.now();
-                return fetched;
-            }
-        } catch (_) {}
+        if (guildFetchInFlight) {
+            await guildFetchInFlight;
+            return guild.members.cache || null;
+        }
+        lastGuildMemberFetchTs = Date.now();
+        guildFetchInFlight = Promise.race([
+            guild.members.fetch().catch(() => null),
+            new Promise(resolve => setTimeout(() => resolve(null), 3000))
+        ]).finally(() => {
+            lastGuildMemberFetchTs = Date.now();
+            guildFetchInFlight = null;
+        });
+        await guildFetchInFlight;
         return guild.members.cache || null;
     }
 
@@ -617,7 +625,7 @@ function createOcDmEngine(injectedDeps = {}) {
         await ensureGuildMembers(guild, false);
         const rows = [];
         for (const [tid, m] of Object.entries(factionMembers || {})) {
-            const resolved = await resolveMemberDiscord(tid, m?.name || '', { allowTornApiFallback: false });
+            const resolved = await resolveMemberDiscord(tid, m?.name || '', { allowTornApiFallback: false, guild });
             rows.push({
                 tornId: String(tid),
                 playerName: m?.name || `Player [${tid}]`,
