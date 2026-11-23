@@ -1,12 +1,14 @@
 /**
- * FactionOS — F.R.I.D.A.Y. Mark-85 Hyper-Realistic Holographic Visor Boot Engine (~6.2s)
+ * FactionOS — F.R.I.D.A.Y. Mark-85 Cinema Optical Visor Boot Engine (~6.8s, 60fps GPU)
  *
- * Features:
- * - Phase 1 (0.0-1.15s): Nanotech faceplate seal, camera impact shake, ocular filaments & lens flare
- * - Phase 2 (1.15-2.85s): 3D tilted orbital rings, rotating geodesic sphere, hex armor shimmer & pitch/roll verniers
- * - Phase 3 (2.85-4.70s): Left/Right optical telemetry wings (Arc Output graph + Warboard Threat Radar) & F.R.I.D.A.Y. voice
- * - Phase 4 (4.70-5.55s): Full operative biometric lock-on, golden/cyan shockwave & diagnostics confirmation
- * - Phase 5 (5.55-6.20s): Nanotech aperture iris dissolve revealing live Warboard underneath
+ * Architecture:
+ * - Layer 1 (GPU WebGL Fragment Shader): Volumetric fBM arc-plasma core, ACES Filmic HDR
+ *   optical bloom, chromatic aberration, crepuscular god rays, bokeh motes, and curved
+ *   helmet visor shutter ignition — single quad draw call at ~1-2ms/frame (60fps locked).
+ * - Layer 2 (Lightweight 2D Overlay, zero shadowBlur): Crisp floating F.R.I.D.A.Y. wordmark,
+ *   operative greeting, and minimal optical hairlines over free air (no chunky boxes).
+ * - Layer 3 (WebAudio + Speech): Mechanical titanium faceplate clamp, turbine swell, harmonic
+ *   resolve chord, and F.R.I.D.A.Y. spoken welcome with autoplay-safe unlock & mute toggle.
  */
 (function () {
     'use strict';
@@ -16,8 +18,8 @@
 
     const PREF_ENABLED_KEY = 'sv_intro_enabled';
     const PREF_SOUND_KEY = 'sv_intro_sound';
-    const DURATION_MS = 6200;
-    const DISSOLVE_MS = 480;
+    const DURATION_MS = 6800;
+    const DISSOLVE_MS = 520;
 
     let activeSession = null;
 
@@ -27,19 +29,11 @@
     }
 
     function isAutoIntroEnabled() {
-        try {
-            return localStorage.getItem(PREF_ENABLED_KEY) !== '0';
-        } catch (_) {
-            return true;
-        }
+        try { return localStorage.getItem(PREF_ENABLED_KEY) !== '0'; } catch (_) { return true; }
     }
 
     function isSoundEnabled() {
-        try {
-            return localStorage.getItem(PREF_SOUND_KEY) !== '0';
-        } catch (_) {
-            return true;
-        }
+        try { return localStorage.getItem(PREF_SOUND_KEY) !== '0'; } catch (_) { return true; }
     }
 
     function hasNoIntroBypass() {
@@ -48,9 +42,7 @@
             if (params.get('no_intro') === '1' || params.get('skip_intro') === '1') return true;
         } catch (_) {}
         try {
-            if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-                return true;
-            }
+            if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return true;
         } catch (_) {}
         return false;
     }
@@ -81,16 +73,14 @@
             authenticated: Boolean(name),
             playerName: name ? String(name) : 'GUEST',
             playerId: pid ? String(pid) : '',
-            factionLabel: fname ? String(fname) : (fid && fid !== '0' ? `Faction #${fid}` : 'SPIDER-VERSE NET')
+            factionLabel: fname ? String(fname) : (fid && fid !== '0' ? `Faction #${fid}` : 'SPIDER-VERSE')
         };
     }
 
     function createAudioEngine() {
         const AudioCtx = window.AudioContext || window.webkitAudioContext;
         let ctx = null;
-        let analyser = null;
         let master = null;
-        let freqData = null;
         let blockedByAutoplay = false;
         let closed = false;
         let spokeGreeting = false;
@@ -101,13 +91,9 @@
             if (closed || !AudioCtx) return null;
             if (!ctx) {
                 ctx = new AudioCtx();
-                analyser = ctx.createAnalyser();
-                analyser.fftSize = 128;
-                freqData = new Uint8Array(analyser.frequencyBinCount);
                 master = ctx.createGain();
-                master.gain.value = 0.36;
-                master.connect(analyser);
-                analyser.connect(ctx.destination);
+                master.gain.value = 0.34;
+                master.connect(ctx.destination);
             }
             return ctx;
         }
@@ -123,7 +109,7 @@
             return !blockedByAutoplay;
         }
 
-        function playTone(freqStart, freqEnd, duration, type, gainPeak, delay = 0, filterType = null, cutoffStart = null, cutoffEnd = null) {
+        function playTone(freqStart, freqEnd, duration, type, gainPeak, delay = 0, cutoffStart = null, cutoffEnd = null) {
             if (!ctx || ctx.state !== 'running' || !master || closed) return;
             const now = ctx.currentTime + delay;
             const osc = ctx.createOscillator();
@@ -136,15 +122,12 @@
                 osc.frequency.exponentialRampToValueAtTime(Math.max(18, freqEnd), now + duration);
             }
 
-            filter.type = filterType || (type === 'sawtooth' ? 'lowpass' : 'bandpass');
-            const f0 = cutoffStart || (type === 'sawtooth' ? 320 : Math.max(freqStart, freqEnd || freqStart) * 1.4);
-            filter.frequency.setValueAtTime(f0, now);
-            if (cutoffEnd) {
-                filter.frequency.exponentialRampToValueAtTime(Math.max(40, cutoffEnd), now + duration * 0.85);
-            }
+            filter.type = 'lowpass';
+            filter.frequency.setValueAtTime(cutoffStart || 1400, now);
+            if (cutoffEnd) filter.frequency.exponentialRampToValueAtTime(Math.max(40, cutoffEnd), now + duration * 0.88);
 
             g.gain.setValueAtTime(0.0001, now);
-            g.gain.exponentialRampToValueAtTime(gainPeak, now + Math.min(0.06, duration * 0.25));
+            g.gain.exponentialRampToValueAtTime(gainPeak, now + Math.min(0.08, duration * 0.25));
             g.gain.exponentialRampToValueAtTime(0.0001, now + duration);
 
             osc.connect(filter);
@@ -161,14 +144,14 @@
             const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
             const data = buffer.getChannelData(0);
             for (let i = 0; i < bufferSize; i++) {
-                data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.35));
+                data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.32));
             }
             const src = ctx.createBufferSource();
             src.buffer = buffer;
             const filter = ctx.createBiquadFilter();
             filter.type = 'bandpass';
             filter.frequency.value = centerFreq;
-            filter.Q.value = 2.4;
+            filter.Q.value = 2.6;
             const g = ctx.createGain();
             const now = ctx.currentTime + delay;
             g.gain.setValueAtTime(gainPeak, now);
@@ -189,28 +172,21 @@
             playedStage[stageNum] = true;
 
             if (stageNum === 1) {
-                // Titanium faceplate mechanical clamp + deep arc reactor ignition swell
-                playServoNoise(0.24, 950, 0.28, 0.08);
-                playTone(105, 34, 0.28, 'sine', 0.34, 0.1, 'lowpass', 300, 60);
-                playTone(42, 140, 2.2, 'sawtooth', 0.16, 0.25, 'lowpass', 180, 1750);
-                playTone(84, 210, 1.9, 'triangle', 0.12, 0.3, 'lowpass', 350, 1400);
+                playServoNoise(0.26, 860, 0.28, 0.06);
+                playTone(98, 30, 0.32, 'sine', 0.36, 0.08, 280, 55);
+                playTone(40, 118, 2.5, 'sawtooth', 0.14, 0.25, 160, 1450);
+                playTone(80, 175, 2.2, 'triangle', 0.11, 0.3, 300, 1150);
             } else if (stageNum === 2) {
-                // Precision optical vernier clicks & holographic array boot
-                playTone(1760, 2093, 0.07, 'sine', 0.075, 0);
-                playTone(2349, 2637, 0.07, 'sine', 0.065, 0.11);
-                playTone(1318, 1760, 0.14, 'triangle', 0.07, 0.24);
-                playServoNoise(0.14, 2400, 0.09, 0.18);
+                playTone(1318, 1760, 0.14, 'sine', 0.06, 0, 2600, 1800);
+                playTone(1975, 2349, 0.1, 'sine', 0.05, 0.14, 3000, 2000);
+                playServoNoise(0.14, 2100, 0.07, 0.2);
             } else if (stageNum === 3) {
-                // Telemetry acquisition triple chime + F.R.I.D.A.Y. voice
-                playTone(784, 1174, 0.12, 'sine', 0.08, 0);
-                playTone(1046.5, 1568, 0.16, 'sine', 0.085, 0.14);
+                playTone(880, 1318, 0.16, 'sine', 0.065, 0, 2400, 1400);
                 speakGreeting(operative);
             } else if (stageNum === 4) {
-                // Full Suit Lock harmonic shimmer triad
-                [220, 277.18, 329.63, 440, 554.37].forEach((f, idx) => {
-                    playTone(f, f * 1.004, 1.25, 'triangle', 0.055, idx * 0.035, 'lowpass', 2200, 750);
+                [196, 293.66, 369.99, 440, 587.33].forEach((f, idx) => {
+                    playTone(f, f * 1.003, 1.45, 'triangle', 0.05, idx * 0.04, 1900, 620);
                 });
-                playTone(1480, 740, 0.38, 'sine', 0.07, 0.06);
             }
         }
 
@@ -223,13 +199,12 @@
             try {
                 window.speechSynthesis.cancel();
                 const phrase = operative && operative.authenticated && operative.playerName !== 'GUEST'
-                    ? `Friday online. Welcome back, ${operative.playerName}. All Warboard systems armed.`
-                    : `Friday Mark eighty-five interface online. Systems armed.`;
+                    ? `Friday online. Welcome back, ${operative.playerName}. Warboard systems armed.`
+                    : `Friday Mark eighty-five online. All systems armed.`;
                 const utter = new SpeechSynthesisUtterance(phrase);
-                utter.rate = 1.04;
-                utter.pitch = 1.05;
+                utter.rate = 1.02;
+                utter.pitch = 1.04;
                 utter.volume = 0.82;
-
                 const voices = window.speechSynthesis.getVoices ? window.speechSynthesis.getVoices() : [];
                 if (voices && voices.length) {
                     const preferred = voices.find(v => /en-IE/i.test(v.lang) && /moira|emily|neural/i.test(v.name))
@@ -243,33 +218,10 @@
             } catch (_) {}
         }
 
-        function sampleSpectrum(barsCount, timeSec) {
-            const out = new Array(barsCount);
-            const speechBoost = performance.now() < voiceSpeakingUntil
-                ? 0.25 * (0.5 + 0.5 * Math.sin(timeSec * 19.0) * Math.cos(timeSec * 7.3))
-                : 0;
-            if (analyser && freqData && ctx && ctx.state === 'running' && isSoundEnabled()) {
-                analyser.getByteFrequencyData(freqData);
-                for (let i = 0; i < barsCount; i++) {
-                    const idx = Math.min(freqData.length - 1, Math.floor((i / barsCount) * (freqData.length * 0.72)));
-                    const v = freqData[idx] / 255;
-                    const wave = 0.14 + 0.16 * Math.abs(Math.sin(timeSec * 6.2 + i * 0.42)) + speechBoost * Math.abs(Math.sin(i * 0.55 + timeSec * 13));
-                    out[i] = Math.min(1, Math.max(v, wave));
-                }
-                return out;
-            }
-            for (let i = 0; i < barsCount; i++) {
-                out[i] = 0.16 + 0.26 * Math.abs(Math.sin(timeSec * 4.8 + i * 0.36)) * (0.62 + 0.38 * Math.cos(timeSec * 2.4 - i * 0.19));
-            }
-            return out;
-        }
-
         function stop() {
             closed = true;
             voiceSpeakingUntil = 0;
-            try {
-                if (window.speechSynthesis) window.speechSynthesis.cancel();
-            } catch (_) {}
+            try { if (window.speechSynthesis) window.speechSynthesis.cancel(); } catch (_) {}
             if (master && ctx) {
                 try {
                     const t = ctx.currentTime;
@@ -278,9 +230,7 @@
                 } catch (_) {}
             }
             setTimeout(() => {
-                if (ctx && ctx.state !== 'closed') {
-                    try { ctx.close(); } catch (_) {}
-                }
+                if (ctx && ctx.state !== 'closed') { try { ctx.close(); } catch (_) {} }
                 ctx = null;
             }, 240);
         }
@@ -288,37 +238,251 @@
         return {
             unlock,
             triggerStage,
-            sampleSpectrum,
             isBlocked: () => blockedByAutoplay && isSoundEnabled(),
             isSpeaking: () => performance.now() < voiceSpeakingUntil,
             stop
         };
     }
 
-    function clamp01(v) { return v < 0 ? 0 : (v > 1 ? 1 : v); }
-    function easeOutCubic(t) { const x = clamp01(t); return 1 - Math.pow(1 - x, 3); }
-    function easeInOutCubic(t) { const x = clamp01(t); return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2; }
-    function easeOutBack(t) {
-        const x = clamp01(t);
-        const c1 = 1.70158;
-        const c3 = c1 + 1;
-        return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2);
-    }
+    function createWebGLRenderer(glCanvas) {
+        let gl = null;
+        try {
+            gl = glCanvas.getContext('webgl2', { alpha: false, antialias: false, powerPreference: 'high-performance' })
+                || glCanvas.getContext('webgl', { alpha: false, antialias: false, powerPreference: 'high-performance' });
+        } catch (_) {}
+        if (!gl) return null;
 
-    // 3D Rotation helper (yaw, pitch)
-    function project3D(x, y, z, yaw, pitch, dist, cx, cy, scale) {
-        const cyaw = Math.cos(yaw), syaw = Math.sin(yaw);
-        const x1 = x * cyaw - z * syaw;
-        const z1 = x * syaw + z * cyaw;
-        const cpitch = Math.cos(pitch), spitch = Math.sin(pitch);
-        const y2 = y * cpitch - z1 * spitch;
-        const z2 = y * spitch + z1 * cpitch;
-        const persp = dist / Math.max(0.4, dist + z2);
+        const vsSrc = `
+            attribute vec2 a_pos;
+            void main() { gl_Position = vec4(a_pos, 0.0, 1.0); }
+        `;
+
+        const fsSrc = `
+            precision highp float;
+            uniform vec2 u_res;
+            uniform float u_time;
+            uniform float u_prog;
+            uniform vec2 u_ptr;
+            uniform vec2 u_centerOffset;
+            uniform float u_speak;
+
+            float hash(vec2 p) {
+                return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
+            }
+
+            float noise(vec2 p) {
+                vec2 i = floor(p);
+                vec2 f = fract(p);
+                vec2 u = f * f * (3.0 - 2.0 * f);
+                return mix(
+                    mix(hash(i + vec2(0.0, 0.0)), hash(i + vec2(1.0, 0.0)), u.x),
+                    mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x),
+                    u.y
+                );
+            }
+
+            float fbm(vec2 p) {
+                float v = 0.0;
+                float a = 0.52;
+                mat2 rot = mat2(0.80, 0.60, -0.60, 0.80);
+                for (int i = 0; i < 3; i++) {
+                    v += a * noise(p);
+                    p = rot * p * 2.05;
+                    a *= 0.5;
+                }
+                return v;
+            }
+
+            vec3 aces(vec3 x) {
+                return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0);
+            }
+
+            float arcGlow(float r, float ang, float targetR, float rot, float segs, float duty, float thickness) {
+                float d = abs(r - targetR);
+                float baseGlow = thickness / (d * d * 95.0 + thickness * 0.45);
+                float theta = mod(ang + rot, 6.2831853);
+                float segAngle = 6.2831853 / segs;
+                float sPos = mod(theta, segAngle) / segAngle;
+                float mask = smoothstep(0.03, 0.09, sPos) * (1.0 - smoothstep(duty - 0.06, duty, sPos));
+                return baseGlow * (0.14 + 0.86 * mask);
+            }
+
+            void main() {
+                float minRes = min(u_res.x, u_res.y);
+                vec2 uv = (gl_FragCoord.xy - 0.5 * u_res) / minRes;
+                uv -= u_centerOffset;
+
+                // Subtle helmet lens barrel curvature & parallax
+                float rRaw = length(uv);
+                vec2 p = uv * (1.0 + 0.065 * rRaw * rRaw) + u_ptr * 0.03;
+
+                float r = length(p);
+                float ang = atan(p.y, p.x);
+
+                // Phase ramps
+                float visorOpen = smoothstep(0.04, 0.24, u_prog);
+                float coreAppear = smoothstep(0.06, 0.28, u_prog);
+                float warmShift = smoothstep(0.42, 0.72, u_prog);
+                float lockFlash = sin(smoothstep(0.74, 0.90, u_prog) * 3.14159265);
+
+                vec3 cyan = vec3(0.14, 0.78, 1.00);
+                vec3 amber = vec3(1.00, 0.47, 0.06);
+                vec3 coreTint = mix(cyan, amber, warmShift);
+
+                // 1. Deep sapphire helmet interior atmosphere + volumetric crepuscular rays
+                vec3 col = vec3(0.006, 0.014, 0.032) * (1.0 - smoothstep(0.25, 1.25, r));
+                float rayWave = pow(max(0.0, cos(ang * 7.0 - u_time * 0.45)), 3.0) * 0.55
+                              + pow(max(0.0, cos(ang * 11.0 + u_time * 0.32)), 4.0) * 0.45;
+                float godRays = rayWave * exp(-r * 3.2) * coreAppear * (0.18 + 0.14 * lockFlash);
+                col += mix(cyan, amber, 0.45 * warmShift) * godRays;
+
+                // 2. Swirling volumetric plasma energy inside core (computed ONLY inside core radius for speed!)
+                float coreScale = mix(0.22, 1.0, coreAppear) * (1.0 + 0.015 * sin(u_time * 4.2));
+                if (r < 0.62 * coreScale) {
+                    vec2 q = p / max(0.05, coreScale) * 4.2;
+                    float spin = u_time * 0.42;
+                    mat2 m = mat2(cos(spin), -sin(spin), sin(spin), cos(spin));
+                    q = m * q;
+                    float n1 = fbm(q + vec2(u_time * 0.28, -u_time * 0.22));
+                    float n2 = fbm(q * 1.45 - vec2(n1 * 1.4, u_time * 0.35));
+                    float sphereMask = smoothstep(0.46, 0.04, r / max(0.05, coreScale));
+                    float filaments = pow(clamp(1.0 - abs(n2 - 0.5) * 4.2, 0.0, 1.0), 2.2);
+                    col += coreTint * sphereMask * (0.28 * n1 + 1.05 * filaments) * (1.0 + u_speak * 0.25);
+                    col += mix(amber, cyan, warmShift) * sphereMask * n2 * 0.18;
+                }
+
+                // 3. Concentric HDR optical rings with radial chromatic aberration near edges
+                float disp = 0.0028 * r;
+                float rA = r / max(0.08, coreScale);
+
+                float ringInner = arcGlow(rA, ang, 0.235,  u_time * 0.85, 2.0, 0.72, 0.0065);
+                float ringGold  = arcGlow(rA, ang, 0.285, -u_time * 0.65, 3.0, 0.68, 0.0042);
+                float ringOuter = arcGlow(rA, ang, 0.335,  u_time * 0.38, 4.0, 0.80, 0.0038);
+
+                // Slight RGB dispersion offset on outer optical halo
+                float ringEdgeR = arcGlow(rA - disp, ang, 0.385, -u_time * 0.25, 6.0, 0.52, 0.0022);
+                float ringEdgeG = arcGlow(rA,        ang, 0.385, -u_time * 0.25, 6.0, 0.52, 0.0022);
+                float ringEdgeB = arcGlow(rA + disp, ang, 0.385, -u_time * 0.25, 6.0, 0.52, 0.0022);
+
+                // Optical notched compass ring inside shader (zero CPU paths!)
+                float ticks = step(0.86, cos(ang * 72.0 + u_time * 16.0));
+                float tickRing = (0.0025 / (abs(rA - 0.355) * 140.0 + 0.01)) * ticks * smoothstep(0.18, 0.38, u_prog);
+
+                // Voice-reactive radial spectrum glow pulses
+                float barAng = floor((ang + 3.14159265) / 6.2831853 * 64.0);
+                float barAmp = 0.012 + 0.024 * abs(sin(barAng * 0.7 + u_time * (5.2 + u_speak * 8.0)));
+                float inBarBand = smoothstep(0.40, 0.405, rA) * (1.0 - smoothstep(0.405 + barAmp, 0.415 + barAmp, rA));
+                float barLine = smoothstep(0.65, 0.92, cos(ang * 64.0));
+                float barsGlow = inBarBand * barLine * smoothstep(0.24, 0.45, u_prog) * (0.45 + 0.4 * u_speak);
+
+                col += amber * (ringInner * 1.15 + ringGold * 0.75) * coreAppear;
+                col += cyan * (ringOuter * 0.95 + tickRing * 0.42 + barsGlow * 0.7) * coreAppear;
+                col += vec3(ringEdgeR, ringEdgeG, ringEdgeB) * vec3(0.25, 0.75, 1.0) * 0.55 * coreAppear;
+
+                // 4. Anamorphic horizontal cinema lens flare + expanding EMP shockwave
+                float flareAmt = sin(smoothstep(0.08, 0.32, u_prog) * 3.14159265) * 0.55 + lockFlash * 0.95;
+                float anamorphic = exp(-abs(p.y) * 64.0) * exp(-abs(p.x) * 1.9) * flareAmt;
+                col += mix(cyan, vec3(1.0, 0.88, 0.72), 0.55) * anamorphic * 0.85;
+
+                if (u_prog > 0.74 && u_prog < 0.92) {
+                    float wT = (u_prog - 0.74) / 0.18;
+                    float wR = 0.28 + wT * 0.95;
+                    float shock = exp(-abs(r - wR) * 48.0) * (1.0 - wT);
+                    col += mix(amber, cyan, 0.4) * shock * 1.1;
+                }
+
+                // 5. Drifting out-of-focus optical bokeh motes (6 fast GPU spheres)
+                for (int k = 0; k < 6; k++) {
+                    float fk = float(k);
+                    float bx = sin(fk * 2.17 + u_time * (0.14 + fk * 0.03)) * (0.36 + 0.1 * fk);
+                    float by = cos(fk * 1.63 - u_time * (0.11 + fk * 0.025)) * (0.28 + 0.06 * fk);
+                    float br = 0.022 + 0.008 * mod(fk, 3.0);
+                    float bd = length(p - vec2(bx, by));
+                    float bokeh = smoothstep(br, br * 0.35, bd) * 0.16 * coreAppear;
+                    col += (mod(fk, 2.0) < 0.5 ? cyan : amber) * bokeh;
+                }
+
+                // 6. Metallic curved helmet visor eye-slit opening (Phase 1) + edge glint
+                float edgeGap = mix(0.006, 0.88, visorOpen);
+                float curvedSlit = abs(p.y) - edgeGap - 0.045 * (p.x * p.x);
+                float visorMask = 1.0 - smoothstep(-0.015, 0.015, curvedSlit);
+                float slitEdgeGlow = exp(-abs(curvedSlit) * 95.0) * (1.0 - visorOpen) * 1.3;
+                col = col * visorMask + cyan * slitEdgeGlow;
+
+                // Subtle diagonal curved glass reflection + outer helmet bezel vignette
+                float glassReflect = exp(-pow((p.x * 0.6 + p.y * 0.9 - 0.35), 2.0) * 18.0) * 0.045 * visorOpen;
+                col += vec3(0.5, 0.8, 1.0) * glassReflect;
+                col *= (1.0 - smoothstep(0.65, 1.38, rRaw) * 0.72);
+
+                // Subtle 35mm cinema film grain (imperceptible organic polish, breaks digital banding)
+                float grain = (hash(gl_FragCoord.xy + fract(u_time) * 100.0) - 0.5) * 0.018;
+                col += grain;
+
+                col = aces(col * 1.18);
+                gl_FragColor = vec4(pow(col, vec3(0.92)), 1.0);
+            }
+        `;
+
+        function compile(type, src) {
+            const sh = gl.createShader(type);
+            gl.shaderSource(sh, src);
+            gl.compileShader(sh);
+            if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
+                gl.deleteShader(sh);
+                return null;
+            }
+            return sh;
+        }
+
+        const vs = compile(gl.VERTEX_SHADER, vsSrc);
+        const fs = compile(gl.FRAGMENT_SHADER, fsSrc);
+        if (!vs || !fs) return null;
+
+        const prog = gl.createProgram();
+        gl.attachShader(prog, vs);
+        gl.attachShader(prog, fs);
+        gl.linkProgram(prog);
+        if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) return null;
+
+        const buf = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+
+        const posLoc = gl.getAttribLocation(prog, 'a_pos');
+        const uRes = gl.getUniformLocation(prog, 'u_res');
+        const uTime = gl.getUniformLocation(prog, 'u_time');
+        const uProg = gl.getUniformLocation(prog, 'u_prog');
+        const uPtr = gl.getUniformLocation(prog, 'u_ptr');
+        const uOffset = gl.getUniformLocation(prog, 'u_centerOffset');
+        const uSpeak = gl.getUniformLocation(prog, 'u_speak');
+
         return {
-            x: cx + x1 * scale * persp,
-            y: cy + y2 * scale * persp,
-            z: z2,
-            scale: persp
+            resize(w, h, dpr) {
+                glCanvas.width = Math.max(1, Math.floor(w * dpr));
+                glCanvas.height = Math.max(1, Math.floor(h * dpr));
+                gl.viewport(0, 0, glCanvas.width, glCanvas.height);
+            },
+            render(t, p, sx, sy, offsetY, speaking) {
+                gl.useProgram(prog);
+                gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+                gl.enableVertexAttribArray(posLoc);
+                gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
+                gl.uniform2f(uRes, glCanvas.width, glCanvas.height);
+                gl.uniform1f(uTime, t);
+                gl.uniform1f(uProg, p);
+                gl.uniform2f(uPtr, sx, sy);
+                gl.uniform2f(uOffset, 0.0, offsetY);
+                gl.uniform1f(uSpeak, speaking ? 1.0 : 0.0);
+                gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+            },
+            destroy() {
+                try {
+                    gl.deleteProgram(prog);
+                    gl.deleteShader(vs);
+                    gl.deleteShader(fs);
+                    gl.deleteBuffer(buf);
+                } catch (_) {}
+            }
         };
     }
 
@@ -343,22 +507,22 @@
         overlay.id = 'friday-intro-overlay';
         overlay.className = 'friday-intro-overlay';
         overlay.setAttribute('role', 'dialog');
-        overlay.setAttribute('aria-label', 'F.R.I.D.A.Y. Mark-85 Tactical Boot Sequence');
+        overlay.setAttribute('aria-label', 'F.R.I.D.A.Y. Mark-85 Boot Sequence');
 
         overlay.innerHTML = `
+            <canvas id="friday-intro-gl" class="friday-intro-canvas"></canvas>
             <canvas id="friday-intro-canvas" class="friday-intro-canvas"></canvas>
-            <div class="friday-intro-visor-vignette"></div>
             <div class="friday-intro-hud-chrome">
                 <div class="friday-intro-topline">
-                    <span class="friday-intro-tag"><span class="fi-dot"></span> MARK-85 ARMOR HUD // F.R.I.D.A.Y. AI</span>
-                    <span class="friday-intro-clock" id="friday-intro-subclock">SUIT SEAL 000%</span>
+                    <span class="friday-intro-tag"><span class="fi-dot"></span> F.R.I.D.A.Y. // MK-85</span>
+                    <span class="friday-intro-clock" id="friday-intro-subclock">INITIALIZING</span>
                 </div>
                 <div class="friday-intro-bottom">
                     <div class="friday-intro-console" id="friday-intro-console" aria-hidden="true"></div>
                     <div class="friday-intro-controls">
                         <button type="button" class="friday-intro-pill" id="friday-intro-audio-btn" aria-label="Toggle Stark Audio"></button>
                         <button type="button" class="friday-intro-pill" id="friday-intro-autohide-btn" aria-label="Toggle Auto-Play on Entry"></button>
-                        <button type="button" class="friday-intro-skip" id="friday-intro-skip-btn">Skip Intro →</button>
+                        <button type="button" class="friday-intro-skip" id="friday-intro-skip-btn">Skip →</button>
                     </div>
                 </div>
             </div>
@@ -367,89 +531,66 @@
         document.body.appendChild(overlay);
         clearBootGuard();
 
-        const canvas = overlay.querySelector('#friday-intro-canvas');
-        const ctx2d = canvas.getContext('2d');
+        const glCanvas = overlay.querySelector('#friday-intro-gl');
+        const txtCanvas = overlay.querySelector('#friday-intro-canvas');
+        const ctx2d = txtCanvas.getContext('2d');
         const subClockEl = overlay.querySelector('#friday-intro-subclock');
         const consoleEl = overlay.querySelector('#friday-intro-console');
         const audioBtn = overlay.querySelector('#friday-intro-audio-btn');
         const autoBtn = overlay.querySelector('#friday-intro-autohide-btn');
         const skipBtn = overlay.querySelector('#friday-intro-skip-btn');
 
+        const glRenderer = createWebGLRenderer(glCanvas);
+
         let vw = window.innerWidth;
         let vh = window.innerHeight;
-        let dpr = Math.min(window.devicePixelRatio || 1, 2);
+        // Keep fragment fillrate ~1.05x DPR for zero-lag 60/120fps on Retina mobile & 4K, while text stays sharp at up to 2x DPR
+        let glDpr = Math.min(window.devicePixelRatio || 1, 1.05);
+        let txtDpr = Math.min(window.devicePixelRatio || 1, 2.0);
 
-        function resizeCanvas() {
+        function resizeAll() {
             vw = window.innerWidth;
             vh = window.innerHeight;
-            dpr = Math.min(window.devicePixelRatio || 1, 2);
-            canvas.width = Math.max(1, Math.floor(vw * dpr));
-            canvas.height = Math.max(1, Math.floor(vh * dpr));
-            canvas.style.width = vw + 'px';
-            canvas.style.height = vh + 'px';
-        }
-        resizeCanvas();
-
-        // Volumetric depth motes & dust sparks
-        const particles = Array.from({ length: 115 }, () => ({
-            x: (Math.random() - 0.5) * 2.2,
-            y: (Math.random() - 0.5) * 2.2,
-            z: Math.random() * 1.5 + 0.12,
-            amber: Math.random() > 0.58,
-            size: Math.random() * 2.0 + 0.65,
-            speed: 0.008 + Math.random() * 0.014
-        }));
-
-        // Radar threat blips inside right telemetry wing
-        const radarBlips = [
-            { r: 0.34, ang: 0.9, label: 'TGT-01' },
-            { r: 0.62, ang: 2.7, label: 'HOSTILE' },
-            { r: 0.48, ang: 4.4, label: 'CHAIN' }
-        ];
-
-        // Precompute hex mesh vertices for subtle armored helmet shimmer
-        const hexCenters = [];
-        const hexR = 34;
-        const hexDx = hexR * 1.55;
-        const hexDy = hexR * Math.sqrt(3) * 0.92;
-        for (let row = -1; row < Math.ceil(vh / hexDy) + 2; row++) {
-            for (let col = -1; col < Math.ceil(vw / hexDx) + 2; col++) {
-                const hx = col * hexDx;
-                const hy = row * hexDy + (col % 2 === 0 ? 0 : hexDy * 0.5);
-                hexCenters.push([hx, hy]);
+            glDpr = Math.min(window.devicePixelRatio || 1, 1.05);
+            txtDpr = Math.min(window.devicePixelRatio || 1, 2.0);
+            if (glRenderer) {
+                glRenderer.resize(vw, vh, glDpr);
+            } else {
+                glCanvas.width = vw;
+                glCanvas.height = vh;
             }
+            txtCanvas.width = Math.max(1, Math.floor(vw * txtDpr));
+            txtCanvas.height = Math.max(1, Math.floor(vh * txtDpr));
         }
+        resizeAll();
 
-        let pointerX = 0;
-        let pointerY = 0;
-        let smoothX = 0;
-        let smoothY = 0;
-
+        let pointerX = 0, pointerY = 0;
+        let smoothX = 0, smoothY = 0;
         function onPointerMove(e) {
             if (!e) return;
             pointerX = ((e.clientX || vw / 2) / vw - 0.5) * 2;
             pointerY = ((e.clientY || vh / 2) / vh - 0.5) * 2;
         }
         window.addEventListener('pointermove', onPointerMove, { passive: true });
-        window.addEventListener('resize', resizeCanvas);
+        window.addEventListener('resize', resizeAll);
 
         function syncControlLabels() {
             const soundOn = isSoundEnabled();
             if (audioBtn) {
                 if (!soundOn) {
-                    audioBtn.innerHTML = '🔇 Audio: OFF';
+                    audioBtn.textContent = '🔇 Muted';
                     audioBtn.classList.remove('pulse');
                 } else if (audio.isBlocked()) {
-                    audioBtn.innerHTML = '🔊 Tap for Sound';
+                    audioBtn.textContent = '🔊 Tap for Sound';
                     audioBtn.classList.add('pulse');
                 } else {
-                    audioBtn.innerHTML = '🔊 Stark Audio: ON';
+                    audioBtn.textContent = '🔊 Stark Audio';
                     audioBtn.classList.remove('pulse');
                 }
             }
             if (autoBtn) {
                 const autoOn = isAutoIntroEnabled();
-                autoBtn.textContent = autoOn ? '⚡ Auto-Intro: ON' : '⏸️ Auto-Intro: OFF';
+                autoBtn.textContent = autoOn ? 'Auto-Intro: ON' : 'Auto-Intro: OFF';
                 autoBtn.classList.toggle('muted-pref', !autoOn);
             }
         }
@@ -458,16 +599,14 @@
         syncControlLabels();
 
         async function tryUnlockFromGesture(e) {
-            if (e && e.target && (e.target.closest('#friday-intro-skip-btn') || e.target.closest('#friday-intro-autohide-btn') || e.target.closest('#friday-intro-audio-btn'))) {
-                return;
-            }
+            if (e && e.target && (e.target.closest('#friday-intro-skip-btn') || e.target.closest('#friday-intro-autohide-btn') || e.target.closest('#friday-intro-audio-btn'))) return;
             if (isSoundEnabled() && audio.isBlocked()) {
                 const ok = await audio.unlock();
                 if (ok) {
                     const elapsed = performance.now() - startMs;
-                    if (elapsed < 1150) audio.triggerStage(1, operative);
-                    else if (elapsed < 2850) audio.triggerStage(2, operative);
-                    else if (elapsed < 4600) audio.triggerStage(3, operative);
+                    if (elapsed < 1200) audio.triggerStage(1, operative);
+                    else if (elapsed < 3200) audio.triggerStage(2, operative);
+                    else if (elapsed < 5100) audio.triggerStage(3, operative);
                     else audio.triggerStage(4, operative);
                     syncControlLabels();
                 }
@@ -528,551 +667,146 @@
         }
         document.addEventListener('keydown', onKeyDown);
 
-        const consoleLines = [
-            { at: 0.16, tag: 'SUIT', color: '#ff8a1f', text: 'MARK-85 OPTIC SEAL & ARC TURBINE', status: 'LOCKED' },
-            { at: 0.34, tag: 'CORE', color: '#38bdf8', text: 'F.R.I.D.A.Y. NEURAL CORTEX', status: 'ONLINE' },
-            { at: 0.52, tag: 'AUTH', color: '#38bdf8', text: `OPERATIVE: ${operative.playerName}${operative.playerId ? ` [${operative.playerId}]` : ''}`, status: operative.authenticated ? 'VERIFIED' : 'STANDBY' },
-            { at: 0.68, tag: 'LINK', color: '#10b981', text: `${operative.factionLabel.toUpperCase()} TACTICAL NET`, status: 'SYNCED' },
-            { at: 0.80, tag: 'HUD ', color: '#fbbf24', text: 'WARBOARD // SENTINEL // ARMORY', status: 'ARMED' }
-        ];
-        const renderedLines = new Set();
+        // Single clean floating cinema telemetry status line (no chunky box)
+        let consolePhase = -1;
+        function updateFloatingTelemetry(p) {
+            if (!consoleEl) return;
+            let phase = 0;
+            if (p >= 0.68) phase = 3;
+            else if (p >= 0.40) phase = 2;
+            else if (p >= 0.08) phase = 1;
+            if (phase === consolePhase) return;
+            consolePhase = phase;
+
+            consoleEl.textContent = '';
+            const span = document.createElement('span');
+            span.className = 'fi-cinema-line';
+            if (phase === 1) {
+                span.textContent = 'OPTICAL VISOR CALIBRATING // ARC TURBINE NOMINAL';
+            } else if (phase === 2) {
+                span.textContent = `OPERATIVE: ${operative.playerName}${operative.playerId ? ` [${operative.playerId}]` : ''} // ${operative.factionLabel.toUpperCase()}`;
+            } else if (phase === 3) {
+                span.textContent = `${operative.authenticated ? 'BIOMETRIC MATCH CONFIRMED' : 'INTERFACE READY'} • WARBOARD TELEMETRY ARMED`;
+                span.classList.add('locked');
+            }
+            if (phase > 0) consoleEl.appendChild(span);
+        }
 
         let rafId = 0;
         let finished = false;
-        const startMs = performance.now();
+        let lastFrameMs = performance.now();
+        let frameCount = 0;
+        let frameDtSum = 0;
+        const startMs = lastFrameMs;
 
-        function drawTilted3DRing(cx, cy, radius, tiltX, tiltY, spinAngle, color, lineWidth, arcs = 3, dashArc = false) {
-            const steps = 64;
-            ctx2d.save();
-            ctx2d.strokeStyle = color;
-            ctx2d.lineWidth = lineWidth;
-            for (let a = 0; a < arcs; a++) {
-                const startA = spinAngle + (a * Math.PI * 2) / arcs + 0.16;
-                const endA = spinAngle + ((a + 1) * Math.PI * 2) / arcs - 0.24;
-                const segSteps = Math.max(8, Math.floor((steps * (endA - startA)) / (Math.PI * 2)));
-                ctx2d.beginPath();
-                for (let s = 0; s <= segSteps; s++) {
-                    const ang = startA + ((endA - startA) * s) / segSteps;
-                    if (dashArc && s % 3 === 2) continue;
-                    const px = Math.cos(ang);
-                    const py = Math.sin(ang);
-                    const pt = project3D(px, py, 0, tiltY, tiltX, 3.2, cx, cy, radius);
-                    if (s === 0 || (dashArc && s % 3 === 0)) ctx2d.moveTo(pt.x, pt.y);
-                    else ctx2d.lineTo(pt.x, pt.y);
-                }
-                ctx2d.stroke();
-            }
-            ctx2d.restore();
-        }
+        function clamp01(v) { return v < 0 ? 0 : (v > 1 ? 1 : v); }
+        function easeOutCubic(t) { const x = clamp01(t); return 1 - Math.pow(1 - x, 3); }
 
         function drawFrame(now) {
             if (finished) return;
+            const dt = now - lastFrameMs;
+            lastFrameMs = now;
+            if (dt > 0 && dt < 250) {
+                frameCount++;
+                frameDtSum += dt;
+            }
+
             const elapsed = now - startMs;
             const p = Math.min(1, elapsed / DURATION_MS);
             const t = elapsed / 1000;
 
-            smoothX += (pointerX - smoothX) * 0.08;
-            smoothY += (pointerY - smoothY) * 0.08;
+            smoothX += (pointerX - smoothX) * 0.09;
+            smoothY += (pointerY - smoothY) * 0.09;
 
-            // Camera impact shake impulses (at helmet seal ~0.22s & lock-on ~4.65s)
-            let shakeX = 0, shakeY = 0;
-            if (elapsed > 140 && elapsed < 440) {
-                const mag = (1 - (elapsed - 140) / 300) * 7.5;
-                shakeX = (Math.random() - 0.5) * mag;
-                shakeY = (Math.random() - 0.5) * mag;
-            } else if (elapsed > 4600 && elapsed < 4950) {
-                const mag = (1 - (elapsed - 4600) / 350) * 5.0;
-                shakeX = (Math.random() - 0.5) * mag;
-                shakeY = (Math.random() - 0.5) * mag;
+            // Camera impact shake impulses (at visor seal & lock flash)
+            let shakePx = 0, shakePy = 0;
+            if (elapsed > 140 && elapsed < 380) {
+                const mag = (1 - (elapsed - 140) / 240) * 6;
+                shakePx = (Math.random() - 0.5) * mag;
+                shakePy = (Math.random() - 0.5) * mag;
             }
 
-            // Stage audio cues
             if (p >= 0.01) audio.triggerStage(1, operative);
-            if (p >= 0.22) audio.triggerStage(2, operative);
+            if (p >= 0.24) audio.triggerStage(2, operative);
             if (p >= 0.48) audio.triggerStage(3, operative);
             if (p >= 0.74) audio.triggerStage(4, operative);
 
-            // Console telemetry lines
-            if (consoleEl) {
-                for (let i = 0; i < consoleLines.length; i++) {
-                    const line = consoleLines[i];
-                    if (p >= line.at && !renderedLines.has(i)) {
-                        renderedLines.add(i);
-                        const row = document.createElement('div');
-                        row.className = 'fi-log-line';
-                        const tagEl = document.createElement('span');
-                        tagEl.className = 'fi-log-tag';
-                        tagEl.style.color = line.color;
-                        tagEl.textContent = `[${line.tag}]`;
-                        const bodyEl = document.createElement('span');
-                        bodyEl.className = 'fi-log-body';
-                        bodyEl.textContent = line.text;
-                        const statEl = document.createElement('span');
-                        statEl.className = 'fi-log-stat';
-                        statEl.textContent = line.status;
-                        row.append(tagEl, ' ', bodyEl, ' ', statEl);
-                        consoleEl.appendChild(row);
-                    }
-                }
-            }
+            updateFloatingTelemetry(p);
             if (subClockEl) {
-                if (p < 0.18) subClockEl.textContent = 'VISOR SEALING...';
-                else if (p < 0.74) subClockEl.textContent = `BOOT ${String(Math.min(99, Math.round((p / 0.76) * 100))).padStart(3, '0')}%`;
-                else if (p < 0.89) subClockEl.textContent = 'MARK-85 ARMED';
-                else subClockEl.textContent = 'HUD ENGAGED';
+                if (p < 0.22) subClockEl.textContent = 'OPTIC SEAL';
+                else if (p < 0.72) subClockEl.textContent = `SYNC ${String(Math.min(99, Math.round((p / 0.74) * 100))).padStart(2, '0')}%`;
+                else subClockEl.textContent = 'ARMED';
             }
 
-            // ── Render Canvas ───────────────────────────────────────────────────
-            ctx2d.save();
-            ctx2d.scale(dpr, dpr);
-            ctx2d.translate(shakeX, shakeY);
-            ctx2d.clearRect(-20, -20, vw + 40, vh + 40);
+            // 1. Hardware GPU WebGL Shader Pass (1 single draw call!)
+            const offsetYGl = vw < 640 ? 0.11 : 0.05; // shift core slightly above center cleanly in GLSL (-Y in uv is down, +Y is up)
+            if (glRenderer) {
+                glRenderer.render(t, p, smoothX + shakePx * 0.01, -smoothY + shakePy * 0.01, offsetYGl, audio.isSpeaking());
+            } else {
+                // Lightweight clean Canvas 2D fallback only if WebGL unavailable
+                const gctx = glCanvas.getContext('2d');
+                if (gctx) {
+                    const gr = gctx.createRadialGradient(vw / 2, vh * 0.44, 10, vw / 2, vh * 0.44, Math.min(vw, vh) * 0.5);
+                    gr.addColorStop(0, '#0a2540');
+                    gr.addColorStop(1, '#010308');
+                    gctx.fillStyle = gr;
+                    gctx.fillRect(0, 0, vw, vh);
+                }
+            }
 
-            const cx = vw * 0.5 + smoothX * 10;
-            const cy = (vw < 640 ? vh * 0.36 : vh * 0.43) + smoothY * 10;
+            // 2. Crisp Lightweight Typography & Minimal Hairlines (<0.4ms total!)
+            ctx2d.setTransform(txtDpr, 0, 0, txtDpr, 0, 0);
+            ctx2d.clearRect(0, 0, vw, vh);
+
+            const cy = (vw < 640 ? vh * 0.39 : vh * 0.45) + shakePy - smoothY * 8;
+            const cx = vw * 0.5 + shakePx - smoothX * 8;
             const minDim = Math.min(vw, vh);
-            const coreR = Math.max(76, Math.min(176, minDim * (vw < 640 ? 0.255 : 0.215)));
+            const scaleR = Math.max(76, Math.min(182, minDim * 0.23));
 
-            // 1. Deep Visor Gradient Backdrop (warms subtly as core ignites)
-            const igniteGlow = easeOutCubic(p / 0.25);
-            const bgGrad = ctx2d.createRadialGradient(cx, cy, 8, cx, cy, Math.max(vw, vh) * 0.82);
-            bgGrad.addColorStop(0, `rgba(12, 34, 68, ${0.42 * igniteGlow + 0.15})`);
-            bgGrad.addColorStop(0.42, `rgba(6, 16, 36, 0.94)`);
-            bgGrad.addColorStop(1, '#010308');
-            ctx2d.fillStyle = '#010308';
-            ctx2d.fillRect(-20, -20, vw + 40, vh + 40);
-            ctx2d.fillStyle = bgGrad;
-            ctx2d.fillRect(-20, -20, vw + 40, vh + 40);
-
-            // 2. Hexagonal Nanotech Helmet Mesh illuminated by vertical laser sweep
-            const scanNorm = (p > 0.12 && p < 0.82) ? ((p - 0.12) / 0.70) : -1;
-            const scanY = scanNorm >= 0 ? vh * (0.06 + scanNorm * 0.88) : -999;
-            if (p > 0.1) {
+            const txtAlpha = easeOutCubic((p - 0.14) / 0.22);
+            if (txtAlpha > 0.02) {
                 ctx2d.save();
-                ctx2d.lineWidth = 0.8;
-                const meshAlpha = easeOutCubic((p - 0.1) / 0.25) * 0.12;
-                for (let h = 0; h < hexCenters.length; h++) {
-                    const [hx, hy] = hexCenters[h];
-                    const dScan = Math.abs(hy - scanY);
-                    const boost = dScan < 85 ? (1 - dScan / 85) * 0.28 : 0;
-                    const distCenter = Math.hypot(hx - cx, hy - cy);
-                    if (distCenter < coreR * 0.9) continue; // keep center clear for hologram
-                    const a = meshAlpha + boost;
-                    if (a < 0.03) continue;
-                    ctx2d.strokeStyle = boost > 0.08 ? `rgba(56, 189, 248, ${a})` : `rgba(56, 189, 248, ${a * 0.45})`;
-                    ctx2d.beginPath();
-                    for (let k = 0; k < 6; k++) {
-                        const ka = (Math.PI / 3) * k;
-                        const px = hx + Math.cos(ka) * (hexR * 0.82);
-                        const py = hy + Math.sin(ka) * (hexR * 0.82);
-                        if (k === 0) ctx2d.moveTo(px, py);
-                        else ctx2d.lineTo(px, py);
-                    }
-                    ctx2d.closePath();
-                    ctx2d.stroke();
-                }
-                ctx2d.restore();
-            }
-
-            // 3. 3D Holographic Depth Starfield / Optical Dust
-            ctx2d.save();
-            ctx2d.globalCompositeOperation = 'lighter';
-            for (let i = 0; i < particles.length; i++) {
-                const pt = particles[i];
-                pt.z -= pt.speed;
-                if (pt.z <= 0.06) {
-                    pt.z = 1.5;
-                    pt.x = (Math.random() - 0.5) * 2.2;
-                    pt.y = (Math.random() - 0.5) * 2.2;
-                }
-                const sx = vw * 0.5 + (pt.x / pt.z) * vw * 0.44 + smoothX * 20 * (1.6 - pt.z);
-                const sy = vh * 0.43 + (pt.y / pt.z) * vh * 0.44 + smoothY * 20 * (1.6 - pt.z);
-                if (sx < -20 || sx > vw + 20 || sy < -20 || sy > vh + 20) continue;
-                const alpha = Math.min(0.85, (1.5 - pt.z) * 0.68) * easeOutCubic(p * 3.5);
-                ctx2d.fillStyle = pt.amber ? `rgba(255, 132, 31, ${alpha})` : `rgba(56, 189, 248, ${alpha})`;
-                ctx2d.beginPath();
-                ctx2d.arc(sx, sy, (pt.size / pt.z) * 0.75, 0, Math.PI * 2);
-                ctx2d.fill();
-            }
-            ctx2d.restore();
-
-            // 4. Phase 1: Helmet Faceplate Eye-Slit Initialization & Optical Bloom
-            if (p < 0.28) {
-                const sealT = easeInOutCubic(p / 0.14);
-                const openIris = easeOutCubic(Math.max(0, (p - 0.08) / 0.2));
-                const maskGap = (vh * 0.55) * openIris;
-                // Closing / opening dark titanium visor plates with bright cyan/gold seam
-                if (maskGap < vh * 0.52) {
-                    ctx2d.save();
-                    ctx2d.fillStyle = '#02040a';
-                    ctx2d.fillRect(-20, -20, vw + 40, Math.max(0, cy - maskGap));
-                    ctx2d.fillRect(-20, cy + maskGap, vw + 40, vh);
-                    // Glowing visor seam edge
-                    const seamG = ctx2d.createLinearGradient(0, cy - maskGap, vw, cy - maskGap);
-                    seamG.addColorStop(0, 'rgba(56, 189, 248, 0)');
-                    seamG.addColorStop(0.5, `rgba(56, 189, 248, ${(1 - openIris) * 0.9 * sealT})`);
-                    seamG.addColorStop(1, 'rgba(56, 189, 248, 0)');
-                    ctx2d.strokeStyle = seamG;
-                    ctx2d.lineWidth = 2.5;
-                    ctx2d.beginPath();
-                    ctx2d.moveTo(0, cy - maskGap);
-                    ctx2d.lineTo(vw, cy - maskGap);
-                    ctx2d.moveTo(0, cy + maskGap);
-                    ctx2d.lineTo(vw, cy + maskGap);
-                    ctx2d.stroke();
-                    ctx2d.restore();
-                }
-            }
-
-            // 5. Core 3D Geodesic Wireframe + Tilted Gyroscopic Orbital Rings
-            const ringScale = easeOutBack(clamp01((p - 0.08) / 0.28));
-            const pulseBreath = 1 + Math.sin(t * 4.0) * 0.018;
-            const R = coreR * ringScale * pulseBreath;
-
-            if (R > 6) {
-                ctx2d.save();
-                ctx2d.globalCompositeOperation = 'lighter';
-
-                // Volumetric Plasma Aura
-                const aura = ctx2d.createRadialGradient(cx, cy, R * 0.04, cx, cy, R * 1.55);
-                aura.addColorStop(0, 'rgba(56, 189, 248, 0.26)');
-                aura.addColorStop(0.35, 'rgba(255, 115, 0, 0.16)');
-                aura.addColorStop(0.7, 'rgba(56, 189, 248, 0.05)');
-                aura.addColorStop(1, 'rgba(0, 0, 0, 0)');
-                ctx2d.fillStyle = aura;
-                ctx2d.beginPath();
-                ctx2d.arc(cx, cy, R * 1.55, 0, Math.PI * 2);
-                ctx2d.fill();
-
-                // True 3D Projected Rotating Geodesic Sphere inside core
-                const yaw = t * 0.65 + smoothX * 0.5;
-                const pitch = 0.35 + Math.sin(t * 0.45) * 0.18 + smoothY * 0.35;
-                const sphereR = R * 0.58;
-                ctx2d.strokeStyle = 'rgba(56, 189, 248, 0.22)';
-                ctx2d.lineWidth = 0.9;
-                for (let lat = -2; lat <= 2; lat++) {
-                    const phi = (lat / 3) * (Math.PI * 0.5);
-                    const ringR = Math.cos(phi);
-                    const yOff = Math.sin(phi);
-                    ctx2d.beginPath();
-                    for (let i = 0; i <= 36; i++) {
-                        const th = (i / 36) * Math.PI * 2;
-                        const pr = project3D(Math.cos(th) * ringR, yOff, Math.sin(th) * ringR, yaw, pitch, 3.0, cx, cy, sphereR);
-                        if (i === 0) ctx2d.moveTo(pr.x, pr.y);
-                        else ctx2d.lineTo(pr.x, pr.y);
-                    }
-                    ctx2d.stroke();
-                }
-                for (let lon = 0; lon < 6; lon++) {
-                    const th = (lon / 6) * Math.PI;
-                    ctx2d.beginPath();
-                    for (let j = 0; j <= 32; j++) {
-                        const phi = (j / 32) * Math.PI * 2;
-                        const pr = project3D(Math.cos(th) * Math.sin(phi), Math.cos(phi), Math.sin(th) * Math.sin(phi), yaw, pitch, 3.0, cx, cy, sphereR);
-                        if (j === 0) ctx2d.moveTo(pr.x, pr.y);
-                        else ctx2d.lineTo(pr.x, pr.y);
-                    }
-                    ctx2d.stroke();
-                }
-
-                // Dual 3D Tilted Gyroscopic Rings (Stark Hologram Perspective)
-                const gyroAlpha = easeOutCubic(clamp01((p - 0.16) / 0.25));
-                drawTilted3DRing(cx, cy, R * 1.18, 0.42 + smoothY * 0.25, 0.25 + smoothX * 0.25, t * 0.95, `rgba(56, 189, 248, ${0.42 * gyroAlpha})`, 1.4, 4, false);
-                drawTilted3DRing(cx, cy, R * 1.08, -0.38 - smoothY * 0.2, 0.48 + smoothX * 0.2, -t * 1.25, `rgba(255, 132, 31, ${0.46 * gyroAlpha})`, 1.6, 3, true);
-
-                // Precision 2D Cyan Degree Tick Compass Ring
-                ctx2d.save();
-                ctx2d.translate(cx, cy);
-                ctx2d.rotate(t * 0.22);
-                ctx2d.strokeStyle = 'rgba(56, 189, 248, 0.78)';
-                ctx2d.lineWidth = 1.4;
-                for (let d = 0; d < 96; d++) {
-                    const ang = (d / 96) * Math.PI * 2;
-                    const major = d % 8 === 0;
-                    const r1 = R * (major ? 1.16 : 1.21);
-                    const r2 = R * 1.26;
-                    ctx2d.globalAlpha = major ? 0.9 : 0.35;
-                    ctx2d.beginPath();
-                    ctx2d.moveTo(Math.cos(ang) * r1, Math.sin(ang) * r1);
-                    ctx2d.lineTo(Math.cos(ang) * r2, Math.sin(ang) * r2);
-                    ctx2d.stroke();
-                }
-                ctx2d.restore();
-
-                // Signature F.R.I.D.A.Y. Burnt-Orange Thick Orbital Segments
-                ctx2d.save();
-                ctx2d.translate(cx, cy);
-                ctx2d.rotate(t * 0.84);
-                ctx2d.strokeStyle = '#ff7b00';
-                ctx2d.shadowColor = '#ff6a00';
-                ctx2d.shadowBlur = 22;
-                ctx2d.lineWidth = 5.8;
-                ctx2d.beginPath();
-                ctx2d.arc(0, 0, R * 0.88, 0.22, Math.PI * 1.08);
-                ctx2d.stroke();
-                ctx2d.beginPath();
-                ctx2d.arc(0, 0, R * 0.88, Math.PI * 1.26, Math.PI * 1.92);
-                ctx2d.stroke();
-
-                ctx2d.lineWidth = 2.2;
-                ctx2d.strokeStyle = '#fbbf24';
-                ctx2d.beginPath();
-                ctx2d.arc(0, 0, R * 0.77, -0.35, Math.PI * 0.62);
-                ctx2d.stroke();
-                ctx2d.restore();
-
-                // Counter-rotating Outer Arc-Cyan Ring
-                ctx2d.save();
-                ctx2d.translate(cx, cy);
-                ctx2d.rotate(-t * 0.52);
-                ctx2d.strokeStyle = '#38bdf8';
-                ctx2d.shadowColor = '#00e5ff';
-                ctx2d.shadowBlur = 16;
-                ctx2d.lineWidth = 2.8;
-                for (let s = 0; s < 3; s++) {
-                    const base = s * ((Math.PI * 2) / 3);
-                    ctx2d.beginPath();
-                    ctx2d.arc(0, 0, R * 1.04, base + 0.14, base + 1.48);
-                    ctx2d.stroke();
-                }
-                ctx2d.restore();
-
-                // 64 Audio-Reactive Volumetric Spectrum Needles
-                const bars = 64;
-                const spec = audio.sampleSpectrum(bars, t);
-                ctx2d.save();
-                ctx2d.translate(cx, cy);
-                const specAlpha = easeOutCubic(clamp01((p - 0.18) / 0.22));
-                ctx2d.globalAlpha = specAlpha * 0.9;
-                for (let b = 0; b < bars; b++) {
-                    const ang = (b / bars) * Math.PI * 2 - Math.PI / 2;
-                    const mag = spec[b];
-                    const len = 3 + mag * (R * 0.2);
-                    const br0 = R * 1.31;
-                    const br1 = br0 + len;
-                    ctx2d.strokeStyle = b % 4 === 0 ? '#ff8811' : (audio.isSpeaking() ? '#7dd3fc' : '#38bdf8');
-                    ctx2d.lineWidth = 2;
-                    ctx2d.beginPath();
-                    ctx2d.moveTo(Math.cos(ang) * br0, Math.sin(ang) * br0);
-                    ctx2d.lineTo(Math.cos(ang) * br1, Math.sin(ang) * br1);
-                    ctx2d.stroke();
-                }
-                ctx2d.restore();
-
-                // Anamorphic Lens Flare Streak at Core Ignition & Final Lock-On
-                const flareStrength = (p < 0.3 ? Math.sin((p / 0.3) * Math.PI) * 0.65 : 0) + (p > 0.72 && p < 0.92 ? Math.sin(((p - 0.72) / 0.2) * Math.PI) * 0.85 : 0);
-                if (flareStrength > 0.02) {
-                    const fl = ctx2d.createLinearGradient(cx - vw * 0.45, cy, cx + vw * 0.45, cy);
-                    fl.addColorStop(0, 'rgba(56, 189, 248, 0)');
-                    fl.addColorStop(0.35, `rgba(56, 189, 248, ${flareStrength * 0.35})`);
-                    fl.addColorStop(0.5, `rgba(255, 225, 180, ${flareStrength * 0.8})`);
-                    fl.addColorStop(0.65, `rgba(255, 123, 0, ${flareStrength * 0.35})`);
-                    fl.addColorStop(1, 'rgba(255, 123, 0, 0)');
-                    ctx2d.fillStyle = fl;
-                    ctx2d.fillRect(cx - vw * 0.45, cy - 2.2, vw * 0.9, 4.4);
-                }
-
-                ctx2d.restore(); // end 'lighter' composite
-
-                // Crisp F.R.I.D.A.Y. Center Wordmark & Lock Sublabel
-                const textAlpha = easeOutCubic(clamp01((p - 0.14) / 0.2));
-                const locked = p > 0.56;
-                ctx2d.save();
-                ctx2d.globalAlpha = textAlpha;
+                ctx2d.globalAlpha = txtAlpha;
                 ctx2d.textAlign = 'center';
                 ctx2d.textBaseline = 'middle';
-                ctx2d.shadowColor = locked ? '#ff8a1f' : '#38bdf8';
-                ctx2d.shadowBlur = locked ? 24 : 14;
-                ctx2d.fillStyle = '#ffffff';
-                const fSize = Math.round(R * 0.255);
+
+                // Clean crisp holographic F.R.I.D.A.Y. wordmark with fast 1px depth backing (zero shadowBlur lag)
+                const fSize = Math.round(scaleR * 0.25);
                 ctx2d.font = `900 ${fSize}px "JetBrains Mono", ui-monospace, SFMono-Regular, monospace`;
-                ctx2d.fillText('F.R.I.D.A.Y.', cx, cy - fSize * 0.15);
+                ctx2d.fillStyle = 'rgba(2, 6, 16, 0.55)';
+                ctx2d.fillText('F.R.I.D.A.Y.', cx, cy - fSize * 0.14 + 2);
+                ctx2d.fillStyle = '#ffffff';
+                ctx2d.fillText('F.R.I.D.A.Y.', cx, cy - fSize * 0.14);
 
-                ctx2d.shadowBlur = 0;
-                ctx2d.fillStyle = locked ? '#fbbf24' : '#7dd3fc';
-                ctx2d.font = `700 ${Math.max(8, Math.round(R * 0.075))}px "Inter", system-ui, sans-serif`;
-                const subTxt = p > 0.74
-                    ? (operative.authenticated ? `OPERATIVE LOCK: ${operative.playerName.toUpperCase()}` : 'SYSTEMS ARMED')
-                    : (p > 0.42 ? 'ESTABLISHING TACTICAL UPLINK' : 'CALIBRATING VISOR OPTICS');
-                ctx2d.fillText(subTxt, cx, cy + fSize * 0.65);
+                const locked = p > 0.56;
+                const subSize = Math.max(9, Math.round(scaleR * 0.07));
+                const subTxt = p > 0.72
+                    ? (operative.authenticated ? `WELCOME BACK, ${operative.playerName.toUpperCase()}` : 'SYSTEMS ARMED')
+                    : 'MARK-85 TACTICAL INTERFACE';
+                ctx2d.font = `700 ${subSize}px "Inter", system-ui, sans-serif`;
+                ctx2d.fillStyle = 'rgba(2, 6, 16, 0.65)';
+                ctx2d.fillText(subTxt, cx, cy + fSize * 0.68 + 1.5);
+                ctx2d.fillStyle = locked ? 'rgba(254, 240, 199, 0.96)' : 'rgba(224, 242, 254, 0.95)';
+                ctx2d.fillText(subTxt, cx, cy + fSize * 0.68);
                 ctx2d.restore();
             }
 
-            // 6. Sliding Compass Azimuth Ribbon (Top Center) & Left/Right Vernier Pitch Ladders
-            const hudAlpha = easeOutCubic(clamp01((p - 0.18) / 0.2));
-            if (hudAlpha > 0.02) {
+            // Subtle hairline corner optics (only 4 short strokes, zero blur)
+            const cornerA = easeOutCubic((p - 0.1) / 0.25) * 0.42;
+            if (cornerA > 0.02) {
+                const pad = vw < 640 ? 14 : 32;
+                const len = vw < 640 ? 16 : 26;
                 ctx2d.save();
-                ctx2d.globalAlpha = hudAlpha;
-
-                // Top Azimuth Heading Scale
-                const hdgW = Math.min(340, vw * 0.52);
-                const hdgY = vw < 640 ? 64 : 68;
-                const hdgBase = (t * 28 + smoothX * 30);
-                ctx2d.strokeStyle = 'rgba(56, 189, 248, 0.4)';
-                ctx2d.fillStyle = 'rgba(125, 211, 252, 0.75)';
-                ctx2d.font = '600 9px "JetBrains Mono", monospace';
-                ctx2d.textAlign = 'center';
+                ctx2d.strokeStyle = `rgba(125, 211, 252, ${cornerA})`;
+                ctx2d.lineWidth = 1.2;
                 ctx2d.beginPath();
-                ctx2d.moveTo(vw / 2 - hdgW / 2, hdgY);
-                ctx2d.lineTo(vw / 2 + hdgW / 2, hdgY);
-                ctx2d.stroke();
-                for (let degOff = -45; degOff <= 45; degOff += 15) {
-                    const bx = vw / 2 + (degOff / 45) * (hdgW / 2);
-                    const val = ((Math.round(hdgBase + degOff) % 360) + 360) % 360;
-                    ctx2d.beginPath();
-                    ctx2d.moveTo(bx, hdgY - 4);
-                    ctx2d.lineTo(bx, hdgY + 3);
-                    ctx2d.stroke();
-                    if (degOff % 30 === 0) ctx2d.fillText(String(val).padStart(3, '0') + '°', bx, hdgY - 8);
-                }
-                // Center caret indicator
-                ctx2d.fillStyle = '#ff8a1f';
-                ctx2d.beginPath();
-                ctx2d.moveTo(vw / 2, hdgY + 4);
-                ctx2d.lineTo(vw / 2 - 4, hdgY + 10);
-                ctx2d.lineTo(vw / 2 + 4, hdgY + 10);
-                ctx2d.closePath();
-                ctx2d.fill();
-
-                // Desktop Flanking Peripheral Telemetry Wings (cleanly hidden on narrow screens so mobile stays spacious)
-                const wingFade = easeOutCubic(clamp01((p - 0.42) / 0.22));
-                if (vw >= 920 && wingFade > 0.02) {
-                    ctx2d.globalAlpha = wingFade;
-                    const wingW = 196;
-                    const leftX = Math.max(38, cx - R * 1.55 - wingW - 36);
-                    const rightX = Math.min(vw - wingW - 38, cx + R * 1.55 + 36);
-                    const wingY = cy - 72;
-
-                    // Left Wing: Arc Core Output & Harmonic Waveform
-                    ctx2d.strokeStyle = 'rgba(56, 189, 248, 0.32)';
-                    ctx2d.fillStyle = 'rgba(6, 14, 30, 0.52)';
-                    ctx2d.lineWidth = 1;
-                    ctx2d.beginPath();
-                    ctx2d.roundRect(leftX, wingY, wingW, 134, 10);
-                    ctx2d.fill();
-                    ctx2d.stroke();
-
-                    const gj = (Math.min(3.2, easeOutCubic(p / 0.8) * 3.2)).toFixed(2);
-                    ctx2d.fillStyle = '#38bdf8';
-                    ctx2d.textAlign = 'left';
-                    ctx2d.font = '700 10px "JetBrains Mono", monospace';
-                    ctx2d.fillText('ARC CORE OUTPUT', leftX + 12, wingY + 20);
-                    ctx2d.fillStyle = '#fbbf24';
-                    ctx2d.font = '800 16px "JetBrains Mono", monospace';
-                    ctx2d.fillText(`${gj} GJ/s`, leftX + 12, wingY + 42);
-
-                    // Live oscillating energy curve inside left wing
-                    ctx2d.strokeStyle = '#ff8811';
-                    ctx2d.lineWidth = 1.6;
-                    ctx2d.beginPath();
-                    for (let gx = 0; gx <= wingW - 24; gx += 4) {
-                        const gy = wingY + 78 + Math.sin(gx * 0.09 + t * 8.5) * 11 * Math.cos(gx * 0.03 - t * 3);
-                        if (gx === 0) ctx2d.moveTo(leftX + 12 + gx, gy);
-                        else ctx2d.lineTo(leftX + 12 + gx, gy);
-                    }
-                    ctx2d.stroke();
-
-                    ctx2d.fillStyle = '#94a3b8';
-                    ctx2d.font = '600 9px "JetBrains Mono", monospace';
-                    ctx2d.fillText('AUX: OK   OPTIC: 99.8%', leftX + 12, wingY + 118);
-
-                    // Right Wing: Tactical Threat Sweep Radar
-                    ctx2d.fillStyle = 'rgba(6, 14, 30, 0.52)';
-                    ctx2d.strokeStyle = 'rgba(56, 189, 248, 0.32)';
-                    ctx2d.beginPath();
-                    ctx2d.roundRect(rightX, wingY, wingW, 134, 10);
-                    ctx2d.fill();
-                    ctx2d.stroke();
-
-                    ctx2d.fillStyle = '#38bdf8';
-                    ctx2d.font = '700 10px "JetBrains Mono", monospace';
-                    ctx2d.fillText('TACTICAL SCAN', rightX + 12, wingY + 20);
-
-                    const rcx = rightX + wingW / 2;
-                    const rcy = wingY + 74;
-                    const rr = 38;
-                    ctx2d.strokeStyle = 'rgba(56, 189, 248, 0.25)';
-                    ctx2d.beginPath(); ctx2d.arc(rcx, rcy, rr, 0, Math.PI * 2); ctx2d.stroke();
-                    ctx2d.beginPath(); ctx2d.arc(rcx, rcy, rr * 0.55, 0, Math.PI * 2); ctx2d.stroke();
-
-                    const sweepA = t * 2.4;
-                    ctx2d.strokeStyle = '#38bdf8';
-                    ctx2d.lineWidth = 1.6;
-                    ctx2d.beginPath();
-                    ctx2d.moveTo(rcx, rcy);
-                    ctx2d.lineTo(rcx + Math.cos(sweepA) * rr, rcy + Math.sin(sweepA) * rr);
-                    ctx2d.stroke();
-
-                    for (const bl of radarBlips) {
-                        const bx = rcx + Math.cos(bl.ang) * (rr * bl.r);
-                        const by = rcy + Math.sin(bl.ang) * (rr * bl.r);
-                        const ping = 0.45 + 0.55 * Math.abs(Math.sin(t * 4 + bl.ang));
-                        ctx2d.fillStyle = `rgba(255, 123, 0, ${ping})`;
-                        ctx2d.beginPath(); ctx2d.arc(bx, by, 2.8, 0, Math.PI * 2); ctx2d.fill();
-                    }
-
-                    ctx2d.fillStyle = '#34d399';
-                    ctx2d.font = '600 9px "JetBrains Mono", monospace';
-                    ctx2d.fillText('FACTION LINK: SYNCHRONIZED', rightX + 12, wingY + 122);
-                }
-
-                ctx2d.restore();
-            }
-
-            // 7. Perimeter Mark-85 Corner Brackets & Sweeping Laser Beam
-            const bracketIn = easeOutCubic(clamp01((p - 0.06) / 0.26));
-            const pad = (vw < 640 ? 14 : 34) + (1 - bracketIn) * 44;
-            const bLen = vw < 640 ? 20 : 34;
-            ctx2d.save();
-            ctx2d.strokeStyle = 'rgba(56, 189, 248, 0.6)';
-            ctx2d.lineWidth = 2;
-            const corners = [
-                [pad, pad + 32, 1, 1],
-                [vw - pad, pad + 32, -1, 1],
-                [pad, vh - pad - 20, 1, -1],
-                [vw - pad, vh - pad - 20, -1, -1]
-            ];
-            for (const [bx, by, dx, dy] of corners) {
-                ctx2d.beginPath();
-                ctx2d.moveTo(bx, by + dy * bLen);
-                ctx2d.lineTo(bx, by);
-                ctx2d.lineTo(bx + dx * bLen, by);
-                ctx2d.stroke();
-            }
-
-            if (scanY > 0) {
-                const scanG = ctx2d.createLinearGradient(0, scanY, vw, scanY);
-                scanG.addColorStop(0, 'rgba(56, 189, 248, 0)');
-                scanG.addColorStop(0.5, 'rgba(56, 189, 248, 0.65)');
-                scanG.addColorStop(1, 'rgba(56, 189, 248, 0)');
-                ctx2d.strokeStyle = scanG;
-                ctx2d.lineWidth = 1.6;
-                ctx2d.beginPath();
-                ctx2d.moveTo(0, scanY);
-                ctx2d.lineTo(vw, scanY);
-                ctx2d.stroke();
-            }
-            ctx2d.restore();
-
-            // 8. Phase 4 Expansion Shockwave Ripple
-            if (p >= 0.74 && p < 0.91) {
-                const wave = (p - 0.74) / 0.17;
-                ctx2d.save();
-                ctx2d.globalCompositeOperation = 'lighter';
-                ctx2d.strokeStyle = `rgba(255, 138, 31, ${(1 - wave) * 0.85})`;
-                ctx2d.lineWidth = 4 * (1 - wave) + 1;
-                ctx2d.beginPath();
-                ctx2d.arc(cx, cy, R * (1.1 + wave * 3.1), 0, Math.PI * 2);
-                ctx2d.stroke();
-                ctx2d.strokeStyle = `rgba(56, 189, 248, ${(1 - wave) * 0.55})`;
-                ctx2d.lineWidth = 2 * (1 - wave) + 0.5;
-                ctx2d.beginPath();
-                ctx2d.arc(cx, cy, R * (0.9 + wave * 2.4), 0, Math.PI * 2);
+                ctx2d.moveTo(pad, pad + 26 + len); ctx2d.lineTo(pad, pad + 26); ctx2d.lineTo(pad + len, pad + 26);
+                ctx2d.moveTo(vw - pad, pad + 26 + len); ctx2d.lineTo(vw - pad, pad + 26); ctx2d.lineTo(vw - pad - len, pad + 26);
+                ctx2d.moveTo(pad, vh - pad - 18 - len); ctx2d.lineTo(pad, vh - pad - 18); ctx2d.lineTo(pad + len, vh - pad - 18);
+                ctx2d.moveTo(vw - pad, vh - pad - 18 - len); ctx2d.lineTo(vw - pad, vh - pad - 18); ctx2d.lineTo(vw - pad - len, vh - pad - 18);
                 ctx2d.stroke();
                 ctx2d.restore();
             }
-
-            ctx2d.restore();
 
             if (p >= 0.89 && !overlay.classList.contains('dissolving')) {
                 dismissFridayIntro(false);
@@ -1086,12 +820,21 @@
             finished = true;
             cancelAnimationFrame(rafId);
             window.removeEventListener('pointermove', onPointerMove);
-            window.removeEventListener('resize', resizeCanvas);
+            window.removeEventListener('resize', resizeAll);
             document.removeEventListener('keydown', onKeyDown);
             audio.stop();
             clearBootGuard();
 
+            if (frameCount > 0) {
+                window.__fridayIntroLastMetrics = {
+                    frames: frameCount,
+                    avgFrameMs: Number((frameDtSum / frameCount).toFixed(2)),
+                    usedWebGL: Boolean(glRenderer)
+                };
+            }
+
             if (immediate) {
+                if (glRenderer) glRenderer.destroy();
                 overlay.remove();
                 activeSession = null;
                 return;
@@ -1100,6 +843,7 @@
             overlay.classList.add('dissolving');
             overlay.style.pointerEvents = 'none';
             setTimeout(() => {
+                if (glRenderer) glRenderer.destroy();
                 overlay.remove();
                 if (activeSession && activeSession.overlay === overlay) {
                     activeSession = null;
