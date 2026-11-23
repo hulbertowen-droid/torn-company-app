@@ -44,6 +44,7 @@ const bugManager = require('./bug-manager');
 const { buildSlashCommands } = require('./discord-slash-builder');
 const tornKnowledge = require('./torn-knowledge');
 const ocDmEngineModule = require('./oc-dm-engine');
+const welcomeGatekeeperModule = require('./welcome-gatekeeper');
 const sessionManager = require('./session-manager');
 const tornApiManager = require('./torn-api-manager');
 const warboardBroadcaster = require('./warboard-broadcaster');
@@ -102,6 +103,11 @@ let discordConfig = {
     notifyApiKeyLinked: false,
     unverifiedRoleId: "",
     verifiedRoleId: "",
+    nonFactionRoleId: "",
+    nonFactionAccessMode: "allow_all",
+    nonFactionAlsoGrantVerified: false,
+    approvalChannelId: "",
+    approvalAdminRoleId: "",
     factionRoleId: "",
     leaderRoleId: "",
     autoVerifyOnJoin: true,
@@ -311,6 +317,11 @@ function sanitizeConfigForClient(rawConfig) {
         postWelcomeRulesOnJoin: rawConfig.postWelcomeRulesOnJoin !== false,
         welcomeRulesTitle: rawConfig.welcomeRulesTitle || "📜 Welcome to the Faction & Server Rules",
         welcomeRulesContent: rawConfig.welcomeRulesContent || DEFAULT_WELCOME_RULES,
+        nonFactionRoleId: rawConfig.nonFactionRoleId || "",
+        nonFactionAccessMode: welcomeGatekeeperModule.normalizeNonFactionAccessMode(rawConfig.nonFactionAccessMode),
+        nonFactionAlsoGrantVerified: rawConfig.nonFactionAlsoGrantVerified === true,
+        approvalChannelId: rawConfig.approvalChannelId || "",
+        approvalAdminRoleId: rawConfig.approvalAdminRoleId || "",
         rev: rawConfig.rev || 1,
         updatedAt: rawConfig.updatedAt || Date.now(),
         updatedBy: rawConfig.updatedBy || 'System',
@@ -543,6 +554,9 @@ async function loadConfigFromMongo() {
                 verifiedDiscordToTorn = { ...(verifiedDiscordToTorn || {}), ...saved.verifiedDiscordUsers };
                 userKeys.setVerifiedDiscordMap(verifiedDiscordToTorn);
                 console.log(`[Mongo] Restored ${Object.keys(verifiedDiscordToTorn).length} verified Discord users from MongoDB Atlas.`);
+            }
+            if (saved.nonFactionGatekeeper && typeof welcomeGatekeeper?.importState === 'function') {
+                welcomeGatekeeper.importState(saved.nonFactionGatekeeper);
             }
             if (discordConfig.factionId) {
                 try {
@@ -1031,6 +1045,11 @@ discordConfig = {
     verificationChannelId: "",
     unverifiedRoleId: "",
     verifiedRoleId: "",
+    nonFactionRoleId: "",
+    nonFactionAccessMode: "allow_all",
+    nonFactionAlsoGrantVerified: false,
+    approvalChannelId: "",
+    approvalAdminRoleId: "",
     factionRoleId: "",
     leaderRoleId: "",
     autoVerifyOnJoin: true,
@@ -1230,6 +1249,7 @@ function saveToMongo() {
                 ocMemory: (typeof ocMemory !== 'undefined' ? ocMemory : {}),
                 ocMemberHistory: (typeof ocMemberHistory !== 'undefined' ? ocMemberHistory : {}),
                 ocDmState: (typeof ocDmEngine !== 'undefined' ? ocDmEngine.exportForMongo() : undefined),
+                nonFactionGatekeeper: (typeof welcomeGatekeeper !== 'undefined' ? welcomeGatekeeper.exportState() : undefined),
                 giveaways: (typeof activeGiveaways !== 'undefined' ? activeGiveaways : {}),
                 warFlightArchive,
                 warAuditArchive,
@@ -1291,6 +1311,24 @@ const ocDmEngine = ocDmEngineModule.createOcDmEngine({
     sanitizeEmbed: (e) => sanitizeEmbed(e),
     saveToMongo: () => saveToMongo()
 });
+
+const welcomeGatekeeper = welcomeGatekeeperModule.createWelcomeGatekeeper({
+    dataDir: path.join(__dirname, 'data'),
+    onPersist: () => saveToMongo()
+});
+
+function resolveGuildDiscordConfig(guildId) {
+    const gId = String(guildId || '').trim();
+    if (!gId || !discordConfig.guildId || String(discordConfig.guildId) === gId) {
+        return discordConfig;
+    }
+    for (const cfg of factionConfigs.values()) {
+        if (cfg && cfg.guildId && String(cfg.guildId) === gId) {
+            return { ...discordConfig, ...cfg };
+        }
+    }
+    return discordConfig;
+}
 
 // --- CENTRALIZED DISCORD RATE-LIMIT QUEUE ---
 let discordSendQueue = [];
@@ -5719,6 +5757,18 @@ app.post('/api/save-discord-config', async (req, res) => {
     }
     if (payload.unverifiedRoleId !== undefined) payload.unverifiedRoleId = String(payload.unverifiedRoleId || '').replace(/[^0-9]/g, '');
     if (payload.verifiedRoleId !== undefined) payload.verifiedRoleId = String(payload.verifiedRoleId || '').replace(/[^0-9]/g, '');
+    if (payload.nonFactionRoleId !== undefined) payload.nonFactionRoleId = String(payload.nonFactionRoleId || '').replace(/[^0-9]/g, '');
+    if (payload.nonFactionAccessMode !== undefined) {
+        payload.nonFactionAccessMode = welcomeGatekeeperModule.normalizeNonFactionAccessMode(payload.nonFactionAccessMode);
+    }
+    if (payload.nonFactionAlsoGrantVerified !== undefined) {
+        payload.nonFactionAlsoGrantVerified = (payload.nonFactionAlsoGrantVerified === true || payload.nonFactionAlsoGrantVerified === 'true');
+    }
+    if (payload.approvalChannelId !== undefined) {
+        let rawAChan = String(payload.approvalChannelId || '').trim();
+        payload.approvalChannelId = (rawAChan.includes('.') || /[a-zA-Z]/.test(rawAChan)) ? "" : rawAChan.replace(/[^0-9]/g, '');
+    }
+    if (payload.approvalAdminRoleId !== undefined) payload.approvalAdminRoleId = String(payload.approvalAdminRoleId || '').replace(/[^0-9]/g, '');
     if (payload.factionRoleId !== undefined) payload.factionRoleId = String(payload.factionRoleId || '').replace(/[^0-9]/g, '');
     if (payload.leaderRoleId !== undefined) payload.leaderRoleId = String(payload.leaderRoleId || '').replace(/[^0-9]/g, '');
     if (payload.autoVerifyOnJoin !== undefined) payload.autoVerifyOnJoin = !!payload.autoVerifyOnJoin;
@@ -23262,6 +23312,433 @@ async function applyGuildMemberRole(guild, guildMember, botMember, roleId, actio
     return { success: false, reason: 'Unknown state' };
 }
 
+function findGuildRoleByCfgOrMatchers(guild, configuredId, matchers = []) {
+    if (!guild || !guild.roles?.cache) return configuredId || null;
+    if (configuredId && guild.roles.cache.has(String(configuredId))) return String(configuredId);
+    for (const m of matchers) {
+        const found = guild.roles.cache.find(r => r && r.name && m(r.name.toLowerCase()));
+        if (found) return found.id;
+    }
+    return configuredId || null;
+}
+
+function resolveServerGatekeeperRoles(guild, cfg = {}) {
+    const guildWord = (guild?.name || '').toLowerCase().replace(/the |server|initiative|faction|community/gi, '').trim();
+    const configuredFacName = (cfg.factionName || '').toLowerCase().trim();
+    return {
+        guildWord,
+        verifiedRoleId: findGuildRoleByCfgOrMatchers(guild, cfg.verifiedRoleId, [
+            n => n === 'verified',
+            n => n === 'verified member',
+            n => n === 'verified members',
+            n => n.includes('verified'),
+            n => n === 'member',
+            n => n === 'members'
+        ]),
+        nonFactionRoleId: findGuildRoleByCfgOrMatchers(guild, cfg.nonFactionRoleId, [
+            n => n === 'non-faction' || n === 'non faction' || n === 'nonfaction',
+            n => n === 'guest' || n === 'guests',
+            n => n === 'visitor' || n === 'visitors',
+            n => n === 'outsider' || n === 'outsiders',
+            n => n === 'ally' || n === 'allies'
+        ]),
+        unverifiedRoleId: findGuildRoleByCfgOrMatchers(guild, cfg.unverifiedRoleId, [
+            n => n === 'unverified',
+            n => n.includes('unverified'),
+            n => n === 'quarantine'
+        ]),
+        factionRoleId: findGuildRoleByCfgOrMatchers(guild, cfg.factionRoleId, [
+            ...(configuredFacName ? [n => n === configuredFacName, n => n.includes(configuredFacName)] : []),
+            ...(guildWord.length >= 3 ? [n => n === `${guildWord} member`, n => n.includes(guildWord) && n.includes('member'), n => n === guildWord] : []),
+            n => n === 'faction member',
+            n => n === 'faction',
+            n => n.includes('member') && !n.includes('verified') && !n.includes('guest'),
+            n => n.includes('spider-verse'),
+            n => n.includes('spider verse'),
+            n => n.includes('spiderverse'),
+            n => n.includes('spdr')
+        ]),
+        leaderRoleId: findGuildRoleByCfgOrMatchers(guild, cfg.leaderRoleId, [
+            ...(guildWord.length >= 3 ? [n => n === `${guildWord} leadership`, n => n.includes(guildWord) && (n.includes('leader') || n.includes('leadership'))] : []),
+            n => n === 'leadership',
+            n => n === 'faction leader',
+            n => n === 'leader',
+            n => n.includes('leadership') || n.includes('leader')
+        ]),
+        bankerRoleId: findGuildRoleByCfgOrMatchers(guild, cfg.bankerRoleId, [
+            n => n === 'banker',
+            n => n.includes('banker'),
+            n => n.includes('treasurer'),
+            n => n.includes('vault')
+        ])
+    };
+}
+
+/**
+ * Shared helper that applies Verified / Non-Faction / Faction / Leader / Banker / Unverified roles
+ * strictly according to welcomeGatekeeper policy.
+ */
+async function applyGatekeeperAccessRoles({ guild, guildMember, botMember, cfg, decision, isLeader = false, isBanker = false, playerFactionName = '', reasonPrefix = 'Verification' }) {
+    const rolesAdded = [];
+    const roleWarnings = [];
+    const roleIds = resolveServerGatekeeperRoles(guild, cfg);
+    let grantedAnyAccess = false;
+    let memberChanged = false;
+
+    const addRoleChecked = async (roleId, label, auditReason) => {
+        if (!roleId || !guildMember) return false;
+        const res = await applyGuildMemberRole(guild, guildMember, botMember, roleId, 'add', auditReason);
+        if (res.success && (res.action === 'added' || res.action === 'already_had')) {
+            rolesAdded.push(label ? `<@&${roleId}> (${label})` : `<@&${roleId}>`);
+            grantedAnyAccess = true;
+            if (res.action === 'added') memberChanged = true;
+            return true;
+        }
+        if (res.hierarchyError) {
+            roleWarnings.push(`⚠️ **Hierarchy Alert:** Bot role is lower than <@&${roleId}>. Drag **F.R.I.D.A.Y** above it in Server Settings ➔ Roles.`);
+        } else if (res.error) {
+            roleWarnings.push(`⚠️ **Role Error:** Could not assign <@&${roleId}>: ${res.error}`);
+        }
+        return false;
+    };
+
+    if (decision.grantVerifiedRole && roleIds.verifiedRoleId) {
+        await addRoleChecked(roleIds.verifiedRoleId, null, `${reasonPrefix}: Verified`);
+    }
+
+    if (decision.grantNonFactionRole) {
+        if (roleIds.nonFactionRoleId) {
+            await addRoleChecked(roleIds.nonFactionRoleId, '🪪 Non-Faction', `${reasonPrefix}: Non-Faction Visitor`);
+        } else {
+            roleWarnings.push(`⚠️ **Non-Faction Role Missing:** Configure a **Non-Faction / Visitor Role** under *Discord Sentinel ➔ Channel & Role Routing* (or create a \`Guest\` / \`Visitor\` role in Discord).`);
+        }
+    }
+
+    if (decision.grantFactionRoles) {
+        if (roleIds.factionRoleId) {
+            await addRoleChecked(roleIds.factionRoleId, null, `${reasonPrefix}: Faction Member (${playerFactionName || 'Faction'})`);
+        }
+        if (isLeader && roleIds.leaderRoleId) {
+            await addRoleChecked(roleIds.leaderRoleId, '👑 Leadership', `${reasonPrefix}: Faction Leader`);
+        }
+        if (isBanker && roleIds.bankerRoleId) {
+            await addRoleChecked(roleIds.bankerRoleId, '🏦 Banker', `${reasonPrefix}: Faction Banker`);
+        }
+        if (roleIds.nonFactionRoleId && guildMember?.roles?.cache?.has?.(roleIds.nonFactionRoleId)) {
+            const rem = await applyGuildMemberRole(guild, guildMember, botMember, roleIds.nonFactionRoleId, 'remove', `${reasonPrefix}: Joined Faction`);
+            if (rem.success && rem.action === 'removed') memberChanged = true;
+        }
+    } else {
+        // Member is NOT in our faction: remove any stale internal faction roles if present
+        for (const staleId of [roleIds.factionRoleId, roleIds.leaderRoleId, roleIds.bankerRoleId]) {
+            if (staleId && staleId !== roleIds.nonFactionRoleId && staleId !== roleIds.verifiedRoleId && guildMember?.roles?.cache?.has?.(staleId)) {
+                const rem = await applyGuildMemberRole(guild, guildMember, botMember, staleId, 'remove', `${reasonPrefix}: Outside Faction`);
+                if (rem.success && rem.action === 'removed') memberChanged = true;
+            }
+        }
+        // If separate role strictly replaces Verified role, strip Verified unless configured otherwise
+        if (decision.mode === 'separate_role' && !decision.grantVerifiedRole && roleIds.verifiedRoleId && roleIds.verifiedRoleId !== roleIds.nonFactionRoleId && guildMember?.roles?.cache?.has?.(roleIds.verifiedRoleId)) {
+            const rem = await applyGuildMemberRole(guild, guildMember, botMember, roleIds.verifiedRoleId, 'remove', `${reasonPrefix}: Separate Non-Faction Role Policy`);
+            if (rem.success && rem.action === 'removed') memberChanged = true;
+        }
+    }
+
+    // Remove quarantine Unverified role only once an access role was actually granted (or verified/non-faction allowed cleanly)
+    if (roleIds.unverifiedRoleId && guildMember && (grantedAnyAccess || (!roleIds.verifiedRoleId && !decision.grantNonFactionRole))) {
+        const rem = await applyGuildMemberRole(guild, guildMember, botMember, roleIds.unverifiedRoleId, 'remove', `${reasonPrefix}: Verified`);
+        if (rem.success && rem.action === 'removed') memberChanged = true;
+    }
+
+    return { rolesAdded, roleWarnings, roleIds, grantedAnyAccess, memberChanged };
+}
+
+/**
+ * Quarantine unapproved outsider & post an interactive Admin Approval Card when nonFactionAccessMode === 'admin_approval'.
+ */
+async function dispatchNonFactionAdminApproval({ guild, guildMember, botMember, cfg, playerId, playerName, playerLevel = 0, playerAge = 0, playerFactionId = 0, playerFactionName = 'None', playerPosition = '', verificationSource = 'Torn Verification' }) {
+    const roleIds = resolveServerGatekeeperRoles(guild, cfg);
+
+    // 1. Ensure Unverified quarantine role is applied and no access roles remain
+    if (roleIds.unverifiedRoleId && guildMember) {
+        try {
+            await applyGuildMemberRole(guild, guildMember, botMember, roleIds.unverifiedRoleId, 'add', 'Pending Administrator Approval');
+        } catch (_) {}
+    }
+    for (const revId of [roleIds.verifiedRoleId, roleIds.nonFactionRoleId, roleIds.factionRoleId, roleIds.leaderRoleId, roleIds.bankerRoleId]) {
+        if (revId && guildMember?.roles?.cache?.has?.(revId)) {
+            await applyGuildMemberRole(guild, guildMember, botMember, revId, 'remove', 'Pending Administrator Approval').catch(() => {});
+        }
+    }
+
+    // 2. Upsert persistent approval record
+    const { record, alreadyNotified } = welcomeGatekeeper.upsertPendingApproval({
+        guildId: guild.id,
+        discordUserId: guildMember.id,
+        discordTag: guildMember.user?.tag || guildMember.user?.username || guildMember.id,
+        discordCreatedAt: guildMember.user?.createdTimestamp || 0,
+        playerId,
+        playerName,
+        playerLevel,
+        playerAge,
+        playerFactionId,
+        playerFactionName,
+        playerPosition,
+        verificationSource
+    });
+
+    // Check if previously sent approval message was deleted; if still live, avoid spamming
+    let shouldSendCard = !alreadyNotified;
+    if (alreadyNotified && record.channelId && record.messageId) {
+        try {
+            const prevChan = guild.channels.cache.get(record.channelId) || await guild.channels.fetch(record.channelId).catch(() => null);
+            const prevMsg = prevChan && prevChan.isTextBased() ? await prevChan.messages.fetch(record.messageId).catch(() => null) : null;
+            if (!prevMsg) shouldSendCard = true;
+        } catch (_) {
+            shouldSendCard = true;
+        }
+    }
+
+    let dispatchedChannelId = record.channelId || null;
+    if (shouldSendCard) {
+        const candidateChanIds = [cfg.approvalChannelId, cfg.verificationChannelId, cfg.globalChannelId].filter(Boolean);
+        let approvalChan = null;
+        for (const cid of candidateChanIds) {
+            const c = guild.channels.cache.get(cid) || await guild.channels.fetch(cid).catch(() => null);
+            if (c && c.isTextBased()) { approvalChan = c; break; }
+        }
+        if (!approvalChan) {
+            approvalChan = guild.channels.cache.find(c => c.isTextBased() && /(admin|mod|staff|leader|officer|verify|welcome)/i.test(c.name)) || guild.systemChannel;
+        }
+
+        const embed = welcomeGatekeeper.buildAdminApprovalEmbed(record, cfg, guild.name);
+        const components = welcomeGatekeeper.buildAdminApprovalButtons(guild.id, guildMember.id, cfg);
+        const adminPing = cfg.approvalAdminRoleId ? `<@&${cfg.approvalAdminRoleId}> ` : '';
+        const contentLine = `${adminPing}🔐 **Administrator Authentication Needed:** <@${guildMember.id}> (\`${playerName} [${playerId}]\`) wants to join **${guild.name}**.`;
+
+        if (approvalChan && approvalChan.isTextBased()) {
+            try {
+                const sent = await approvalChan.send({
+                    content: contentLine,
+                    embeds: [sanitizeEmbed(embed)],
+                    components
+                });
+                dispatchedChannelId = approvalChan.id;
+                welcomeGatekeeper.attachApprovalMessage(guild.id, guildMember.id, approvalChan.id, sent.id);
+            } catch (sendErr) {
+                console.warn('[WelcomeGatekeeper] Failed posting approval card to channel:', sendErr.message);
+            }
+        } else {
+            // Fallback: DM guild owner or configured admin Discord ID if no text channel is writable
+            try {
+                const ownerId = guild.ownerId || cfg.personalDiscordId;
+                const ownerUser = ownerId ? await (guild.client || bot).users.fetch(ownerId).catch(() => null) : null;
+                if (ownerUser) {
+                    await ownerUser.send({ content: contentLine, embeds: [sanitizeEmbed(embed)], components }).catch(() => {});
+                }
+            } catch (_) {}
+        }
+    }
+
+    const facLabel = (playerFactionId && String(playerFactionId) !== '0')
+        ? `${playerFactionName} [${playerFactionId}]`
+        : 'None (Factionless)';
+    const websiteFacLabel = cfg.factionName || (cfg.factionId ? `Faction [${cfg.factionId}]` : 'the server faction');
+
+    return {
+        success: false,
+        isPendingApproval: true,
+        alreadyNotified,
+        approvalChannelId: dispatchedChannelId,
+        playerName,
+        playerId,
+        playerFactionId,
+        playerFactionName,
+        isOurFaction: false,
+        title: `⏳ Administrator Approval Required — ${playerName} [${playerId}]`,
+        description:
+            `🛡️ Your Torn identity (**[${playerName} [${playerId}]](https://www.torn.com/profiles.php?XID=${playerId})**, Faction: **${facLabel}**) was confirmed.\n\n` +
+            `Because you are not currently in **${websiteFacLabel}**, a **Server Administrator** must authenticate your account before server access can be unlocked.\n\n` +
+            `📋 **Status:** ${alreadyNotified ? 'Approval request is already pending with Server Administrators.' : 'Your approval request has been dispatched to Server Administrators.'}\n` +
+            `🔔 You will receive a DM as soon as an administrator approves or reviews your request.`,
+        color: UI.COLORS.WARNING || 0xf59e0b,
+        footer: UI.FOOTER,
+        timestamp: new Date().toISOString()
+    };
+}
+
+const processingJoinApprovals = new Set();
+
+async function handleNonFactionApprovalInteraction(interaction) {
+    const parts = String(interaction.customId || '').split(':');
+    const action = parts[0];
+    const guildId = parts[1];
+    const targetUserId = parts[2];
+
+    const guild = interaction.guild || (guildId ? await (interaction.client || bot).guilds.fetch(guildId).catch(() => null) : null);
+    if (!guild || !targetUserId) {
+        return interaction.reply({ content: '⚠️ Could not resolve target server or member for this request.', ephemeral: true }).catch(() => {});
+    }
+
+    const cfg = resolveGuildDiscordConfig(guild.id);
+    if (!welcomeGatekeeperModule.isServerAdminForApproval(interaction, cfg)) {
+        return interaction.reply({
+            content: '⛔ Only a **Server Administrator** can approve, deny, or kick non-faction join requests.',
+            ephemeral: true
+        }).catch(() => {});
+    }
+
+    const lockKey = `${guild.id}:${targetUserId}`;
+    if (processingJoinApprovals.has(lockKey)) {
+        return interaction.reply({ content: '⏳ Another administrator is already processing this request.', ephemeral: true }).catch(() => {});
+    }
+
+    processingJoinApprovals.add(lockKey);
+    try {
+        await interaction.deferUpdate().catch(() => {});
+
+        const existing = welcomeGatekeeper.getPendingApproval(guild.id, targetUserId) || {
+            guildId: guild.id,
+            discordUserId: targetUserId,
+            playerId: '',
+            playerName: 'External Member',
+            playerFactionId: '0',
+            playerFactionName: 'None'
+        };
+
+        let targetMember = null;
+        try { targetMember = await guild.members.fetch({ user: targetUserId, force: true }).catch(() => null); } catch (_) {}
+        let botMember = guild.members.me;
+        if (!botMember) {
+            try { botMember = await guild.members.fetchMe().catch(() => null); } catch (_) {}
+        }
+        try { await guild.roles.fetch().catch(() => null); } catch (_) {}
+
+        let decision = 'denied';
+        let rolesAssigned = [];
+        let extraNote = '';
+
+        if (action === 'nf_approve_guest' || action === 'nf_approve_verified') {
+            const grantMode = action === 'nf_approve_verified' ? 'verified' : 'guest';
+            decision = action === 'nf_approve_verified' ? 'approved_verified' : 'approved_guest';
+
+            welcomeGatekeeper.setApprovedRecord(guild.id, targetUserId, {
+                playerId: existing.playerId,
+                playerName: existing.playerName,
+                grantMode,
+                approvedBy: interaction.user.id,
+                approvedByName: interaction.user.username
+            });
+
+            if (existing.playerId) {
+                verifiedDiscordToTorn[targetUserId] = {
+                    tornId: String(existing.playerId),
+                    tornName: existing.playerName,
+                    timestamp: Date.now()
+                };
+                if (typeof saveVerifiedDiscordUsers === 'function') saveVerifiedDiscordUsers();
+            }
+
+            if (targetMember) {
+                if (existing.playerName && existing.playerId && targetMember.manageable) {
+                    const targetNick = `${existing.playerName} [${existing.playerId}]`.slice(0, 32);
+                    if (targetMember.nickname !== targetNick) {
+                        await targetMember.setNickname(targetNick, `Approved by ${interaction.user.tag}`).catch(() => {});
+                    }
+                }
+                const roleRes = await applyGatekeeperAccessRoles({
+                    guild,
+                    guildMember: targetMember,
+                    botMember,
+                    cfg,
+                    decision: {
+                        mode: 'admin_approval',
+                        grantFactionRoles: false,
+                        grantVerifiedRole: grantMode === 'verified' || Boolean(cfg.nonFactionAlsoGrantVerified),
+                        grantNonFactionRole: grantMode === 'guest'
+                    },
+                    playerFactionName: existing.playerFactionName || '',
+                    reasonPrefix: `Admin Approved by ${interaction.user.tag}`
+                });
+                rolesAssigned = roleRes.rolesAdded;
+                if (roleRes.roleWarnings.length > 0) extraNote = roleRes.roleWarnings.join('\n');
+            } else {
+                extraNote = 'Member is no longer in the server; approval has been saved if they rejoin.';
+            }
+
+            // Notify member via DM
+            try {
+                const u = targetMember?.user || await (interaction.client || bot).users.fetch(targetUserId).catch(() => null);
+                if (u) {
+                    await u.send({
+                        embeds: [sanitizeEmbed(UI.success(
+                            `✅ Access Approved — ${guild.name}`,
+                            `Your verification request for **${guild.name}** has been approved by a Server Administrator (<@${interaction.user.id}>)!\n\n` +
+                            (rolesAssigned.length > 0 ? `🎖️ **Roles Granted:** ${rolesAssigned.join(', ')}` : `You may now access the server channels.`)
+                        ))]
+                    }).catch(() => {});
+                }
+            } catch (_) {}
+
+            if (cfg.verificationChannelId && targetMember) {
+                try {
+                    const vChan = guild.channels.cache.get(cfg.verificationChannelId) || await guild.channels.fetch(cfg.verificationChannelId).catch(() => null);
+                    if (vChan && vChan.isTextBased() && vChan.id !== interaction.channelId) {
+                        await vChan.send({
+                            content: `✅ <@${targetUserId}> (**${existing.playerName}${existing.playerId ? ` [${existing.playerId}]` : ''}**) was approved by <@${interaction.user.id}>!`
+                        }).catch(() => {});
+                    }
+                } catch (_) {}
+            }
+        } else {
+            const isKick = action === 'nf_kick';
+            decision = isKick ? 'kicked' : 'denied';
+            welcomeGatekeeper.markDeniedOrKicked(guild.id, targetUserId, decision, interaction.user.id, interaction.user.username);
+            if (verifiedDiscordToTorn[targetUserId]) {
+                delete verifiedDiscordToTorn[targetUserId];
+                if (typeof saveVerifiedDiscordUsers === 'function') saveVerifiedDiscordUsers();
+            }
+
+            try {
+                const u = targetMember?.user || await (interaction.client || bot).users.fetch(targetUserId).catch(() => null);
+                if (u) {
+                    await u.send({
+                        embeds: [sanitizeEmbed(UI.error(
+                            `⛔ Join Request ${isKick ? 'Denied' : 'Declined'} — ${guild.name}`,
+                            `Your external join request for **${guild.name}** was declined by a Server Administrator.`
+                        ))]
+                    }).catch(() => {});
+                }
+            } catch (_) {}
+
+            if (isKick && targetMember) {
+                if (targetMember.kickable) {
+                    await targetMember.kick(`Denied non-faction join by ${interaction.user.tag}`).catch(err => {
+                        extraNote = `Could not kick member: ${err.message}`;
+                    });
+                } else {
+                    extraNote = 'Could not kick member (missing Kick Members permission or target role hierarchy is higher).';
+                }
+            } else if (!targetMember && isKick) {
+                extraNote = 'Member had already left the server.';
+            }
+        }
+
+        const reviewedEmbed = welcomeGatekeeper.buildReviewedApprovalEmbed(existing, decision, interaction.user.id, rolesAssigned, extraNote);
+        const editPayload = {
+            content: decision.startsWith('approved')
+                ? `✅ **Approved** by <@${interaction.user.id}>`
+                : `⛔ **${decision === 'kicked' ? 'Denied & Kicked' : 'Denied'}** by <@${interaction.user.id}>`,
+            embeds: [sanitizeEmbed(reviewedEmbed)],
+            components: []
+        };
+        await interaction.editReply(editPayload).catch(async () => {
+            if (interaction.message?.edit) await interaction.message.edit(editPayload).catch(() => {});
+        });
+    } finally {
+        processingJoinApprovals.delete(lockKey);
+    }
+}
+
 /**
  * Core Verification Engine (Limited API Key)
  * Links and encrypts a Torn Limited Access API Key via userKeys, validates player identity,
@@ -23356,13 +23833,14 @@ async function executeVerifyWithKey(interactionOrMember, rawKey, explicitGuild =
     const playerPosition = linkRes.faction?.position || "";
     const bars = linkRes.bars;
 
-    const guildWord = (guild?.name || '').toLowerCase().replace(/the |server|initiative|faction|community/gi, '').trim();
-    const facId = discordConfig.factionId || dynamicFactionId || "";
-    const isOurFaction = Boolean(
-        (facId && String(playerFactionId) === String(facId)) ||
-        (guildWord.length >= 3 && playerFactionName.toLowerCase().includes(guildWord)) ||
-        (guild?.name && playerFactionName.toLowerCase() === guild.name.toLowerCase())
-    );
+    const cfg = resolveGuildDiscordConfig(guild?.id);
+    const websiteFacId = cfg.factionId || dynamicFactionId || "";
+    const isOurFaction = welcomeGatekeeperModule.checkFactionMembership({
+        playerFactionId,
+        playerFactionName,
+        websiteFactionId: websiteFacId,
+        guildName: guild?.name
+    });
 
     // Detect Leadership & Banker Roles
     let isLeader = false;
@@ -23392,6 +23870,43 @@ async function executeVerifyWithKey(interactionOrMember, rawKey, explicitGuild =
     }
     try { await guild.roles.fetch().catch(() => null); } catch(e) {}
 
+    // Evaluate non-faction access policy BEFORE unlocking roles
+    const decision = welcomeGatekeeper.evaluateNonFactionPolicy({
+        cfg,
+        guildId: guild.id,
+        discordUserId,
+        playerId,
+        isOurFaction,
+        isExplicitAdminAction: false
+    });
+
+    if (decision.requiresAdminApproval && guildMember) {
+        const pendingRes = await dispatchNonFactionAdminApproval({
+            guild,
+            guildMember,
+            botMember,
+            cfg,
+            playerId,
+            playerName,
+            playerLevel: linkRes.level || 0,
+            playerAge: linkRes.age || 0,
+            playerFactionId,
+            playerFactionName,
+            playerPosition,
+            verificationSource: 'Linked Limited API Key'
+        });
+        pendingRes.fields = [
+            { name: "👤 Torn Profile", value: UI.player(playerName, playerId), inline: true },
+            { name: "🏢 Faction", value: `${playerFactionName} [${playerFactionId}]`, inline: true },
+            {
+                name: "🔒 Security Guarantee",
+                value: "Your Limited API Key has been encrypted with AES-256-GCM, and your server roles remain locked until a Server Administrator approves entry.",
+                inline: false
+            }
+        ];
+        return pendingRes;
+    }
+
     // Sync Server Nickname to "Name [ID]"
     let nickUpdated = false;
     let nickNote = "";
@@ -23410,118 +23925,17 @@ async function executeVerifyWithKey(interactionOrMember, rawKey, explicitGuild =
         nickNote = "Cannot change nickname of Server Owner or member with higher role";
     }
 
-    // Apply Roles with Hierarchy Check
-    const rolesAdded = [];
-    const roleWarnings = [];
-
-    const findGuildRole = (configuredId, matchers) => {
-        if (!guild || !guild.roles?.cache) return configuredId || null;
-        if (configuredId && guild.roles.cache.has(configuredId)) return configuredId;
-        for (const m of matchers) {
-            const found = guild.roles.cache.find(r => r && r.name && m(r.name.toLowerCase()));
-            if (found) return found.id;
-        }
-        return configuredId || null;
-    };
-
-    // 1. Assign Verified Role
-    const verifiedRoleId = findGuildRole(discordConfig.verifiedRoleId, [
-        n => n === 'verified',
-        n => n === 'verified member',
-        n => n === 'verified members',
-        n => n.includes('verified'),
-        n => n === 'member',
-        n => n === 'members'
-    ]);
-    if (verifiedRoleId && guildMember) {
-        const res = await applyGuildMemberRole(guild, guildMember, botMember, verifiedRoleId, 'add', 'Tornium API Key Verified');
-        if (res.success && (res.action === 'added' || res.action === 'already_had')) {
-            rolesAdded.push(`<@&${verifiedRoleId}>`);
-        } else if (res.hierarchyError) {
-            roleWarnings.push(`⚠️ **Hierarchy Alert:** Bot role is lower than <@&${verifiedRoleId}>. Drag **F.R.I.D.A.Y** above it in Server Settings ➔ Roles.`);
-        }
-    }
-
-    // Remove Unverified Quarantine Role
-    const unverifiedRoleId = findGuildRole(discordConfig.unverifiedRoleId, [
-        n => n === 'unverified',
-        n => n.includes('unverified'),
-        n => n === 'quarantine'
-    ]);
-    if (unverifiedRoleId && guildMember) {
-        await applyGuildMemberRole(guild, guildMember, botMember, unverifiedRoleId, 'remove', 'Verified with API Key');
-    }
-
-    const isAlreadyVerified = true;
-
-    // 2. Faction Member Roles (Sync if member belongs to server's faction)
-    if (isOurFaction && guildMember) {
-        const configuredFacName = (discordConfig.factionName || '').toLowerCase().trim();
-        const factionRoleId = findGuildRole(discordConfig.factionRoleId, [
-            ...(configuredFacName ? [
-                n => n === configuredFacName,
-                n => n.includes(configuredFacName)
-            ] : []),
-            ...(guildWord.length >= 3 ? [
-                n => n === `${guildWord} member`,
-                n => n.includes(guildWord) && n.includes('member'),
-                n => n === guildWord
-            ] : []),
-            n => n === 'faction member',
-            n => n === 'faction',
-            n => n.includes('member') && !n.includes('verified') && !n.includes('guest'),
-            n => n.includes('spider-verse'),
-            n => n.includes('spider verse'),
-            n => n.includes('spiderverse'),
-            n => n.includes('spdr')
-        ]);
-        if (factionRoleId) {
-            const res = await applyGuildMemberRole(guild, guildMember, botMember, factionRoleId, 'add', `Faction Member (${playerFactionName || 'Faction'})`);
-            if (res.success && (res.action === 'added' || res.action === 'already_had')) {
-                rolesAdded.push(`<@&${factionRoleId}>`);
-            } else if (res.hierarchyError) {
-                roleWarnings.push(`⚠️ **Hierarchy Alert:** Bot role is lower than <@&${factionRoleId}>. Drag **F.R.I.D.A.Y** above it in Server Settings ➔ Roles.`);
-            } else if (res.error) {
-                roleWarnings.push(`⚠️ **Role Error:** Could not assign <@&${factionRoleId}>: ${res.error}`);
-            }
-        }
-
-        // 3. Faction Leader Role
-        const leaderRoleId = findGuildRole(discordConfig.leaderRoleId, [
-            ...(guildWord.length >= 3 ? [
-                n => n === `${guildWord} leadership`,
-                n => n.includes(guildWord) && (n.includes('leader') || n.includes('leadership'))
-            ] : []),
-            n => n === 'leadership',
-            n => n === 'faction leader',
-            n => n === 'leader',
-            n => n.includes('leadership') || n.includes('leader')
-        ]);
-        if (isLeader && leaderRoleId) {
-            const res = await applyGuildMemberRole(guild, guildMember, botMember, leaderRoleId, 'add', 'Faction Leader / Co-Leader');
-            if (res.success && (res.action === 'added' || res.action === 'already_had')) {
-                rolesAdded.push(`<@&${leaderRoleId}> (👑 Leadership)`);
-            } else if (res.hierarchyError) {
-                roleWarnings.push(`⚠️ **Hierarchy Alert:** Bot role is lower than <@&${leaderRoleId}>.`);
-            }
-        }
-
-        // 4. Faction Banker Role
-        const bankerRoleId = findGuildRole(discordConfig.bankerRoleId, [
-            n => n === 'banker',
-            n => n.includes('banker'),
-            n => n.includes('treasurer'),
-            n => n.includes('vault')
-        ]);
-        if (isBanker && bankerRoleId) {
-            const res = await applyGuildMemberRole(guild, guildMember, botMember, bankerRoleId, 'add', 'Faction Banker / Vault Controller');
-            if (res.success && (res.action === 'added' || res.action === 'already_had')) {
-                rolesAdded.push(`<@&${bankerRoleId}> (🏦 Banker)`);
-            } else if (res.hierarchyError) {
-                roleWarnings.push(`⚠️ **Hierarchy Alert:** Bot role is lower than <@&${bankerRoleId}>.`);
-            }
-        }
-    }
+    const { rolesAdded, roleWarnings } = await applyGatekeeperAccessRoles({
+        guild,
+        guildMember,
+        botMember,
+        cfg,
+        decision,
+        isLeader,
+        isBanker,
+        playerFactionName,
+        reasonPrefix: 'API Key Verify'
+    });
 
     // Cache to verifiedDiscordToTorn & Persist
     if (playerId) {
@@ -23538,8 +23952,8 @@ async function executeVerifyWithKey(interactionOrMember, rawKey, explicitGuild =
     }
 
     // Broadcast Announcement to Verification Channel ONLY if explicitly enabled by admin
-    const vChanId = discordConfig.verificationChannelId;
-    if (vChanId && guild && discordConfig.notifyApiKeyLinked === true) {
+    const vChanId = cfg.verificationChannelId;
+    if (vChanId && guild && cfg.notifyApiKeyLinked === true) {
         try {
             const chan = guild.channels.cache.get(vChanId) || await guild.channels.fetch(vChanId).catch(() => null);
             if (chan && chan.isTextBased()) {
@@ -23585,12 +23999,15 @@ async function executeVerifyWithKey(interactionOrMember, rawKey, explicitGuild =
         playerId,
         playerFactionId,
         isOurFaction,
+        nonFactionRoleApplied: decision.grantNonFactionRole,
         isLeader,
         isBanker,
         rolesAdded,
         roleWarnings,
         title: `🔑 API Key Linked: ${playerName} [${playerId}]`,
-        description: `✅ <@${discordUserId}>, your Torn Limited Access API Key has been securely linked and encrypted!\nF.R.I.D.A.Y has permanently saved your key for live gym stats, battle stats (\`/bs\`), energy tracking, and faction banking.`,
+        description: (!isOurFaction && decision.grantNonFactionRole)
+            ? `✅ <@${discordUserId}>, your Limited API Key was linked! Because you are outside our faction, you have been granted the **Non-Faction / Visitor** role.`
+            : `✅ <@${discordUserId}>, your Torn Limited Access API Key has been securely linked and encrypted!\nF.R.I.D.A.Y has permanently saved your key for live gym stats, battle stats (\`/bs\`), energy tracking, and faction banking.`,
         color: isOurFaction ? UI.COLORS.SUCCESS : UI.COLORS.INFO,
         fields,
         footer: UI.FOOTER,
@@ -23864,19 +24281,22 @@ async function executeVerifyMember(memberOrUser, guild, targetPlayerInput = null
     const playerId = tornUser.player_id;
     const playerFactionId = tornUser.faction?.faction_id || 0;
     const playerFactionName = tornUser.faction?.faction_name || "None";
-    const guildWord = (guild.name || '').toLowerCase().replace(/the |server|initiative|faction|community/gi, '').trim();
-    const isOurFaction = Boolean(
-        (facId && String(playerFactionId) === String(facId)) ||
-        (guildWord.length >= 3 && playerFactionName.toLowerCase().includes(guildWord)) ||
-        (guild.name && playerFactionName.toLowerCase() === guild.name.toLowerCase())
-    );
+
+    const cfg = resolveGuildDiscordConfig(guild?.id);
+    const websiteFacId = cfg.factionId || facId || dynamicFactionId || "";
+    const isOurFaction = welcomeGatekeeperModule.checkFactionMembership({
+        playerFactionId,
+        playerFactionName,
+        websiteFactionId: websiteFacId,
+        guildName: guild?.name
+    });
 
     // Detect Faction Position (Leader, Co-Leader, Banker, etc.)
     let isLeader = false;
     let isBanker = false;
     let memberPositionTitle = "";
 
-    const lookupFacId = (isOurFaction && playerFactionId) ? playerFactionId : (facId || playerFactionId);
+    const lookupFacId = (isOurFaction && playerFactionId) ? playerFactionId : (websiteFacId || playerFactionId);
     if (isOurFaction && apiKey && lookupFacId) {
         try {
             const facRes = await fetch(`https://api.torn.com/faction/${lookupFacId}?selections=basic,positions&key=${apiKey}`, { signal: AbortSignal.timeout(8000) });
@@ -23894,6 +24314,46 @@ async function executeVerifyMember(memberOrUser, guild, targetPlayerInput = null
                            pLower.includes('treasur');
             }
         } catch(e) {}
+    }
+
+    const decision = welcomeGatekeeper.evaluateNonFactionPolicy({
+        cfg,
+        guildId: guild.id,
+        discordUserId,
+        playerId,
+        isOurFaction,
+        isExplicitAdminAction: Boolean(isExplicitAdminAction || verifiedViaAdminOverride)
+    });
+
+    if (decision.requiresAdminApproval) {
+        const verificationSource = verifiedViaGlobalLink
+            ? 'Official Torn Discord Link'
+            : (userKeys?.hasLinkedKey?.(discordUserId) ? 'Linked API Key' : 'Torn Verification');
+        return await dispatchNonFactionAdminApproval({
+            guild,
+            guildMember,
+            botMember,
+            cfg,
+            playerId,
+            playerName,
+            playerLevel: tornUser.level || 0,
+            playerAge: tornUser.age || 0,
+            playerFactionId,
+            playerFactionName,
+            playerPosition: tornUser.faction?.position || memberPositionTitle || '',
+            verificationSource
+        });
+    }
+
+    if (!isOurFaction && (isExplicitAdminAction || verifiedViaAdminOverride)) {
+        const gMode = (decision.grantNonFactionRole && !decision.grantVerifiedRole) ? 'guest' : 'verified';
+        welcomeGatekeeper.setApprovedRecord(guild.id, discordUserId, {
+            playerId,
+            playerName,
+            grantMode: gMode,
+            approvedBy: 'admin_verify',
+            approvedByName: 'Server Admin'
+        });
     }
 
     // Sync Server Nickname to "Name [ID]"
@@ -23914,120 +24374,27 @@ async function executeVerifyMember(memberOrUser, guild, targetPlayerInput = null
         nickNote = "Cannot change nickname (Server Owner or higher role)";
     }
 
-    // Apply Roles with Hierarchy Check & Error Collection
-    const rolesAdded = [];
-    const roleWarnings = [];
-
-    const findGuildRole = (configuredId, matchers) => {
-        if (configuredId && guild.roles.cache.has(configuredId)) return configuredId;
-        for (const m of matchers) {
-            const found = guild.roles.cache.find(r => r && r.name && m(r.name.toLowerCase()));
-            if (found) return found.id;
-        }
-        return configuredId || null;
-    };
-
-    // 1. Verified Role
-    let alreadyHadVerifiedRole = false;
-    const verifiedRoleId = findGuildRole(discordConfig.verifiedRoleId, [
-        n => n === 'verified',
-        n => n === 'verified member',
-        n => n === 'verified members',
-        n => n.includes('verified'),
-        n => n === 'member',
-        n => n === 'members'
-    ]);
-    if (verifiedRoleId) {
-        alreadyHadVerifiedRole = Boolean(guildMember && guildMember.roles?.cache?.has(verifiedRoleId));
-        const res = await applyGuildMemberRole(guild, guildMember, botMember, verifiedRoleId, 'add', 'Tornium Verified');
-        if (res.success && (res.action === 'added' || res.action === 'already_had')) {
-            rolesAdded.push(`<@&${verifiedRoleId}>`);
-        } else if (res.hierarchyError) {
-            roleWarnings.push(`⚠️ **Hierarchy Alert:** Bot role is lower than <@&${verifiedRoleId}>. Drag **F.R.I.D.A.Y** above it in Server Settings ➔ Roles.`);
-        } else if (res.error) {
-            roleWarnings.push(`⚠️ **Role Error:** Could not assign <@&${verifiedRoleId}>: ${res.error}`);
-        }
+    const preRoleIds = resolveServerGatekeeperRoles(guild, cfg);
+    let alreadyHadAccess = false;
+    if (decision.grantVerifiedRole && preRoleIds.verifiedRoleId) {
+        alreadyHadAccess = Boolean(guildMember?.roles?.cache?.has?.(preRoleIds.verifiedRoleId));
+    } else if (decision.grantNonFactionRole && preRoleIds.nonFactionRoleId) {
+        alreadyHadAccess = Boolean(guildMember?.roles?.cache?.has?.(preRoleIds.nonFactionRoleId));
     }
 
-    // 2. Faction Member Role
-    if (isOurFaction) {
-        const configuredFacName = (discordConfig.factionName || '').toLowerCase().trim();
-        const factionRoleId = findGuildRole(discordConfig.factionRoleId, [
-            ...(configuredFacName ? [
-                n => n === configuredFacName,
-                n => n.includes(configuredFacName)
-            ] : []),
-            ...(guildWord.length >= 3 ? [
-                n => n === `${guildWord} member`,
-                n => n.includes(guildWord) && n.includes('member'),
-                n => n === guildWord
-            ] : []),
-            n => n === 'faction member',
-            n => n === 'faction',
-            n => n.includes('member') && !n.includes('verified') && !n.includes('guest'),
-            n => n.includes('spider-verse'),
-            n => n.includes('spider verse'),
-            n => n.includes('spiderverse'),
-            n => n.includes('spdr')
-        ]);
-        if (factionRoleId) {
-            const res = await applyGuildMemberRole(guild, guildMember, botMember, factionRoleId, 'add', 'Faction Member');
-            if (res.success && (res.action === 'added' || res.action === 'already_had')) {
-                rolesAdded.push(`<@&${factionRoleId}>`);
-            } else if (res.hierarchyError) {
-                roleWarnings.push(`⚠️ **Hierarchy Alert:** Bot role is lower than <@&${factionRoleId}>. Drag **F.R.I.D.A.Y** above it in Server Settings ➔ Roles.`);
-            } else if (res.error) {
-                roleWarnings.push(`⚠️ **Role Error:** Could not assign <@&${factionRoleId}>: ${res.error}`);
-            }
-        }
+    const { rolesAdded, roleWarnings } = await applyGatekeeperAccessRoles({
+        guild,
+        guildMember,
+        botMember,
+        cfg,
+        decision,
+        isLeader,
+        isBanker,
+        playerFactionName,
+        reasonPrefix: 'Torn Verify'
+    });
 
-        // 3. Faction Leader Role
-        const leaderRoleId = findGuildRole(discordConfig.leaderRoleId, [
-            ...(guildWord.length >= 3 ? [
-                n => n === `${guildWord} leadership`,
-                n => n.includes(guildWord) && (n.includes('leader') || n.includes('leadership'))
-            ] : []),
-            n => n === 'leadership',
-            n => n === 'faction leader',
-            n => n === 'leader',
-            n => n.includes('leadership') || n.includes('leader')
-        ]);
-        if (isLeader && leaderRoleId) {
-            const res = await applyGuildMemberRole(guild, guildMember, botMember, leaderRoleId, 'add', 'Faction Leader / Co-Leader');
-            if (res.success && (res.action === 'added' || res.action === 'already_had')) {
-                rolesAdded.push(`<@&${leaderRoleId}> (👑 Leadership)`);
-            } else if (res.hierarchyError) {
-                roleWarnings.push(`⚠️ **Hierarchy Alert:** Bot role is lower than <@&${leaderRoleId}>. Drag **F.R.I.D.A.Y** above it in Server Settings ➔ Roles.`);
-            }
-        }
-
-        // 4. Faction Banker Role
-        const bankerRoleId = findGuildRole(discordConfig.bankerRoleId, [
-            n => n === 'banker',
-            n => n.includes('banker'),
-            n => n.includes('treasurer')
-        ]);
-        if (isBanker && bankerRoleId) {
-            const res = await applyGuildMemberRole(guild, guildMember, botMember, bankerRoleId, 'add', 'Faction Banker');
-            if (res.success && (res.action === 'added' || res.action === 'already_had')) {
-                rolesAdded.push(`<@&${bankerRoleId}> (🏦 Banker)`);
-            } else if (res.hierarchyError) {
-                roleWarnings.push(`⚠️ **Hierarchy Alert:** Bot role is lower than <@&${bankerRoleId}>. Drag **F.R.I.D.A.Y** above it in Server Settings ➔ Roles.`);
-            }
-        }
-    }
-
-    // 5. Remove Unverified Quarantine Role
-    const unverifiedRoleId = findGuildRole(discordConfig.unverifiedRoleId, [
-        n => n === 'unverified',
-        n => n.includes('unverified'),
-        n => n === 'quarantine'
-    ]);
-    if (unverifiedRoleId) {
-        await applyGuildMemberRole(guild, guildMember, botMember, unverifiedRoleId, 'remove', 'Verified on Torn');
-    }
-
-    const factionBadge = isOurFaction ? (playerFactionName.toLowerCase().includes('spider') ? '🕷️' : '⭐') : '';
+    const factionBadge = isOurFaction ? (playerFactionName.toLowerCase().includes('spider') ? '🕷️' : '⭐') : (!isOurFaction ? '🪪' : '');
     const fields = [
         { name: "👤 Torn Profile", value: UI.player(playerName, playerId), inline: true },
         { name: "🏢 Faction", value: `${playerFactionName} [${playerFactionId}] ${factionBadge} ${memberPositionTitle ? `· *${memberPositionTitle}*` : ''}`, inline: true },
@@ -24053,26 +24420,31 @@ async function executeVerifyMember(memberOrUser, guild, targetPlayerInput = null
         }
     }
 
-    const hasLinkedKey = userKeys && typeof userKeys.hasLinkedKey === 'function' && userKeys.hasLinkedKey(discordUserId);
+    const isVisitorOnly = !isOurFaction && decision.grantNonFactionRole && !decision.grantVerifiedRole;
     const returnObj = {
         success: true,
         playerName,
         playerId,
         playerFactionId,
+        playerFactionName,
         isOurFaction,
+        nonFactionRoleApplied: decision.grantNonFactionRole,
+        accessMode: decision.mode,
         isLeader,
         isBanker,
         rolesAdded,
         roleWarnings,
-        isNewVerification: !alreadyHadVerifiedRole,
-        alreadyVerified: alreadyHadVerifiedRole,
-        title: `${playerFactionName && playerFactionName.toLowerCase().includes('spider') ? '🕷️' : '🛡️'} Verified: ${playerName} [${playerId}]`,
+        isNewVerification: !alreadyHadAccess,
+        alreadyVerified: alreadyHadAccess,
+        title: `${playerFactionName && playerFactionName.toLowerCase().includes('spider') ? '🕷️' : (isVisitorOnly ? '🪪' : '🛡️')} Verified: ${playerName} [${playerId}]`,
         description: verifiedViaAdminOverride
             ? `✅ <@${discordUserId}> has been manually verified as **[${playerName}](https://www.torn.com/profiles.php?XID=${playerId})**! Roles and nickname synced.`
-            : (alreadyHadVerifiedRole
+            : (alreadyHadAccess
                 ? `✅ <@${discordUserId}>, your verification is already up to date! Roles and nickname refreshed.`
-                : `✅ <@${discordUserId}> has been successfully verified! Full server access granted.`),
-        color: UI.COLORS.GREEN,
+                : (isVisitorOnly
+                    ? `🪪 <@${discordUserId}> has been verified as a **Non-Faction Visitor** and granted guest role access.`
+                    : `✅ <@${discordUserId}> has been successfully verified! Full server access granted.`)),
+        color: isVisitorOnly ? (UI.COLORS.INFO || 0x38bdf8) : UI.COLORS.GREEN,
         fields,
         footer: UI.FOOTER,
         timestamp: new Date().toISOString()
@@ -24082,11 +24454,12 @@ async function executeVerifyMember(memberOrUser, guild, targetPlayerInput = null
 }
 
 async function executeVerifyAll(guild, apiKey) {
-    apiKey = apiKey || discordConfig.apiKey || process.env.TORN_API_KEY || getNextApiKey() || (apiPoolConfig && apiPoolConfig.keys && apiPoolConfig.keys[0]) || "";
+    const cfg = resolveGuildDiscordConfig(guild?.id);
+    apiKey = apiKey || cfg.apiKey || discordConfig.apiKey || process.env.TORN_API_KEY || getNextApiKey() || (apiPoolConfig && apiPoolConfig.keys && apiPoolConfig.keys[0]) || "";
     if (!apiKey) return { title: "🛡️ Batch Verification", description: "⚠️ Torn API Key is not configured. Please add an API key in dashboard settings.", color: UI.COLORS.ERROR, footer: UI.FOOTER, timestamp: new Date().toISOString() };
     if (!guild) return { title: "🛡️ Batch Verification", description: "⚠️ Must be run inside a Discord server.", color: UI.COLORS.ERROR, footer: UI.FOOTER, timestamp: new Date().toISOString() };
 
-    let facId = discordConfig.factionId || dynamicFactionId || "";
+    let facId = cfg.factionId || dynamicFactionId || "";
     let facData = null;
     let membersMap = {};
     try {
@@ -24148,53 +24521,11 @@ async function executeVerifyAll(guild, apiKey) {
     let unmatchedCount = 0;
     let factionMatchedCount = 0;
     let guestMatchedCount = 0;
+    let pendingApprovalCount = 0;
     const updatedMembersList = [];
     const globalRoleWarnings = new Set();
 
-    const findGuildRole = (configuredId, matchers) => {
-        if (configuredId && guild.roles.cache.has(configuredId)) return configuredId;
-        for (const m of matchers) {
-            const found = guild.roles.cache.find(r => r && r.name && m(r.name.toLowerCase()));
-            if (found) return found.id;
-        }
-        return configuredId || null;
-    };
-
-    const verifiedRoleId = findGuildRole(discordConfig.verifiedRoleId, [
-        n => n === 'verified',
-        n => n === 'verified member',
-        n => n.includes('verified'),
-        n => n === 'member',
-        n => n === 'members'
-    ]);
-
-    const guildWord = (guild.name || '').toLowerCase().replace(/the |server|initiative|faction|community/gi, '').trim();
-    const configuredFacName = (discordConfig.factionName || '').toLowerCase().trim();
-    const factionRoleId = findGuildRole(discordConfig.factionRoleId, [
-        ...(configuredFacName ? [
-            n => n === configuredFacName,
-            n => n.includes(configuredFacName)
-        ] : []),
-        ...(guildWord.length >= 3 ? [
-            n => n === `${guildWord} member`,
-            n => n.includes(guildWord) && n.includes('member'),
-            n => n === guildWord
-        ] : []),
-        n => n === 'faction member',
-        n => n === 'faction',
-        n => n.includes('member') && !n.includes('verified') && !n.includes('guest'),
-        n => n.includes('spider-verse'),
-        n => n.includes('spider verse'),
-        n => n.includes('spiderverse'),
-        n => n.includes('spdr')
-    ]);
-
-    const unverifiedRoleId = findGuildRole(discordConfig.unverifiedRoleId, [
-        n => n === 'unverified',
-        n => n.includes('unverified'),
-        n => n === 'quarantine'
-    ]);
-
+    const preRoleIds = resolveServerGatekeeperRoles(guild, cfg);
     const membersList = Array.from(guildMembers.values ? guildMembers.values() : guildMembers);
 
     // Track how many live API lookups we do in this run (max 15 to stay blazing fast)
@@ -24304,6 +24635,23 @@ async function executeVerifyAll(guild, apiKey) {
                 if (isOurFaction) factionMatchedCount++;
                 else guestMatchedCount++;
 
+                const decision = welcomeGatekeeper.evaluateNonFactionPolicy({
+                    cfg,
+                    guildId: guild.id,
+                    discordUserId: gm.id,
+                    playerId: matchedPlayerId,
+                    isOurFaction,
+                    isExplicitAdminAction: false
+                });
+
+                if (decision.requiresAdminApproval) {
+                    pendingApprovalCount++;
+                    if (preRoleIds.unverifiedRoleId && !gm.roles.cache.has(preRoleIds.unverifiedRoleId)) {
+                        await applyGuildMemberRole(guild, gm, botMember, preRoleIds.unverifiedRoleId, 'add', 'Batch Quarantine: Pending Admin Approval').catch(() => {});
+                    }
+                    continue;
+                }
+
                 const targetNick = `${matchedName} [${matchedPlayerId}]`.slice(0, 32);
                 let memberChanged = false;
 
@@ -24318,39 +24666,30 @@ async function executeVerifyAll(guild, apiKey) {
                 // Check leadership / banker positions
                 const mData = membersMap[matchedPlayerId];
                 const pLower = (mData?.position || '').toLowerCase();
-                const isLeader = (String(matchedPlayerId) === String(facData?.leader)) ||
-                                 (String(matchedPlayerId) === String(facData?.['co-leader'])) ||
-                                 pLower.includes('leader');
-                const isBanker = isLeader ||
-                                 pLower.includes('bank') ||
-                                 pLower.includes('vault') ||
-                                 pLower.includes('treasur');
+                const isLeader = isOurFaction && (
+                    (String(matchedPlayerId) === String(facData?.leader)) ||
+                    (String(matchedPlayerId) === String(facData?.['co-leader'])) ||
+                    pLower.includes('leader')
+                );
+                const isBanker = isLeader || (isOurFaction && (
+                    pLower.includes('bank') ||
+                    pLower.includes('vault') ||
+                    pLower.includes('treasur')
+                ));
 
-                // Role application: ONLY call Discord API if member DOES NOT already have the role!
-                if (verifiedRoleId && !gm.roles.cache.has(verifiedRoleId)) {
-                    const res = await applyGuildMemberRole(guild, gm, botMember, verifiedRoleId, 'add', 'Batch Verified');
-                    if (res.success && res.action === 'added') memberChanged = true;
-                    else if (res.hierarchyError) globalRoleWarnings.add(res.reason);
-                }
-                if (isOurFaction && factionRoleId && !gm.roles.cache.has(factionRoleId)) {
-                    const res = await applyGuildMemberRole(guild, gm, botMember, factionRoleId, 'add', 'Batch Faction Member');
-                    if (res.success && res.action === 'added') memberChanged = true;
-                    else if (res.hierarchyError) globalRoleWarnings.add(res.reason);
-                }
-                if (isOurFaction && isLeader && discordConfig.leaderRoleId && !gm.roles.cache.has(discordConfig.leaderRoleId)) {
-                    const res = await applyGuildMemberRole(guild, gm, botMember, discordConfig.leaderRoleId, 'add', 'Batch Faction Leader');
-                    if (res.success && res.action === 'added') memberChanged = true;
-                    else if (res.hierarchyError) globalRoleWarnings.add(res.reason);
-                }
-                if (isOurFaction && isBanker && discordConfig.bankerRoleId && !gm.roles.cache.has(discordConfig.bankerRoleId)) {
-                    const res = await applyGuildMemberRole(guild, gm, botMember, discordConfig.bankerRoleId, 'add', 'Batch Faction Banker');
-                    if (res.success && res.action === 'added') memberChanged = true;
-                    else if (res.hierarchyError) globalRoleWarnings.add(res.reason);
-                }
-                if (unverifiedRoleId && gm.roles.cache.has(unverifiedRoleId)) {
-                    const res = await applyGuildMemberRole(guild, gm, botMember, unverifiedRoleId, 'remove', 'Batch Verified');
-                    if (res.success && res.action === 'removed') memberChanged = true;
-                }
+                const roleRes = await applyGatekeeperAccessRoles({
+                    guild,
+                    guildMember: gm,
+                    botMember,
+                    cfg,
+                    decision,
+                    isLeader,
+                    isBanker,
+                    playerFactionName: facData?.name || '',
+                    reasonPrefix: 'Batch Verification'
+                });
+                if (roleRes.memberChanged) memberChanged = true;
+                (roleRes.roleWarnings || []).forEach(w => globalRoleWarnings.add(w));
 
                 verifiedDiscordToTorn[gm.id] = {
                     tornId: String(matchedPlayerId),
@@ -24395,6 +24734,7 @@ async function executeVerifyAll(guild, apiKey) {
         '',
         `• 🔄 **Roles / Nicknames Updated:** ${updatedCount}`,
         `• 🔒 **Already in Sync:** ${alreadySynced}`,
+        ...(pendingApprovalCount > 0 ? [`• ⏳ **Pending Admin Approval (Non-Faction):** ${pendingApprovalCount}`] : []),
         `• ⚠️ **Unmatched / Guests:** ${unmatchedCount}`
     ];
 
@@ -24418,78 +24758,21 @@ async function executeVerifyAll(guild, apiKey) {
 // ─── Verification-on-Join Engine ──────────────────────────────────────────────
 async function handleGuildMemberAdd(member) {
     if (!member || member.user?.bot) return;
-    if (discordConfig.autoVerifyOnJoin === false) return;
+    const cfg = resolveGuildDiscordConfig(member.guild?.id);
+    if (cfg.autoVerifyOnJoin === false) return;
 
     try {
         const guild = member.guild;
-        const apiKey = discordConfig.apiKey || TORN_API_KEY || getNextApiKey();
-        const verificationChannelId = discordConfig.verificationChannelId;
+        const apiKey = cfg.apiKey || discordConfig.apiKey || TORN_API_KEY || getNextApiKey();
+        const verificationChannelId = cfg.verificationChannelId;
+        const accessMode = welcomeGatekeeperModule.normalizeNonFactionAccessMode(cfg.nonFactionAccessMode);
 
         // Pre-fetch all roles so cache is always warm
         try { await guild.roles.fetch().catch(() => null); } catch(e) {}
 
-        const findGuildRole = (configuredId, matchers) => {
-            if (configuredId && guild.roles.cache.has(configuredId)) return configuredId;
-            for (const m of matchers) {
-                const found = guild.roles.cache.find(r => m(r.name.toLowerCase()));
-                if (found) return found.id;
-            }
-            return configuredId || null;
-        };
+        const { verifiedRoleId, nonFactionRoleId, unverifiedRoleId } = resolveServerGatekeeperRoles(guild, cfg);
 
-        const verifiedRoleId = findGuildRole(discordConfig.verifiedRoleId, [
-            n => n === 'verified',
-            n => n === 'verified member',
-            n => n.includes('verified'),
-            n => n === 'member',
-            n => n === 'members'
-        ]);
-
-        const guildWord = (guild.name || '').toLowerCase().replace(/the |server|initiative|faction|community/gi, '').trim();
-        const configuredFacName = (discordConfig.factionName || '').toLowerCase().trim();
-        const factionRoleId = findGuildRole(discordConfig.factionRoleId, [
-            ...(configuredFacName ? [
-                n => n === configuredFacName,
-                n => n.includes(configuredFacName)
-            ] : []),
-            ...(guildWord.length >= 3 ? [
-                n => n === `${guildWord} member`,
-                n => n.includes(guildWord) && n.includes('member'),
-                n => n === guildWord
-            ] : []),
-            n => n === 'faction member',
-            n => n === 'faction',
-            n => n.includes('member') && !n.includes('verified') && !n.includes('guest'),
-            n => n.includes('spider-verse'),
-            n => n.includes('spider verse'),
-            n => n.includes('spiderverse'),
-            n => n.includes('spdr')
-        ]);
-
-        const unverifiedRoleId = findGuildRole(discordConfig.unverifiedRoleId, [
-            n => n === 'unverified',
-            n => n.includes('unverified'),
-            n => n === 'quarantine'
-        ]);
-
-        console.log(`[Verification-on-Join] New member joined ${guild.name}: ${member.user.tag} (${member.id})`);
-
-        // ── Dedicated Welcome & Faction Rules Announcement (Option C) ──
-        if (discordConfig.welcomeChannelId && discordConfig.postWelcomeRulesOnJoin !== false) {
-            try {
-                const welcomeRulesChan = guild.channels.cache.get(discordConfig.welcomeChannelId)
-                    || (await guild.channels.fetch(discordConfig.welcomeChannelId).catch(() => null));
-                if (welcomeRulesChan && welcomeRulesChan.isTextBased()) {
-                    const rulesEmbed = buildWelcomeRulesEmbed(member.id);
-                    welcomeRulesChan.send({
-                        content: `👋 Welcome to the server, <@${member.id}>! Please review our faction rules and priority objectives below:`,
-                        embeds: [sanitizeEmbed(rulesEmbed)]
-                    }).catch(e => console.warn('[Welcome Rules] Failed to send to welcome channel:', e.message));
-                }
-            } catch(err) {
-                console.warn('[Welcome Rules] Error sending join welcome:', err.message);
-            }
-        }
+        console.log(`[Verification-on-Join] New member joined ${guild.name}: ${member.user.tag} (${member.id}) [Mode: ${accessMode}]`);
 
         // Ensure botMember is ready
         let botMember = guild.members.me;
@@ -24497,7 +24780,7 @@ async function handleGuildMemberAdd(member) {
             try { botMember = await guild.members.fetchMe().catch(() => null); } catch(e) {}
         }
 
-        // 1. Attempt instant auto-verification via Tornium flow (Torn v2 discord cross-reference)
+        // 1. Attempt instant auto-verification via Tornium flow (also enforces nonFactionAccessMode)
         let verifyResult = null;
         if (apiKey) {
             try {
@@ -24507,71 +24790,60 @@ async function handleGuildMemberAdd(member) {
             }
         }
 
+        const sendWelcomeRulesIfEligible = () => {
+            if (!cfg.welcomeChannelId || cfg.postWelcomeRulesOnJoin === false) return;
+            const allowWelcomeRules = verifyResult?.success
+                ? (verifyResult.isOurFaction || accessMode === 'allow_all')
+                : (accessMode !== 'admin_approval');
+            if (!allowWelcomeRules) return;
+            try {
+                const welcomeRulesChan = guild.channels.cache.get(cfg.welcomeChannelId)
+                    || guild.channels.fetch(cfg.welcomeChannelId).catch(() => null);
+                Promise.resolve(welcomeRulesChan).then(chan => {
+                    if (chan && chan.isTextBased()) {
+                        const rulesEmbed = buildWelcomeRulesEmbed(member.id);
+                        chan.send({
+                            content: `👋 Welcome to the server, <@${member.id}>! Please review our faction rules and priority objectives below:`,
+                            embeds: [sanitizeEmbed(rulesEmbed)]
+                        }).catch(e => console.warn('[Welcome Rules] Failed to send to welcome channel:', e.message));
+                    }
+                }).catch(() => {});
+            } catch(err) {
+                console.warn('[Welcome Rules] Error sending join welcome:', err.message);
+            }
+        };
+
         if (verifyResult && verifyResult.success) {
-            console.log(`[Verification-on-Join] Auto-verified ${member.user.tag} as ${verifyResult.playerName} [${verifyResult.playerId}]`);
+            console.log(`[Verification-on-Join] Auto-verified ${member.user.tag} as ${verifyResult.playerName} [${verifyResult.playerId}] (inFaction=${verifyResult.isOurFaction})`);
+            sendWelcomeRulesIfEligible();
 
-            // Guarantee direct role application on the member object
-            const rolesGrantedList = [];
-            if (verifiedRoleId) {
-                try {
-                    if (!member.roles.cache.has(verifiedRoleId)) {
-                        await member.roles.add(verifiedRoleId, 'Verification-on-Join Direct');
-                        console.log(`[Verification-on-Join] Added Verified role ${verifiedRoleId} to ${member.user.tag}`);
-                    }
-                    rolesGrantedList.push(`<@&${verifiedRoleId}>`);
-                } catch(err) {
-                    console.error(`[Verification-on-Join] Failed to add Verified role to ${member.user.tag}:`, err.message);
-                    verifyResult.roleWarnings = verifyResult.roleWarnings || [];
-                    if (err.message.includes('Missing Permissions')) {
-                        verifyResult.roleWarnings.push(`⚠️ **Hierarchy Alert:** F.R.I.D.A.Y role is lower than <@&${verifiedRoleId}>. In Server Settings ➔ Roles, drag F.R.I.D.A.Y above it!`);
-                    } else {
-                        verifyResult.roleWarnings.push(`⚠️ **Role Error:** ${err.message}`);
-                    }
-                }
-            }
-
-            if (verifyResult.isOurFaction && factionRoleId) {
-                try {
-                    if (!member.roles.cache.has(factionRoleId)) {
-                        await member.roles.add(factionRoleId, 'Faction Member Verification-on-Join Direct');
-                        console.log(`[Verification-on-Join] Added Faction role ${factionRoleId} to ${member.user.tag}`);
-                    }
-                    rolesGrantedList.push(`<@&${factionRoleId}>`);
-                } catch(err) {
-                    console.error(`[Verification-on-Join] Failed to add Faction role to ${member.user.tag}:`, err.message);
-                }
-            }
-
-            // Remove quarantine/unverified role if present
-            if (unverifiedRoleId) {
-                try {
-                    if (member.roles.cache.has(unverifiedRoleId)) {
-                        await member.roles.remove(unverifiedRoleId, 'Auto-verified on join');
-                    }
-                } catch(e) {}
-            }
-
-            const allRolesGranted = [
-                ...(verifyResult.rolesAdded || []),
-                ...rolesGrantedList
-            ].filter((v, i, a) => a.indexOf(v) === i);
-
-            const rolesDisplay = allRolesGranted.length > 0 
-                ? allRolesGranted.join(', ') 
-                : (verifiedRoleId ? `<@&${verifiedRoleId}>` : 'Verified Member');
+            const allRolesGranted = (verifyResult.rolesAdded || []).filter((v, i, a) => a.indexOf(v) === i);
+            const rolesDisplay = allRolesGranted.length > 0
+                ? allRolesGranted.join(', ')
+                : (verifyResult.nonFactionRoleApplied && nonFactionRoleId
+                    ? `<@&${nonFactionRoleId}>`
+                    : (verifiedRoleId ? `<@&${verifiedRoleId}>` : 'Verified Member'));
 
             let warningNotice = '';
             if (verifyResult.roleWarnings && verifyResult.roleWarnings.length > 0) {
                 warningNotice = `\n\n${verifyResult.roleWarnings.join('\n')}`;
             }
 
+            const isVisitorSeparate = !verifyResult.isOurFaction && accessMode === 'separate_role';
             const welcomeEmbed = {
-                title: `🎉 Welcome to ${guild.name}!`,
-                description: `✅ <@${member.id}> has been automatically verified as ${UI.player(verifyResult.playerName, verifyResult.playerId)}!\n\n` +
-                             `🏷️ **Nickname set to:** \`${verifyResult.playerName} [${verifyResult.playerId}]\`\n` +
-                             `🎖️ **Roles Granted:** ${rolesDisplay}\n\n` +
-                             `Welcome to the faction! All channels are now unlocked for you.${warningNotice}`,
-                color: UI.COLORS.SUCCESS,
+                title: isVisitorSeparate
+                    ? `🪪 Visitor Verified — ${guild.name}`
+                    : `🎉 Welcome to ${guild.name}!`,
+                description: (isVisitorSeparate
+                    ? `🪪 <@${member.id}> was verified as external player ${UI.player(verifyResult.playerName, verifyResult.playerId)}.\n\n` +
+                      `🏷️ **Nickname set to:** \`${verifyResult.playerName} [${verifyResult.playerId}]\`\n` +
+                      `🎖️ **Visitor Role Granted:** ${rolesDisplay}\n\n` +
+                      `You have been granted **Non-Faction / Visitor** channel access.${warningNotice}`
+                    : `✅ <@${member.id}> has been automatically verified as ${UI.player(verifyResult.playerName, verifyResult.playerId)}!\n\n` +
+                      `🏷️ **Nickname set to:** \`${verifyResult.playerName} [${verifyResult.playerId}]\`\n` +
+                      `🎖️ **Roles Granted:** ${rolesDisplay}\n\n` +
+                      `Welcome to the faction! All channels are now unlocked for you.${warningNotice}`),
+                color: isVisitorSeparate ? (UI.COLORS.INFO || 0x38bdf8) : UI.COLORS.SUCCESS,
                 footer: UI.FOOTER,
                 timestamp: new Date().toISOString()
             };
@@ -24586,7 +24858,7 @@ async function handleGuildMemberAdd(member) {
                     targetChan = guild.channels.cache.find(c => c.isTextBased() && (c.name.includes('verify') || c.name.includes('welcome'))) || guild.systemChannel;
                 }
                 if (targetChan && targetChan.isTextBased()) {
-                    await targetChan.send({ content: `Welcome <@${member.id}>! 🎉`, embeds: [sanitizeEmbed(welcomeEmbed)] });
+                    await targetChan.send({ content: `Welcome <@${member.id}>! ${isVisitorSeparate ? '🪪' : '🎉'}`, embeds: [sanitizeEmbed(welcomeEmbed)] });
                 }
             } catch(chanErr) {
                 console.warn('[Verification-on-Join] Failed to send channel welcome:', chanErr.message);
@@ -24595,15 +24867,48 @@ async function handleGuildMemberAdd(member) {
             // Also DM member welcome
             try {
                 await member.send({
-                    content: `🎉 Welcome to **${guild.name}**! You have been automatically verified as **[${verifyResult.playerName} [${verifyResult.playerId}]](https://www.torn.com/profiles.php?XID=${verifyResult.playerId})**! Full server access is unlocked.`
+                    content: isVisitorSeparate
+                        ? `🪪 Welcome to **${guild.name}**! You were verified as **[${verifyResult.playerName} [${verifyResult.playerId}]](https://www.torn.com/profiles.php?XID=${verifyResult.playerId})** with **Non-Faction Visitor** access.`
+                        : `🎉 Welcome to **${guild.name}**! You have been automatically verified as **[${verifyResult.playerName} [${verifyResult.playerId}]](https://www.torn.com/profiles.php?XID=${verifyResult.playerId})**! Full server access is unlocked.`
                 });
             } catch(e) {}
 
             return;
         }
 
+        // 1b. Member WAS identified on Torn, is NOT in our faction, and requires Server Admin approval
+        if (verifyResult && verifyResult.isPendingApproval) {
+            console.log(`[Verification-on-Join] Held non-faction member ${member.user.tag} (${verifyResult.playerName} [${verifyResult.playerId}]) in quarantine pending Admin Approval.`);
+
+            try {
+                let chan = null;
+                if (verificationChannelId) {
+                    chan = guild.channels.cache.get(verificationChannelId) || await guild.channels.fetch(verificationChannelId).catch(() => null);
+                }
+                if (!chan) {
+                    chan = guild.channels.cache.find(c => c.isTextBased() && (c.name.includes('verify') || c.name.includes('welcome'))) || guild.systemChannel;
+                }
+                if (chan && chan.isTextBased() && chan.id !== verifyResult.approvalChannelId) {
+                    await chan.send({
+                        content: `⏳ <@${member.id}> — your verification is awaiting **Server Administrator approval**.`,
+                        embeds: [sanitizeEmbed(verifyResult)]
+                    }).catch(() => {});
+                }
+            } catch(_) {}
+
+            try {
+                await member.send({
+                    content: `⏳ Update from **${guild.name}**:`,
+                    embeds: [sanitizeEmbed(verifyResult)]
+                });
+            } catch(_) {}
+
+            return;
+        }
+
         // 2. Member is unverified — restrict and guide them with interactive verification card
         console.log(`[Verification-on-Join] Member ${member.user.tag} is unverified. Restricting access and sending verification guide.`);
+        sendWelcomeRulesIfEligible();
 
         // Assign Unverified quarantine role if configured
         if (unverifiedRoleId) {
@@ -24614,8 +24919,8 @@ async function handleGuildMemberAdd(member) {
 
         const verifyEmbed = UI.verificationCard({
             memberId: member.id,
-            factionName: guild.name || discordConfig.factionName || 'Spider-Verse',
-            verifiedRoleId: discordConfig.verifiedRoleId
+            factionName: guild.name || cfg.factionName || 'Spider-Verse',
+            verifiedRoleId: cfg.verifiedRoleId
         });
         const verifyButtons = UI.verificationButtons();
 
@@ -26171,14 +26476,16 @@ function setupSlashBotEvents(bot, token) {
                 const result = await executeVerifyMember(interaction.member || interaction.user, interaction.guild, playerInput, apiKey);
 
                 if (result && result.success && result.isNewVerification && interaction.guild) {
-                    const vChanId = discordConfig.verificationChannelId;
+                    const cfg = resolveGuildDiscordConfig(interaction.guild.id);
+                    const vChanId = cfg.verificationChannelId;
                     if (vChanId) {
                         try {
                             const chan = interaction.guild.channels.cache.get(vChanId) || await interaction.guild.channels.fetch(vChanId).catch(() => null);
                             if (chan && chan.isTextBased()) {
-                                await chan.send({
-                                    content: `🎉 <@${interaction.user.id}> has successfully verified as **[${result.playerName} [${result.playerId}]](https://www.torn.com/profiles.php?XID=${result.playerId})**! Full server access granted.`
-                                });
+                                const msgLine = (!result.isOurFaction && result.nonFactionRoleApplied)
+                                    ? `🪪 <@${interaction.user.id}> verified as **[${result.playerName} [${result.playerId}]](https://www.torn.com/profiles.php?XID=${result.playerId})** (**Non-Faction / Visitor** role assigned).`
+                                    : `🎉 <@${interaction.user.id}> has successfully verified as **[${result.playerName} [${result.playerId}]](https://www.torn.com/profiles.php?XID=${result.playerId})**! Full server access granted.`;
+                                await chan.send({ content: msgLine });
                             }
                         } catch(e) {}
                     }
@@ -26965,18 +27272,20 @@ function setupSlashBotEvents(bot, token) {
                     }).catch(() => {});
                 }
                 await interaction.deferReply({ ephemeral: true });
-                const apiKey = discordConfig.apiKey || TORN_API_KEY || getNextApiKey();
+                const cfg = resolveGuildDiscordConfig(interaction.guild?.id);
+                const apiKey = cfg.apiKey || discordConfig.apiKey || TORN_API_KEY || getNextApiKey();
                 const result = await executeVerifyMember(interaction.member || interaction.user, interaction.guild, null, apiKey);
 
                 if (result && result.success && result.isNewVerification && interaction.guild) {
-                    const vChanId = discordConfig.verificationChannelId;
+                    const vChanId = cfg.verificationChannelId;
                     if (vChanId) {
                         try {
                             const chan = interaction.guild.channels.cache.get(vChanId) || await interaction.guild.channels.fetch(vChanId).catch(() => null);
                             if (chan && chan.isTextBased()) {
-                                await chan.send({
-                                    content: `🎉 <@${interaction.user.id}> has successfully verified as **[${result.playerName} [${result.playerId}]](https://www.torn.com/profiles.php?XID=${result.playerId})**! Welcome to the server!`
-                                });
+                                const msgLine = (!result.isOurFaction && result.nonFactionRoleApplied)
+                                    ? `🪪 <@${interaction.user.id}> verified as **[${result.playerName} [${result.playerId}]](https://www.torn.com/profiles.php?XID=${result.playerId})** (**Non-Faction / Visitor** role assigned).`
+                                    : `🎉 <@${interaction.user.id}> has successfully verified as **[${result.playerName} [${result.playerId}]](https://www.torn.com/profiles.php?XID=${result.playerId})**! Welcome to the server!`;
+                                await chan.send({ content: msgLine });
                             }
                         } catch(e) {}
                     }
@@ -26987,6 +27296,11 @@ function setupSlashBotEvents(bot, token) {
                     replyPayload.components = result.components;
                 }
                 return await interaction.editReply(replyPayload);
+            }
+
+            // ── Non-Faction Administrator Approval / Denial / Kick Buttons ──
+            if (customId.startsWith('nf_approve_guest:') || customId.startsWith('nf_approve_verified:') || customId.startsWith('nf_deny:') || customId.startsWith('nf_kick:')) {
+                return await handleNonFactionApprovalInteraction(interaction);
             }
 
             // ── Torn City Vault Withdrawal: Two-Step Ephemeral Claim & Lock Flow ──
@@ -29016,18 +29330,20 @@ function setupSlashBotEvents(bot, token) {
                 interaction.guild,
                 targetPlayerInput || null,
                 apiKey,
-                isCallerAdmin && Boolean(targetPlayerInput)
+                isCallerAdmin && Boolean(targetUser || targetPlayerInput)
             );
 
             if (result && result.success && result.isNewVerification && interaction.guild) {
-                const vChanId = discordConfig.verificationChannelId;
+                const cfg = resolveGuildDiscordConfig(interaction.guild.id);
+                const vChanId = cfg.verificationChannelId;
                 if (vChanId) {
                     try {
                         const chan = interaction.guild.channels.cache.get(vChanId) || await interaction.guild.channels.fetch(vChanId).catch(() => null);
                         if (chan && chan.isTextBased()) {
-                            await chan.send({
-                                content: `🎉 <@${targetMemberOrUser.id}> has successfully verified as **[${result.playerName} [${result.playerId}]](https://www.torn.com/profiles.php?XID=${result.playerId})**! Welcome to the server!`
-                            });
+                            const msgLine = (!result.isOurFaction && result.nonFactionRoleApplied)
+                                ? `🪪 <@${targetMemberOrUser.id}> verified as **[${result.playerName} [${result.playerId}]](https://www.torn.com/profiles.php?XID=${result.playerId})** (**Non-Faction / Visitor** role assigned).`
+                                : `🎉 <@${targetMemberOrUser.id}> has successfully verified as **[${result.playerName} [${result.playerId}]](https://www.torn.com/profiles.php?XID=${result.playerId})**! Welcome to the server!`;
+                            await chan.send({ content: msgLine });
                         }
                     } catch(e) {}
                 }

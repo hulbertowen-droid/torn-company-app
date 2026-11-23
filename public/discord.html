@@ -1942,10 +1942,64 @@
         .routing-matrix-table td { padding: 14px; border-bottom: 1px solid var(--border-subtle); vertical-align: middle; }
         .routing-stream-name { font-weight: 700; font-size: 0.9em; color: var(--text-main); }
         .routing-stream-desc { font-size: 0.78em; color: var(--text-muted); margin-top: 2px; }
-        .role-hierarchy-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+        .role-hierarchy-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; }
         @media(max-width: 900px) { .role-hierarchy-grid { grid-template-columns: 1fr; } }
         .role-card { background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 12px; }
         .role-card-title { font-weight: 700; font-size: 0.86em; color: var(--text-main); margin-bottom: 8px; }
+
+        /* Non-Faction Welcome Protection Mode Selector */
+        .nf-mode-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 12px;
+            margin-top: 10px;
+        }
+        @media(max-width: 920px) { .nf-mode-grid { grid-template-columns: 1fr; } }
+        .nf-mode-card {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            padding: 13px 14px;
+            border-radius: var(--radius-md);
+            background: rgba(255, 255, 255, 0.025);
+            border: 1px solid var(--border-subtle);
+            cursor: pointer;
+            transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
+            min-width: 0;
+        }
+        .nf-mode-card:hover { border-color: rgba(88, 101, 242, 0.45); background: rgba(88, 101, 242, 0.05); }
+        .nf-mode-card.active {
+            border-color: rgba(0, 206, 201, 0.65);
+            background: rgba(0, 206, 201, 0.08);
+            box-shadow: 0 0 18px rgba(0, 206, 201, 0.14);
+        }
+        .nf-mode-card.mode-approval.active {
+            border-color: rgba(245, 158, 11, 0.65);
+            background: rgba(245, 158, 11, 0.08);
+            box-shadow: 0 0 18px rgba(245, 158, 11, 0.14);
+        }
+        .nf-mode-card input[type="radio"] { position: absolute; opacity: 0; pointer-events: none; }
+        .nf-mode-title { font-weight: 800; font-size: 0.9em; color: var(--text-main); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+        .nf-mode-desc { font-size: 0.78em; color: var(--text-muted); line-height: 1.45; }
+        .nf-subpanel {
+            margin-top: 14px;
+            padding: 12px 14px;
+            border-radius: var(--radius-md);
+            background: rgba(15, 23, 42, 0.45);
+            border: 1px solid var(--border-subtle);
+        }
+        body.light-mode .nf-subpanel { background: #f8fafc; }
+        .nf-warn-banner {
+            margin-top: 10px;
+            padding: 9px 12px;
+            border-radius: 8px;
+            font-size: 0.8em;
+            font-weight: 600;
+            color: #fbbf24;
+            background: rgba(245, 158, 11, 0.1);
+            border: 1px solid rgba(245, 158, 11, 0.35);
+        }
 
         /* Layer C Floating Save Dock */
         .floating-save-dock {
@@ -3470,13 +3524,15 @@
                                     </select>
                                 </div>
                                 <div class="trigger-routing-item">
-                                    <span class="trigger-routing-label">Throttle:</span>
-                                    <select class="trigger-override-select trigger-throttle-select" id="override-throttle-autoVerifyOnJoin" onchange="trackDirty()">
-                                        <option value="instant">⚡ Instant</option>
-                                        <option value="batch30s">⏱️ Batch 30s</option>
-                                        <option value="cd1m">⏳ 1m Cooldown</option>
-                                        <option value="cd5m">⏳ 5m Cooldown</option>
+                                    <span class="trigger-routing-label">Non-Faction Policy:</span>
+                                    <select class="trigger-override-select" id="quick-nonfaction-mode" onchange="setNonFactionAccessMode(this.value, true);">
+                                        <option value="allow_all">🌐 Let Anyone In</option>
+                                        <option value="separate_role">🪪 Separate Non-Faction Role</option>
+                                        <option value="admin_approval">🔐 Admin Approval Required</option>
                                     </select>
+                                </div>
+                                <div class="trigger-routing-item">
+                                    <button type="button" class="btn-test" style="padding:4px 10px; font-size:0.76em;" onclick="switchDeckTab('routing'); setTimeout(() => document.getElementById('card-welcome-protection')?.scrollIntoView({ behavior:'smooth', block:'center' }), 80);">🛡️ Configure Role &amp; Approvals</button>
                                 </div>
                             </div>
                         </div>
@@ -3974,11 +4030,14 @@
                                     <textarea id="welcome-rules-content" class="field-input" rows="8" placeholder="Enter faction rules, OC guidelines, chain rules, drug protocols..." style="resize:vertical; line-height:1.45; font-size:0.88em;" oninput="trackDirty(); updateBroadcastPreview();"></textarea>
                                 </div>
 
-                                <div style="display:flex; align-items:center; gap:8px; margin-bottom:16px;">
-                                    <input type="checkbox" id="postWelcomeRulesOnJoin" onchange="trackDirty()">
-                                    <label for="postWelcomeRulesOnJoin" style="font-size:0.84em; color:var(--text-main); cursor:pointer;">
-                                        Automatically mention and guide new members to this card when they join the Discord server
-                                    </label>
+                                <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-bottom:16px;">
+                                    <div style="display:flex; align-items:center; gap:8px;">
+                                        <input type="checkbox" id="postWelcomeRulesOnJoin" onchange="trackDirty()">
+                                        <label for="postWelcomeRulesOnJoin" style="font-size:0.84em; color:var(--text-main); cursor:pointer;">
+                                            Automatically mention and guide new members to this card when they join the Discord server
+                                        </label>
+                                    </div>
+                                    <button type="button" class="btn-test" style="font-size:0.76em; padding:4px 10px;" onclick="switchDeckTab('routing'); setTimeout(() => document.getElementById('card-welcome-protection')?.scrollIntoView({ behavior:'smooth', block:'center' }), 80);">🛡️ Non-Faction Welcome Protection</button>
                                 </div>
 
                                 <div style="display:flex; align-items:center; gap:12px;">
@@ -4288,6 +4347,82 @@
                                     <option value="">-- Select Role --</option>
                                 </select>
                                 <input type="text" id="unverified-roleid" class="field-input" style="display:none;" oninput="trackDirty()">
+                            </div>
+                            <div class="role-card">
+                                <div class="role-card-title">🪪 Non-Faction / Visitor Role</div>
+                                <select class="field-select role-picker" id="nonfaction-roleid-select" onchange="onRoleSelectChange(this, 'nonfaction-roleid'); updateNonFactionProtectionUI(); trackDirty();">
+                                    <option value="">-- Select Role (e.g. @Guest) --</option>
+                                </select>
+                                <input type="text" id="nonfaction-roleid" class="field-input" style="display:none;" oninput="updateNonFactionProtectionUI(); trackDirty();">
+                                <div style="font-size:0.74em; color:var(--text-dim); margin-top:6px;">Assigned to verified users outside your configured faction</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Welcome & Non-Faction Join Protection Policy -->
+                <div class="card" id="card-welcome-protection" style="margin-top:20px;">
+                    <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+                        <div>
+                            <p class="card-title">🛡️ Welcome &amp; Non-Faction Entry Protection</p>
+                            <span class="card-subtitle">Optionally restrict, role-isolate, or require Server Administrator approval when someone joins who is not in the website's faction</span>
+                        </div>
+                        <span class="oc-dm-status-pill active" id="nf-website-faction-badge">🏛️ Website Faction: Synced</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="nf-mode-grid" id="nf-mode-selector">
+                            <label class="nf-mode-card active" id="nf-card-allow_all" onclick="setNonFactionAccessMode('allow_all', true)">
+                                <input type="radio" name="nonFactionAccessMode" value="allow_all" checked>
+                                <div class="nf-mode-title">🌐 Let Anyone In</div>
+                                <div class="nf-mode-desc">Default behavior: any verified Torn user receives your standard <strong>Verified</strong> role regardless of whether they are in your faction.</div>
+                            </label>
+
+                            <label class="nf-mode-card" id="nf-card-separate_role" onclick="setNonFactionAccessMode('separate_role', true)">
+                                <input type="radio" name="nonFactionAccessMode" value="separate_role">
+                                <div class="nf-mode-title">🪪 Separate Non-Faction Role</div>
+                                <div class="nf-mode-desc">Faction members receive <strong>Faction + Verified</strong> roles. People outside your faction are allowed in automatically with your <strong>Non-Faction / Visitor Role</strong>.</div>
+                            </label>
+
+                            <label class="nf-mode-card mode-approval" id="nf-card-admin_approval" onclick="setNonFactionAccessMode('admin_approval', true)">
+                                <input type="radio" name="nonFactionAccessMode" value="admin_approval">
+                                <div class="nf-mode-title">🔐 Admin Authentication Required</div>
+                                <div class="nf-mode-desc">Faction members auto-verify seamlessly. Anyone outside your faction stays in <strong>Unverified quarantine</strong> until a <strong>Server Administrator</strong> clicks Approve.</div>
+                            </label>
+                        </div>
+
+                        <div class="nf-subpanel" id="nf-panel-separate" style="display:none;">
+                            <div style="font-weight:700; font-size:0.84em; color:var(--text-main); margin-bottom:8px;">🪪 Separate Non-Faction Role Options</div>
+                            <label class="oc-dm-check-pill" style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                                <input type="checkbox" id="nonfaction-also-grant-verified" onchange="trackDirty();">
+                                <span>Also grant standard <strong>Verified</strong> role alongside the Non-Faction role (leave unchecked if Verified unlocks internal faction channels)</span>
+                            </label>
+                            <div class="nf-warn-banner" id="nf-missing-role-warn" style="display:none;">
+                                ⚠️ No <strong>Non-Faction / Visitor Role</strong> selected above yet — pick a role in <em>Role Hierarchy Mapping</em> (or create a <code>@Guest</code> / <code>@Visitor</code> role in Discord) before saving.
+                            </div>
+                        </div>
+
+                        <div class="nf-subpanel" id="nf-panel-approval" style="display:none;">
+                            <div style="font-weight:700; font-size:0.84em; color:#fbbf24; margin-bottom:10px;">🔐 Administrator Authentication Gate Settings</div>
+                            <div class="field-grid">
+                                <div class="field-group">
+                                    <label class="field-label" for="approval-channelid-select">Admin Approval Queue Channel</label>
+                                    <select class="field-select channel-picker" id="approval-channelid-select" onchange="onChannelSelectChange(this, 'approval-channelid'); trackDirty();">
+                                        <option value="">-- Same as Verification Channel --</option>
+                                    </select>
+                                    <input type="text" id="approval-channelid" class="field-input" style="display:none;" oninput="trackDirty();">
+                                    <span class="field-hint">Where F.R.I.D.A.Y. posts [Approve / Deny / Kick] cards when a non-faction user tries to join. Recommended: a private Staff/Admin channel.</span>
+                                </div>
+                                <div class="field-group">
+                                    <label class="field-label" for="approval-admin-roleid-select">Approver Ping / Admin Role (Optional)</label>
+                                    <select class="field-select role-picker" id="approval-admin-roleid-select" onchange="onRoleSelectChange(this, 'approval-admin-roleid'); trackDirty();">
+                                        <option value="">-- Discord Server Administrators Only --</option>
+                                    </select>
+                                    <input type="text" id="approval-admin-roleid" class="field-input" style="display:none;" oninput="trackDirty();">
+                                    <span class="field-hint">Discord users with Server <strong>Administrator</strong> permission can always approve; optionally pick an officer role to ping &amp; authorize too.</span>
+                                </div>
+                            </div>
+                            <div style="margin-top:8px; font-size:0.78em; color:var(--text-muted); line-height:1.45;">
+                                💡 When an outsider joins, admins get interactive buttons to admit them with the <strong>Non-Faction / Guest Role</strong> (if set), grant <strong>Full Verified</strong>, <strong>Deny</strong>, or <strong>Deny &amp; Kick</strong>.
                             </div>
                         </div>
                     </div>
@@ -5893,6 +6028,7 @@ function populateChannelSelects() {
         { id: 'ocdm-receipt-channelid', defaultLabel: '-- Select Receipt Channel (Disabled if blank) --' },
         { id: 'welcome-channelid', defaultLabel: '-- Select Welcome Channel (e.g. #welcome-and-rules) --' },
         { id: 'verification-channelid', defaultLabel: '-- Select Channel --' },
+        { id: 'approval-channelid', defaultLabel: '-- Same as Verification Channel --' },
         { id: 'banking-channelid', defaultLabel: '-- Post in Command Channel --' },
         { id: 'promotion-channelid', defaultLabel: '-- Post in Leadership Channel --' }
     ];
@@ -5946,6 +6082,8 @@ function populateRoleSelects() {
         { id: 'banker-roleid', defaultLabel: '-- Select Role (or leave blank) --' },
         { id: 'unverified-roleid', defaultLabel: '-- Select Role --' },
         { id: 'verified-roleid', defaultLabel: '-- Select Role --' },
+        { id: 'nonfaction-roleid', defaultLabel: '-- Select Role (e.g. @Guest) --' },
+        { id: 'approval-admin-roleid', defaultLabel: '-- Discord Server Administrators Only --' },
         { id: 'faction-roleid', defaultLabel: '-- Select Role --' },
         { id: 'leader-roleid', defaultLabel: '-- Select Role --' }
     ];
@@ -6001,6 +6139,37 @@ function onRoleSelectChange(sel, targetId) {
     if (inp) {
         inp.value = sel.value;
     }
+}
+
+function updateNonFactionProtectionUI() {
+    const selectedMode = document.querySelector('input[name="nonFactionAccessMode"]:checked')?.value || 'allow_all';
+    ['allow_all', 'separate_role', 'admin_approval'].forEach(m => {
+        const card = document.getElementById(`nf-card-${m}`);
+        if (card) card.classList.toggle('active', m === selectedMode);
+    });
+    const quickSel = document.getElementById('quick-nonfaction-mode');
+    if (quickSel && quickSel.value !== selectedMode) {
+        quickSel.value = selectedMode;
+    }
+    const sepPanel = document.getElementById('nf-panel-separate');
+    const appPanel = document.getElementById('nf-panel-approval');
+    if (sepPanel) sepPanel.style.display = selectedMode === 'separate_role' ? 'block' : 'none';
+    if (appPanel) appPanel.style.display = selectedMode === 'admin_approval' ? 'block' : 'none';
+
+    const nfRoleVal = (document.getElementById('nonfaction-roleid')?.value || '').trim();
+    const warnBanner = document.getElementById('nf-missing-role-warn');
+    if (warnBanner) {
+        warnBanner.style.display = (selectedMode === 'separate_role' && !nfRoleVal) ? 'block' : 'none';
+    }
+}
+
+function setNonFactionAccessMode(mode, shouldTrackDirty = false) {
+    const normalized = (mode === 'separate_role' || mode === 'admin_approval') ? mode : 'allow_all';
+    document.querySelectorAll('input[name="nonFactionAccessMode"]').forEach(r => {
+        r.checked = (r.value === normalized);
+    });
+    updateNonFactionProtectionUI();
+    if (shouldTrackDirty && typeof trackDirty === 'function') trackDirty();
 }
 
 function toggleManualInput(targetId) {
@@ -6262,8 +6431,18 @@ function applyConfigToDOM(cfg) {
         document.getElementById('welcome-rules-content').value = cfg.welcomeRulesContent || `⚡ **Priority Directive: Rush to Level 15!**\nGet to **Level 15** as fast as possible to unlock foreign travel, run plushies/flowers, and generate high daily income!\n\n📋 **Organized Crimes (OC 2.0) Requirements:**\nOC (Short for organized crimes) are a requirement to be in this faction.\nYou can join one by simply [clicking here](https://www.torn.com/factions.php?step=your&type=1#/tab=crimes)\n\nThere are requirements for joining specific roles, that is the sole purpose of this post.\nFamiliarize yourself with these:\n• **Level 1/2:** No CPR Requirement\n• **Level 3/4:** Minimum CPR of 50\n• **Level 5/6:** Minimum CPR of 40\n\nThe minimum CPR for levels 3 and up may change as we get better at crimes, be aware of notices being sent and this thread being edited to reflect current expectations.\n\nIf you're outside of the bounds of the minimum CPR you will be removed and expected to join a new one yourself.`;
     }
     if (document.getElementById('verification-channelid')) document.getElementById('verification-channelid').value = (cfg.verificationChannelId || localStorage.getItem('warboard_verification_channelid') || '').replace(/[^0-9]/g, '');
+    if (document.getElementById('approval-channelid')) document.getElementById('approval-channelid').value = (cfg.approvalChannelId || localStorage.getItem('warboard_approval_channelid') || '').replace(/[^0-9]/g, '');
     if (document.getElementById('unverified-roleid')) document.getElementById('unverified-roleid').value = (cfg.unverifiedRoleId || localStorage.getItem('warboard_unverified_roleid') || '').replace(/[^0-9]/g, '');
     if (document.getElementById('verified-roleid')) document.getElementById('verified-roleid').value = cfg.verifiedRoleId || localStorage.getItem('warboard_verified_roleid') || '';
+    if (document.getElementById('nonfaction-roleid')) document.getElementById('nonfaction-roleid').value = (cfg.nonFactionRoleId || localStorage.getItem('warboard_nonfaction_roleid') || '').replace(/[^0-9]/g, '');
+    if (document.getElementById('approval-admin-roleid')) document.getElementById('approval-admin-roleid').value = (cfg.approvalAdminRoleId || localStorage.getItem('warboard_approval_admin_roleid') || '').replace(/[^0-9]/g, '');
+    if (document.getElementById('nonfaction-also-grant-verified')) document.getElementById('nonfaction-also-grant-verified').checked = cfg.nonFactionAlsoGrantVerified === true;
+    const facBadgeEl = document.getElementById('nf-website-faction-badge');
+    if (facBadgeEl) {
+        const fLabel = cfg.factionName ? `${cfg.factionName}${cfg.factionId ? ` [${cfg.factionId}]` : ''}` : (cfg.factionId ? `Faction [${cfg.factionId}]` : 'Not Set');
+        facBadgeEl.textContent = `🏛️ Website Faction: ${fLabel}`;
+    }
+    setNonFactionAccessMode(cfg.nonFactionAccessMode || localStorage.getItem('warboard_nonfaction_access_mode') || 'allow_all', false);
     if (document.getElementById('faction-roleid')) document.getElementById('faction-roleid').value = cfg.factionRoleId || localStorage.getItem('warboard_faction_roleid') || '';
     if (document.getElementById('leader-roleid')) document.getElementById('leader-roleid').value = (cfg.leaderRoleId || localStorage.getItem('warboard_leader_roleid') || '').replace(/[^0-9]/g, '');
     if (document.getElementById('guild-id-input')) document.getElementById('guild-id-input').value = (cfg.guildId || localStorage.getItem('warboard_guildid') || '').replace(/[^0-9]/g, '');
@@ -6601,8 +6780,13 @@ async function saveDiscordConfig() {
     });
     const noParticipationDays = parseFloat(document.getElementById('noParticipationDays')?.value || '1');
     const verificationChannelId = (document.getElementById('verification-channelid')?.value.trim() || '').replace(/[^0-9]/g, '');
+    const approvalChannelId = (document.getElementById('approval-channelid')?.value.trim() || '').replace(/[^0-9]/g, '');
     const unverifiedRoleId = (document.getElementById('unverified-roleid')?.value.trim() || '').replace(/[^0-9]/g, '');
     const verifiedRoleId = (document.getElementById('verified-roleid')?.value.trim() || '').replace(/[^0-9]/g, '');
+    const nonFactionRoleId = (document.getElementById('nonfaction-roleid')?.value.trim() || '').replace(/[^0-9]/g, '');
+    const approvalAdminRoleId = (document.getElementById('approval-admin-roleid')?.value.trim() || '').replace(/[^0-9]/g, '');
+    const nonFactionAccessMode = document.querySelector('input[name="nonFactionAccessMode"]:checked')?.value || 'allow_all';
+    const nonFactionAlsoGrantVerified = document.getElementById('nonfaction-also-grant-verified')?.checked === true;
     const factionRoleId = (document.getElementById('faction-roleid')?.value.trim() || '').replace(/[^0-9]/g, '');
     const leaderRoleId = (document.getElementById('leader-roleid')?.value.trim() || '').replace(/[^0-9]/g, '');
     const guildId = (document.getElementById('guild-id-input')?.value.trim() || '').replace(/[^0-9]/g, '');
@@ -6645,8 +6829,12 @@ async function saveDiscordConfig() {
     localStorage.setItem('warboard_oc_manager_userids', ocManagerUserIds);
     localStorage.setItem('warboard_welcome_channelid', welcomeChannelId);
     localStorage.setItem('warboard_verification_channelid', verificationChannelId);
+    localStorage.setItem('warboard_approval_channelid', approvalChannelId);
     localStorage.setItem('warboard_unverified_roleid', unverifiedRoleId);
     localStorage.setItem('warboard_verified_roleid', verifiedRoleId);
+    localStorage.setItem('warboard_nonfaction_roleid', nonFactionRoleId);
+    localStorage.setItem('warboard_approval_admin_roleid', approvalAdminRoleId);
+    localStorage.setItem('warboard_nonfaction_access_mode', nonFactionAccessMode);
     localStorage.setItem('warboard_faction_roleid', factionRoleId);
     localStorage.setItem('warboard_leader_roleid', leaderRoleId);
 
@@ -6688,8 +6876,13 @@ async function saveDiscordConfig() {
             alertOcNoParticipation: document.getElementById('alertOcNoParticipation')?.checked ?? true,
             noParticipationDays,
             verificationChannelId,
+            approvalChannelId,
             unverifiedRoleId,
             verifiedRoleId,
+            nonFactionRoleId,
+            approvalAdminRoleId,
+            nonFactionAccessMode,
+            nonFactionAlsoGrantVerified,
             factionRoleId,
             leaderRoleId,
             notifyApiKeyLinked: document.getElementById('notify-api-key-linked')?.checked === true,
