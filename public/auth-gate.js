@@ -382,29 +382,38 @@
             background: rgba(15, 23, 42, 0.7);
             border: 1px solid rgba(255, 255, 255, 0.12);
         }
+        @media (max-width: 640px) {
+            .app-topbar .sv-badge-container {
+                display: none !important;
+            }
+        }
         @media (max-width: 768px) {
             .sv-badge-container {
-                padding: 3px 6px !important;
+                padding: 3px 7px !important;
                 margin: 0 !important;
-                gap: 5px !important;
-                max-width: 112px !important;
-                background: rgba(0, 206, 201, 0.06) !important;
+                gap: 6px !important;
+                max-width: 126px !important;
+                height: 34px !important;
+                border-radius: 999px !important;
+                background: rgba(56, 189, 248, 0.08) !important;
+                border-color: rgba(56, 189, 248, 0.22) !important;
             }
             .sv-badge-fac {
                 display: none !important;
             }
             .sv-badge-user-info {
-                max-width: 60px !important;
+                max-width: 62px !important;
             }
             .sv-badge-name {
-                font-size: 0.72rem !important;
+                font-size: 0.74rem !important;
                 white-space: nowrap !important;
                 overflow: hidden !important;
                 text-overflow: ellipsis !important;
             }
             #sv-logout-link {
-                font-size: 0.65rem !important;
-                padding: 2px 5px !important;
+                font-size: 0.66rem !important;
+                padding: 2px 6px !important;
+                border-radius: 999px !important;
             }
             .sv-connect-label {
                 display: none !important;

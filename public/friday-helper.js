@@ -926,6 +926,76 @@
             }
             .fh-send-btn:hover { background: #22d3ee; }
             .fh-send-btn:disabled { opacity: 0.5; cursor: wait; }
+
+            /* Apple iOS Mobile Safe Positioning & Bottom-Sheet Presentation */
+            @media (max-width: 768px) {
+                #friday-helper-fab {
+                    left: auto !important;
+                    right: 14px !important;
+                    bottom: calc(env(safe-area-inset-bottom, 0px) + 74px) !important;
+                    width: 48px !important;
+                    height: 48px !important;
+                    padding: 0 !important;
+                    border-radius: 50% !important;
+                    justify-content: center !important;
+                    backdrop-filter: saturate(180%) blur(18px);
+                    -webkit-backdrop-filter: saturate(180%) blur(18px);
+                    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.58), 0 0 0 1px rgba(56, 189, 248, 0.4) !important;
+                    transition: transform 0.2s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.18s ease !important;
+                }
+                #friday-helper-fab .fh-fab-text,
+                #friday-helper-fab .fh-fab-dot {
+                    display: none !important;
+                }
+                body:has(#mobile-app-sheet.open) #friday-helper-fab,
+                body:has(#friday-helper-panel.open) #friday-helper-fab {
+                    opacity: 0;
+                    pointer-events: none;
+                    transform: scale(0.8);
+                }
+                #friday-helper-panel,
+                #friday-helper-panel.expanded {
+                    left: 0 !important;
+                    right: 0 !important;
+                    bottom: 0 !important;
+                    width: 100vw !important;
+                    max-width: 100vw !important;
+                    height: 82dvh !important;
+                    max-height: 88dvh !important;
+                    border-radius: 22px 22px 0 0 !important;
+                    border-bottom: none !important;
+                    padding-bottom: env(safe-area-inset-bottom, 0px);
+                    z-index: 10030 !important;
+                }
+                #friday-helper-panel.open {
+                    animation: fhIosSheetUp 0.34s cubic-bezier(0.32, 0.72, 0, 1) !important;
+                }
+                @keyframes fhIosSheetUp {
+                    from { transform: translateY(100%); opacity: 0.7; }
+                    to { transform: translateY(0); opacity: 1; }
+                }
+                .fh-header::before {
+                    content: '';
+                    display: block;
+                    width: 36px;
+                    height: 4px;
+                    border-radius: 99px;
+                    background: rgba(148, 163, 184, 0.42);
+                    margin: 0 auto 4px auto;
+                }
+                .fh-input {
+                    font-size: 16px !important;
+                    padding: 10px 12px !important;
+                }
+                .fh-send-btn {
+                    width: 40px !important;
+                    height: 40px !important;
+                }
+                .fh-icon-btn {
+                    min-height: 34px;
+                    padding: 5px 10px !important;
+                }
+            }
         `;
         document.head.appendChild(style);
 
@@ -983,6 +1053,37 @@
         document.getElementById('fh-mode-tactical').addEventListener('click', () => setHelperMode('tactical'));
         document.getElementById('fh-expand-btn').addEventListener('click', () => toggleExpandPanel());
         document.getElementById('fh-close-btn').addEventListener('click', () => toggleHelperPanel(false));
+
+        // Swipe-down header gesture to close Helper AI bottom sheet on mobile
+        const fhHeader = panel.querySelector('.fh-header');
+        if (fhHeader) {
+            let startY = 0;
+            let dy = 0;
+            let dragging = false;
+            fhHeader.addEventListener('touchstart', (e) => {
+                if (window.innerWidth > 768) return;
+                startY = e.touches[0].clientY;
+                dy = 0;
+                dragging = true;
+                panel.style.transition = 'none';
+            }, { passive: true });
+            fhHeader.addEventListener('touchmove', (e) => {
+                if (!dragging) return;
+                dy = Math.max(0, e.touches[0].clientY - startY);
+                if (dy > 0) panel.style.transform = `translateY(${dy}px)`;
+            }, { passive: true });
+            fhHeader.addEventListener('touchend', () => {
+                if (!dragging) return;
+                dragging = false;
+                panel.style.transition = 'transform 0.28s cubic-bezier(0.32, 0.72, 0, 1)';
+                if (dy > 85) {
+                    panel.style.transform = '';
+                    toggleHelperPanel(false);
+                } else {
+                    panel.style.transform = '';
+                }
+            }, { passive: true });
+        }
         document.getElementById('fh-clear-btn').addEventListener('click', () => {
             saveHistory([]);
             renderMessages();

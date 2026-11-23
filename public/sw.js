@@ -3,12 +3,14 @@
  * Provides app shell caching, offline asset delivery, and native PWA capabilities.
  */
 
-const CACHE_NAME = 'factionos-pwa-v1.5.0';
+const CACHE_NAME = 'factionos-pwa-v1.6.0';
 const STATIC_ASSETS = [
     '/',
     '/manifest.json',
     '/global.css',
     '/global-topbar.js',
+    '/pwa-helper.js',
+    '/instant-nav.js',
     '/friday-helper.js',
     '/auth-gate.js',
     '/global_settings.js',
