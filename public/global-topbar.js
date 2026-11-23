@@ -319,6 +319,13 @@
             s.defer = true;
             document.head.appendChild(s);
         }
+        // Ensure F.R.I.D.A.Y. Boot Intro module is available on all pages for Settings / Helper replay
+        if (!window.__fridayIntroEngineLoaded && !document.querySelector('script[src*="/friday-intro.js"]')) {
+            const introScript = document.createElement('script');
+            introScript.src = '/friday-intro.js?v=1.0.0';
+            introScript.defer = true;
+            document.head.appendChild(introScript);
+        }
     });
 
     // 5. Global WebSocket Badge Updater Helper

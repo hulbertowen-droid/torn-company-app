@@ -28,11 +28,33 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/global.css?v=4.4.0">
     
+    <script>
+    (function(){
+        try {
+            var q = window.location.search || '';
+            var red = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            if (localStorage.getItem('sv_intro_enabled') !== '0' && q.indexOf('no_intro=1') === -1 && q.indexOf('skip_intro=1') === -1 && !red) {
+                var s = document.createElement('style');
+                s.id = 'friday-intro-boot-guard';
+                s.textContent = 'html.friday-intro-pending body{overflow:hidden!important;}html.friday-intro-pending::before{content:"";position:fixed;inset:0;z-index:1000008;background:#02050d;}';
+                document.head.appendChild(s);
+                document.documentElement.classList.add('friday-intro-pending');
+                setTimeout(function(){
+                    document.documentElement.classList.remove('friday-intro-pending');
+                    var el = document.getElementById('friday-intro-boot-guard');
+                    if (el && !document.getElementById('friday-intro-overlay')) el.remove();
+                }, 1500);
+            }
+        } catch(e){}
+    })();
+    </script>
+
     <!-- Scripts & Core Libraries -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="/auth-gate.js?v=4.4.0"></script>
     <script src="/global_settings.js?v=4.4.0"></script>
     <script src="/global-topbar.js?v=4.4.0"></script>
+    <script src="/friday-intro.js?v=1.0.0"></script>
     <script src="/friday-helper.js?v=4.4.0" defer></script>
     <script src="/pwa-helper.js?v=1.2.0" defer></script>
 

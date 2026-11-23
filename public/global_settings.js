@@ -199,6 +199,21 @@ const globalSettingsHTML = `
             <input type="number" id="gs-api-cpm" aria-label="API Calls Per Minute" min="1" max="60" placeholder="12 calls/min">
         </div>
 
+        <div style="margin: 12px 0 14px; border: 1px solid rgba(255, 132, 31, 0.28); border-radius: 8px; background: rgba(255, 123, 0, 0.06); padding: 11px 12px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom: 9px;">
+                <span style="font-size:0.78em; font-weight:800; text-transform:uppercase; letter-spacing:0.5px; color:#fbbf24;">🎬 F.R.I.D.A.Y. Stark Boot Intro</span>
+                <button type="button" id="gs-btn-replay-intro" onclick="window.replayFridayIntroFromSettings()" style="padding:5px 10px; border-radius:6px; background:linear-gradient(135deg, rgba(255,123,0,0.28), rgba(56,189,248,0.25)); border:1px solid rgba(56,189,248,0.45); color:#f8fafc; font-size:0.74em; font-weight:800; cursor:pointer; font-family:inherit;">▶ Replay Intro Now</button>
+            </div>
+            <label style="display:flex; align-items:center; gap:8px; font-size:0.8em; color:#e2e8f0; cursor:pointer; margin-bottom:6px; text-transform:none; font-weight:600; letter-spacing:0;">
+                <input type="checkbox" id="gs-intro-enabled" style="width:16px; height:16px; margin:0; accent-color:#38bdf8;">
+                <span>Play Stark HUD Boot Intro when opening Live Warboard</span>
+            </label>
+            <label style="display:flex; align-items:center; gap:8px; font-size:0.8em; color:#e2e8f0; cursor:pointer; margin:0; text-transform:none; font-weight:600; letter-spacing:0;">
+                <input type="checkbox" id="gs-intro-sound" style="width:16px; height:16px; margin:0; accent-color:#ff7b00;">
+                <span>Enable Sci-Fi Synth Audio &amp; F.R.I.D.A.Y. Voice Greeting</span>
+            </label>
+        </div>
+
         <details style="margin: 14px 0 16px; border: 1px solid rgba(56,189,248,0.22); border-radius: 8px; background: rgba(15,23,42,0.55); padding: 10px 12px;">
             <summary style="cursor:pointer; font-size:0.78em; font-weight:800; text-transform:uppercase; letter-spacing:0.5px; color:#38bdf8; list-style:none; display:flex; justify-content:space-between; align-items:center;">
                 <span>🔌 Torn Userscripts &amp; PDA Hub</span>
@@ -291,6 +306,22 @@ function showGlobalToast(message) {
     }, 2500);
 }
 
+window.replayFridayIntroFromSettings = function() {
+    const enabledEl = document.getElementById('gs-intro-enabled');
+    const soundEl = document.getElementById('gs-intro-sound');
+    if (enabledEl) localStorage.setItem('sv_intro_enabled', enabledEl.checked ? '1' : '0');
+    if (soundEl) localStorage.setItem('sv_intro_sound', soundEl.checked ? '1' : '0');
+    closeGlobalSettings();
+    if (typeof window.playFridayIntro === 'function') {
+        window.playFridayIntro({ force: true });
+        return;
+    }
+    const sc = document.createElement('script');
+    sc.src = '/friday-intro.js?v=1.0.0';
+    sc.onload = () => { if (typeof window.playFridayIntro === 'function') window.playFridayIntro({ force: true }); };
+    document.head.appendChild(sc);
+};
+
 window.openGlobalSettings = async function() {
     injectGlobalSettings();
     const modal = document.getElementById('global-settings-modal');
@@ -315,6 +346,10 @@ window.openGlobalSettings = async function() {
     document.getElementById('gs-my-name').value = myName;
     document.getElementById('gs-discord-webhook').value = discord;
     document.getElementById('gs-api-cpm').value = cpm;
+    const gsIntroEnabled = document.getElementById('gs-intro-enabled');
+    const gsIntroSound = document.getElementById('gs-intro-sound');
+    if (gsIntroEnabled) gsIntroEnabled.checked = localStorage.getItem('sv_intro_enabled') !== '0';
+    if (gsIntroSound) gsIntroSound.checked = localStorage.getItem('sv_intro_sound') !== '0';
 
     const statusText = document.getElementById('gs-status-text');
     const logoutBtn = document.getElementById('gs-btn-logout');
@@ -498,6 +533,10 @@ window.saveGlobalSettings = async function() {
     if (myName) localStorage.setItem('warboard_myname', myName); else localStorage.removeItem('warboard_myname');
     if (discord) localStorage.setItem('warboard_discord', discord); else localStorage.removeItem('warboard_discord');
     if (cpm) localStorage.setItem('warboard_cpm', cpm);
+    const gsIntroEnabled = document.getElementById('gs-intro-enabled');
+    const gsIntroSound = document.getElementById('gs-intro-sound');
+    if (gsIntroEnabled) localStorage.setItem('sv_intro_enabled', gsIntroEnabled.checked ? '1' : '0');
+    if (gsIntroSound) localStorage.setItem('sv_intro_sound', gsIntroSound.checked ? '1' : '0');
 
     showGlobalToast('✅ Settings Saved Successfully!');
     closeGlobalSettings();

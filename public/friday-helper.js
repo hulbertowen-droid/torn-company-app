@@ -217,6 +217,17 @@
             }
             return true;
         }
+        if (action.type === 'replay_intro') {
+            if (typeof window.playFridayIntro === 'function') {
+                window.playFridayIntro({ force: true });
+            } else {
+                const sc = document.createElement('script');
+                sc.src = '/friday-intro.js?v=1.0.0';
+                sc.onload = () => { if (typeof window.playFridayIntro === 'function') window.playFridayIntro({ force: true }); };
+                document.head.appendChild(sc);
+            }
+            return true;
+        }
         if (action.type === 'open_settings') {
             if (typeof window.openGlobalSettings === 'function') {
                 window.openGlobalSettings();
@@ -1200,6 +1211,15 @@
         if (!hist.length || hist[hist.length - 1].role !== 'user' || hist[hist.length - 1].text !== text) {
             hist.push({ role: 'user', text });
             saveHistory(hist);
+        }
+
+        if (/^(replay|play|show|start)\s+(friday\s+|hud\s+)?intro$|^reboot\s+(hud|friday|intro)$/i.test(text.trim())) {
+            const localAction = { type: 'replay_intro', label: 'Launched F.R.I.D.A.Y. Boot Intro' };
+            hist.push({ role: 'assistant', text: 'Initiating **F.R.I.D.A.Y. Mark-85 Holographic Boot Sequence** now.', action: localAction });
+            saveHistory(hist);
+            renderMessages();
+            executeHelperAction(localAction);
+            return;
         }
 
         isHelperBusy = true;
