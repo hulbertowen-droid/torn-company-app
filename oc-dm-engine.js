@@ -1352,34 +1352,40 @@ function createOcDmEngine(injectedDeps = {}) {
     // ── Shared Live OC Fetcher for Slash Commands & Button Refreshes ──
     async function fetchLiveOcContext(apiKey) {
         const dCfg = deps.getDiscordConfig() || {};
-        const k = apiKey || dCfg.apiKey || (typeof deps.getNextApiKey === 'function' ? deps.getNextApiKey() : null);
-        if (!k) throw new Error('No Torn API key available. Connect a key in Dashboard Settings or /linkkey.');
+        const fallbackKey = dCfg.apiKey || (typeof deps.getNextApiKey === 'function' ? deps.getNextApiKey() : null);
+        const primaryKey = apiKey || fallbackKey;
+        if (!primaryKey) throw new Error('No Torn API key available. Connect a key in Dashboard Settings or /linkkey.');
 
         let fid = String(dCfg.factionId || '').trim();
         if (!fid) {
-            const profRes = await fetch(`https://api.torn.com/user/?selections=profile&key=${encodeURIComponent(k)}`, { signal: AbortSignal.timeout(7000) });
+            const profRes = await fetch(`https://api.torn.com/user/?selections=profile&key=${encodeURIComponent(primaryKey)}`, { signal: AbortSignal.timeout(7000) });
             const profData = await profRes.json();
             if (profData.error) throw new Error(profData.error.error || 'Torn API error');
             fid = String(profData?.faction?.faction_id || '');
         }
         if (!fid || fid === '0') throw new Error('Faction ID could not be resolved from API key.');
 
-        const [v2Res, facRes] = await Promise.all([
-            fetch(`https://api.torn.com/v2/faction/${fid}/crimes?cat=available&key=${encodeURIComponent(k)}`, { signal: AbortSignal.timeout(9000) }),
-            fetch(`https://api.torn.com/faction/${fid}?selections=basic&key=${encodeURIComponent(k)}`, { signal: AbortSignal.timeout(9000) })
-        ]);
-        const v2Data = await v2Res.json();
-        const facData = await facRes.json();
-        if (v2Data.error) throw new Error(v2Data.error.error || 'Torn OC v2 API error');
-        if (facData.error) throw new Error(facData.error.error || 'Torn Faction API error');
-
-        return {
-            fid,
-            apiKey: k,
-            factionName: facData.name || dCfg.factionName || `Faction [${fid}]`,
-            v2Crimes: Array.isArray(v2Data.crimes) ? v2Data.crimes : [],
-            members: facData.members || {}
-        };
+        const candidateKeys = Array.from(new Set([primaryKey, fallbackKey, (typeof deps.getNextApiKey === 'function' ? deps.getNextApiKey() : null)].filter(Boolean)));
+        let lastErr = null;
+        for (const k of candidateKeys) {
+            const [v2Res, facRes] = await Promise.all([
+                fetch(`https://api.torn.com/v2/faction/${fid}/crimes?cat=available&key=${encodeURIComponent(k)}`, { signal: AbortSignal.timeout(9000) }),
+                fetch(`https://api.torn.com/faction/${fid}?selections=basic&key=${encodeURIComponent(k)}`, { signal: AbortSignal.timeout(9000) })
+            ]);
+            const v2Data = await v2Res.json();
+            const facData = await facRes.json();
+            if (!v2Data.error && !facData.error) {
+                return {
+                    fid,
+                    apiKey: k,
+                    factionName: facData.name || dCfg.factionName || `Faction [${fid}]`,
+                    v2Crimes: Array.isArray(v2Data.crimes) ? v2Data.crimes : [],
+                    members: facData.members || {}
+                };
+            }
+            lastErr = v2Data.error?.error || facData.error?.error || 'Torn API error';
+        }
+        throw new Error(lastErr || 'Torn OC API error');
     }
 
     async function collectMissingItemsData(apiKey, statusFilter = 'all') {

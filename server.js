@@ -7296,21 +7296,36 @@ app.post('/api/discord/oc-dm-test', async (req, res) => {
     }
 });
 
+async function fetchFactionBasicMembersSafe(fid, callerKey = '') {
+    const candidates = Array.from(new Set([
+        callerKey,
+        discordConfig.apiKey,
+        ADMIN_API_KEY,
+        TORN_API_KEY,
+        getNextApiKey()
+    ].filter(k => k && typeof k === 'string' && k.length >= 10)));
+
+    for (const k of candidates) {
+        try {
+            const fRes = await fetch(`https://api.torn.com/faction/${encodeURIComponent(fid)}?selections=basic&key=${encodeURIComponent(k)}`, {
+                signal: AbortSignal.timeout(8000)
+            }).then(r => r.json());
+            if (fRes && !fRes.error && fRes.members && Object.keys(fRes.members).length > 0) {
+                return fRes.members;
+            }
+        } catch (_) {}
+    }
+    return {};
+}
+
 app.get('/api/discord/oc-unlinked-members', async (req, res) => {
     try {
         const callerKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey;
         const isAuthed = Boolean(req.userSession || (callerKey && callerKey.length >= 10));
         if (!isAuthed) return res.status(401).json({ success: false, error: 'Authentication required' });
 
-        const key = callerKey || discordConfig.apiKey || TORN_API_KEY || getNextApiKey();
         const fid = String(resolveFactionId(req) || discordConfig.factionId || '52355');
-        let members = {};
-        if (key) {
-            const fRes = await fetch(`https://api.torn.com/faction/${fid}?selections=basic&key=${encodeURIComponent(key)}`, {
-                signal: AbortSignal.timeout(8000)
-            }).then(r => r.json()).catch(() => ({}));
-            if (fRes && fRes.members) members = fRes.members;
-        }
+        const members = await fetchFactionBasicMembersSafe(fid, callerKey);
         const rows = await ocDmEngine.getFactionMemberLinkStatus(members);
         return res.json({
             success: true,
@@ -7349,15 +7364,8 @@ app.post('/api/discord/oc-scan-nicknames', async (req, res) => {
         if (!isOwner && !isMember) {
             return res.status(403).json({ success: false, error: 'Authorization required.' });
         }
-        const key = callerKey || discordConfig.apiKey || TORN_API_KEY || getNextApiKey();
         const fid = String(resolveFactionId(req) || discordConfig.factionId || '52355');
-        let members = {};
-        if (key) {
-            const fRes = await fetch(`https://api.torn.com/faction/${fid}?selections=basic&key=${encodeURIComponent(key)}`, {
-                signal: AbortSignal.timeout(8000)
-            }).then(r => r.json()).catch(() => ({}));
-            if (fRes && fRes.members) members = fRes.members;
-        }
+        const members = await fetchFactionBasicMembersSafe(fid, callerKey);
         const scan = await ocDmEngine.scanGuildNicknamesForLinks(members);
         return res.json({ success: true, ...scan });
     } catch (e) {
