@@ -1226,21 +1226,29 @@
             return;
         }
 
-        // Fast client-side Travel Co-Pilot intent parser ("best run under 2 hours with $2M budget and low mug risk", "museum set planner", "contraband in stock")
+        // Fast client-side Travel Co-Pilot intent parser ("overnight sleep flight", "swiss rehab", "instant npc cash", "best run under 2 hours with $2M budget")
         const qLow = text.trim().toLowerCase();
-        if (/\b(best\s+run|best\s+flight|museum\s+set|set\s+planner|fly\s+for\s+a\s+set|contraband|mug\s+risk|50[\s-]*flight|travel\s+merit|country\s+cards)\b/.test(qLow)) {
+        if (/\b(best\s+run|best\s+flight|sleep\s+flight|overnight\s+flight|before\s+bed|swiss\s+rehab|zurich\s+rehab|rehab\s+flight|rehab\s+combo|instant\s+npc|npc\s+cash|museum\s+set|set\s+planner|fly\s+for\s+a\s+set|contraband|mug\s+risk|50[\s-]*flight|travel\s+merit|country\s+cards)\b/.test(qLow)) {
+            let preset = null;
+            if (/\bsleep\s+flight|overnight\s+flight|before\s+bed/.test(qLow)) preset = 'sleep';
+            else if (/\bswiss\s+rehab|zurich\s+rehab|rehab\s+flight|rehab\s+combo/.test(qLow)) preset = 'rehab';
+            else if (/\binstant\s+npc|npc\s+cash/.test(qLow)) preset = 'npc_cash';
+
             let filter = null;
-            if (/\bplushie/.test(qLow)) filter = 'plushie';
-            else if (/\bflower/.test(qLow)) filter = 'flower';
-            else if (/\bcontraband|black\s*market/.test(qLow)) filter = 'contraband';
-            else if (/\bweapon|temp/.test(qLow)) filter = 'weapon';
-            else if (/\bdrug|xanax/.test(qLow)) filter = 'drug';
+            if (!preset) {
+                if (/\bplushie/.test(qLow)) filter = 'plushie';
+                else if (/\bflower/.test(qLow)) filter = 'flower';
+                else if (/\bcontraband|black\s*market/.test(qLow)) filter = 'contraband';
+                else if (/\bweapon|temp/.test(qLow)) filter = 'weapon';
+                else if (/\bdrug|xanax/.test(qLow)) filter = 'drug';
+            }
 
             let viewMode = null;
             if (/\bmuseum|set\s*planner|fly\s*for\s*a\s*set/.test(qLow)) viewMode = 'museum';
             else if (/\bcountry\s*card|by\s*country/.test(qLow)) viewMode = 'countries';
             else if (/\bmerit|50[\s-]*flight|trip\s*log/.test(qLow)) viewMode = 'merits';
             else if (/\bscatter|chart|simulator/.test(qLow)) viewMode = 'analytics';
+            else if (preset) viewMode = 'items';
 
             const hrM = qLow.match(/(?:under|max|within|<=?)\s*(\d+(?:\.\d+)?)\s*(?:h|hr|hrs|hour|hours)\b/);
             const minM = qLow.match(/(?:under|max|within|<=?)\s*(\d+)\s*(?:m|min|mins|minutes)\b/);
@@ -1258,22 +1266,26 @@
             const travelAct = {
                 type: 'travel_action',
                 page: '/travel.html',
+                preset,
                 filter,
                 viewMode,
                 maxRtMins,
                 budget,
                 lowMugRisk,
                 noEnergyWaste,
-                inStockOnly: true,
-                label: 'Applied Travel Tactical Plan'
+                inStockOnly: preset !== 'rehab',
+                label: preset ? `Activated Travel Preset: ${preset.toUpperCase()}` : 'Applied Travel Tactical Plan'
             };
             const summaryParts = [];
-            if (viewMode) summaryParts.push(`switched to **${viewMode.toUpperCase()}** view`);
+            if (preset === 'sleep') summaryParts.push(`activated **🌙 Overnight / Sleep Flight Planner**`);
+            else if (preset === 'rehab') summaryParts.push(`activated **🏥 Swiss Rehab Combo (Zurich)**`);
+            else if (preset === 'npc_cash') summaryParts.push(`activated **🕶️ Instant City NPC Cash (0% Tax)**`);
+            if (viewMode && !preset) summaryParts.push(`switched to **${viewMode.toUpperCase()}** view`);
             if (filter) summaryParts.push(`filtered to **${filter}**`);
             if (maxRtMins) summaryParts.push(`max flight time **≤${maxRtMins}m RT**`);
             if (budget) summaryParts.push(`budget cap **$${budget.toLocaleString()}**`);
-            if (lowMugRisk) summaryParts.push(`**Low Mug Risk (<$1M)**`);
-            if (noEnergyWaste) summaryParts.push(`**0 Energy Waste Guard**`);
+            if (lowMugRisk) summaryParts.push(`**Low Mug Risk**`);
+            if (noEnergyWaste) summaryParts.push(`**0E/0N Waste Guard**`);
             hist.push({
                 role: 'assistant',
                 text: `Executing on **Travel Profit Desk**: ${summaryParts.length ? summaryParts.join(', ') : 'showing optimal in-stock travel runs'}.`,
