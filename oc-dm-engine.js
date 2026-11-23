@@ -178,7 +178,15 @@ function mergeOcDmConfig(rawOcConfig = {}, incoming = null) {
     lc.graceHours = Math.max(0.25, Math.min(168, Number(lc.graceHours) || 6));
     lc.cooldownHours = Math.max(0.25, Math.min(336, Number(lc.cooldownHours) || 12));
     lc.escalationEnabled = lc.escalationEnabled !== false;
-    lc.tierFloors = { ...base.triggers.low_cpr_dm.tierFloors, ...(lc.tierFloors || {}) };
+    const rawTierFloors = { ...base.triggers.low_cpr_dm.tierFloors, ...(lc.tierFloors || {}) };
+    const cleanTierFloors = {};
+    for (let t = 1; t <= 8; t++) {
+        const tk = String(t);
+        const v = rawTierFloors[tk];
+        const num = (v !== undefined && v !== null && v !== '') ? Number(v) : Number(base.triggers.low_cpr_dm.tierFloors[tk] ?? lc.globalMinCpr ?? 70);
+        cleanTierFloors[tk] = Number.isNaN(num) ? 70 : Math.max(0, Math.min(100, Math.round(num)));
+    }
+    lc.tierFloors = cleanTierFloors;
 
     const inact = merged.triggers.inactive_oc_dm;
     inact.idleHours = Math.max(1, Math.min(720, Number(inact.idleHours) || 24));

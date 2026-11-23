@@ -98,10 +98,16 @@
     let broadcastCrimeId = null;
 
     let cprFloors = (() => {
+        const defLevels = { 1: 0, 2: 0, 3: 50, 4: 50, 5: 40, 6: 40, 7: 80, 8: 85 };
         try {
             const raw = JSON.parse(localStorage.getItem(STORAGE_FLOORS_KEY) || '{}');
-            return { low: Number(raw.low || 70), high: Number(raw.high || 65) };
-        } catch (_) { return { low: 70, high: 65 }; }
+            const levels = { ...defLevels, ...(raw.levels && typeof raw.levels === 'object' ? raw.levels : {}) };
+            return {
+                low: raw.low !== undefined ? Number(raw.low) : 70,
+                high: raw.high !== undefined ? Number(raw.high) : 65,
+                levels
+            };
+        } catch (_) { return { low: 70, high: 65, levels: defLevels }; }
     })();
 
     const openCrimeIds = new Set();
@@ -243,11 +249,24 @@
     }
 
     function getMinSafeFloor(difficulty) {
-        return Number(difficulty || 1) >= 5 ? cprFloors.high : cprFloors.low;
+        const tier = Math.max(1, Math.min(8, Number(difficulty || 1)));
+        const lvlVal = cprFloors.levels?.[String(tier)];
+        if (lvlVal !== undefined && lvlVal !== null && lvlVal !== '' && !Number.isNaN(Number(lvlVal))) {
+            return Number(lvlVal);
+        }
+        return tier >= 5 ? cprFloors.high : cprFloors.low;
+    }
+
+    function formatFloorGroupRange(minT, maxT) {
+        const vals = [];
+        for (let t = minT; t <= maxT; t++) vals.push(getMinSafeFloor(t));
+        const mn = Math.min(...vals), mx = Math.max(...vals);
+        return mn === mx ? `${mn}%` : `${mn}–${mx}%`;
     }
 
     function getCprBadgeClass(rate, floor = 70) {
         const r = Number(rate || 0);
+        if (floor > 0 && r < floor) return 'cpr-risk';
         if (r >= 80) return 'cpr-opt';
         if (r >= Math.min(70, floor)) return 'cpr-safe';
         if (r >= 60) return 'cpr-warn';
@@ -521,6 +540,10 @@
                 if (data.factionRoleCprCache && Object.keys(data.factionRoleCprCache).length > 0) {
                     localRoleCprCache = { ...localRoleCprCache, ...data.factionRoleCprCache };
                     try { localStorage.setItem(STORAGE_ROLE_CPR_CACHE_KEY, JSON.stringify(localRoleCprCache)); } catch (_) {}
+                }
+                if (data.cprFloors?.lowCprLevels && typeof data.cprFloors.lowCprLevels === 'object') {
+                    cprFloors.levels = { ...(cprFloors.levels || {}), ...data.cprFloors.lowCprLevels };
+                    try { localStorage.setItem(STORAGE_FLOORS_KEY, JSON.stringify(cprFloors)); } catch (_) {}
                 }
             }
 
@@ -1128,7 +1151,7 @@
         }
 
         document.getElementById('kpi-cpr-val').textContent = k.avgCpr === '—' ? '—%' : `${k.avgCpr}% Avg`;
-        document.getElementById('kpi-cpr-sub').textContent = `${k.lowCprSlots || 0} slots <${cprFloors.low}%/${cprFloors.high}% floor`;
+        document.getElementById('kpi-cpr-sub').textContent = `${k.lowCprSlots || 0} slots < T1–4 (${formatFloorGroupRange(1, 4)}) / T5–8 (${formatFloorGroupRange(5, 8)})`;
 
         const alertSum = (k.missingItemsCount || 0) + (k.blockedCount || 0);
         const alertEl = document.getElementById('kpi-alerts-val');
@@ -1491,7 +1514,7 @@
 
             const blk = slot._liveBlocker || getMemberLiveBlocker(slot.user, nowSec);
             const prog = Number(slot.user.progress ?? (c.phase === 'ready' ? 100 : 0)).toFixed(0);
-            const isBottleneck = cpr > 0 && cpr < 65;
+            const isBottleneck = cpr > 0 && (cpr < 65 || (c.floor > 0 && cpr < c.floor));
 
             // Real Tool #2: Pulsing Bottleneck Swapper Badge inside slot row for <65% CPR
             const cprCellHtml = isBottleneck
@@ -1690,8 +1713,8 @@
         renderQueueOptimizerCard('workbench-queue-banner', false);
         const fLow = document.getElementById('floor-disp-low');
         const fHigh = document.getElementById('floor-disp-high');
-        if (fLow) fLow.textContent = `${cprFloors.low}%`;
-        if (fHigh) fHigh.textContent = `${cprFloors.high}%`;
+        if (fLow) fLow.textContent = formatFloorGroupRange(1, 4);
+        if (fHigh) fHigh.textContent = formatFloorGroupRange(5, 8);
 
         populateSimulatorSelect();
         renderWorkbenchOpenSlots();
@@ -3002,9 +3025,23 @@
         copyText(document.getElementById('bc-preview-text')?.value || '', '📢 Broadcast callout copied!');
     };
 
+    window.applyCprTierPreset = function (minT, maxT, val) {
+        const raw = String(val ?? '').trim();
+        if (raw === '') return;
+        const clamped = Math.max(0, Math.min(100, Math.round(Number(raw) || 0)));
+        for (let t = minT; t <= maxT; t++) {
+            const el = document.getElementById(`cpr-lvl-${t}`);
+            if (el) el.value = clamped;
+        }
+    };
+
     window.openCprModal = function () {
         document.getElementById('cpr-floor-low').value = cprFloors.low;
         document.getElementById('cpr-floor-high').value = cprFloors.high;
+        for (let t = 1; t <= 8; t++) {
+            const el = document.getElementById(`cpr-lvl-${t}`);
+            if (el) el.value = getMinSafeFloor(t);
+        }
         const tsKey = typeof window.getTornStatsKey === 'function' ? window.getTornStatsKey() : (localStorage.getItem('warboard_tskey') || '');
         const inp = document.getElementById('cpr-tornstats-key');
         if (inp && tsKey) inp.placeholder = 'Connected from Global Settings (leave blank to reuse)';
@@ -3014,10 +3051,25 @@
         document.getElementById('cpr-modal')?.classList.remove('open');
     };
     window.saveCprSettingsAndSync = async function () {
-        const low = Math.max(10, Math.min(100, Number(document.getElementById('cpr-floor-low')?.value || 70)));
-        const high = Math.max(10, Math.min(100, Number(document.getElementById('cpr-floor-high')?.value || 65)));
-        cprFloors = { low, high };
+        const low = Math.max(0, Math.min(100, Number(document.getElementById('cpr-floor-low')?.value ?? 70)));
+        const high = Math.max(0, Math.min(100, Number(document.getElementById('cpr-floor-high')?.value ?? 65)));
+        const levels = {};
+        for (let t = 1; t <= 8; t++) {
+            const el = document.getElementById(`cpr-lvl-${t}`);
+            const rawV = el ? el.value : '';
+            const parsed = rawV === '' ? getMinSafeFloor(t) : Number(rawV);
+            levels[String(t)] = Number.isNaN(parsed) ? 40 : Math.max(0, Math.min(100, Math.round(parsed)));
+        }
+        cprFloors = { low, high, levels };
         localStorage.setItem(STORAGE_FLOORS_KEY, JSON.stringify(cprFloors));
+
+        try {
+            await fetch('/api/oc/cpr-floors', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ lowCprLevels: levels })
+            });
+        } catch (_) {}
 
         const manualRaw = (document.getElementById('cpr-manual-json')?.value || '').trim();
         let manualOverrides = null;
@@ -3038,11 +3090,11 @@
                 if (!res.ok || d.error) showOcToast(`⚠️ CPR Import notice: ${d.error}`);
                 else {
                     cmdData.cprOverrides = d.overrides || cmdData.cprOverrides;
-                    showOcToast(`✅ Saved floors & imported ${d.importedCount || 0} CPR entries!`);
+                    showOcToast(`✅ Saved per-level CPR floors & imported ${d.importedCount || 0} entries!`);
                 }
             } catch (e) { showOcToast(`⚠️ CPR Sync failed: ${e.message}`); }
         } else {
-            showOcToast(`✅ Saved Safe Floors: Tiers 1–4 (${low}%), Tiers 5–8 (${high}%)`);
+            showOcToast(`✅ Saved per-level Min CPR floors: T1–4 (${formatFloorGroupRange(1, 4)}), T5–8 (${formatFloorGroupRange(5, 8)})`);
         }
         closeCprModal();
         recomputeCommandAnalytics();

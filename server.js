@@ -5643,7 +5643,16 @@ app.post('/api/save-discord-config', async (req, res) => {
     if (payload.alertOcLowCpr !== undefined) ocConfig.alertLowCpr = !!payload.alertOcLowCpr;
     if (payload.lowCprDefaultThreshold !== undefined) ocConfig.lowCprDefaultThreshold = Math.max(1, Math.min(100, parseInt(payload.lowCprDefaultThreshold, 10) || 40));
     if (payload.lowCprLevels !== undefined && typeof payload.lowCprLevels === 'object') {
-        ocConfig.lowCprLevels = { ...ocConfig.lowCprLevels, ...payload.lowCprLevels };
+        const cleanedLevels = { ...ocConfig.lowCprLevels };
+        for (let t = 1; t <= 8; t++) {
+            const key = String(t);
+            const rawV = payload.lowCprLevels[key];
+            if (rawV !== undefined && rawV !== null && rawV !== '') {
+                const n = Number(rawV);
+                if (!Number.isNaN(n)) cleanedLevels[key] = Math.max(0, Math.min(100, Math.round(n)));
+            }
+        }
+        ocConfig.lowCprLevels = cleanedLevels;
     }
     if (payload.alertOcNoParticipation !== undefined) ocConfig.alertNoParticipation = !!payload.alertOcNoParticipation;
     if (payload.noParticipationDays !== undefined) ocConfig.noParticipationDays = Math.max(0.1, parseFloat(payload.noParticipationDays) || 1);
@@ -12468,6 +12477,17 @@ ocCommandRoutes.setDeps({
     getFactionArmoryCandidateKeys,
     getDiscordConfig: () => discordConfig,
     getOcConfig: () => ocConfig,
+    saveOcCprFloors: (levels) => {
+        ocConfig.lowCprLevels = { ...(ocConfig.lowCprLevels || {}), ...(levels || {}) };
+        if (!ocConfig.ocDm || typeof ocConfig.ocDm !== 'object') {
+            ocConfig.ocDm = ocDmEngineModule.mergeOcDmConfig(ocConfig, null);
+        }
+        if (ocConfig.ocDm.triggers?.low_cpr_dm) {
+            ocConfig.ocDm.triggers.low_cpr_dm.tierFloors = { ...ocConfig.lowCprLevels };
+        }
+        saveOcConfig();
+        return ocConfig.lowCprLevels;
+    },
     getOcMemberHistory: () => ocMemberHistory,
     userKeys
 });

@@ -23,6 +23,7 @@ const DATA_DIR = path.join(__dirname, '..', 'data');
 const CPR_OVERRIDES_FILE = path.join(DATA_DIR, 'oc_cpr_overrides.json');
 const ROLE_CPR_CACHE_FILE = path.join(DATA_DIR, 'oc_role_cpr_cache.json');
 const PAYOUT_STATUS_FILE = path.join(DATA_DIR, 'oc_payout_status.json');
+const CPR_FLOORS_FILE = path.join(DATA_DIR, 'oc_cpr_floors.json');
 
 let deps = {
     cachedTornFetch: null,
@@ -30,6 +31,7 @@ let deps = {
     getFactionArmoryCandidateKeys: null,
     getDiscordConfig: () => ({}),
     getOcConfig: () => ({}),
+    saveOcCprFloors: null,
     getOcMemberHistory: () => ({}),
     userKeys: null
 };
@@ -54,10 +56,11 @@ const rankedWarsCache = new Map();
 const userOcHarvestTimestamps = new Map();
 let tornItemsMemoryCache = { ts: 0, items: {} };
 
-// Load manual / TornStats CPR overrides, role CPR cache, and batch payout settlement status
+// Load manual / TornStats CPR overrides, role CPR cache, batch payout settlement status, and per-level CPR floors
 let cprOverridesByFaction = {};
 let roleCprCacheByFaction = {};
 let payoutStatusByFaction = {};
+let cprFloorsByFaction = {};
 
 function loadJsonSafe(filePath) {
     try {
@@ -79,10 +82,24 @@ function saveJsonSafe(filePath, data) {
 cprOverridesByFaction = loadJsonSafe(CPR_OVERRIDES_FILE);
 roleCprCacheByFaction = loadJsonSafe(ROLE_CPR_CACHE_FILE);
 payoutStatusByFaction = loadJsonSafe(PAYOUT_STATUS_FILE);
+cprFloorsByFaction = loadJsonSafe(CPR_FLOORS_FILE);
 
 function saveCprOverrides() { saveJsonSafe(CPR_OVERRIDES_FILE, cprOverridesByFaction); }
 function saveRoleCprCache() { saveJsonSafe(ROLE_CPR_CACHE_FILE, roleCprCacheByFaction); }
 function savePayoutStatus() { saveJsonSafe(PAYOUT_STATUS_FILE, payoutStatusByFaction); }
+function saveCprFloors() { saveJsonSafe(CPR_FLOORS_FILE, cprFloorsByFaction); }
+
+function sanitizeTierFloors(raw = {}, base = {}) {
+    const out = { 1: 0, 2: 0, 3: 50, 4: 50, 5: 40, 6: 40, 7: 80, 8: 85, ...(base || {}) };
+    for (let t = 1; t <= 8; t++) {
+        const key = String(t);
+        if (raw && raw[key] !== undefined && raw[key] !== null && raw[key] !== '') {
+            const num = Number(raw[key]);
+            if (!Number.isNaN(num)) out[key] = Math.max(0, Math.min(100, Math.round(num)));
+        }
+    }
+    return out;
+}
 
 // Complete Torn OC 2.0 Tiers 1–8 Baseline Reference Catalog (enriched dynamically with live faction data)
 const BASE_OC_CATALOG = [
@@ -581,10 +598,15 @@ router.get('/command-center', async (req, res) => {
         const ocMemHist = deps.getOcMemberHistory() || {};
 
         const ocCfg = deps.getOcConfig() || {};
+        const hostLevels = (String(fid) === String(hostFacId))
+            ? (ocCfg.lowCprLevels || ocCfg.ocDm?.triggers?.low_cpr_dm?.tierFloors || {})
+            : {};
+        const mergedLevels = sanitizeTierFloors(cprFloorsByFaction[fid], hostLevels);
         const defaultFloors = {
             tier1to4: 70,
             tier5to8: 65,
-            lowCprLevels: ocCfg.lowCprLevels || {}
+            lowCprDefaultThreshold: ocCfg.lowCprDefaultThreshold ?? 40,
+            lowCprLevels: mergedLevels
         };
 
         const payload = {
@@ -715,6 +737,42 @@ router.post('/payout-status', async (req, res) => {
             if (key.startsWith(`${fid}:`)) commandCenterCache.delete(key);
         }
         res.json({ success: true, payoutStatus: payoutStatusByFaction[fid] });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * POST /api/oc/cpr-floors
+ * Persist per-OC-level (Tiers 1–8) minimum CPR thresholds for this faction and sync host OC DM bot config.
+ */
+router.post('/cpr-floors', async (req, res) => {
+    try {
+        const { userKey, fid: initialFid } = await resolveCallerKeyAndFaction(req);
+        if (!userKey && !req.userSession) {
+            return res.status(401).json({ success: false, error: 'Authentication required' });
+        }
+        const dCfg = deps.getDiscordConfig() || {};
+        const hostFacId = String(dCfg.factionId || '52355');
+        const fid = initialFid || hostFacId;
+        const { lowCprLevels } = req.body || {};
+        if (!lowCprLevels || typeof lowCprLevels !== 'object') {
+            return res.status(400).json({ success: false, error: 'lowCprLevels object (keys 1..8) is required' });
+        }
+
+        const existing = cprFloorsByFaction[fid] || (String(fid) === hostFacId ? (deps.getOcConfig()?.lowCprLevels || {}) : {});
+        const cleanLevels = sanitizeTierFloors(lowCprLevels, existing);
+        cprFloorsByFaction[fid] = cleanLevels;
+        saveCprFloors();
+
+        if (String(fid) === hostFacId && typeof deps.saveOcCprFloors === 'function') {
+            deps.saveOcCprFloors(cleanLevels);
+        }
+
+        for (const key of commandCenterCache.keys()) {
+            if (key.startsWith(`${fid}:`)) commandCenterCache.delete(key);
+        }
+        res.json({ success: true, factionId: fid, lowCprLevels: cleanLevels });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }

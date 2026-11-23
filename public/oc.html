@@ -1266,14 +1266,27 @@
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                 </button>
             </div>
-            <div class="oc-equal-two-col" style="margin-bottom:14px;">
+            <div class="oc-equal-two-col" style="margin-bottom:10px;">
                 <div>
-                    <label style="display:block; font-size:0.74em; font-weight:800; color:var(--text-tertiary); margin-bottom:4px;">TIERS 1–4 MIN SAFE CPR (%)</label>
-                    <input type="number" id="cpr-floor-low" class="oc-input" min="10" max="100" value="70" style="width:100%;">
+                    <label style="display:block; font-size:0.74em; font-weight:800; color:var(--text-tertiary); margin-bottom:4px;">QUICK APPLY: TIERS 1–4 (%)</label>
+                    <input type="number" id="cpr-floor-low" class="oc-input" min="0" max="100" value="70" oninput="applyCprTierPreset(1, 4, this.value)" style="width:100%;">
                 </div>
                 <div>
-                    <label style="display:block; font-size:0.74em; font-weight:800; color:var(--text-tertiary); margin-bottom:4px;">TIERS 5–8 MIN SAFE CPR (%)</label>
-                    <input type="number" id="cpr-floor-high" class="oc-input" min="10" max="100" value="65" style="width:100%;">
+                    <label style="display:block; font-size:0.74em; font-weight:800; color:var(--text-tertiary); margin-bottom:4px;">QUICK APPLY: TIERS 5–8 (%)</label>
+                    <input type="number" id="cpr-floor-high" class="oc-input" min="0" max="100" value="65" oninput="applyCprTierPreset(5, 8, this.value)" style="width:100%;">
+                </div>
+            </div>
+            <div style="margin-bottom:14px; padding:10px 12px; border-radius:10px; background:rgba(2,6,23,0.45); border:1px solid rgba(148,163,184,0.16);">
+                <div style="font-size:0.74em; font-weight:800; color:var(--text-tertiary); margin-bottom:8px;">PER-LEVEL MIN CPR RATING (TIER 1 – TIER 8 • 0 = NO FLOOR)</div>
+                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(95px, 1fr)); gap:8px;">
+                    <div><label style="display:block; font-size:0.71em; color:var(--text-secondary); margin-bottom:3px;">Level 1 (T1)</label><input type="number" id="cpr-lvl-1" class="oc-input cpr-modal-lvl" data-lvl="1" min="0" max="100" value="0" style="width:100%; text-align:center;"></div>
+                    <div><label style="display:block; font-size:0.71em; color:var(--text-secondary); margin-bottom:3px;">Level 2 (T2)</label><input type="number" id="cpr-lvl-2" class="oc-input cpr-modal-lvl" data-lvl="2" min="0" max="100" value="0" style="width:100%; text-align:center;"></div>
+                    <div><label style="display:block; font-size:0.71em; color:var(--text-secondary); margin-bottom:3px;">Level 3 (T3)</label><input type="number" id="cpr-lvl-3" class="oc-input cpr-modal-lvl" data-lvl="3" min="0" max="100" value="50" style="width:100%; text-align:center;"></div>
+                    <div><label style="display:block; font-size:0.71em; color:var(--text-secondary); margin-bottom:3px;">Level 4 (T4)</label><input type="number" id="cpr-lvl-4" class="oc-input cpr-modal-lvl" data-lvl="4" min="0" max="100" value="50" style="width:100%; text-align:center;"></div>
+                    <div><label style="display:block; font-size:0.71em; color:var(--text-secondary); margin-bottom:3px;">Level 5 (T5)</label><input type="number" id="cpr-lvl-5" class="oc-input cpr-modal-lvl" data-lvl="5" min="0" max="100" value="40" style="width:100%; text-align:center;"></div>
+                    <div><label style="display:block; font-size:0.71em; color:var(--text-secondary); margin-bottom:3px;">Level 6 (T6)</label><input type="number" id="cpr-lvl-6" class="oc-input cpr-modal-lvl" data-lvl="6" min="0" max="100" value="40" style="width:100%; text-align:center;"></div>
+                    <div><label style="display:block; font-size:0.71em; color:var(--text-secondary); margin-bottom:3px;">Level 7 (T7)</label><input type="number" id="cpr-lvl-7" class="oc-input cpr-modal-lvl" data-lvl="7" min="0" max="100" value="80" style="width:100%; text-align:center;"></div>
+                    <div><label style="display:block; font-size:0.71em; color:var(--text-secondary); margin-bottom:3px;">Level 8 (T8)</label><input type="number" id="cpr-lvl-8" class="oc-input cpr-modal-lvl" data-lvl="8" min="0" max="100" value="85" style="width:100%; text-align:center;"></div>
                 </div>
             </div>
             <div style="margin-bottom:12px;">
