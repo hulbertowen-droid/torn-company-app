@@ -139,8 +139,8 @@ async function ensureTornEncyclopediaSynced(tornApiKey) {
     syncInFlight = (async () => {
         try {
             const [v1Data, v2CrimesData] = await Promise.all([
-                fetch(`https://api.torn.com/torn/?selections=items,gyms,companies,education,merits,properties,stocks&key=${encodeURIComponent(tornApiKey)}`, {
-                    signal: AbortSignal.timeout(12000)
+                fetch(`https://api.torn.com/torn/?selections=items,gyms,companies,education,properties,stocks&key=${encodeURIComponent(tornApiKey)}`, {
+                    signal: AbortSignal.timeout(14000)
                 }).then(r => r.json()).catch(() => null),
                 fetch(`https://api.torn.com/v2/torn/crimes?key=${encodeURIComponent(tornApiKey)}`, {
                     signal: AbortSignal.timeout(8000)
@@ -259,14 +259,15 @@ function lookupEncyclopediaMatches(query) {
 
     const blocks = [];
 
-    // 1. Exact / Phrase Item Matches (Books, Drugs, Boosters, Enhancers, Weapons, Caches, etc.)
+    // 1. Exact / Phrase Item Matches (Books including "Book : <Title>", Drugs, Boosters, Enhancers, Weapons, Caches, etc.)
     const matchedItems = [];
     for (const it of encyclopedia.itemsList) {
         const nm = it.name.toLowerCase();
-        if (nm.length >= 3 && qLow.includes(nm)) {
-            matchedItems.push({ it, score: nm.length + 20 });
-        } else if (nm.length >= 6 && kws.length >= 2) {
-            const hits = kws.filter(k => k.length >= 4 && nm.includes(k)).length;
+        const bareTitle = nm.startsWith('book :') ? nm.replace(/^book\s*:\s*/, '').trim() : nm;
+        if ((nm.length >= 3 && qLow.includes(nm)) || (bareTitle.length >= 5 && qLow.includes(bareTitle))) {
+            matchedItems.push({ it, score: bareTitle.length + 25 });
+        } else if (bareTitle.length >= 6 && kws.length >= 2) {
+            const hits = kws.filter(k => k.length >= 4 && bareTitle.includes(k)).length;
             if (hits >= 2) matchedItems.push({ it, score: hits * 4 });
         }
     }
@@ -353,24 +354,23 @@ let forumSyncInFlight = null;
 async function ensureForumGuidesIndexSynced(tornApiKey) {
     if (!tornApiKey) return;
     const now = Date.now();
-    if (forumIndex.threads.length > 30 && (now - forumIndex.lastSynced) < 2 * 3600 * 1000) {
+    if (forumIndex.threads.length > 200 && (now - forumIndex.lastSynced) < 3 * 3600 * 1000) {
         return;
     }
     if (forumSyncInFlight) return forumSyncInFlight;
 
     forumSyncInFlight = (async () => {
         try {
-            // Pull top/recent threads across Tutorials & Guides (61), Questions & Answers (3), and Announcements (1)
-            const urls = [
-                [61, 'Tutorials & Guides', `https://api.torn.com/v2/forum/61/threads?limit=100&sort=DESC&key=${encodeURIComponent(tornApiKey)}`],
-                [3, 'Questions & Answers', `https://api.torn.com/v2/forum/3/threads?limit=100&sort=DESC&key=${encodeURIComponent(tornApiKey)}`],
-                [1, 'Announcements', `https://api.torn.com/v2/forum/1/threads?limit=50&sort=DESC&key=${encodeURIComponent(tornApiKey)}`]
-            ];
-            const batches = await Promise.all(
-                urls.map(([fid, fname, u]) =>
-                    fetch(u, { signal: AbortSignal.timeout(7000) })
-                        .then(r => r.json())
-                        .then(j => (j.threads || []).map(t => ({
+            const walkForumPages = async (fid, fname, maxPages) => {
+                const collected = [];
+                let toParam = '';
+                for (let p = 0; p < maxPages; p++) {
+                    const url = `https://api.torn.com/v2/forum/${fid}/threads?limit=100&sort=DESC${toParam}&key=${encodeURIComponent(tornApiKey)}`;
+                    const j = await fetch(url, { signal: AbortSignal.timeout(6500) }).then(r => r.json()).catch(() => null);
+                    const arr = j?.threads || [];
+                    if (!arr.length) break;
+                    for (const t of arr) {
+                        collected.push({
                             id: Number(t.id),
                             title: t.title || '',
                             forumId: fid,
@@ -382,10 +382,21 @@ async function ensureForumGuidesIndexSynced(tornApiKey) {
                             author: t.author?.username || 'Player',
                             karma: Number(t.author?.karma || 0),
                             firstPostTime: Number(t.first_post_time || 0)
-                        })))
-                        .catch(() => [])
-                )
-            );
+                        });
+                    }
+                    const prevLink = j?._metadata?.links?.prev || '';
+                    const mTo = prevLink.match(/[?&]to=(\d+)/);
+                    if (!mTo) break;
+                    toParam = `&to=${mTo[1]}`;
+                }
+                return collected;
+            };
+
+            const batches = await Promise.all([
+                walkForumPages(61, 'Tutorials & Guides', 5),
+                walkForumPages(3, 'Questions & Answers', 2),
+                walkForumPages(1, 'Announcements', 1)
+            ]);
             const mergedMap = new Map();
             for (const t of forumIndex.threads) mergedMap.set(t.id, t);
             for (const list of batches) {
@@ -663,24 +674,34 @@ async function gatherTornWikiAndForumEvidence(question, tornApiKey = '', geminiK
         return cached.value;
     }
 
-    // Kick off non-blocking background encyclopedia & forum index warmups (awaited briefly if cold)
+    // Warm up encyclopedia & forum index (up to 6s on first ever boot, 0ms once cached)
     await Promise.race([
         Promise.all([
             ensureTornEncyclopediaSynced(tornApiKey),
             ensureForumGuidesIndexSynced(tornApiKey)
         ]),
-        new Promise(r => setTimeout(r, 3000))
+        new Promise(r => setTimeout(r, 6000))
     ]).catch(() => {});
 
     const encyclopediaBlock = lookupEncyclopediaMatches(question);
-    const searchRes = await runTornWikiAndForumSearchPass(question, geminiKeys);
+    const initialThreadIds = findMatchingForumThreadIds(question, []);
 
-    // Pull multi-reply Torn Forum posts via Torn API v2 if Wiki wasn't 100% complete OR forum threads were discovered
-    let forumConsensus = { text: '', sources: [] };
-    if (!searchRes.wikiWasComplete || searchRes.discoveredThreadIds.length > 0) {
-        const threadIds = findMatchingForumThreadIds(question, searchRes.discoveredThreadIds);
-        if (threadIds.length > 0) {
-            forumConsensus = await fetchMultiThreadForumConsensus(threadIds, tornApiKey);
+    // Run Torn Wiki/Forum Grounded Search AND initial Multi-Thread Forum Consensus in parallel for speed!
+    const [searchRes, initialForumConsensus] = await Promise.all([
+        runTornWikiAndForumSearchPass(question, geminiKeys),
+        initialThreadIds.length > 0 ? fetchMultiThreadForumConsensus(initialThreadIds, tornApiKey) : Promise.resolve({ text: '', sources: [] })
+    ]);
+
+    let forumConsensus = initialForumConsensus;
+    // If search discovered additional specific forum thread IDs not in our initial set, fetch them when Wiki wasn't complete
+    const newThreadIds = searchRes.discoveredThreadIds.filter(id => !initialThreadIds.includes(id));
+    if (!searchRes.wikiWasComplete && newThreadIds.length > 0) {
+        const extraConsensus = await fetchMultiThreadForumConsensus(newThreadIds.slice(0, 2), tornApiKey);
+        if (extraConsensus.text) {
+            forumConsensus = {
+                text: `${initialForumConsensus.text}${extraConsensus.text}`,
+                sources: [...initialForumConsensus.sources, ...extraConsensus.sources]
+            };
         }
     }
 

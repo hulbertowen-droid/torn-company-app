@@ -44,6 +44,13 @@ const bugManager = require('./bug-manager');
 const { buildSlashCommands } = require('./discord-slash-builder');
 const tornKnowledge = require('./torn-knowledge');
 const fridayWikiForumRag = require('./friday-wiki-forum-rag');
+setTimeout(() => {
+    const bootKey = discordConfig.apiKey || process.env.TORN_API_KEY || '';
+    if (bootKey) {
+        fridayWikiForumRag.ensureTornEncyclopediaSynced(bootKey).catch(() => {});
+        fridayWikiForumRag.ensureForumGuidesIndexSynced(bootKey).catch(() => {});
+    }
+}, 3500);
 const ocDmEngineModule = require('./oc-dm-engine');
 const welcomeGatekeeperModule = require('./welcome-gatekeeper');
 const warReadinessModule = require('./war-readiness');
