@@ -37,126 +37,186 @@
     <script src="/pwa-helper.js?v=1.2.0" defer></script>
 
     <style>
-    /* ─── Travel Profit Desk 2.1 Tactical Suite Styling ─── */
-    .kpi-row-travel {
-        display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
+    /* ─── Travel Profit Desk 2.2 Clean Scannable Layout ─── */
+    @media (min-width: 769px) {
+        .main-content {
+            padding: 10px 18px 36px !important;
+        }
+    }
+    .page-header.travel-header {
+        margin-bottom: 6px !important;
         gap: 10px;
-        margin-bottom: 10px;
+        position: relative;
     }
-    .kpi-row-travel .kpi-card {
-        padding: 10px 13px !important;
-        min-width: 0;
-        overflow: hidden;
-    }
-    .kpi-row-travel .kpi-card > div {
-        min-width: 0;
-        flex: 1 1 auto;
-    }
-    .kpi-row-travel .kpi-value {
-        font-size: clamp(0.98rem, 1.28vw, 1.24rem) !important;
+    .page-header.travel-header .page-title {
+        display: block !important;
+        font-size: 1.28em;
         letter-spacing: -0.02em;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
+        line-height: 1.2;
     }
-    .kpi-row-travel .kpi-sub {
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-    @media (max-width: 1024px) {
-        .kpi-row-travel { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-        .kpi-row-travel .kpi-value { font-size: 1.02rem !important; }
+    .page-header.travel-header .page-title span {
+        color: var(--accent-cobalt);
     }
 
-    /* Compact Smart Recommendation Advisor Banner */
-    .advisor-banner {
-        background: linear-gradient(135deg, rgba(14, 24, 42, 0.96), rgba(10, 16, 28, 0.98));
-        border: 1px solid rgba(56, 189, 248, 0.28);
+    /* Quick Guide Popover */
+    .quick-guide-popover {
+        display: none;
+        position: absolute;
+        top: calc(100% + 6px);
+        right: 0;
+        z-index: 120;
+        width: 390px;
+        max-width: calc(100vw - 28px);
+        background: var(--bg-surface);
+        border: 1px solid rgba(56, 189, 248, 0.45);
         border-radius: var(--radius-md);
-        padding: 10px 14px;
-        margin-bottom: 10px;
+        padding: 13px 15px;
+        box-shadow: 0 14px 36px rgba(0, 0, 0, 0.45);
+        font-size: 13px;
+        line-height: 1.45;
+        color: var(--text-primary);
+    }
+    .quick-guide-popover.open { display: block; }
+    .quick-guide-popover ul {
+        margin: 8px 0 0 0;
+        padding-left: 18px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+    .quick-guide-popover li {
+        font-size: 12px;
+        color: var(--text-secondary);
+    }
+    .quick-guide-popover li strong { color: var(--text-primary); }
+
+    /* Unified Compact 3-Card "Best Move Right Now" Strip */
+    .top-moves-strip {
         display: grid;
         grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 10px;
-        box-shadow: 0 4px 18px rgba(0, 0, 0, 0.24);
-    }
-    body.light-mode .advisor-banner {
-        background: linear-gradient(135deg, rgba(240, 249, 255, 0.95), rgba(248, 250, 252, 0.98));
-        border-color: rgba(14, 165, 233, 0.35);
+        gap: 8px;
+        margin-bottom: 6px;
     }
     @media (max-width: 980px) {
-        .advisor-banner { grid-template-columns: 1fr; gap: 8px; padding: 10px 12px; }
+        .top-moves-strip { grid-template-columns: 1fr; gap: 7px; }
     }
     .adv-slot {
-        background: rgba(255, 255, 255, 0.025);
+        background: var(--bg-surface);
         border: 1px solid var(--border-subtle);
         border-radius: var(--radius-sm);
-        padding: 8px 11px;
+        padding: 6px 10px;
         display: flex;
         flex-direction: column;
         justify-content: space-between;
-        gap: 4px;
+        gap: 3px;
         min-width: 0;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.14);
     }
     .adv-slot.primary-pick {
-        border-color: rgba(16, 185, 129, 0.38);
-        background: rgba(16, 185, 129, 0.06);
+        border-color: rgba(16, 185, 129, 0.42);
+        background: linear-gradient(135deg, rgba(16, 185, 129, 0.08), rgba(12, 16, 23, 0.96));
+    }
+    body.light-mode .adv-slot.primary-pick {
+        background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), #ffffff);
     }
     .adv-tag {
-        font-size: 0.67em;
+        font-size: 11px;
         font-weight: 800;
         text-transform: uppercase;
-        letter-spacing: 0.6px;
+        letter-spacing: 0.4px;
         display: flex;
         align-items: center;
         justify-content: space-between;
         gap: 6px;
+        min-width: 0;
     }
     .adv-main {
-        font-size: 0.89em;
+        font-size: 13.5px;
         font-weight: 800;
         color: var(--text-primary);
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
     }
+    .adv-bottom-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 6px;
+        flex-wrap: nowrap;
+        min-width: 0;
+    }
     .adv-meta {
-        font-size: 0.73em;
+        font-size: 11.5px;
         color: var(--text-secondary);
         font-family: var(--font-mono);
-        display: flex;
-        flex-wrap: wrap;
-        gap: 6px;
-        align-items: center;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        min-width: 0;
+        flex: 1 1 auto;
     }
     .adv-actions {
         display: flex;
-        gap: 5px;
-        margin-top: 2px;
-        flex-wrap: wrap;
+        gap: 3px;
+        flex-shrink: 0;
+    }
+    .adv-actions .act-link {
+        padding: 2px 5px;
+        font-size: 10.5px;
     }
 
-    /* Workspace Sub-Navigation Tabs */
+    /* Slim 1-Line Live Telemetry Status Strip */
+    .live-status-strip {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        flex-wrap: nowrap;
+        padding: 4px 10px;
+        margin-bottom: 6px;
+        border-radius: var(--radius-sm);
+        background: var(--bg-surface);
+        border: 1px solid var(--border-subtle);
+        font-size: 12px;
+        color: var(--text-secondary);
+        overflow: hidden;
+    }
+    @media (max-width: 980px) {
+        .live-status-strip { flex-wrap: wrap; }
+        .adv-bottom-row { flex-wrap: wrap; }
+    }
+    .status-group {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: nowrap;
+        white-space: nowrap;
+        min-width: 0;
+    }
+    @media (max-width: 980px) {
+        .status-group { flex-wrap: wrap; white-space: normal; }
+    }
+
+    /* Workspace Sub-Navigation Tabs (Crisp Non-Clipping) */
     .travel-view-tabs {
         display: flex;
         align-items: center;
         gap: 6px;
-        margin-bottom: 10px;
+        margin-bottom: 6px;
+        padding: 2px 2px 3px;
         overflow-x: auto;
-        padding-bottom: 2px;
         scrollbar-width: none;
     }
     .travel-view-tabs::-webkit-scrollbar { display: none; }
     .tv-tab {
-        padding: 7px 13px;
+        padding: 5px 12px;
         border-radius: var(--radius-sm);
         border: 1px solid var(--border-default);
         background: var(--bg-surface);
         color: var(--text-secondary);
-        font-size: 0.8em;
-        font-weight: 800;
+        font-size: 12.5px;
+        font-weight: 700;
         cursor: pointer;
         white-space: nowrap;
         transition: all 0.16s ease;
@@ -170,92 +230,61 @@
         color: var(--text-primary);
     }
     .tv-tab.active {
-        background: rgba(56, 189, 248, 0.14);
-        border-color: rgba(56, 189, 248, 0.55);
-        color: #38bdf8;
-        box-shadow: 0 0 14px rgba(56, 189, 248, 0.14);
+        background: #0ea5e9;
+        border-color: #38bdf8;
+        color: #ffffff;
+        box-shadow: 0 2px 10px rgba(14, 165, 233, 0.28);
     }
     body.light-mode .tv-tab.active {
-        background: rgba(2, 132, 199, 0.12);
-        border-color: rgba(2, 132, 199, 0.5);
-        color: #0284c7;
+        background: #0284c7;
+        border-color: #0284c7;
+        color: #ffffff;
     }
 
-    /* Playstyle & Purpose Presets Strip */
+    /* Scoped Controls Bar (Profit Table & By Country Only) */
+    .controls-bar {
+        background: var(--bg-surface);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-md);
+        padding: 6px 11px;
+        margin-bottom: 6px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16);
+    }
+    .controls-bar.hidden-for-tab { display: none !important; }
     .presets-strip {
         display: flex;
         align-items: center;
         gap: 6px;
         overflow-x: auto;
         scrollbar-width: none;
-        padding-bottom: 2px;
+        padding: 2px 1px;
     }
     .presets-strip::-webkit-scrollbar { display: none; }
-    .preset-chip {
-        padding: 5px 11px;
-        border-radius: var(--radius-full);
-        border: 1px solid var(--border-default);
-        background: var(--bg-elevated);
-        color: var(--text-secondary);
-        font-size: 0.76em;
-        font-weight: 800;
-        cursor: pointer;
-        white-space: nowrap;
-        font-family: inherit;
-        transition: all 0.15s ease;
-        display: inline-flex;
-        align-items: center;
-        gap: 5px;
-    }
-    .preset-chip:hover {
-        border-color: #38bdf8;
-        color: var(--text-primary);
-    }
-    .preset-chip.active {
-        background: linear-gradient(135deg, rgba(16, 185, 129, 0.18), rgba(56, 189, 248, 0.15));
-        border-color: rgba(16, 185, 129, 0.55);
-        color: #34d399;
-        box-shadow: 0 0 12px rgba(16, 185, 129, 0.14);
-    }
-    body.light-mode .preset-chip.active {
-        background: rgba(16, 185, 129, 0.14);
-        border-color: #059669;
-        color: #047857;
-    }
     .preset-context-box {
         display: none;
-        background: rgba(14, 24, 42, 0.75);
+        background: rgba(14, 24, 42, 0.72);
         border: 1px solid rgba(56, 189, 248, 0.32);
         border-radius: var(--radius-sm);
-        padding: 9px 12px;
-        font-size: 0.8em;
+        padding: 8px 12px;
+        font-size: 12.5px;
         gap: 10px;
         align-items: center;
         justify-content: space-between;
         flex-wrap: wrap;
     }
     body.light-mode .preset-context-box {
-        background: rgba(240, 249, 255, 0.92);
+        background: rgba(240, 249, 255, 0.94);
         border-color: rgba(2, 132, 199, 0.35);
     }
     .preset-context-box.open { display: flex; }
 
-    /* Controls Bar & Collapsible Drawers */
-    .controls-bar {
-        background: var(--bg-surface);
-        border: 1px solid var(--border-subtle);
-        border-radius: var(--radius-md);
-        padding: 10px 14px;
-        margin-bottom: 10px;
-        display: flex;
-        flex-direction: column;
-        gap: 9px;
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
-    }
     .controls-row {
         display: flex;
         align-items: center;
-        gap: 10px;
+        gap: 6px;
         flex-wrap: wrap;
     }
     .controls-bar .ctrl-group {
@@ -265,29 +294,32 @@
         flex-wrap: nowrap;
     }
     .controls-bar label {
-        font-size: 0.71em;
+        font-size: 11px;
         font-weight: 800;
         text-transform: uppercase;
         color: var(--text-tertiary);
-        letter-spacing: 0.5px;
+        letter-spacing: 0.4px;
         white-space: nowrap;
         margin: 0 !important;
     }
     input.ctrl-input {
-        padding: 5px 8px !important;
+        padding: 4px 7px !important;
         border-radius: var(--radius-sm);
         border: 1px solid var(--border-default);
         background: var(--bg-elevated);
         color: var(--text-primary);
-        font-size: 0.83em;
+        font-size: 13px;
         font-family: var(--font-mono);
-        width: 62px !important;
+        width: 52px !important;
         min-width: 0;
         transition: all var(--transition-fast);
     }
-    input.ctrl-input.wide { width: 112px !important; }
+    input.ctrl-input.wide { width: 114px !important; }
     input.ctrl-input.search-box {
-        width: 152px !important;
+        width: 95px !important;
+        min-width: 85px;
+        flex: 1 1 90px;
+        max-width: 205px;
         font-family: inherit;
     }
     input.ctrl-input:focus, select.ctrl-select:focus {
@@ -296,33 +328,36 @@
         box-shadow: 0 0 0 2px var(--accent-cobalt-dim);
     }
     select.ctrl-select {
-        padding: 5px 8px !important;
+        padding: 4px 6px !important;
         border-radius: var(--radius-sm);
         border: 1px solid var(--border-default);
         background: var(--bg-elevated);
         color: var(--text-primary);
-        font-size: 0.8em;
+        font-size: 12px;
         font-family: inherit;
         cursor: pointer;
         width: auto !important;
-        max-width: 178px;
+        max-width: 138px;
+    }
+    .tactical-panel select.ctrl-select,
+    .builder-grid select.ctrl-select {
+        max-width: 100%;
     }
     .builder-grid input.ctrl-input,
     .builder-grid select.ctrl-select {
         width: 100% !important;
-        max-width: 100%;
     }
     @media (max-width: 640px) {
         .controls-bar .ctrl-group { flex-wrap: wrap; }
-        input.ctrl-input.search-box { width: 100% !important; }
+        input.ctrl-input.search-box { width: 100% !important; max-width: 100%; }
     }
     .btn-ctrl {
-        padding: 6px 10px;
+        padding: 4px 8px;
         border-radius: var(--radius-sm);
         border: 1px solid var(--border-default);
         background: var(--bg-elevated);
         color: var(--text-secondary);
-        font-size: 0.78em;
+        font-size: 12px;
         font-weight: 700;
         cursor: pointer;
         transition: all var(--transition-fast);
@@ -337,22 +372,17 @@
         border-color: var(--accent-cobalt);
         color: var(--accent-cobalt);
     }
-    .btn-ctrl.primary {
-        background: var(--accent-cobalt);
-        color: #ffffff;
-        border-color: var(--accent-cobalt);
-    }
     .btn-ctrl.active-toggle {
-        background: rgba(56, 189, 248, 0.14);
-        border-color: rgba(56, 189, 248, 0.5);
-        color: #38bdf8;
+        background: #0ea5e9;
+        border-color: #38bdf8;
+        color: #ffffff;
     }
 
     /* Interactive Capacity Builder & Tactical Guardrails Drawers */
     .builder-drawer, .guardrails-drawer {
         display: none;
         background: rgba(12, 18, 30, 0.78);
-        border: 1px solid rgba(56, 189, 248, 0.26);
+        border: 1px solid rgba(56, 189, 248, 0.28);
         border-radius: var(--radius-md);
         padding: 12px 14px;
     }
@@ -374,60 +404,77 @@
         gap: 4px;
     }
     .b-field label {
-        font-size: 0.7em;
+        font-size: 11px;
         font-weight: 800;
         text-transform: uppercase;
         color: var(--text-secondary);
     }
 
-    /* Filter Pills & Country Chips */
+    /* Unified Toggle Pills: Solid Highlighted Fill = ON, Muted Outline = OFF */
     .filter-pills, .country-chips-bar {
         display: flex;
         gap: 6px;
         flex-wrap: wrap;
         align-items: center;
     }
-    .pill-btn, .country-chip {
-        padding: 4px 10px;
+    .pill-btn, .country-chip, .preset-chip {
+        padding: 4px 9px;
         border-radius: var(--radius-full);
         border: 1px solid var(--border-default);
         background: transparent;
         color: var(--text-secondary);
-        font-size: 0.75em;
+        font-size: 11.5px;
         font-weight: 700;
         cursor: pointer;
-        transition: all var(--transition-fast);
+        transition: all 0.15s ease;
         white-space: nowrap;
         font-family: inherit;
         display: inline-flex;
         align-items: center;
         gap: 4px;
     }
-    .pill-btn:hover, .country-chip:hover {
-        border-color: var(--accent-cobalt);
-        color: var(--accent-cobalt);
+    .pill-btn:hover, .country-chip:hover, .preset-chip:hover {
+        border-color: #38bdf8;
+        color: var(--text-primary);
         background: var(--bg-elevated);
     }
-    .pill-btn.active, .country-chip.active {
-        background: var(--accent-cobalt-dim);
-        border-color: var(--accent-cobalt-border);
-        color: var(--accent-cobalt);
-    }
-    .pill-btn.guard-pill.active {
-        background: rgba(16, 185, 129, 0.14);
-        border-color: rgba(16, 185, 129, 0.45);
-        color: #10b981;
+    .pill-btn.active, .country-chip.active, .preset-chip.active {
+        background: #0284c7;
+        border-color: #38bdf8;
+        color: #ffffff;
+        box-shadow: 0 2px 8px rgba(14, 165, 233, 0.28);
     }
 
-    /* Streamlined 9-Column Profit Table + Expandable Tactical Row Drawer */
+    /* Clean 7-Column Profit Table & Responsive Tactical Row Drawer */
     .table-card {
         background: var(--bg-surface);
         border: 1px solid var(--border-subtle);
         border-radius: var(--radius-md);
         overflow: hidden;
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
         min-width: 0;
         margin-bottom: 18px;
+    }
+    .table-header {
+        padding: 6px 12px;
+        border-bottom: 1px solid var(--border-subtle);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        flex-wrap: wrap;
+        background: rgba(255, 255, 255, 0.01);
+    }
+    .table-title {
+        font-size: 13px;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.6px;
+        color: var(--accent-amber);
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 8px;
     }
     .table-wrap {
         width: 100%;
@@ -437,15 +484,15 @@
         width: 100%;
         min-width: 0;
         border-collapse: collapse;
-        font-size: 0.8em;
+        font-size: 13px;
     }
     .table-wrap th {
-        padding: 8px 9px;
+        padding: 5px 6px;
         text-align: left;
-        font-size: 0.71em;
+        font-size: 11px;
         font-weight: 800;
         text-transform: uppercase;
-        letter-spacing: 0.4px;
+        letter-spacing: 0.35px;
         color: var(--text-tertiary);
         border-bottom: 1px solid var(--border-default);
         background: var(--bg-elevated);
@@ -455,13 +502,14 @@
     }
     .table-wrap th.sorted {
         color: #38bdf8;
-        background: rgba(56, 189, 248, 0.07);
+        background: rgba(56, 189, 248, 0.08);
     }
     .table-wrap td {
-        padding: 7px 9px;
+        padding: 4px 6px;
         border-bottom: 1px solid var(--border-subtle);
         vertical-align: middle;
         white-space: nowrap;
+        line-height: 1.2;
     }
     .table-wrap tr.data-row {
         cursor: pointer;
@@ -471,43 +519,72 @@
         background: rgba(56, 189, 248, 0.05);
     }
     .table-wrap tr.data-row.expanded-parent {
-        background: rgba(56, 189, 248, 0.08);
+        background: rgba(56, 189, 248, 0.09);
     }
     .table-wrap tr.pinned-row {
         background: rgba(245, 158, 11, 0.05);
     }
+
+    /* Sticky Item Column on Narrow Viewports (< 1024px) */
+    @media (max-width: 1024px) {
+        .table-wrap th.col-item,
+        .table-wrap td.col-item {
+            position: sticky;
+            left: 0;
+            z-index: 6;
+            background: var(--bg-surface);
+            border-right: 1px solid var(--border-subtle);
+            box-shadow: 4px 0 10px rgba(0, 0, 0, 0.22);
+        }
+        .table-wrap th.col-item {
+            z-index: 12;
+            background: var(--bg-elevated);
+        }
+        .table-wrap tr.pinned-row td.col-item {
+            background: #171412;
+        }
+        body.light-mode .table-wrap tr.pinned-row td.col-item {
+            background: #fffbeb;
+        }
+        .table-wrap tr.data-row.expanded-parent td.col-item {
+            background: #102030;
+        }
+        body.light-mode .table-wrap tr.data-row.expanded-parent td.col-item {
+            background: #e0f2fe;
+        }
+    }
+
+    .primary-cell-val {
+        font-size: 13.5px;
+        font-weight: 700;
+        color: var(--text-primary);
+        line-height: 1.25;
+    }
     .sub-calc {
-        font-size: 0.78em;
-        color: var(--text-tertiary);
+        font-size: 11.5px;
+        color: var(--text-secondary);
         margin-top: 2px;
         display: flex;
         align-items: center;
-        gap: 4px;
+        gap: 5px;
         flex-wrap: wrap;
+        line-height: 1.25;
     }
-    .copy-cash-chip {
-        background: none;
-        border: 1px dashed rgba(56, 189, 248, 0.35);
-        border-radius: 5px;
-        padding: 1px 6px;
-        color: var(--text-primary);
-        font-family: var(--font-mono);
-        font-size: 0.95em;
-        font-weight: 700;
-        cursor: pointer;
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        transition: all 0.14s ease;
+    .expand-chevron {
+        font-size: 13px;
+        color: var(--text-tertiary);
+        padding: 2px 4px;
+        border-radius: 4px;
+        flex-shrink: 0;
     }
-    .copy-cash-chip:hover {
-        border-color: #10b981;
-        color: #34d399;
-        background: rgba(16, 185, 129, 0.1);
-    }
+    tr.data-row:hover .expand-chevron { color: #38bdf8; }
+
+    /* Non-Clipping Expandable Tactical Row Drawer */
     tr.tactical-drawer-row td {
         padding: 0 !important;
         white-space: normal !important;
+        width: 100%;
+        max-width: 100%;
         background: rgba(8, 13, 24, 0.85);
         border-bottom: 2px solid rgba(56, 189, 248, 0.32);
     }
@@ -515,16 +592,19 @@
         background: rgba(241, 245, 249, 0.96);
     }
     .row-drawer-grid {
+        width: 100%;
+        max-width: 100%;
+        box-sizing: border-box;
         display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
         gap: 12px;
-        padding: 12px 16px;
-        font-size: 0.92em;
+        padding: 12px 14px;
+        font-size: 12.5px;
     }
-    @media (max-width: 920px) {
+    @media (max-width: 768px) {
         .row-drawer-grid {
-            grid-template-columns: 1fr;
-            max-width: calc(100vw - 36px);
+            max-width: calc(100vw - 26px);
+            padding: 10px 12px;
         }
     }
     .drawer-box {
@@ -535,64 +615,80 @@
         display: flex;
         flex-direction: column;
         gap: 6px;
+        min-width: 0;
+        overflow-wrap: break-word;
     }
     .drawer-box-title {
-        font-size: 0.73em;
+        font-size: 11px;
         font-weight: 800;
         text-transform: uppercase;
-        letter-spacing: 0.5px;
+        letter-spacing: 0.45px;
         color: #38bdf8;
         display: flex;
         align-items: center;
         justify-content: space-between;
         gap: 6px;
-    }
-    .table-header {
-        padding: 10px 16px;
-        border-bottom: 1px solid var(--border-subtle);
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 12px;
         flex-wrap: wrap;
-        background: rgba(255, 255, 255, 0.01);
     }
-    .table-title {
-        font-size: 0.88em;
-        font-weight: 800;
-        text-transform: uppercase;
-        letter-spacing: 0.8px;
-        color: var(--accent-amber);
-        margin: 0;
-        display: flex;
+    .copy-cash-chip {
+        background: none;
+        border: 1px dashed rgba(56, 189, 248, 0.42);
+        border-radius: 5px;
+        padding: 2px 7px;
+        color: var(--text-primary);
+        font-family: var(--font-mono);
+        font-size: 12px;
+        font-weight: 700;
+        cursor: pointer;
+        display: inline-flex;
         align-items: center;
-        gap: 8px;
+        gap: 4px;
+        transition: all 0.14s ease;
     }
+    .copy-cash-chip:hover {
+        border-color: #10b981;
+        color: #34d399;
+        background: rgba(16, 185, 129, 0.12);
+    }
+
     .rank-badge {
         display: inline-flex;
         align-items: center;
         justify-content: center;
         width: 22px; height: 22px;
         border-radius: 50%;
-        font-size: 0.72em;
+        font-size: 11px;
         font-weight: 900;
         font-family: var(--font-mono);
     }
     .rank-badge.gold { background: var(--accent-amber-dim); color: var(--accent-amber); border: 1px solid var(--accent-amber-border); }
-    .rank-badge.silver { background: rgba(200,200,220,0.12); color: #cbd5e1; border: 1px solid #94a3b8; }
-    .rank-badge.bronze { background: rgba(180,110,80,0.14); color: #d97706; border: 1px solid #b45309; }
-    .rank-badge.normal { background: var(--bg-elevated); color: var(--text-tertiary); border: 1px solid var(--border-subtle); }
+    .rank-badge.silver { background: rgba(200,200,220,0.14); color: #cbd5e1; border: 1px solid #94a3b8; }
+    .rank-badge.bronze { background: rgba(180,110,80,0.16); color: #d97706; border: 1px solid #b45309; }
+    .rank-badge.normal { background: var(--bg-elevated); color: var(--text-secondary); border: 1px solid var(--border-subtle); }
+
+    .star-pin-btn {
+        background: none;
+        border: none;
+        cursor: pointer;
+        font-size: 16px;
+        line-height: 1;
+        padding: 2px 3px;
+        color: var(--text-secondary);
+        transition: transform 0.12s ease, color 0.12s ease;
+    }
+    .star-pin-btn.pinned { color: #fbbf24; }
+    .star-pin-btn:hover { transform: scale(1.18); color: #fbbf24; }
 
     .refresh-btn {
         display: inline-flex;
         align-items: center;
         gap: 6px;
-        padding: 7px 14px;
+        padding: 6px 12px;
         border-radius: var(--radius-sm);
         border: 1px solid var(--border-default);
         background: var(--bg-elevated);
         color: var(--text-primary);
-        font-size: 0.82em;
+        font-size: 12.5px;
         font-weight: 700;
         cursor: pointer;
         transition: all var(--transition-fast);
@@ -604,48 +700,39 @@
     }
     .refresh-btn:disabled { opacity: 0.6; cursor: wait; }
 
-    .item-name { font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 5px; }
-    .item-category { font-size: 0.71em; color: var(--text-tertiary); margin-top: 2px; display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
-    .country-flag { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
-    .country-badge {
-        padding: 2px 7px;
-        border-radius: 99px;
-        background: var(--bg-elevated);
-        border: 1px solid var(--border-subtle);
-        font-size: 0.8em;
-        font-weight: 700;
-    }
-    .flight-time { font-family: var(--font-mono); color: var(--text-secondary); white-space: nowrap; }
+    .item-name { font-size: 13.5px; font-weight: 700; color: var(--text-primary); line-height: 1.25; }
+    .country-flag { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; font-size: 13px; font-weight: 600; color: var(--text-primary); }
+    .flight-time { font-family: var(--font-mono); color: var(--text-primary); white-space: nowrap; }
     .profit-item, .profit-hr { font-family: var(--font-mono); font-weight: 800; white-space: nowrap; }
     .profit-item { color: var(--accent-emerald); }
     .profit-loss { color: var(--accent-crimson, #ef4444) !important; font-family: var(--font-mono); font-weight: 800; }
-    .profit-hr { color: #38bdf8; }
+    .profit-hr { color: #38bdf8; font-size: 13.5px; }
     .stock-none {
-        display: inline-block; padding: 2px 7px; border-radius: 99px;
+        display: inline-block; padding: 2px 8px; border-radius: 99px;
         background: rgba(239, 68, 68, 0.14); color: var(--accent-crimson);
-        border: 1px solid rgba(239, 68, 68, 0.35); font-size: 0.72em; font-weight: 800;
+        border: 1px solid rgba(239, 68, 68, 0.35); font-size: 11px; font-weight: 800;
     }
     .stock-low {
-        display: inline-block; padding: 2px 7px; border-radius: 99px;
+        display: inline-block; padding: 2px 8px; border-radius: 99px;
         background: rgba(245, 158, 11, 0.15); color: var(--accent-amber);
-        border: 1px solid rgba(245, 158, 11, 0.35); font-family: var(--font-mono); font-size: 0.76em; font-weight: 800;
+        border: 1px solid rgba(245, 158, 11, 0.35); font-family: var(--font-mono); font-size: 12px; font-weight: 800;
     }
     .stock-ok {
-        display: inline-block; padding: 2px 7px; border-radius: 99px;
+        display: inline-block; padding: 2px 8px; border-radius: 99px;
         background: rgba(16, 185, 129, 0.14); color: var(--accent-emerald);
-        border: 1px solid rgba(16, 185, 129, 0.3); font-family: var(--font-mono); font-size: 0.76em; font-weight: 800;
+        border: 1px solid rgba(16, 185, 129, 0.3); font-family: var(--font-mono); font-size: 12px; font-weight: 800;
     }
-    tr.out-stock { opacity: 0.66; }
+    tr.out-stock { opacity: 0.72; }
 
-    /* Badges for Mug Risk, Contraband Deal, Energy Guard & Shop Type */
+    /* Clean Readable Pills (11px-12px) */
     .mini-badge {
         display: inline-flex;
         align-items: center;
         gap: 3px;
-        padding: 1px 6px;
-        border-radius: 4px;
-        font-size: 0.69em;
-        font-weight: 800;
+        padding: 2px 7px;
+        border-radius: 5px;
+        font-size: 11px;
+        font-weight: 700;
         font-family: var(--font-mono);
         white-space: nowrap;
     }
@@ -655,29 +742,17 @@
     .mini-badge.cyan { background: rgba(56, 189, 248, 0.14); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.32); }
     .mini-badge.purple { background: rgba(168, 85, 247, 0.15); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.32); }
 
-    .star-pin-btn {
-        background: none;
-        border: none;
-        cursor: pointer;
-        font-size: 0.98em;
-        padding: 0 3px;
-        color: var(--text-tertiary);
-        transition: transform 0.12s ease, color 0.12s ease;
-    }
-    .star-pin-btn.pinned { color: #fbbf24; }
-    .star-pin-btn:hover { transform: scale(1.18); }
-
     .act-link {
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        padding: 3px 6px;
+        padding: 4px 8px;
         border-radius: 5px;
         border: 1px solid var(--border-default);
         background: var(--bg-elevated);
         color: var(--text-secondary);
         text-decoration: none;
-        font-size: 0.72em;
+        font-size: 11.5px;
         font-weight: 700;
         cursor: pointer;
     }
@@ -685,6 +760,24 @@
         border-color: var(--accent-cobalt);
         color: #38bdf8;
     }
+
+    /* Scatter Chart Legend */
+    .scatter-legend {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 8px 14px;
+        margin-top: 8px;
+        padding: 7px 10px;
+        border-radius: var(--radius-sm);
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-subtle);
+        font-size: 11.5px;
+        color: var(--text-secondary);
+    }
+    .sl-item { display: inline-flex; align-items: center; gap: 5px; }
+    .sl-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
 
     /* Country Command Grid (Tab 2) */
     .country-command-grid {
@@ -880,164 +973,156 @@
         </header>
 
     <main class="main-content">
-        <!-- Header -->
-        <div class="page-header" style="margin-bottom:14px;">
+        <!-- Header + Quick Guide -->
+        <div class="page-header travel-header">
             <div>
-                <div class="page-title">✈️ Travel <span>Profit &amp; Route</span> Command</div>
-                <div style="font-size:0.77em; color:var(--text-tertiary); margin-top:3px;" id="player-flight-banner">
-                    Torn Travel 2.0 (Patch #438 -5.26% Flight Times) • Live Foreign Stock, Contraband &amp; Museum Arbitrage
-                </div>
+                <h1 class="page-title">✈️ Travel <span>Profit &amp; Route</span> Command</h1>
             </div>
-            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-                <span class="mini-badge cyan" id="feed-source-badge" title="Foreign stock telemetry feed">YATA LIVE</span>
-                <span id="last-updated" style="font-size:0.76em;color:var(--text-dim);"></span>
+            <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;position:relative;">
+                <button type="button" class="btn-ctrl" id="btn-quick-guide" onclick="toggleQuickGuide()" title="How to use Travel Profit Desk">❓ Quick Guide</button>
                 <a href="https://www.torn.com/travelagency.php" target="_blank" rel="noopener" class="btn-ctrl" title="Open Torn Travel Agency">✈️ Travel Agency</a>
                 <button class="refresh-btn" onclick="loadProfits(true)" id="refresh-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> Refresh</button>
-            </div>
-        </div>
-
-        <!-- 4-Card High-Signal Executive KPI Strip -->
-        <div class="kpi-row-travel">
-            <div class="kpi-card">
-                <span class="kpi-icon">🏆</span>
-                <div>
-                    <div class="kpi-label">Best $/hr Right Now</div>
-                    <div class="kpi-value" id="kpi-best-rate">—</div>
-                    <div class="kpi-sub" id="kpi-best-name">Loading…</div>
-                </div>
-            </div>
-            <div class="kpi-card">
-                <span class="kpi-icon">💰</span>
-                <div>
-                    <div class="kpi-label">Best Total Trip</div>
-                    <div class="kpi-value" id="kpi-best-total">—</div>
-                    <div class="kpi-sub" id="kpi-best-total-name">Loading…</div>
-                </div>
-            </div>
-            <div class="kpi-card">
-                <span class="kpi-icon">🕶️</span>
-                <div>
-                    <div class="kpi-label">Best Instant NPC / Contraband</div>
-                    <div class="kpi-value" id="kpi-best-contra">—</div>
-                    <div class="kpi-sub" id="kpi-best-contra-name">Black Market</div>
-                </div>
-            </div>
-            <div class="kpi-card">
-                <span class="kpi-icon">⏱️</span>
-                <div>
-                    <div class="kpi-label">Next :00/:15/:30/:45 Tick</div>
-                    <div class="kpi-value" id="kpi-restock">—</div>
-                    <div class="kpi-sub" id="kpi-in-stock-sub">Scanning live stock…</div>
+                <div class="quick-guide-popover" id="quick-guide-popover" role="dialog" aria-label="Travel Profit Desk Quick Guide">
+                    <div style="display:flex;justify-content:space-between;align-items:center;">
+                        <strong style="color:#38bdf8;font-size:13px;">✈️ Travel Desk Quick Guide</strong>
+                        <button type="button" class="act-link" onclick="toggleQuickGuide(false)">✕</button>
+                    </div>
+                    <ul>
+                        <li><strong>1. Pick a Route Mode:</strong> Use quick presets (<em>Best Right Now</em>, <em>Overnight / Sleep</em>, <em>Swiss Rehab</em>, <em>Instant NPC Cash</em>, or <em>Fast Workday</em>) to match your schedule.</li>
+                        <li><strong>2. Set Capacity &amp; Sell Method:</strong> Adjust suitcase capacity (open <strong>⚙️ Builder</strong> for perks &amp; books) and choose how you liquidate cargo (<em>Market -5%</em>, <em>Smart Auto</em>, or <em>City NPC</em>).</li>
+                        <li><strong>3. Click Any Row for Deep Intel:</strong> Expand any item to copy exact abroad cash with one click, inspect City NPC prices, split-cargo backups, and restock snipe timing.</li>
+                        <li><strong>4. Star Items for Alerts:</strong> Click <strong>☆</strong> on any row to add it to your watchlist and arm audio/browser restock alerts in <em>Merits &amp; Alerts</em>.</li>
+                    </ul>
                 </div>
             </div>
         </div>
 
-        <!-- Compact Smart Flight Advisor Banner -->
-        <div class="advisor-banner" id="advisor-banner">
+        <!-- Unified Compact 3-Card "Best Move Right Now" Top Strip -->
+        <div class="top-moves-strip" id="advisor-banner">
             <div class="adv-slot primary-pick">
-                <div class="adv-tag"><span style="color:#10b981;">🟢 #1 OPTIMAL FLIGHT NOW</span><span id="adv-1-badge" class="mini-badge green">0E Wasted</span></div>
+                <div class="adv-tag">
+                    <span style="color:#10b981;">🟢 #1 Best $/hr</span>
+                    <span id="adv-1-badge" class="mini-badge green">No Energy Waste</span>
+                </div>
                 <div class="adv-main" id="adv-1-title">Scanning live foreign stocks…</div>
-                <div class="adv-meta" id="adv-1-meta">—</div>
-                <div class="adv-actions" id="adv-1-actions"></div>
+                <div class="adv-bottom-row">
+                    <div class="adv-meta" id="adv-1-meta">—</div>
+                    <div class="adv-actions" id="adv-1-actions"></div>
+                </div>
             </div>
             <div class="adv-slot">
-                <div class="adv-tag"><span style="color:#38bdf8;">⚡ FAST SPRINT (&le; 2h RT)</span><span id="adv-2-badge" class="mini-badge cyan">Quick Turn</span></div>
+                <div class="adv-tag">
+                    <span style="color:#38bdf8;">⚡ Fast Run (&le; 2h)</span>
+                    <span id="adv-2-badge" class="mini-badge cyan">Quick Turn</span>
+                </div>
                 <div class="adv-main" id="adv-2-title">Scanning short-haul runs…</div>
-                <div class="adv-meta" id="adv-2-meta">—</div>
-                <div class="adv-actions" id="adv-2-actions"></div>
+                <div class="adv-bottom-row">
+                    <div class="adv-meta" id="adv-2-meta">—</div>
+                    <div class="adv-actions" id="adv-2-actions"></div>
+                </div>
             </div>
             <div class="adv-slot">
-                <div class="adv-tag"><span style="color:#c084fc;">🕶️ INSTANT CITY NPC / BLACK MKT</span><span id="adv-3-badge" class="mini-badge purple">0% Tax</span></div>
-                <div class="adv-main" id="adv-3-title">Scanning Black Market…</div>
-                <div class="adv-meta" id="adv-3-meta">—</div>
-                <div class="adv-actions" id="adv-3-actions"></div>
+                <div class="adv-tag">
+                    <span style="color:#c084fc;">🕶️ Best Instant NPC Cash</span>
+                    <span id="adv-3-badge" class="mini-badge purple">0% Tax • City NPC</span>
+                </div>
+                <div class="adv-main" id="adv-3-title">Scanning City NPC buys…</div>
+                <div class="adv-bottom-row">
+                    <div class="adv-meta" id="adv-3-meta">—</div>
+                    <div class="adv-actions" id="adv-3-actions"></div>
+                </div>
             </div>
         </div>
 
-        <!-- 5-Tab Tactical Workspace Bar -->
-        <div class="travel-view-tabs" id="travel-view-tabs">
-            <button type="button" class="tv-tab active" data-view="items" onclick="switchTravelView('items', this)">📊 By Item (Profit Table)</button>
-            <button type="button" class="tv-tab" data-view="countries" onclick="switchTravelView('countries', this)">🌍 By Country (11 Destination Cards)</button>
-            <button type="button" class="tv-tab" data-view="museum" onclick="switchTravelView('museum', this)">🏛️ Museum Set Planner</button>
-            <button type="button" class="tv-tab" data-view="analytics" onclick="switchTravelView('analytics', this)">📈 Scatter Chart &amp; Daily Simulator</button>
-            <button type="button" class="tv-tab" data-view="merits" onclick="switchTravelView('merits', this)">🏅 50-Flight Merits, Trip Log &amp; Alerts</button>
+        <!-- Slim 1-Line Status Bar (Next Restock Tick, Stock & Feed + Live Player Bar) -->
+        <div class="live-status-strip" id="live-status-strip">
+            <div class="status-group">
+                <span title="Torn foreign item restock tick occurs every 15 minutes at :00 / :15 / :30 / :45 TCT">⏱️ Next Tick (:00/:15/:30/:45): <strong id="kpi-restock" style="font-family:var(--font-mono);color:var(--text-primary);">—</strong></span>
+                <span>•</span>
+                <span id="kpi-in-stock-sub">Scanning stock…</span>
+                <span class="mini-badge cyan" id="feed-source-badge" title="Foreign stock telemetry feed">YATA+PROM</span>
+            </div>
+            <div class="status-group" style="overflow:hidden;text-overflow:ellipsis;">
+                <span id="player-flight-banner" style="font-size:11.5px;color:var(--text-tertiary);overflow:hidden;text-overflow:ellipsis;">Patch #438</span>
+                <span id="last-updated" style="font-size:11px;color:var(--text-tertiary);"></span>
+            </div>
         </div>
 
-        <!-- Compact Controls, Playstyle Presets & Collapsible Tactical Guardrails -->
-        <div class="controls-bar">
-            <!-- Playstyle & Purpose Presets Strip -->
+        <!-- 5 Concise Non-Clipping Workspace Tabs -->
+        <div class="travel-view-tabs" id="travel-view-tabs">
+            <button type="button" class="tv-tab active" data-view="items" onclick="switchTravelView('items', this)">📊 Profit Table</button>
+            <button type="button" class="tv-tab" data-view="countries" onclick="switchTravelView('countries', this)">🌍 By Country</button>
+            <button type="button" class="tv-tab" data-view="museum" onclick="switchTravelView('museum', this)">🏛️ Museum Sets</button>
+            <button type="button" class="tv-tab" data-view="analytics" onclick="switchTravelView('analytics', this)">📈 Chart &amp; Sim</button>
+            <button type="button" class="tv-tab" data-view="merits" onclick="switchTravelView('merits', this)">🏅 Merits &amp; Alerts</button>
+        </div>
+
+        <!-- Scoped Controls Bar (Shown ONLY on Profit Table & By Country) -->
+        <div class="controls-bar" id="controls-bar">
+            <!-- Route Mode Presets -->
             <div class="presets-strip" id="presets-strip">
-                <span style="font-size:0.7em;font-weight:800;color:var(--text-tertiary);text-transform:uppercase;margin-right:2px;">🎯 Route Mode:</span>
+                <span style="font-size:11px;font-weight:800;color:var(--text-tertiary);text-transform:uppercase;margin-right:2px;white-space:nowrap;">🎯 Route Mode:</span>
                 <button type="button" class="preset-chip active" data-preset="best_now" onclick="applyPlaystylePreset('best_now')">⚡ Best Right Now</button>
                 <button type="button" class="preset-chip" data-preset="sleep" onclick="applyPlaystylePreset('sleep')">🌙 Overnight / Sleep</button>
                 <button type="button" class="preset-chip" data-preset="rehab" onclick="applyPlaystylePreset('rehab')">🏥 Swiss Rehab</button>
-                <button type="button" class="preset-chip" data-preset="npc_cash" onclick="applyPlaystylePreset('npc_cash')">🕶️ Instant NPC Cash (0% Tax)</button>
-                <button type="button" class="preset-chip" data-preset="fast_turns" onclick="applyPlaystylePreset('fast_turns')">🏃 Fast Workday (&le; 2h RT)</button>
+                <button type="button" class="preset-chip" data-preset="npc_cash" onclick="applyPlaystylePreset('npc_cash')">🕶️ Instant NPC Cash</button>
+                <button type="button" class="preset-chip" data-preset="fast_turns" onclick="applyPlaystylePreset('fast_turns')">🏃 Fast Workday (&le; 2h)</button>
             </div>
 
             <!-- Contextual Sleep / Swiss Rehab Planner Banner -->
             <div class="preset-context-box" id="preset-context-box"></div>
 
-            <!-- Primary 1-Row Control Bar (Always Visible Above the Fold) -->
+            <!-- Primary 1-Row Control Bar -->
             <div class="controls-row">
                 <div class="ctrl-group">
                     <label for="capacity">🧳 Cap</label>
                     <input type="number" id="capacity" class="ctrl-input" value="28" min="1" max="100" onchange="applyCapacity(true)">
-                    <button type="button" class="btn-ctrl" id="btn-cap-builder" onclick="toggleCapacityBuilder()" title="Open Patch #438 Interactive Capacity Builder">⚙️ <span id="cap-builder-note" style="color:#38bdf8;">(28)</span></button>
+                    <button type="button" class="btn-ctrl" id="btn-cap-builder" onclick="toggleCapacityBuilder()" title="Open Interactive Capacity &amp; Perks Builder (suitcases, faction/company perks &amp; -25% time book)">⚙️ Builder <span id="cap-builder-note" style="color:#38bdf8;">(28)</span></button>
                 </div>
                 <div class="ctrl-group">
                     <label for="flight-profile">✈️ Mode</label>
                     <select id="flight-profile" class="ctrl-select" onchange="applyFlightProfile()">
-                        <option value="airstrip" selected>Private Airstrip (PI)</option>
+                        <option value="airstrip" selected>Airstrip (PI)</option>
                         <option value="wlt">WLT Benefit</option>
-                        <option value="bct">Business Class (BCT)</option>
+                        <option value="bct">Business (BCT)</option>
                         <option value="standard">Standard Ticket</option>
                     </select>
-                    <label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;text-transform:none;font-size:0.76em;color:var(--text-secondary);" title="Mailing Yourself Abroad Book (-25% Flight Time)">
-                        <input type="checkbox" id="chk-book-mailing" onchange="onFlightModifierChange()" style="accent-color:#38bdf8;"> 📖 -25%
-                    </label>
-                    <label id="lbl-free-bct" style="display:none;align-items:center;gap:4px;cursor:pointer;text-transform:none;font-size:0.76em;color:#fbbf24;" title="10★ Lingerie Store perk waives Business Class Ticket cost">
-                        <input type="checkbox" id="chk-free-bct" onchange="onFlightModifierChange()" style="accent-color:#fbbf24;"> Free BCT
+                    <label id="lbl-free-bct" style="display:none;align-items:center;gap:4px;cursor:pointer;text-transform:none;font-size:12px;color:#fbbf24;" title="10★ Lingerie Store perk waives Business Class Ticket cost">
+                        <input type="checkbox" id="chk-free-bct" onchange="onFlightModifierChange()" style="accent-color:#fbbf24;"> Free BCT (10★)
                     </label>
                 </div>
                 <div class="ctrl-group">
                     <label for="sell-basis">💵 Sell</label>
                     <select id="sell-basis" class="ctrl-select" onchange="onSellBasisChange()">
-                        <option value="smart_auto">Smart Auto (Best: Mkt -5% vs City NPC)</option>
-                        <option value="market_5" selected>Item Market (-5% fee)</option>
-                        <option value="market_anon_15">Market Anonymous (-15%)</option>
-                        <option value="bazaar_0">Bazaar / Trade (0% fee)</option>
+                        <option value="smart_auto">Smart Auto</option>
+                        <option value="market_5" selected>Market (-5%)</option>
+                        <option value="market_anon_15">Anon Market (-15%)</option>
+                        <option value="bazaar_0">Bazaar (0% fee)</option>
                         <option value="custom_trader">Custom Trader %</option>
-                        <option value="npc_museum">City NPC / Museum (0% mug)</option>
+                        <option value="npc_museum">City NPC / Museum</option>
                     </select>
-                    <input type="number" id="custom-trader-pct" class="ctrl-input" value="97" min="50" max="110" step="0.5" style="display:none;width:60px;" onchange="onSellBasisChange()" title="Trader payout % of Market Value">
+                    <input type="number" id="custom-trader-pct" class="ctrl-input" value="97" min="50" max="110" step="0.5" style="display:none;width:62px;" onchange="onSellBasisChange()" title="Trader payout % of Market Value">
                 </div>
-                <input type="search" id="travel-search" class="ctrl-input search-box" placeholder="🔍 Search item, country, NPC shop…" oninput="onSearchInput()">
-                <button type="button" class="pill-btn guard-pill active" id="btn-hide-traps" onclick="toggleGuardFilter('hideTraps', this)" title="Hide illiquid $1.5M+ vanity/weapon traps with thin market volume">🛡️ Hide Traps</button>
-                <button type="button" class="pill-btn" id="btn-quick-instock" data-filter="instock" onclick="setFilter('instock', this)">✅ In Stock</button>
-                <button type="button" class="btn-ctrl" id="btn-guardrails-drawer" onclick="toggleGuardrailsDrawer()" style="margin-left:auto;" title="Expand Category Pills, Schedule Guardrails, Budget & Country Filters">🎛️ Filters <span id="active-filters-badge" class="mini-badge cyan" style="display:none;">0</span></button>
+                <input type="search" id="travel-search" class="ctrl-input search-box" placeholder="🔍 Search..." oninput="onSearchInput()">
+                <button type="button" class="pill-btn active" id="btn-quick-instock" data-filter="instock" onclick="setFilter('instock', this)" title="Toggle showing only currently in-stock items">In Stock Only</button>
+                <button type="button" class="pill-btn active" id="btn-hide-traps" onclick="toggleGuardFilter('hideTraps', this)" title="Hide slow-moving $1.5M+ novelty/weapon traps">Hide Traps</button>
+                <button type="button" class="btn-ctrl" id="btn-guardrails-drawer" onclick="toggleGuardrailsDrawer()" style="margin-left:auto;" title="Expand Category Pills, Schedule Guardrails, Budget &amp; Country Filters">🎛️ Filters <span id="active-filters-badge" class="mini-badge cyan" style="display:none;">0</span></button>
             </div>
 
             <!-- Active Filter Summary when Drawer is Collapsed -->
-            <div id="collapsed-filter-summary" style="display:none;align-items:center;gap:6px;flex-wrap:wrap;font-size:0.75em;"></div>
+            <div id="collapsed-filter-summary" style="display:none;align-items:center;gap:6px;flex-wrap:wrap;font-size:12px;"></div>
 
-            <!-- Interactive Capacity Builder Drawer (Patch #438 Rules) -->
+            <!-- Interactive Capacity & Flight Perks Builder Drawer -->
             <div class="builder-drawer" id="capacity-builder-drawer">
                 <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;border-bottom:1px solid var(--border-subtle);padding-bottom:8px;">
-                    <div style="font-size:0.82em;font-weight:800;color:#38bdf8;">🧳 Interactive Travel Capacity Builder (Patch #438 Rules)</div>
-                    <div style="display:flex;gap:8px;align-items:center;">
+                    <div style="font-size:12.5px;font-weight:800;color:#38bdf8;">🧳 Interactive Capacity &amp; Perks Builder (Patch #438)</div>
+                    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                        <span id="cb-mode-sync-badge" class="mini-badge cyan" title="Automatically synced from your selected Flight Mode">Plane Slots (from Mode): 15</span>
                         <button type="button" class="btn-ctrl" onclick="autoPopulateCapacityFromApi()">⚡ Auto-Sync My API Perks</button>
                         <button type="button" class="btn-ctrl" onclick="resetCapacityDefault()">Reset Default (28)</button>
                     </div>
                 </div>
                 <div class="builder-grid">
-                    <div class="b-field">
-                        <label for="cb-base">Base Flight Method</label>
-                        <select id="cb-base" class="ctrl-select" onchange="recalcCapacityFromBuilder()">
-                            <option value="15" selected>Airstrip / WLT / BCT (15)</option>
-                            <option value="10">Standard Ticket (10)</option>
-                        </select>
-                    </div>
                     <div class="b-field">
                         <label for="cb-suitcase">Suitcase (Non-Stacking)</label>
                         <select id="cb-suitcase" class="ctrl-select" onchange="recalcCapacityFromBuilder()">
@@ -1049,7 +1134,7 @@
                     </div>
                     <div class="b-field">
                         <label for="cb-excursion">Faction Excursion (0 to +10)</label>
-                        <input type="number" id="cb-excursion" class="ctrl-input" value="10" min="0" max="10" onchange="recalcCapacityFromBuilder()" style="width:100%;">
+                        <input type="number" id="cb-excursion" class="ctrl-input" value="10" min="0" max="10" onchange="recalcCapacityFromBuilder()">
                     </div>
                     <div class="b-field">
                         <label for="cb-company">Company Perk</label>
@@ -1065,18 +1150,25 @@
                     </div>
                     <div class="b-field">
                         <label for="cb-outbound">Outbound Gear Slots (-N)</label>
-                        <input type="number" id="cb-outbound" class="ctrl-input" value="0" min="0" max="25" onchange="recalcCapacityFromBuilder()" style="width:100%;" title="Slots occupied by weapons/armor carried abroad">
+                        <input type="number" id="cb-outbound" class="ctrl-input" value="0" min="0" max="25" onchange="recalcCapacityFromBuilder()" title="Travel slots reserved for weapons/armor carried abroad">
                     </div>
-                    <div class="b-field">
+                    <div class="b-field" style="grid-column: span 2;">
                         <label>Books &amp; Events</label>
-                        <div style="display:flex;flex-direction:column;gap:5px;font-size:0.78em;color:var(--text-primary);">
-                            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;text-transform:none;"><input type="checkbox" id="cb-book-smuggling" onchange="recalcCapacityFromBuilder()" style="accent-color:#38bdf8;"> 📘 Smuggling For Beginners (+10)</label>
-                            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;text-transform:none;"><input type="checkbox" id="cb-tourism-day" onchange="recalcCapacityFromBuilder()" style="accent-color:#10b981;"> 🎉 Tourism Day (2× total, excl. +5 shop)</label>
+                        <div style="display:flex;flex-wrap:wrap;gap:10px 18px;font-size:12.5px;color:var(--text-primary);padding-top:3px;">
+                            <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;text-transform:none;font-weight:600;" title="Mailing Yourself Abroad book (-25% flight time)">
+                                <input type="checkbox" id="chk-book-mailing" onchange="onFlightModifierChange()" style="accent-color:#38bdf8;"> 📖 Book: Mailing Yourself Abroad (-25% flight time)
+                            </label>
+                            <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;text-transform:none;font-weight:600;" title="Smuggling For Beginners book (+10 capacity)">
+                                <input type="checkbox" id="cb-book-smuggling" onchange="recalcCapacityFromBuilder()" style="accent-color:#38bdf8;"> 📘 Book: Smuggling For Beginners (+10 cap)
+                            </label>
+                            <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;text-transform:none;font-weight:600;" title="Tourism Day doubles capacity excluding +5 shop perks">
+                                <input type="checkbox" id="cb-tourism-day" onchange="recalcCapacityFromBuilder()" style="accent-color:#10b981;"> 🎉 Tourism Day (2× capacity)
+                            </label>
                         </div>
                     </div>
                 </div>
-                <div id="cb-formula-readout" style="margin-top:8px;font-size:0.75em;font-family:var(--font-mono);color:var(--text-secondary);">
-                    Effective Capacity: 15 (Base) + 3 (Large Suitcase) + 10 (Excursion) = 28 items
+                <div id="cb-formula-readout" style="margin-top:8px;font-size:12px;font-family:var(--font-mono);color:var(--text-secondary);">
+                    Effective Capacity: 15 (Mode) + 3 (Large Suitcase) + 10 (Excursion) = 28 items
                 </div>
             </div>
 
@@ -1099,7 +1191,7 @@
 
                     <div class="controls-row" style="border-top:1px solid var(--border-subtle);padding-top:9px;">
                         <div class="ctrl-group">
-                            <label for="max-flight-mins">⏳ Max RT</label>
+                            <label for="max-flight-mins">⏳ Max Round-Trip</label>
                             <select id="max-flight-mins" class="ctrl-select" onchange="onGuardrailInputChange()">
                                 <option value="0" selected>Any Flight Time</option>
                                 <option value="60">&le; 1h RT (Mex/Cay/Can)</option>
@@ -1111,37 +1203,21 @@
                             </select>
                         </div>
                         <div class="ctrl-group">
-                            <label for="guard-energy-cap">⚡ Regen</label>
-                            <select id="guard-energy-cap" class="ctrl-select" onchange="onGuardrailInputChange()" title="Flag or hide flights that overflow natural energy/nerve regeneration">
-                                <option value="150" selected>Donator 150E (5h)</option>
-                                <option value="100">Non-Donator 100E (3h20m)</option>
+                            <label for="guard-energy-cap">⚡ Energy Regen</label>
+                            <select id="guard-energy-cap" class="ctrl-select" onchange="onGuardrailInputChange()" title="Flag flights that overflow natural energy or nerve regeneration">
+                                <option value="150" selected>Donator 150E (5h cap)</option>
+                                <option value="100">Non-Donator 100E (3h 20m)</option>
                             </select>
-                            <button type="button" class="pill-btn guard-pill" id="btn-guard-0e" onclick="toggleGuardFilter('noEnergyWaste', this)" title="Hide flights that waste natural Energy/Nerve or collide with Drug CD">⚡ 0E/0N Waste</button>
-                            <label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;text-transform:none;font-size:0.76em;color:#34d399;" title="Travel 2.0 Patch #438: Pack 1 Xanax / Med in outbound luggage (-1 cargo slot) to dose mid-flight and clear Drug CD collision">
+                            <button type="button" class="pill-btn" id="btn-guard-0e" onclick="toggleGuardFilter('noEnergyWaste', this)" title="Hide flights that waste natural Energy/Nerve or overlap with your Drug Cooldown">No Energy Waste</button>
+                            <label style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;text-transform:none;font-size:12px;color:var(--text-primary);" title="Travel 2.0: Pack 1 Xanax / Med in outbound luggage (-1 cargo slot) to consume mid-flight and clear Drug Cooldown conflicts">
                                 <input type="checkbox" id="chk-pack-xanax" onchange="onPackXanaxToggle()" style="accent-color:#10b981;"> 💊 Pack Xanax (-1 slot)
                             </label>
                         </div>
                         <div class="ctrl-group">
                             <label for="budget-input">💼 Budget</label>
-                            <input type="text" id="budget-input" class="ctrl-input wide" placeholder="Unlimited ($)" oninput="onBudgetInputChange()" title="Enter max cash to carry (e.g. 5000000 or 5m)">
+                            <input type="text" id="budget-input" class="ctrl-input wide" placeholder="Unlimited ($)" oninput="onBudgetInputChange()" title="Max cash to spend abroad (e.g. 5000000 or 5m)">
                             <button type="button" class="btn-ctrl" id="btn-use-wallet" onclick="applyWalletBudget()" style="display:none;" title="Limit budget to live Torn wallet cash">Use Wallet</button>
-                            <button type="button" class="pill-btn guard-pill" id="btn-guard-mug" onclick="toggleGuardFilter('lowMugRisk', this)" title="Hide runs requiring $5M+ cash abroad (High Mug Risk)">🛡️ &lt;$5M Mug</button>
-                        </div>
-                        <div class="ctrl-group">
-                            <label for="sort-select">Sort</label>
-                            <select id="sort-select" class="ctrl-select" onchange="applySort()">
-                                <option value="profitPerHr">Profit / Hour ($/hr)</option>
-                                <option value="totalProfit">Total Trip Profit</option>
-                                <option value="profit">Unit Profit</option>
-                                <option value="roi">ROI %</option>
-                                <option value="flightTimeMins">Shortest Flight (RT)</option>
-                                <option value="stock">Stock Available</option>
-                                <option value="cost">Buy Cost</option>
-                                <option value="marketPrice">Net Sell Value</option>
-                                <option value="capital">Capital Needed</option>
-                                <option value="name">Item Name</option>
-                                <option value="country">Country</option>
-                            </select>
+                            <button type="button" class="pill-btn" id="btn-guard-mug" onclick="toggleGuardFilter('lowMugRisk', this)" title="Hide runs carrying $5M+ cash abroad (High Mug Risk)">Low Mug Risk (&lt;$5M)</button>
                         </div>
                     </div>
 
@@ -1152,14 +1228,14 @@
         </div>
 
         <!-- ===================================================================
-             VIEW PANE 1: BY ITEM (STREAMLINED 9-COLUMN PROFIT TABLE + DRAWER)
+             VIEW PANE 1: BY ITEM (CLEAN 7-COLUMN PROFIT TABLE + EXPAND DRAWER)
              =================================================================== -->
         <div class="view-pane active" id="pane-items">
             <div class="table-card">
                 <div class="table-header">
-                    <p class="table-title">📊 Live Foreign Profit Rankings <span style="font-size:0.8em;font-weight:600;color:var(--text-tertiary);text-transform:none;">(Click any row for NPC vs Market, Split-Cargo &amp; Snipe Timing)</span></p>
+                    <p class="table-title">📊 Live Foreign Profit Rankings <span style="font-size:12px;font-weight:500;color:var(--text-secondary);text-transform:none;">Click any row for City NPC comparison, exact cash copy &amp; restock timing</span></p>
                     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-                        <span id="row-count" style="font-size:0.78em;color:var(--text-dim);">Loading data...</span>
+                        <span id="row-count" style="font-size:12px;color:var(--text-secondary);">Loading data...</span>
                     </div>
                 </div>
                 <div class="table-wrap">
@@ -1167,20 +1243,18 @@
                         <thead>
                             <tr>
                                 <th data-sort-col="rank" onclick="sortBy('rank')"># <span class="sort-arrow">↕</span></th>
-                                <th data-sort-col="name" onclick="sortBy('name')">Item &amp; Liquidity <span class="sort-arrow">↕</span></th>
+                                <th class="col-item" data-sort-col="name" onclick="sortBy('name')">Item <span class="sort-arrow">↕</span></th>
                                 <th data-sort-col="country" onclick="sortBy('country')">Country <span class="sort-arrow">↕</span></th>
-                                <th data-sort-col="flightTimeMins" onclick="sortBy('flightTimeMins')">Flight &amp; Snipe <span class="sort-arrow">↕</span></th>
-                                <th data-sort-col="stock" onclick="sortBy('stock')">Stock &amp; Restock <span class="sort-arrow">↕</span></th>
+                                <th data-sort-col="flightTimeMins" onclick="sortBy('flightTimeMins')">Flight (RT) <span class="sort-arrow">↕</span></th>
+                                <th data-sort-col="stock" onclick="sortBy('stock')">Stock <span class="sort-arrow">↕</span></th>
                                 <th data-sort-col="cost" onclick="sortBy('cost')">Buy → Net Sell <span class="sort-arrow">↕</span></th>
-                                <th data-sort-col="capital" onclick="sortBy('capital')" title="Click exact cash badge to copy">Capital &amp; Mug <span class="sort-arrow">↕</span></th>
-                                <th data-sort-col="totalProfit" onclick="sortBy('totalProfit')">Trip / Unit <span class="sort-arrow">↕</span></th>
-                                <th data-sort-col="profitPerHr" onclick="sortBy('profitPerHr')" class="sorted">$/hr &amp; Actions <span class="sort-arrow">↓</span></th>
+                                <th data-sort-col="profitPerHr" onclick="sortBy('profitPerHr')" class="sorted">Trip Profit / $/hr <span class="sort-arrow">↓</span></th>
                             </tr>
                         </thead>
                         <tbody id="profits-tbody">
-                            <tr class="shimmer-row"><td colspan="9"><div class="shimmer-line"></div></td></tr>
-                            <tr class="shimmer-row"><td colspan="9"><div class="shimmer-line" style="width:80%"></div></td></tr>
-                            <tr class="shimmer-row"><td colspan="9"><div class="shimmer-line" style="width:90%"></div></td></tr>
+                            <tr class="shimmer-row"><td colspan="7"><div class="shimmer-line"></div></td></tr>
+                            <tr class="shimmer-row"><td colspan="7"><div class="shimmer-line" style="width:80%"></div></td></tr>
+                            <tr class="shimmer-row"><td colspan="7"><div class="shimmer-line" style="width:90%"></div></td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -1211,11 +1285,11 @@
                         <div class="ctrl-group">
                             <label for="mus-set-type">Collection</label>
                             <select id="mus-set-type" class="ctrl-select" onchange="renderMuseumPlanner()">
-                                <option value="plushie" selected>🧸 Plushie Set (13 items → 10 pts)</option>
-                                <option value="flower">🌸 Flower Set (11 items → 10 pts)</option>
-                                <option value="arrowhead">🏹 6× Arrowhead Point Set (6 Contraband → 25 pts)</option>
-                                <option value="fossil">🦕 Patagonian Fossil (Argentina → 20 pts)</option>
-                                <option value="meteorite">☄️ Meteorite Fragment (Argentina → 15 pts)</option>
+                                <option value="plushie" selected>🧸 Plushie Set (13 → 10 pts)</option>
+                                <option value="flower">🌸 Flower Set (11 → 10 pts)</option>
+                                <option value="arrowhead">🏹 Arrowhead Set (6 → 25 pts)</option>
+                                <option value="fossil">🦕 Patagonian Fossil (20 pts)</option>
+                                <option value="meteorite">☄️ Meteorite Fragment (15 pts)</option>
                             </select>
                         </div>
                         <div class="ctrl-group">
@@ -1223,16 +1297,16 @@
                             <input type="number" id="mus-target-sets" class="ctrl-input" value="10" min="1" max="1000" onchange="renderMuseumPlanner()">
                         </div>
                         <div class="ctrl-group">
-                            <label for="mus-point-price" title="Auto-synced from Torn Points Market (no $45k Pawn Shop floor)">Point Price ($)</label>
+                            <label for="mus-point-price" title="Auto-synced from Torn live Points Market">Point Price ($)</label>
                             <input type="number" id="mus-point-price" class="ctrl-input wide" value="33500" min="5000" max="200000" step="100" onchange="onManualPointPriceEdit()">
                         </div>
-                        <label style="display:inline-flex;align-items:center;gap:5px;font-size:0.8em;font-weight:700;color:#10b981;cursor:pointer;">
+                        <label style="display:inline-flex;align-items:center;gap:5px;font-size:12.5px;font-weight:700;color:#10b981;cursor:pointer;">
                             <input type="checkbox" id="mus-day-bonus" onchange="renderMuseumPlanner()" style="accent-color:#10b981;"> 🎉 Museum Day (+10% Points)
                         </label>
                     </div>
                     <div id="museum-arbitrage-summary" style="margin-bottom:12px;"></div>
                     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-                        <span style="font-size:0.75em;font-weight:800;color:var(--text-tertiary);text-transform:uppercase;">Check Off Owned Pieces / Enter Inventory</span>
+                        <span style="font-size:11.5px;font-weight:800;color:var(--text-tertiary);text-transform:uppercase;">Check Off Owned Pieces / Enter Inventory</span>
                         <button type="button" class="btn-ctrl" onclick="clearMuseumOwned()">Clear Owned</button>
                     </div>
                     <div class="museum-pieces-grid" id="museum-pieces-grid"></div>
@@ -1254,11 +1328,19 @@
                         <span>📈 Profit/Hr vs. Round-Trip Flight Time Sweet-Spot Map</span>
                         <span class="mini-badge green">Click bubble to inspect</span>
                     </h3>
-                    <div style="position:relative;height:340px;width:100%;">
+                    <div style="position:relative;height:330px;width:100%;">
                         <canvas id="travel-scatter-canvas"></canvas>
                     </div>
-                    <div style="font-size:0.74em;color:var(--text-tertiary);margin-top:8px;">
-                        Vertical guard lines mark <strong>3h 20m (100E Full Regen)</strong> and <strong>5h 00m (150E Donator Cap)</strong>. Top-left quadrant = highest $/hr with zero energy waste.
+                    <div class="scatter-legend" id="scatter-legend-bar">
+                        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                            <span class="sl-item"><span class="sl-dot" style="background:#38bdf8;"></span>Plushie</span>
+                            <span class="sl-item"><span class="sl-dot" style="background:#f472b6;"></span>Flower</span>
+                            <span class="sl-item"><span class="sl-dot" style="background:#c084fc;"></span>Contraband</span>
+                            <span class="sl-item"><span class="sl-dot" style="background:#10b981;"></span>Drug</span>
+                            <span class="sl-item"><span class="sl-dot" style="background:#f59e0b;"></span>Temp/Wpn</span>
+                            <span class="sl-item"><span class="sl-dot" style="background:#94a3b8;"></span>Other</span>
+                        </div>
+                        <span style="font-family:var(--font-mono);">Bubble Size = Total Trip Profit • Guard Lines: 3h 20m (100E) &amp; 5h 00m (150E)</span>
                     </div>
                 </div>
                 <div class="tactical-panel">
@@ -1277,7 +1359,7 @@
                                 <option value="hardcore">Hardcore Pilot (16h/day)</option>
                             </select>
                         </div>
-                        <label style="display:inline-flex;align-items:center;gap:5px;font-size:0.78em;color:var(--text-secondary);cursor:pointer;">
+                        <label style="display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--text-secondary);cursor:pointer;">
                             <input type="checkbox" id="sim-pi-upkeep" checked onchange="renderDailySimulator()" style="accent-color:#f59e0b;"> Deduct PI Upkeep ($352.5k/day)
                         </label>
                     </div>
@@ -1296,8 +1378,8 @@
                         <span>🏅 50-Flight Country Honor Bar &amp; Merit Tracker</span>
                         <span id="merits-completed-badge" class="mini-badge green">0 / 11 Completed</span>
                     </h3>
-                    <div style="font-size:0.76em;color:var(--text-tertiary);margin-bottom:10px;">
-                        Every country grants an Honor Bar merit at <strong>50 flights</strong>. Logging a trip from the table or Country cards automatically increments that destination's flight counter.
+                    <div style="font-size:12px;color:var(--text-tertiary);margin-bottom:10px;">
+                        Every country grants an Honor Bar merit at <strong>50 flights</strong>. Logging a trip from an expanded row or Country card automatically increments that destination's flight counter.
                     </div>
                     <div class="merit-grid" id="merit-grid"></div>
                 </div>
@@ -1305,7 +1387,7 @@
                     <div class="tactical-panel">
                         <h3>
                             <span>🔔 Live Restock &amp; Target $/Hr Alert Sentinel</span>
-                            <label style="display:inline-flex;align-items:center;gap:5px;font-size:0.8em;cursor:pointer;text-transform:none;">
+                            <label style="display:inline-flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;text-transform:none;">
                                 <input type="checkbox" id="chk-restock-alerts" onchange="toggleRestockAlertSentinel()" style="accent-color:#10b981;"> Arm Audio + Browser Alerts
                             </label>
                         </h3>
@@ -1316,7 +1398,7 @@
                             </div>
                             <button type="button" class="btn-ctrl" onclick="testTravelAlertChime()">🔊 Test Chime</button>
                         </div>
-                        <div id="alert-watched-list" style="margin-top:10px;font-size:0.78em;color:var(--text-secondary);"></div>
+                        <div id="alert-watched-list" style="margin-top:10px;font-size:12px;color:var(--text-secondary);"></div>
                     </div>
 
                     <div class="tactical-panel">
@@ -1483,7 +1565,7 @@ let hasUserSetRehabDiscount = savedRehabDiscRaw !== null;
 
 let activeCategory = 'all';
 let currentFilter = 'all';
-let inStockOnly = false;
+let inStockOnly = true;
 let guardFilters = {
     profitable: false,
     watched: false,
@@ -1710,18 +1792,19 @@ function getLandingSnipeIntel(oneWayMins, item) {
     const landTotalMins = landMs / 60000;
     const offsetPastTick = ((landTotalMins % 15) + 15) % 15;
     let snipeBadge = '';
-    let snipeNote = `Lands ${landTct} (+${Math.round(offsetPastTick)}m past quarter-hour tick)`;
+    let snipeNote = `Lands ${landTct} (+${Math.round(offsetPastTick)}m past tick)`;
     if (offsetPastTick >= 0.6 && offsetPastTick <= 4.3) {
-        snipeBadge = `<span class="mini-badge green" title="Ideal departure: lands +${Math.round(offsetPastTick)}m after a :00/:15/:30/:45 restock tick with full 15s landing protection">🟢 Snipe +${Math.max(1, Math.round(offsetPastTick))}m</span>`;
-        snipeNote = `Ideal takeoff NOW: lands ${landTct} right after restock tick with full 15s landing protection.`;
+        const minsAfter = Math.max(1, Math.round(offsetPastTick));
+        snipeBadge = `<span class="mini-badge green" title="Ideal departure: lands +${minsAfter}m after a :00/:15/:30/:45 restock tick with full 15s landing protection">🟢 Land +${minsAfter}m</span>`;
+        snipeNote = `Ideal takeoff now: lands ${landTct} (+${minsAfter}m after restock tick, full 15s protection).`;
     } else if (offsetPastTick >= 11.5) {
         const waitMins = Math.max(1, Math.ceil(15 - offsetPastTick + 1));
         const optDepartTct = fmtTctClock(nowMs + waitMins * 60000);
-        snipeBadge = `<span class="mini-badge amber" title="Leaving now lands ${Math.round(15 - offsetPastTick)}m BEFORE a restock tick. Wait ${waitMins}m (${optDepartTct}) to land right after restock!">⏳ Wait ${waitMins}m</span>`;
-        snipeNote = `Hold ${waitMins}m (depart ${optDepartTct}) so you land +1m AFTER the restock tick instead of waiting exposed.`;
+        snipeBadge = `<span class="mini-badge amber" title="Leaving now lands ${Math.round(15 - offsetPastTick)}m before a restock tick. Wait ${waitMins}m (${optDepartTct}) to land right after restock!">⏳ Wait ${waitMins}m</span>`;
+        snipeNote = `Wait ${waitMins}m (depart ${optDepartTct}) to land +1m after the restock tick.`;
     }
 
-    // Predicted Restock & Snipe Takeoff Clock for Out-of-Stock items
+    // Predicted Restock & Snipe Takeoff Clock ONLY for Out-of-Stock items
     let restockInfo = null;
     if (Number(item.stock || 0) <= 0) {
         const predUnix = item.predictedRestock?.unix || (item.nextRestockIso ? Math.floor(Date.parse(item.nextRestockIso) / 1000) : null);
@@ -1729,17 +1812,23 @@ function getLandingSnipeIntel(oneWayMins, item) {
             const nowSec = Math.floor(nowMs / 1000);
             const effectiveRestockSec = predUnix > nowSec ? predUnix : (Math.ceil((nowSec + 1) / 900) * 900);
             const restockMs = effectiveRestockSec * 1000;
-            const idealTakeoffMs = restockMs - (oneWayMins * 60000) + 60000; // Land +1m after restock
-            const minsUntilRestock = Math.max(0, Math.round((restockMs - nowMs) / 60000));
+            const rawIdealTakeoffMs = restockMs - (oneWayMins * 60000) + 60000; // Land +1m after restock
+            const minsUntilRestock = Math.max(1, Math.ceil((restockMs - nowMs) / 60000));
             const overdue = Boolean(item.predictedRestock?.overdue || predUnix <= nowSec);
+            const takeoffPassed = rawIdealTakeoffMs < (nowMs - 120000);
+            const flyNowToSnipe = !takeoffPassed && rawIdealTakeoffMs <= (nowMs + 120000);
+            const futureTakeoffMs = takeoffPassed ? null : Math.max(nowMs, rawIdealTakeoffMs);
+            const takeoffWaitMins = futureTakeoffMs ? Math.max(0, Math.round((futureTakeoffMs - nowMs) / 60000)) : null;
             restockInfo = {
                 restockTct: fmtTctClock(restockMs),
                 minsUntilRestock,
                 overdue,
                 source: item.predictedRestock?.source || 'quarter_tick',
-                idealTakeoffMs,
-                idealTakeoffTct: fmtTctClock(idealTakeoffMs),
-                flyNowToSnipe: idealTakeoffMs <= nowMs + 120000 && restockMs >= nowMs + Math.max(2, oneWayMins - 3) * 60000
+                idealTakeoffMs: futureTakeoffMs,
+                idealTakeoffTct: flyNowToSnipe ? 'NOW' : (futureTakeoffMs ? fmtTctClock(futureTakeoffMs) : null),
+                takeoffWaitMins,
+                takeoffPassed,
+                flyNowToSnipe
             };
         }
     }
@@ -1921,6 +2010,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (pxEl) pxEl.checked = packXanaxMed;
     const htBtn = document.getElementById('btn-hide-traps');
     if (htBtn) htBtn.classList.toggle('active', guardFilters.hideTraps);
+    const stBtn = document.getElementById('btn-quick-instock');
+    if (stBtn) stBtn.classList.toggle('active', inStockOnly);
     const ecEl = document.getElementById('guard-energy-cap');
     if (ecEl) ecEl.value = String(energyCapSetting);
     const bInp = document.getElementById('budget-input');
@@ -1928,6 +2019,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const mpEl = document.getElementById('mus-point-price');
     if (mpEl) mpEl.value = String(livePointPrice);
 
+    syncModeToBuilderBadge();
     restoreCapacityBuilderInputs();
     renderCountryChips();
     updateWatchedBadge();
@@ -1968,7 +2060,7 @@ async function loadProfits(showSpin = false) {
         const headers = apiKey ? { 'x-api-key': apiKey } : {};
         const res = await fetch('/api/travel-profits', { headers });
         if (res.status === 401) {
-            tbody.innerHTML = `<tr><td colspan="9" style="padding:30px;text-align:center;color:var(--text-dim);">⚠️ Connect your Torn API key in Settings (top right) to load live travel profits.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="7" style="padding:30px;text-align:center;color:var(--text-dim);">⚠️ Connect your Torn API key in Settings (top right) to load live travel profits.</td></tr>`;
             return;
         }
         const data = await res.json();
@@ -2029,7 +2121,7 @@ async function loadProfits(showSpin = false) {
         document.getElementById('last-updated').textContent = 'Updated ' + new Date().toLocaleTimeString();
     } catch (err) {
         if (!allItems.length) {
-            tbody.innerHTML = `<tr><td colspan="9" style="padding:30px;text-align:center;color:var(--accent-crimson, #ef4444);">❌ ${escHtml(err.message)}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="7" style="padding:30px;text-align:center;color:var(--accent-crimson, #ef4444);">❌ ${escHtml(err.message)}</td></tr>`;
         }
     } finally {
         if (refreshBtn) {
@@ -2044,21 +2136,21 @@ function applyLivePlayerContextBanner(ctx) {
     const walletBtn = document.getElementById('btn-use-wallet');
     if (walletBtn && ctx.wallet >= 0) {
         walletBtn.style.display = 'inline-flex';
-        walletBtn.textContent = `💼 Wallet (${fmtCompactMoney(ctx.wallet)})`;
+        walletBtn.textContent = `Wallet (${fmtCompactMoney(ctx.wallet)})`;
     }
     if (!banner) return;
     const parts = [];
-    if (ctx.name) parts.push(`🟢 <strong>${escHtml(ctx.name)}</strong>`);
-    if (ctx.energy) parts.push(`⚡ Energy: <strong>${ctx.energy.current}/${ctx.energy.maximum}</strong>`);
-    if (ctx.nerve) parts.push(`🧠 Nerve: <strong>${ctx.nerve.current}/${ctx.nerve.maximum}</strong>`);
-    if (ctx.cooldowns && ctx.cooldowns.drug > 0) parts.push(`💊 Drug CD: <strong>${fmtMins(ctx.cooldowns.drug / 60)}</strong>`);
-    else parts.push(`💊 Drug CD: <strong>Ready</strong>`);
+    if (ctx.name) parts.push(`<strong>${escHtml(ctx.name)}</strong>`);
+    if (ctx.energy) parts.push(`⚡ ${ctx.energy.current}/${ctx.energy.maximum}E`);
+    if (ctx.nerve) parts.push(`🧠 ${ctx.nerve.current}/${ctx.nerve.maximum}N`);
+    if (ctx.cooldowns && ctx.cooldowns.drug > 0) parts.push(`💊 CD ${fmtMins(ctx.cooldowns.drug / 60)}`);
+    else parts.push(`💊 CD Ready`);
     if (ctx.travel && ctx.travel.timeLeft > 0) {
-        parts.push(`✈️ In Flight → <strong>${escHtml(ctx.travel.destination)} (${fmtMins(ctx.travel.timeLeft / 60)} left)</strong>`);
+        parts.push(`✈️ To ${escHtml(ctx.travel.destination)} (${fmtMins(ctx.travel.timeLeft / 60)})`);
     } else if (ctx.travel && ctx.travel.destination && ctx.travel.destination !== 'Torn') {
-        parts.push(`🌍 Abroad in <strong>${escHtml(ctx.travel.destination)}</strong>`);
+        parts.push(`🌍 ${escHtml(ctx.travel.destination)}`);
     }
-    banner.innerHTML = parts.join(' &nbsp;•&nbsp; ');
+    banner.innerHTML = parts.join(' • ');
 }
 
 function refreshAllViews() {
@@ -2123,8 +2215,9 @@ function applyPlaystylePreset(presetName) {
         guardFilters.hideTraps = true;
         const sbEl = document.getElementById('sell-basis');
         if (sbEl) {
-            sellBasis = 'smart_auto';
-            sbEl.value = 'smart_auto';
+            sellBasis = 'npc_museum';
+            sbEl.value = 'npc_museum';
+            localStorage.setItem('travelSellBasis', sellBasis);
         }
         sortKey = 'profitPerHr';
         sortAsc = false;
@@ -2147,8 +2240,6 @@ function applyPlaystylePreset(presetName) {
     if (htBtn) htBtn.classList.toggle('active', guardFilters.hideTraps);
     const zBtn = document.getElementById('btn-guard-0e');
     if (zBtn) zBtn.classList.toggle('active', guardFilters.noEnergyWaste);
-    const sortSel = document.getElementById('sort-select');
-    if (sortSel) sortSel.value = sortKey;
     document.querySelectorAll('#filter-pills .pill-btn[data-filter]').forEach(b => {
         const df = b.getAttribute('data-filter');
         if (!['instock', 'profitable', 'watched'].includes(df)) {
@@ -2250,30 +2341,11 @@ function renderPresetContextBox() {
 // ── 4-Card KPI Strip & Smart Advisor Banner ──────────────────────────────────
 function updateKPIs() {
     if (!allItems.length) return;
-    const computed = allItems.map(getTravelMetrics);
-    const liquidInStock = computed.filter(i => !i.isOutOfStock && i.liquidityTier !== 'trap');
-    const inStockProfit = liquidInStock.filter(i => i.totalProfit > 0);
-    const pool = inStockProfit.length ? inStockProfit : liquidInStock;
-
-    const bestRate = [...pool].sort((a, b) => b.profitPerHr - a.profitPerHr)[0];
-    document.getElementById('kpi-best-rate').textContent = bestRate ? fmtSignedMoney(bestRate.profitPerHr) : '—';
-    document.getElementById('kpi-best-name').textContent = bestRate ? `${bestRate.name} (${bestRate.country})` : '—';
-
-    const bestTotal = [...pool].sort((a, b) => b.totalProfit - a.totalProfit)[0];
-    document.getElementById('kpi-best-total').textContent = bestTotal ? fmtSignedMoney(bestTotal.totalProfit) : '—';
-    document.getElementById('kpi-best-total-name').textContent = bestTotal ? `${bestTotal.name} (${bestTotal.country})` : '—';
-
-    const bestContra = [...inStockProfit].filter(i => i.category === 'contraband').sort((a, b) => b.profitPerHr - a.profitPerHr)[0];
-    document.getElementById('kpi-best-contra').textContent = bestContra ? fmtSignedMoney(bestContra.profitPerHr) : '—';
-    document.getElementById('kpi-best-contra-name').textContent = bestContra
-        ? `${bestContra.name} (${bestContra.sellArb.npcShop || bestContra.country})`
-        : 'No Contraband in stock';
-
     const inStock = allItems.filter(i => i.stock > 0).length;
     const outStock = allItems.filter(i => i.stock <= 0).length;
     const stockSub = document.getElementById('kpi-in-stock-sub');
     if (stockSub) {
-        stockSub.textContent = `${inStock} in stock • ${outStock} OOS • ${currentFeedLabel.replace(' LIVE', '')}`;
+        stockSub.textContent = `${inStock} in stock • ${outStock} OOS`;
     }
 }
 
@@ -2287,12 +2359,22 @@ function renderAdvisorBanner() {
         .filter(i => (!pick1 || i.id !== pick1.id) && i.roundTripMins <= 120 && !i.exceedsBudget && (i.category === 'plushie' || i.category === 'flower' || i.liquidityTier === 'instant_npc'))
         .sort((a, b) => b.profitPerHr - a.profitPerHr)[0]
         || [...computed].filter(i => (!pick1 || i.id !== pick1.id) && i.roundTripMins <= 120).sort((a, b) => b.profitPerHr - a.profitPerHr)[0];
-    const pick3 = [...computed]
-        .filter(i => (!pick1 || i.id !== pick1.id) && (!pick2 || i.id !== pick2.id) && i.category === 'contraband')
-        .sort((a, b) => b.profitPerHr - a.profitPerHr)[0]
-        || [...computed].filter(i => (!pick1 || i.id !== pick1.id) && (!pick2 || i.id !== pick2.id)).sort((a, b) => b.totalProfit - a.totalProfit)[0];
 
-    function fillSlot(slotNum, item, fallbackMsg) {
+    // Strictly direct City NPC shop items ONLY (Pawn Shop, Nikeh Performance, Jewelry Store, Pharmacy — never Museum barter collectibles)
+    const allInStockComputed = allItems.map(getTravelMetrics).filter(i => !i.isOutOfStock && !i.exceedsBudget);
+    const npcPool = allInStockComputed
+        .filter(i => i.sellArb && i.sellArb.npcFixed > 0 && i.sellArb.npcShop && i.sellArb.npcShop !== 'Museum')
+        .map(i => {
+            const npcTrip = (i.sellArb.npcFixed - i.cost) * i.tripUnits - i.flightCost;
+            const npcPph = i.roundTripMins > 0 ? (npcTrip / i.roundTripMins) * 60 : 0;
+            return { item: i, npcTrip, npcPph };
+        })
+        .filter(x => x.npcTrip > 0)
+        .sort((a, b) => b.npcPph - a.npcPph);
+    const pick3Entry = npcPool.find(x => (!pick1 || x.item.id !== pick1.id) && (!pick2 || x.item.id !== pick2.id)) || npcPool[0] || null;
+    const pick3 = pick3Entry ? pick3Entry.item : null;
+
+    function fillSlot(slotNum, item, fallbackMsg, overrideMetrics) {
         const tEl = document.getElementById(`adv-${slotNum}-title`);
         const mEl = document.getElementById(`adv-${slotNum}-meta`);
         const bEl = document.getElementById(`adv-${slotNum}-badge`);
@@ -2300,33 +2382,55 @@ function renderAdvisorBanner() {
         if (!tEl || !mEl || !aEl) return;
         if (!item) {
             tEl.textContent = fallbackMsg;
-            mEl.textContent = 'Try relaxing filters or refreshing stock';
+            mEl.textContent = 'Check OOS items or adjust Budget / Mode';
+            if (bEl) {
+                bEl.textContent = slotNum === 3 ? '0% Tax • City NPC' : 'Waiting';
+                bEl.className = 'mini-badge ' + (slotNum === 3 ? 'purple' : 'amber');
+            }
             aEl.innerHTML = '';
             return;
         }
-        tEl.innerHTML = `${item.flag} ${escHtml(item.name)} <span style="font-weight:600;color:var(--text-secondary);">(${escHtml(item.country)})</span>`;
-        const npcTag = item.sellArb.npcShop && item.sellArb.npcFixed > 0 ? ` • <span style="color:#34d399;">🏪 ${escHtml(item.sellArb.npcShop)}</span>` : '';
-        mEl.innerHTML = `<span style="color:#38bdf8;font-weight:800;">${fmtSignedMoney(item.profitPerHr)}/hr</span> • <span>${fmtSignedMoney(item.totalProfit)} trip</span> • <span>${fmtMins(item.roundTripMins)} RT</span>${npcTag}`;
-        if (bEl) {
-            if (slotNum === 3 && item.sellArb.npcFixed > 0) {
-                bEl.textContent = item.sellArb.requiresSportsSciEdu ? '🎓 Sports Sci' : '0% Tax NPC';
+        const shortCtry = TRAVEL_2_COUNTRIES[item.country]?.short || item.country;
+        tEl.innerHTML = `${item.flag} ${escHtml(item.name)} <span style="font-weight:600;color:var(--text-secondary);">(${escHtml(shortCtry)})</span>`;
+
+        if (slotNum === 3 && overrideMetrics) {
+            mEl.innerHTML = `<span style="color:#c084fc;font-weight:800;">${fmtCompactMoney(overrideMetrics.npcPph)}/hr</span> • <span>${fmtCompactMoney(overrideMetrics.npcTrip)}</span> • <span>${fmtMins(item.roundTripMins)}</span>`;
+            mEl.title = `${fmtSignedMoney(overrideMetrics.npcPph)}/hr • ${fmtSignedMoney(overrideMetrics.npcTrip)} trip • Sell to ${item.sellArb.npcShop} (0% tax)`;
+            if (bEl) {
+                bEl.textContent = item.sellArb.requiresSportsSciEdu ? `${item.sellArb.npcShop} (Edu)` : `0% • ${item.sellArb.npcShop}`;
                 bEl.className = 'mini-badge ' + (item.sellArb.requiresSportsSciEdu ? 'amber' : 'purple');
-            } else {
-                bEl.textContent = item.energyWasted === 0 ? '0E Wasted' : `⚡ -${item.energyWasted}E`;
-                bEl.className = 'mini-badge ' + (item.energyWasted === 0 ? 'green' : 'amber');
+                bEl.title = item.sellArb.requiresSportsSciEdu
+                    ? 'Requires Bachelor of Sports Science (EDU2120) education to sell to Nikeh Performance for 0% tax cash'
+                    : `Instant 0% tax, 0% mug sale to Torn City ${item.sellArb.npcShop}`;
+            }
+        } else {
+            mEl.innerHTML = `<span style="color:#38bdf8;font-weight:800;">${fmtCompactMoney(item.profitPerHr)}/hr</span> • <span>${fmtCompactMoney(item.totalProfit)}</span> • <span>${fmtMins(item.roundTripMins)}</span>`;
+            mEl.title = `${fmtSignedMoney(item.profitPerHr)}/hr • ${fmtSignedMoney(item.totalProfit)} trip • ${fmtMins(item.roundTripMins)} round-trip`;
+            if (bEl) {
+                if (slotNum === 2) {
+                    bEl.textContent = `${fmtMins(item.roundTripMins)} RT`;
+                    bEl.className = 'mini-badge cyan';
+                    bEl.title = 'Fast turnaround ≤ 2h flight';
+                } else {
+                    bEl.textContent = item.energyWasted === 0 ? 'No E Waste' : `-${item.energyWasted}E Waste`;
+                    bEl.className = 'mini-badge ' + (item.energyWasted === 0 ? 'green' : 'amber');
+                    bEl.title = item.energyWasted === 0
+                        ? 'Flight finishes before your natural energy bar hits full'
+                        : `Round trip overflows your natural energy cap by ${item.energyWasted}E`;
+                }
             }
         }
+
         aEl.innerHTML = `
-            <button type="button" class="act-link" onclick="focusCountryInTable('${escHtml(item.country)}')">🎯 ${escHtml(TRAVEL_2_COUNTRIES[item.country]?.short || item.country)}</button>
-            <button type="button" class="act-link" onclick="copyExactCash(${item.cashAbroad}, this, event)" title="Copy exact abroad purchase cash">💵 ${fmtCompactMoney(item.cashAbroad)}</button>
-            <button type="button" class="act-link" onclick="logTripForItem(${item.id}, '${escHtml(item.country)}')">📝 Log</button>
-            <a href="https://www.torn.com/travelagency.php" target="_blank" rel="noopener" class="act-link">✈️ Fly</a>
+            <button type="button" class="act-link" onclick="focusCountryInTable('${escHtml(item.country)}')" title="Filter Profit Table to ${escHtml(item.country)}">${escHtml(shortCtry)}</button>
+            <button type="button" class="act-link" onclick="copyExactCash(${item.cashAbroad}, this, event)" title="Copy exact abroad purchase cash ($${item.cashAbroad.toLocaleString()})">💵 ${fmtCompactMoney(item.cashAbroad)}</button>
+            <a href="https://www.torn.com/travelagency.php" target="_blank" rel="noopener" class="act-link">Fly ↗</a>
         `;
     }
 
-    fillSlot(1, pick1, 'No zero-waste runs match current budget');
-    fillSlot(2, pick2, 'No short-haul runs currently in stock');
-    fillSlot(3, pick3, 'No Contraband currently in stock');
+    fillSlot(1, pick1, 'No zero-waste runs match current filters');
+    fillSlot(2, pick2, 'No fast runs (≤ 2h) in stock');
+    fillSlot(3, pick3, 'No profitable City NPC items in stock', pick3Entry);
 }
 
 function toggleRowDrawer(watchKey, ev) {
@@ -2374,7 +2478,7 @@ function renderTable() {
         const maxSleepRt = Math.round(sleepHoursWindow * 60 * 1.35);
         items = items.filter(i => i.flightTimeMins >= 85 && i.roundTripMins <= Math.max(240, maxSleepRt));
     } else if (activePreset === 'npc_cash') {
-        items = items.filter(i => i.sellArb.npcFixed > 0);
+        items = items.filter(i => i.sellArb.npcFixed > 0 && i.sellArb.npcShop && i.sellArb.npcShop !== 'Museum');
     }
     if (inStockOnly) {
         items = items.filter(i => !i.isOutOfStock);
@@ -2437,7 +2541,7 @@ function renderTable() {
     document.getElementById('row-count').textContent = `${items.length} items • ${effNote}${bookMailing ? ' • -25% Book' : ''}`;
 
     if (!items.length) {
-        tbody.innerHTML = `<tr><td colspan="9" style="padding:30px;text-align:center;color:var(--text-dim);">No items match these filters. Try clearing filters or toggling In Stock off.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" style="padding:30px;text-align:center;color:var(--text-dim);">No items match these filters. Try adjusting Filters or toggling In Stock Only off.</td></tr>`;
         return;
     }
 
@@ -2458,84 +2562,50 @@ function renderTable() {
         const cSrc = (item.feedSource || countryFeedSourceMap[item.countryCode] || 'yata').toUpperCase();
         const splitPlan = computeSplitCargoPlan(item, byCountryMap.get(item.country));
 
-        // Liquidity, Crimes 2.0, Contraband NPC & Nikeh Sports Science Badges
-        let liqBadges = '';
-        if (item.liquidityTier === 'instant_npc') {
-            liqBadges += `<span class="mini-badge green" title="Instant 0% tax, 0% mug cash sale to Torn City ${escHtml(item.sellArb.npcShop)}">⚡ Instant NPC</span>`;
-        } else if (item.liquidityTier === 'high') {
-            liqBadges += `<span class="mini-badge cyan" title="High daily turnover &amp; fast market liquidity">🟢 Fast Liq</span>`;
+        // Col 2: MAX 1 clean tag on row; full breakdown lives inside Tactical Drawer
+        let itemSubTag = `<span>${cm.emoji} ${cm.label}</span>`;
+        if (item.sellArb.npcFixed > 0 && item.sellArb.npcShop && item.sellArb.npcShop !== 'Museum') {
+            const eduTitle = item.sellArb.requiresSportsSciEdu
+                ? `Instant 0% tax sale to ${item.sellArb.npcShop} ($${item.sellArb.npcFixed.toLocaleString()}) — requires Bachelor of Sports Science (EDU2120)`
+                : `Instant 0% tax, 0% mug sale to Torn City ${item.sellArb.npcShop} ($${item.sellArb.npcFixed.toLocaleString()})`;
+            const badgeCls = item.sellArb.requiresSportsSciEdu ? 'amber' : 'green';
+            itemSubTag = `<span class="mini-badge ${badgeCls}" title="${escHtml(eduTitle)}">Instant NPC • ${escHtml(item.sellArb.npcShop)}${item.sellArb.requiresSportsSciEdu ? ' (Edu)' : ''}</span>`;
+        } else if (item.sellArb.npcShop === 'Museum' || item.sellArb.museumPts > 0) {
+            const ptLbl = item.sellArb.museumPts === 4.1667 ? '25 pts/set' : `${item.sellArb.museumPts} pts`;
+            itemSubTag = `<span class="mini-badge purple" title="Museum / Set barter item (${ptLbl}) — not instant shop cash">Museum (${ptLbl})</span>`;
         } else if (item.liquidityTier === 'trap') {
-            liqBadges += `<span class="mini-badge red" title="Low-volume / novelty item — may sit unsold on Item Market">⚠️ Illiquid Trap</span>`;
-        }
-        if (item.isCrimes2Mat) {
-            liqBadges += `<span class="mini-badge cyan" title="High-demand Crimes 2.0 consumable/material">🧰 Crimes 2.0</span>`;
-        }
-
-        // Always display City NPC badge on Contraband items (Decision #2 + Nikeh Sports Sci Edu adjustment)
-        let npcInlineHtml = '';
-        if (item.category === 'contraband' && item.sellArb.npcShop) {
-            if (item.sellArb.npcFixed > 0) {
-                const d = item.sellArb.npcDeltaVsMkt5;
-                const dTxt = d !== null && d >= 0 ? ` (+${fmtCompactMoney(d)} vs Mkt)` : '';
-                const cls = (d !== null && d >= 0) ? 'green' : 'purple';
-                npcInlineHtml += `<span class="mini-badge ${cls}" title="Sell directly to ${escHtml(item.sellArb.npcShop)} in Torn City for $${item.sellArb.npcFixed.toLocaleString()} (0% tax, 0% mug risk)">🏪 ${escHtml(item.sellArb.npcShop)} ${fmtCompactMoney(item.sellArb.npcFixed)}${dTxt}</span>`;
-            } else if (item.sellArb.museumPts > 0) {
-                const ptLbl = item.sellArb.museumPts === 4.1667 ? '25 pts / 6-set' : `${item.sellArb.museumPts} pts`;
-                npcInlineHtml += `<span class="mini-badge purple" title="Redeemable in Torn Museum">${escHtml('🏛️ Museum ' + ptLbl)}</span>`;
-            }
-            if (item.sellArb.requiresSportsSciEdu) {
-                npcInlineHtml += `<span class="mini-badge amber" title="Requires Bachelor of Sports Science (EDU2120) education to unlock Nikeh Performance shop in Torn City">🎓 Sports Sci Edu</span>`;
-            }
+            itemSubTag = `<span class="mini-badge red" title="Low daily market turnover / novelty item — high risk of sitting unsold">Low Market Liquidity</span>`;
+        } else if (item.isCrimes2Mat) {
+            itemSubTag = `<span class="mini-badge cyan" title="High-demand Crimes 2.0 material / consumable">Crimes 2.0 • ${cm.label}</span>`;
         }
 
-        // Black Market Variable Price Deal Indicator
-        let dealHtml = '';
-        if (item.cbDeal) {
-            const pctStr = (item.cbDeal.dealPct > 0 ? '+' : '') + item.cbDeal.dealPct + '%';
-            if (item.cbDeal.dealTier === 'floor') {
-                dealHtml = `<span class="mini-badge green" title="Near foreign price floor ($${item.cbDeal.minCost.toLocaleString()}–$${item.cbDeal.maxCost.toLocaleString()})">🔥 Floor (${pctStr})</span>`;
-            } else if (item.cbDeal.dealTier === 'high') {
-                dealHtml = `<span class="mini-badge red" title="Above avg foreign cost ($${item.cbDeal.minCost.toLocaleString()}–$${item.cbDeal.maxCost.toLocaleString()})">High (${pctStr})</span>`;
-            }
-        }
-
-        // Stock & Predicted Restock / Snipe Takeoff
+        // Col 5: Stock count + concise freshness label (PROM/YATA source tag lives inside Expanded Drawer)
         let stockHtml = '';
         if (item.isOutOfStock) {
             const ri = item.snipe.restockInfo;
-            const rsBadge = ri
-                ? (ri.flyNowToSnipe
-                    ? `<span class="mini-badge green" title="Restock due ~${ri.restockTct} — depart now to land right after restock!">🚀 Fly Now → ${ri.restockTct}</span>`
-                    : `<span class="mini-badge cyan" title="${ri.overdue ? 'Eligible next :00/:15/:30/:45 tick' : 'Predicted restock (' + ri.source + ')'} • Ideal takeoff: ${ri.idealTakeoffTct}">${ri.overdue ? 'Due Next Tick' : 'Restock ' + ri.restockTct}</span>`)
-                : `<span class="mini-badge amber">Est ×${item.effectiveCap}</span>`;
-            stockHtml = `<div><span class="stock-none">OOS</span> ${rsBadge}</div>`;
-            if (ri && !ri.flyNowToSnipe) {
-                stockHtml += `<div class="sub-calc">🛫 Takeoff ${ri.idealTakeoffTct} • <span class="mini-badge ${age.cls}">${age.label}</span></div>`;
-            } else {
-                stockHtml += `<div class="sub-calc"><span class="mini-badge ${age.cls}">${age.label} (${cSrc === 'PROM' ? 'PROM' : 'YATA'})</span></div>`;
+            let rsText = `Est ×${item.effectiveCap}`;
+            let rsTitle = 'Out of stock — profit reflects a full suitcase on next restock';
+            if (ri) {
+                if (ri.flyNowToSnipe) {
+                    rsText = `Fly Now → ${ri.restockTct}`;
+                    rsTitle = `Restock ~${ri.restockTct} — depart now to land just after restock`;
+                } else if (ri.overdue) {
+                    rsText = `Next Tick (${ri.restockTct})`;
+                    rsTitle = `Restock overdue — eligible on next tick at ${ri.restockTct}`;
+                } else {
+                    rsText = `Restock ~${ri.restockTct}`;
+                    rsTitle = `Estimated restock at ${ri.restockTct} (in ${ri.minsUntilRestock}m)`;
+                }
             }
+            stockHtml = `<div class="primary-cell-val"><span class="stock-none">OOS</span></div>
+                         <div class="sub-calc"><span class="mini-badge ${age.cls}" title="${escHtml(rsTitle)}">${escHtml(rsText)} • ${age.label}</span></div>`;
         } else {
-            const stBadge = item.stockAtRisk
-                ? `<span class="stock-low">${item.stock.toLocaleString()}</span> <span class="mini-badge amber" title="Projected ~${item.projectedStockAtLanding} left on landing">⚠️ Fast Burn</span>`
-                : `<span class="stock-ok">${item.stock.toLocaleString()}</span>`;
-            stockHtml = `<div>${stBadge}</div><div class="sub-calc"><span class="mini-badge ${age.cls}">${age.label}</span><span style="font-size:0.88em;opacity:0.75;">${cSrc === 'PROM' ? 'PROM' : 'YATA'}</span></div>`;
+            const stCls = item.stockAtRisk ? 'stock-low' : 'stock-ok';
+            const burnNote = item.stockAtRisk ? ` <span style="font-size:11px;color:#fbbf24;" title="Projected ~${item.projectedStockAtLanding} left by landing">Low</span>` : '';
+            stockHtml = `<div class="primary-cell-val"><span class="${stCls}">${item.stock.toLocaleString()}</span>${burnNote}</div>
+                         <div class="sub-calc"><span class="mini-badge ${age.cls}">${age.label}</span></div>`;
         }
 
-        // Guard Badges (Energy, Nerve, Drug CD & Landing Snipe)
-        const guardPills = [];
-        if (item.snipe.snipeBadge) guardPills.push(item.snipe.snipeBadge);
-        if (item.energyWasted > 0) guardPills.push(`<span class="mini-badge amber" title="Exceeds natural energy cap">⚡ -${item.energyWasted}E</span>`);
-        else guardPills.push(`<span class="mini-badge green">0E</span>`);
-        if (item.nerveWasted >= 3) guardPills.push(`<span class="mini-badge amber" title="Exceeds natural nerve cap">🧠 -${item.nerveWasted}N</span>`);
-        if (item.drugCollision) guardPills.push(`<span class="mini-badge red" title="Exceeds Drug CD — check 'Pack Xanax (-1 slot)' in Filters to dose mid-flight!">💊 CD</span>`);
-
-        // Mug Risk & ROI
-        const mugBadge = item.mugTier === 'high'
-            ? `<span class="mini-badge red" title="$5M+ carried abroad — buy within 15s landing protection!">🔴 High • 15s</span>`
-            : (item.mugTier === 'med' ? `<span class="mini-badge amber">🟡 Med</span>` : `<span class="mini-badge green">🟢 Low</span>`);
-        const roiTxt = `${item.roi >= 0 ? '+' : ''}${item.roi.toFixed(0)}% ROI`;
-
-        const uCls = item.profit >= 0 ? 'profit-item' : 'profit-loss';
         const tCls = item.totalProfit >= 0 ? 'profit-item' : 'profit-loss';
         const hCls = item.profitPerHr >= 0 ? 'profit-hr' : 'profit-loss';
 
@@ -2545,54 +2615,116 @@ function renderTable() {
                 .filter(b => b.id !== item.id && !b.isOutOfStock && b.profit > 0 && b.liquidityTier !== 'trap')
                 .sort((a, b) => b.profitPerHr - a.profitPerHr)
                 .slice(0, 2);
+
             const splitSummaryHtml = splitPlan
-                ? `<div style="padding:6px 8px;border-radius:5px;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.35);font-size:0.86em;">
-                    <strong style="color:#34d399;">🔀 Smart Split Load (${splitPlan.mode === 'shop_7star_hybrid' ? '7★ Shop +5 Bonus' : 'Partial Stock Fill'}):</strong><br>
+                ? `<div style="padding:7px 9px;border-radius:5px;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.35);font-size:12px;">
+                    <strong style="color:#34d399;">🔀 Split Cargo Backup (${splitPlan.mode === 'shop_7star_hybrid' ? '7★ Shop +5 Bonus' : 'Partial Stock Fill'}):</strong><br>
                     Buy <strong>${splitPlan.primaryQty}× ${escHtml(item.name)}</strong> + <strong>${splitPlan.backupQty}× ${escHtml(splitPlan.backupItem.name)}</strong> →
-                    Combined Trip <strong style="color:#10b981;">${fmtSignedMoney(splitPlan.combinedProfit)}</strong> (${fmtSignedMoney(splitPlan.combinedPph)}/hr)
-                    <div style="margin-top:4px;"><button type="button" class="act-link" onclick="copyExactCash(${splitPlan.combinedCashAbroad}, this, event)">📋 Copy Split Cash (${fmtSignedMoney(splitPlan.combinedCashAbroad)})</button></div>
+                    Trip <strong style="color:#10b981;">${fmtSignedMoney(splitPlan.combinedProfit)}</strong> (${fmtSignedMoney(splitPlan.combinedPph)}/hr)
+                    <div style="margin-top:5px;"><button type="button" class="act-link" onclick="copyExactCash(${splitPlan.combinedCashAbroad}, this, event)">📋 Copy Split Cash ($${Math.round(splitPlan.combinedCashAbroad).toLocaleString()})</button></div>
                    </div>`
                 : (backups.length
-                    ? `<div style="font-size:0.85em;color:var(--text-secondary);"><strong>Backup Cargo if Sold Out Mid-Flight:</strong><br>${backups.map((b, bi) => `#${bi + 2} <strong>${escHtml(b.name)}</strong> (${b.stock} in stock • ${fmtSignedMoney(b.profitPerHr)}/hr)`).join('<br>')}</div>`
-                    : `<div style="font-size:0.85em;color:var(--text-dim);">No profitable in-stock backup items in ${escHtml(item.country)} right now.</div>`);
+                    ? `<div style="font-size:12px;color:var(--text-secondary);"><strong>Backup Cargo if Sold Out Mid-Flight:</strong><br>${backups.map((b, bi) => `#${bi + 2} <strong>${escHtml(b.name)}</strong> (${b.stock.toLocaleString()} in stock • ${fmtSignedMoney(b.profitPerHr)}/hr)`).join('<br>')}</div>`
+                    : `<div style="font-size:12px;color:var(--text-dim);">No profitable in-stock backup items in ${escHtml(item.country)}.</div>`);
 
-            const rangeHtml = item.cbDeal
-                ? `<div style="font-size:0.84em;color:var(--text-secondary);margin-top:4px;font-family:var(--font-mono);">
-                    Black Mkt Range: <span style="color:#34d399;">$${item.cbDeal.minCost.toLocaleString()}</span> — Now <strong>$${item.cost.toLocaleString()}</strong> — Max <span style="color:#f87171;">$${item.cbDeal.maxCost.toLocaleString()}</span>
-                   </div>`
-                : '';
+            let rangeBarHtml = '';
+            if (item.cbDeal) {
+                const span = Math.max(1, item.cbDeal.maxCost - item.cbDeal.minCost);
+                const posPct = Math.max(0, Math.min(100, Math.round(((item.cost - item.cbDeal.minCost) / span) * 100)));
+                const dealLabel = item.cbDeal.dealTier === 'floor'
+                    ? `<span class="mini-badge green">Near Daily Low (${item.cbDeal.dealPct}%)</span>`
+                    : (item.cbDeal.dealTier === 'high'
+                        ? `<span class="mini-badge red">Near Daily High (+${item.cbDeal.dealPct}%)</span>`
+                        : `<span class="mini-badge cyan">Mid Daily Price</span>`);
+                rangeBarHtml = `
+                    <div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--border-subtle);">
+                        <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;font-size:11.5px;margin-bottom:4px;">
+                            <span style="color:var(--text-secondary);font-weight:700;">Foreign Price Range (${escHtml(item.shopType)})</span>
+                            ${dealLabel}
+                        </div>
+                        <div style="height:5px;border-radius:3px;background:rgba(148,163,184,0.22);position:relative;overflow:hidden;">
+                            <div style="position:absolute;left:0;top:0;bottom:0;width:${posPct}%;background:${item.cbDeal.dealTier === 'high' ? '#ef4444' : '#10b981'};"></div>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;font-size:11px;font-family:var(--font-mono);color:var(--text-tertiary);margin-top:3px;">
+                            <span>Low $${item.cbDeal.minCost.toLocaleString()}</span>
+                            <span style="color:var(--text-primary);font-weight:700;">Now $${item.cost.toLocaleString()}</span>
+                            <span>High $${item.cbDeal.maxCost.toLocaleString()}</span>
+                        </div>
+                    </div>`;
+            }
+
+            const guardBadgesDrawer = [
+                `<span class="mini-badge ${item.energyWasted === 0 ? 'green' : 'amber'}" title="${item.energyWasted === 0 ? 'Finishes within your natural energy cap' : 'Natural energy overflows while flying'}">${item.energyWasted === 0 ? 'No Energy Waste (0E)' : `Energy Cap Overflow (-${item.energyWasted}E)`}</span>`,
+                item.nerveWasted >= 3 ? `<span class="mini-badge amber" title="Round trip exceeds natural nerve regeneration cap">Nerve Cap Risk (-${item.nerveWasted}N)</span>` : '',
+                item.drugCollision ? `<span class="mini-badge red" title="Drug cooldown expires mid-flight — pack Xanax in Filters to clear mid-air">Drug Cooldown Conflict</span>` : ''
+            ].filter(Boolean).join(' ');
+
+            let restockDrawerLine = '';
+            if (item.isOutOfStock && item.snipe.restockInfo) {
+                const ri = item.snipe.restockInfo;
+                if (ri.flyNowToSnipe) {
+                    restockDrawerLine = `<div style="margin-top:5px;color:#34d399;font-weight:700;">🚀 Snipe Window Open: Depart now to land right after ~${ri.restockTct} restock.</div>`;
+                } else if (!ri.takeoffPassed && ri.idealTakeoffTct) {
+                    restockDrawerLine = `<div style="margin-top:5px;color:#38bdf8;font-weight:700;">🛫 Optimal Restock Takeoff: ${ri.idealTakeoffTct} (wait ${ri.takeoffWaitMins}m → restocks ${ri.restockTct})</div>`;
+                } else {
+                    restockDrawerLine = `<div style="margin-top:5px;color:#fbbf24;">⏱️ Next Restock: ~${ri.restockTct} (in ${ri.minsUntilRestock}m — arrives mid-flight).</div>`;
+                }
+            }
+
+            const mugTxt = item.mugTier === 'high'
+                ? `<span class="mini-badge red">High Mug Risk ($5M+ cash) • Buy inside 15s grace</span>`
+                : (item.mugTier === 'med' ? `<span class="mini-badge amber">Medium Mug Risk</span>` : `<span class="mini-badge green">Low Mug Risk</span>`);
 
             drawerHtml = `<tr class="tactical-drawer-row">
-                <td colspan="9">
+                <td colspan="7">
                     <div class="row-drawer-grid">
                         <div class="drawer-box">
-                            <div class="drawer-box-title"><span>💵 Sell Channel Arbitrage (Unit)</span><span class="mini-badge cyan">Active: ${escHtml(item.sellArb.channelLabel)}</span></div>
-                            <div style="font-size:0.86em;font-family:var(--font-mono);display:flex;flex-direction:column;gap:3px;">
+                            <div class="drawer-box-title">
+                                <span>💵 Sell Channels &amp; Liquidity</span>
+                                <span class="mini-badge cyan">${escHtml(item.sellArb.channelLabel)}</span>
+                            </div>
+                            <div style="font-size:12px;font-family:var(--font-mono);display:flex;flex-direction:column;gap:3px;">
                                 <div>Item Market (-5% fee): <strong>${fmtSignedMoney(item.sellArb.mkt5)}</strong> (Profit ${fmtSignedMoney(item.sellArb.mkt5 - item.cost)})</div>
                                 <div>Bazaar / Direct Trade (0%): <strong>${fmtSignedMoney(item.sellArb.bazaar0)}</strong> (Profit ${fmtSignedMoney(item.sellArb.bazaar0 - item.cost)})</div>
-                                ${item.sellArb.npcFixed > 0 ? `<div style="color:#34d399;">🏪 City ${escHtml(item.sellArb.npcShop)} (0% tax / 0% mug): <strong>${fmtSignedMoney(item.sellArb.npcFixed)}</strong> (Profit ${fmtSignedMoney(item.sellArb.npcFixed - item.cost)})</div>` : ''}
+                                ${item.sellArb.npcFixed > 0 ? `<div style="color:#34d399;">🏪 City ${escHtml(item.sellArb.npcShop)} (0% tax): <strong>${fmtSignedMoney(item.sellArb.npcFixed)}</strong> (Profit ${fmtSignedMoney(item.sellArb.npcFixed - item.cost)})</div>` : ''}
                                 ${item.sellArb.museumPts > 0 ? `<div style="color:#c084fc;">🏛️ Torn Museum (${item.sellArb.museumPts === 4.1667 ? '25 pts / 6-set' : item.sellArb.museumPts + ' pts'}): <strong>~${fmtSignedMoney(item.sellArb.museumVal)}</strong></div>` : ''}
                             </div>
-                            ${item.sellArb.requiresSportsSciEdu ? `<div style="font-size:0.82em;color:#fbbf24;">🎓 Note: Selling to <strong>Nikeh Performance</strong> requires completing the <strong>Bachelor of Sports Science (EDU2120)</strong> degree.</div>` : ''}
-                            ${rangeHtml}
+                            <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:2px;">${mugTxt} <span class="mini-badge cyan">+${item.roi.toFixed(0)}% ROI</span></div>
+                            ${item.sellArb.requiresSportsSciEdu ? `<div style="font-size:11.5px;color:#fbbf24;">🎓 Requires Bachelor of Sports Science (EDU2120) to sell to Nikeh Performance.</div>` : ''}
+                            ${rangeBarHtml}
                         </div>
-                        <div class="drawer-box">
-                            <div class="drawer-box-title"><span>⏱️ Takeoff Snipe &amp; 15s Protection</span><span>Land ${item.snipe.landTct} • Back ${item.snipe.retTct}</span></div>
-                            <div style="font-size:0.86em;color:var(--text-secondary);line-height:1.4;">
-                                ${escHtml(item.snipe.snipeNote)}
-                                ${item.mugHotspot ? `<div style="color:#f87171;margin-top:4px;"><strong>⚠️ ${escHtml(item.country)} Mugger Hotspot:</strong> Torn grants <strong>15 seconds</strong> of attack immunity upon landing. Buy &amp; board your return flight immediately!</div>` : `<div style="margin-top:4px;">🛡️ Landing grants <strong>15s mug protection</strong> — carry exact cash and depart without idling abroad.</div>`}
-                                ${packXanaxMed ? `<div style="color:#34d399;margin-top:4px;">💊 Outbound Xanax/Med slot reserved (-1 cargo slot) for mid-flight dosing or abroad med-out.</div>` : ''}
-                            </div>
-                        </div>
+
                         <div class="drawer-box">
                             <div class="drawer-box-title">
-                                <span>🧳 Cargo Manifest &amp; Exact Cash</span>
+                                <span>⏱️ Timing, Guardrails &amp; Feed</span>
+                                <span class="mini-badge cyan">${cSrc === 'PROM' ? 'Prometheus' : 'YATA'} • ${age.label}</span>
+                            </div>
+                            <div style="font-size:12px;color:var(--text-secondary);line-height:1.45;">
+                                <div><strong>Lands:</strong> ${item.snipe.landTct} • <strong>Returns:</strong> ${item.snipe.retTct}</div>
+                                <div style="margin-top:3px;">${escHtml(item.snipe.snipeNote)}</div>
+                                ${restockDrawerLine}
+                                <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:6px;">${guardBadgesDrawer}</div>
+                                ${item.mugHotspot
+                                    ? `<div style="color:#f87171;font-size:11.5px;margin-top:5px;"><strong>⚠️ ${escHtml(item.country)} Hotspot:</strong> 15s attack immunity on landing — buy &amp; depart fast.</div>`
+                                    : `<div style="color:var(--text-tertiary);font-size:11.5px;margin-top:5px;">🛡️ 15s landing protection window — carry exact cash.</div>`}
+                                ${packXanaxMed ? `<div style="color:#34d399;font-size:11.5px;margin-top:4px;">💊 -1 slot reserved for outbound Xanax/Med.</div>` : ''}
+                            </div>
+                        </div>
+
+                        <div class="drawer-box">
+                            <div class="drawer-box-title">
+                                <span>🧳 Cargo Cash &amp; Backup Plan</span>
                                 <button type="button" class="act-link" onclick="copyExactCash(${item.cashAbroad}, this, event)">📋 Copy $${item.cashAbroad.toLocaleString()}</button>
                             </div>
-                            <div style="font-size:0.85em;font-family:var(--font-mono);color:var(--text-primary);">
-                                Withdraw Abroad Cash: <strong>${fmtSignedMoney(item.cashAbroad)}</strong> (${item.tripUnits} × ${fmtSignedMoney(item.cost)})${item.flightCost > 0 ? ` + ${fmtCompactMoney(item.flightCost)} ticket` : ''}
+                            <div style="font-size:12px;font-family:var(--font-mono);color:var(--text-primary);">
+                                Abroad Cash: <strong>${fmtSignedMoney(item.cashAbroad)}</strong> (${item.tripUnits} × ${fmtSignedMoney(item.cost)})${item.flightCost > 0 ? ` • Ticket ${fmtCompactMoney(item.flightCost)}` : ''}
                             </div>
                             ${splitSummaryHtml}
+                            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:auto;padding-top:4px;border-top:1px solid var(--border-subtle);">
+                                <button type="button" class="act-link" onclick="logTripForItem(${item.id}, '${escHtml(item.country)}');event.stopPropagation();">📝 Log Trip</button>
+                                <a href="https://www.torn.com/page.php?sid=ItemMarket#/market/view=search&itemID=${item.id}" target="_blank" rel="noopener" class="act-link" onclick="event.stopPropagation();">🛒 Market ↗</a>
+                                <a href="https://www.torn.com/travelagency.php" target="_blank" rel="noopener" class="act-link" onclick="event.stopPropagation();">✈️ Fly Now ↗</a>
+                            </div>
                         </div>
                     </div>
                 </td>
@@ -2601,61 +2733,40 @@ function renderTable() {
 
         return `<tr class="${rowClass}" onclick="toggleRowDrawer('${item.watchKey}', event)">
             <td>
-                <div style="display:flex;align-items:center;gap:3px;">
+                <div style="display:flex;align-items:center;gap:4px;">
                     <button type="button" class="star-pin-btn ${item.isWatched ? 'pinned' : ''}" onclick="toggleWatchItem('${item.watchKey}', event)" title="Pin / Watch Item for Restock Alerts">${item.isWatched ? '★' : '☆'}</button>
                     ${rankBadge(item, i)}
                 </div>
             </td>
-            <td>
-                <div class="item-name">
-                    <span>${escHtml(item.name)}</span>
-                    ${liqBadges}
-                </div>
-                <div class="item-category">
-                    <span>${cm.emoji} ${cm.label}</span>
-                    <span class="mini-badge ${item.shopType === 'Black Market' ? 'purple' : 'cyan'}">${escHtml(item.shopType)}</span>
-                    ${npcInlineHtml}
-                    ${dealHtml}
-                </div>
+            <td class="col-item">
+                <div class="primary-cell-val">${escHtml(item.name)}</div>
+                <div class="sub-calc">${itemSubTag}</div>
             </td>
-            <td title="${escHtml(item.country)} • ${escHtml(item.city)}">
-                <span class="country-flag">${item.flag} <span class="country-badge">${escHtml(shortCountry)}</span></span>
-                <div class="sub-calc">${escHtml(item.city)}${item.mugHotspot ? ' <span class="mini-badge red" title="High overseas mugger activity — use 15s landing grace">🎯 Hotspot</span>' : ''}</div>
+            <td title="${escHtml(item.country)} • ${escHtml(item.city)}${item.mugHotspot ? ' • High Mugger Activity' : ''}">
+                <div class="primary-cell-val">${item.flag} ${escHtml(shortCountry)}</div>
+                <div class="sub-calc">${escHtml(item.city)}${item.mugHotspot ? ' • <span style="color:#f87171;">Hotspot</span>' : ''}</div>
             </td>
             <td class="flight-time">
-                <div><strong>${fmtMins(item.roundTripMins)}</strong> RT <span style="color:var(--text-tertiary);">(${fmtMins(item.flightTimeMins)} 1W)</span></div>
-                <div class="sub-calc">${guardPills.join('')}</div>
+                <div class="primary-cell-val" style="font-family:var(--font-mono);">${fmtMins(item.roundTripMins)} <span style="font-size:11.5px;font-weight:500;color:var(--text-tertiary);">(${fmtMins(item.flightTimeMins)} 1W)</span></div>
+                <div class="sub-calc">${item.snipe.snipeBadge || `<span>Lands ${item.snipe.landTct}</span>`}</div>
             </td>
             <td>${stockHtml}</td>
-            <td style="font-family:var(--font-mono);">
-                <div>${fmtSignedMoney(item.cost)} <span style="color:var(--text-tertiary);">→</span> <strong>${fmtSignedMoney(item.netSellPrice)}</strong></div>
-                <div class="sub-calc"><span>${escHtml(item.sellArb.channelLabel)}</span>${item.flightCost > 0 ? `<span>• +${fmtCompactMoney(item.flightCost)} tkt</span>` : ''}</div>
+            <td style="font-family:var(--font-mono);" title="Buy $${item.cost.toLocaleString()} → Net Sell $${item.netSellPrice.toLocaleString()} (${escHtml(item.sellArb.channelLabel)})">
+                <div class="primary-cell-val">${fmtCompactMoney(item.cost)} <span style="color:var(--text-tertiary);font-weight:500;">→</span> <strong>${fmtCompactMoney(item.netSellPrice)}</strong></div>
+                <div class="sub-calc" style="font-family:inherit;"><span>${escHtml(item.sellArb.channelLabel)}</span>${item.flightCost > 0 ? `<span>• +${fmtCompactMoney(item.flightCost)} tkt</span>` : ''}</div>
             </td>
-            <td style="font-family:var(--font-mono);">
-                <div>
-                    <button type="button" class="copy-cash-chip" onclick="copyExactCash(${item.cashAbroad}, this, event)" title="Click to copy exact abroad cash ($${item.cashAbroad.toLocaleString()}) so you carry $0 extra muggable money">💵 ${fmtCompactMoney(item.cashAbroad)} <span style="color:var(--text-tertiary);font-weight:600;">×${item.tripUnits}</span></button>
-                </div>
-                <div class="sub-calc">${mugBadge} <span class="${item.roi >= 0 ? 'profit-item' : 'profit-loss'}" style="font-size:0.92em;">${roiTxt}</span>${item.exceedsBudget ? ' <span class="mini-badge red">Over Cap</span>' : ''}</div>
-            </td>
-            <td class="${tCls}">
-                <div>${fmtSignedMoney(item.totalProfit)}</div>
-                <div class="sub-calc">
-                    <span class="${uCls}" style="font-size:0.95em;">Unit ${fmtSignedMoney(item.profit)}</span>
-                    ${splitPlan ? `<span class="mini-badge green" title="Click row for Smart Split Load (${splitPlan.primaryQty}× + ${splitPlan.backupQty}× ${escHtml(splitPlan.backupItem.name)})">🔀 ${fmtCompactMoney(splitPlan.combinedProfit)}</span>` : ''}
-                </div>
-            </td>
-            <td class="${hCls}">
+            <td class="${hCls}" title="Net ${fmtSignedMoney(item.profitPerHr)}/hr • Trip ${fmtSignedMoney(item.totalProfit)} (${item.tripUnits}×) • Cash ${fmtSignedMoney(item.cashAbroad)}">
                 <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
                     <div>
-                        <div>${fmtSignedMoney(item.profitPerHr)}</div>
-                        ${item.isOutOfStock ? '<div class="sub-calc">Est. Restocked</div>' : ''}
+                        <div style="font-size:14px;font-weight:800;line-height:1.25;">${fmtSignedMoney(item.profitPerHr)}/hr</div>
+                        <div class="sub-calc">
+                            <span class="${tCls}" style="font-weight:700;">${fmtSignedMoney(item.totalProfit)}</span>
+                            <span>•</span>
+                            <span>${fmtCompactMoney(item.cashAbroad)} cash</span>
+                            ${item.exceedsBudget ? '<span class="mini-badge red">Over Cap</span>' : ''}
+                        </div>
                     </div>
-                    <div style="display:flex;gap:3px;">
-                        <button type="button" class="act-link" onclick="toggleRowDrawer('${item.watchKey}');event.stopPropagation();" title="Toggle Tactical Breakdown">${isExpanded ? '▴' : '▾'}</button>
-                        <button type="button" class="act-link" onclick="logTripForItem(${item.id}, '${escHtml(item.country)}');event.stopPropagation();" title="Log Trip &amp; Increment 50-Flight Merit">📝</button>
-                        <a href="https://www.torn.com/page.php?sid=ItemMarket#/market/view=search&itemID=${item.id}" target="_blank" rel="noopener" class="act-link" onclick="event.stopPropagation();" title="View on Torn Item Market">🛒</a>
-                        <a href="https://www.torn.com/travelagency.php" target="_blank" rel="noopener" class="act-link" onclick="event.stopPropagation();" title="Fly via Torn Travel Agency">✈️</a>
-                    </div>
+                    <span class="expand-chevron" title="Click row to expand">${isExpanded ? '▴' : '▾'}</span>
                 </div>
             </td>
         </tr>${drawerHtml}`;
@@ -2695,21 +2806,26 @@ function renderCountryCommandCards() {
         const renderSlot = (itm, rankLbl, isPrimary) => {
             if (!itm) return '';
             const cls = itm.profitPerHr >= 0 ? 'profit-hr' : 'profit-loss';
-            const npcMini = itm.sellArb?.npcFixed > 0 ? ` • 🏪 ${escHtml(itm.sellArb.npcShop)}` : '';
-            const eduMini = itm.sellArb?.requiresSportsSciEdu ? ` <span class="mini-badge amber" title="Requires Sports Science Edu">🎓</span>` : '';
+            const hasCityNpc = itm.sellArb?.npcFixed > 0 && itm.sellArb?.npcShop && itm.sellArb.npcShop !== 'Museum';
+            const shopRouteLabel = hasCityNpc
+                ? `Buy: ${escHtml(itm.shopType)} → Sell: ${escHtml(itm.sellArb.npcShop)}`
+                : (itm.sellArb?.npcShop === 'Museum'
+                    ? `Buy: ${escHtml(itm.shopType)} → Museum`
+                    : `Buy: ${escHtml(itm.shopType)} → ${escHtml(itm.sellArb.channelLabel)}`);
+            const eduMini = itm.sellArb?.requiresSportsSciEdu ? ` <span class="mini-badge amber" title="Requires Bachelor of Sports Science (EDU2120) to sell to Nikeh Performance">🎓 Edu</span>` : '';
             return `
                 <div class="cc-item-slot ${isPrimary ? 'primary' : ''}">
                     <div style="min-width:0;">
-                        <div style="font-weight:800;font-size:0.82em;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                        <div style="font-weight:800;font-size:12.5px;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
                             ${rankLbl}: ${escHtml(itm.name)} ${itm.isOutOfStock ? '<span class="mini-badge red">OOS</span>' : `<span class="mini-badge green">${itm.stock.toLocaleString()}</span>`}${eduMini}
                         </div>
-                        <div style="font-size:0.71em;color:var(--text-tertiary);font-family:var(--font-mono);">
-                            Buy ${fmtSignedMoney(itm.cost)} • Trip ${fmtSignedMoney(itm.totalProfit)}${npcMini}
+                        <div style="font-size:11px;color:var(--text-tertiary);font-family:var(--font-mono);">
+                            Buy ${fmtCompactMoney(itm.cost)} • Trip ${fmtSignedMoney(itm.totalProfit)} (${itm.tripUnits}×)
                         </div>
                     </div>
                     <div style="text-align:right;flex-shrink:0;">
-                        <div class="${cls}" style="font-size:0.84em;">${fmtSignedMoney(itm.profitPerHr)}/hr</div>
-                        <div style="font-size:0.68em;color:var(--text-tertiary);">${escHtml(itm.shopType)}</div>
+                        <div class="${cls}" style="font-size:13px;">${fmtSignedMoney(itm.profitPerHr)}/hr</div>
+                        <div style="font-size:10.5px;color:var(--text-tertiary);">${shopRouteLabel}</div>
                     </div>
                 </div>
             `;
@@ -2720,11 +2836,11 @@ function renderCountryCommandCards() {
         return `
             <div class="country-cmd-card">
                 <div class="cc-top">
-                    <div>
-                        <div class="cc-title">${cMeta.flag} ${escHtml(cMeta.name)} <span style="font-size:0.76em;color:var(--text-tertiary);font-weight:600;">(${escHtml(cMeta.city)})</span>${cMeta.mugHotspot ? ' <span class="mini-badge red" title="High mugger activity — use 15s landing protection">🎯 Hotspot</span>' : ''}</div>
+                    <div style="min-width:0;">
+                        <div class="cc-title">${cMeta.flag} ${escHtml(cMeta.name)} <span style="font-size:0.78em;color:var(--text-tertiary);font-weight:600;white-space:nowrap;">(${escHtml(cMeta.city)})</span></div>
                         <div class="cc-sub">1W: <strong>${fmtMins(oneWay)}</strong> • RT: <strong>${fmtMins(rt)}</strong> • Land: ${snipe.landTct} • Back: ${snipe.retTct}</div>
                     </div>
-                    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
+                    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0;">
                         ${statusPill}
                         <div style="display:flex;gap:4px;align-items:center;">
                             ${snipe.snipeBadge || ''}
@@ -2733,13 +2849,14 @@ function renderCountryCommandCards() {
                     </div>
                 </div>
                 ${renderSlot(top1, '#1 Best', true)}
-                ${splitPlan ? `<div style="font-size:0.73em;font-family:var(--font-mono);padding:5px 8px;border-radius:4px;background:rgba(16,185,129,0.09);border:1px solid rgba(16,185,129,0.3);color:#34d399;">🔀 Split Cargo: ${splitPlan.primaryQty}× ${escHtml(top1.name)} + ${splitPlan.backupQty}× ${escHtml(splitPlan.backupItem.name)} = <strong>${fmtSignedMoney(splitPlan.combinedProfit)}</strong></div>` : ''}
+                ${splitPlan ? `<div style="font-size:11.5px;font-family:var(--font-mono);padding:5px 8px;border-radius:4px;background:rgba(16,185,129,0.09);border:1px solid rgba(16,185,129,0.3);color:#34d399;">🔀 Split Cargo: ${splitPlan.primaryQty}× ${escHtml(top1.name)} + ${splitPlan.backupQty}× ${escHtml(splitPlan.backupItem.name)} = <strong>${fmtSignedMoney(splitPlan.combinedProfit)}</strong></div>` : ''}
                 ${renderSlot(backup2, '#2 Backup', false)}
                 ${renderSlot(backup3, '#3 Backup', false)}
-                <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;padding-top:4px;border-top:1px solid var(--border-subtle);font-size:0.74em;">
-                    <div style="display:flex;gap:5px;align-items:center;">
-                        <span class="mini-badge ${eg.energyWasted === 0 ? 'green' : 'amber'}">${eg.energyWasted === 0 ? '⚡ 0E Wasted' : `⚡ -${eg.energyWasted}E`}</span>
+                <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;padding-top:6px;border-top:1px solid var(--border-subtle);font-size:11.5px;">
+                    <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;">
+                        <span class="mini-badge ${eg.energyWasted === 0 ? 'green' : 'amber'}">${eg.energyWasted === 0 ? 'No Energy Waste' : `-${eg.energyWasted}E Cap Overflow`}</span>
                         <span class="mini-badge cyan" title="50-Flight Honor Bar Progress (${cMeta.merit})">🏅 ${flightsLogged}/50</span>
+                        ${cMeta.mugHotspot ? `<span class="mini-badge red" title="High mugger activity — buy &amp; depart within 15s landing protection">🎯 Mugger Hotspot</span>` : ''}
                     </div>
                     <div style="display:flex;gap:4px;flex-wrap:wrap;">
                         ${top1 ? `<button type="button" class="act-link" onclick="copyExactCash(${splitPlan ? splitPlan.combinedCashAbroad : top1.cashAbroad}, this, event)" title="Copy exact abroad cash">💵 ${fmtCompactMoney(splitPlan ? splitPlan.combinedCashAbroad : top1.cashAbroad)}</button>` : ''}
@@ -2958,11 +3075,43 @@ function clearMuseumOwned() {
 function renderScatterChart() {
     const canvas = document.getElementById('travel-scatter-canvas');
     if (!canvas || !allItems.length) return;
-    const pts = allItems.map(getTravelMetrics).filter(i => !i.isOutOfStock && i.profitPerHr > 0);
+    const pts = allItems
+        .map(getTravelMetrics)
+        .filter(i => !i.isOutOfStock && i.profitPerHr > 0 && (!guardFilters.hideTraps || i.liquidityTier !== 'trap'));
 
     if (typeof window.Chart === 'function') {
         if (scatterChartInstance) scatterChartInstance.destroy();
         const catColor = { plushie: '#38bdf8', flower: '#f472b6', contraband: '#c084fc', drug: '#10b981', weapon: '#f59e0b', other: '#94a3b8' };
+        const energyGuardLines = {
+            id: 'energyGuardLines',
+            beforeDatasetsDraw(chart) {
+                const { ctx, chartArea, scales } = chart;
+                if (!chartArea || !scales?.x) return;
+                const guards = [
+                    { x: 200, color: '#fbbf24', label: '3h 20m (100E)' },
+                    { x: 300, color: '#f87171', label: '5h 00m (150E)' }
+                ];
+                ctx.save();
+                ctx.font = '700 10px sans-serif';
+                ctx.textAlign = 'right';
+                guards.forEach(g => {
+                    if (g.x < scales.x.min || g.x > scales.x.max) return;
+                    const px = scales.x.getPixelForValue(g.x);
+                    if (px < chartArea.left || px > chartArea.right) return;
+                    ctx.beginPath();
+                    ctx.setLineDash([5, 4]);
+                    ctx.lineWidth = 1.4;
+                    ctx.strokeStyle = g.color;
+                    ctx.moveTo(px, chartArea.top);
+                    ctx.lineTo(px, chartArea.bottom);
+                    ctx.stroke();
+                    ctx.fillStyle = g.color;
+                    ctx.fillText(g.label, px - 5, chartArea.top + 13);
+                });
+                ctx.restore();
+            }
+        };
+
         scatterChartInstance = new Chart(canvas.getContext('2d'), {
             type: 'bubble',
             data: {
@@ -2979,6 +3128,7 @@ function renderScatterChart() {
                     borderWidth: 1.5
                 }]
             },
+            plugins: [energyGuardLines],
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
@@ -3000,8 +3150,18 @@ function renderScatterChart() {
                     }
                 },
                 scales: {
-                    x: { title: { display: true, text: 'Round-Trip Flight Time (Minutes)', color: '#94a3b8' }, ticks: { color: '#94a3b8' }, grid: { color: 'rgba(148,163,184,0.12)' } },
-                    y: { title: { display: true, text: 'Net Profit / Hour ($/hr)', color: '#94a3b8' }, ticks: { color: '#94a3b8', callback: v => fmtCompactMoney(v) }, grid: { color: 'rgba(148,163,184,0.12)' } }
+                    x: {
+                        min: 0,
+                        suggestedMax: 360,
+                        title: { display: true, text: 'Round-Trip Flight Time (Minutes)', color: '#94a3b8' },
+                        ticks: { color: '#94a3b8' },
+                        grid: { color: 'rgba(148,163,184,0.12)' }
+                    },
+                    y: {
+                        title: { display: true, text: 'Net Profit / Hour ($/hr)', color: '#94a3b8' },
+                        ticks: { color: '#94a3b8', callback: v => fmtCompactMoney(v) },
+                        grid: { color: 'rgba(148,163,184,0.12)' }
+                    }
                 }
             }
         });
@@ -3247,9 +3407,29 @@ function checkRestockAlertsOnRefresh() {
 }
 
 // ── Controls, Collapsible Guardrails Drawer & Interactive Capacity Builder ───
-function toggleCapacityBuilder() {
+function syncModeToBuilderBadge() {
+    const base = flightProfile === 'standard' ? 10 : 15;
+    const bEl = document.getElementById('cb-mode-sync-badge');
+    if (bEl) bEl.textContent = `Plane Slots (from Mode): ${base}`;
+    return base;
+}
+
+function toggleQuickGuide(forceOpen) {
+    const pop = document.getElementById('quick-guide-popover');
+    const btn = document.getElementById('btn-quick-guide');
+    if (!pop) return;
+    const next = typeof forceOpen === 'boolean' ? forceOpen : !pop.classList.contains('open');
+    pop.classList.toggle('open', next);
+    if (btn) btn.classList.toggle('active-toggle', next);
+}
+
+function toggleCapacityBuilder(forceOpen) {
     const dr = document.getElementById('capacity-builder-drawer');
-    if (dr) dr.classList.toggle('open');
+    const btn = document.getElementById('btn-cap-builder');
+    if (!dr) return;
+    const next = typeof forceOpen === 'boolean' ? forceOpen : !dr.classList.contains('open');
+    dr.classList.toggle('open', next);
+    if (btn) btn.classList.toggle('active-toggle', next);
 }
 
 function toggleGuardrailsDrawer(forceOpen) {
@@ -3276,11 +3456,11 @@ function updateActiveFilterSummary() {
     if (activeCategory !== 'all') chips.push(`Cat: ${CAT_META[activeCategory]?.label || activeCategory}`);
     if (selectedCountries.size > 0) chips.push(`🌍 ${[...selectedCountries].map(c => TRAVEL_2_COUNTRIES[c]?.short || c).join(', ')}`);
     if (maxFlightRtMins > 0) chips.push(`≤ ${fmtMins(maxFlightRtMins)} RT`);
-    if (guardFilters.noEnergyWaste) chips.push('⚡ 0E/0N Waste');
+    if (guardFilters.noEnergyWaste) chips.push('⚡ No Energy Waste');
     if (packXanaxMed) chips.push('💊 Pack Xanax (-1)');
     if (budgetCap > 0) chips.push(`💼 Cap ${fmtCompactMoney(budgetCap)}`);
-    if (guardFilters.lowMugRisk) chips.push('🛡️ <$5M Mug');
-    if (guardFilters.profitable) chips.push('💰 Profitable');
+    if (guardFilters.lowMugRisk) chips.push('🛡️ Low Mug Risk');
+    if (guardFilters.profitable) chips.push('💰 Profitable Only');
     if (guardFilters.watched) chips.push('⭐ Watched');
 
     if (badge) {
@@ -3331,7 +3511,7 @@ function clearSecondaryFilters() {
 }
 
 function recalcCapacityFromBuilder() {
-    const base = parseInt(document.getElementById('cb-base')?.value || '15', 10);
+    const base = syncModeToBuilderBadge();
     const suit = parseInt(document.getElementById('cb-suitcase')?.value || '3', 10);
     const exc = Math.max(0, Math.min(10, parseInt(document.getElementById('cb-excursion')?.value || '10', 10)));
     const comp = document.getElementById('cb-company')?.value || 'none';
@@ -3360,50 +3540,60 @@ function recalcCapacityFromBuilder() {
     const noteEl = document.getElementById('cap-builder-note');
     if (noteEl) noteEl.textContent = `(${finalCap})`;
     localStorage.setItem('travelCapacity', String(finalCap));
-    localStorage.setItem('travelBuilderState', JSON.stringify({ base, suit, exc, comp, outbound, bookSmug, tourism }));
+    localStorage.setItem('travelBuilderState', JSON.stringify({ suit, exc, comp, outbound, bookSmug, tourism }));
 
     const shopExtra = comp === 'flower_7' ? ' (+5 Flowers = ' + (finalCap + 5) + ')' : (comp === 'toy_7' ? ' (+5 Plushies = ' + (finalCap + 5) + ')' : '');
     const rEl = document.getElementById('cb-formula-readout');
     if (rEl) {
-        rEl.textContent = `Effective Capacity: (${base} Base + ${suit} Suitcase + ${exc} Excursion${genComp ? ' + ' + genComp + ' Company' : ''}${bookSmug ? ' + 10 Book' : ''})${tourism ? ' × 2 Tourism Day' : ''}${outbound ? ' - ' + outbound + ' Gear' : ''} = ${finalCap} items${shopExtra}`;
+        rEl.textContent = `Effective Capacity: (${base} Mode + ${suit} Suitcase + ${exc} Excursion${genComp ? ' + ' + genComp + ' Company' : ''}${bookSmug ? ' + 10 Book' : ''})${tourism ? ' × 2 Tourism Day' : ''}${outbound ? ' - ' + outbound + ' Gear' : ''} = ${finalCap} items${shopExtra}`;
     }
 
     refreshAllViews();
 }
 
 function restoreCapacityBuilderInputs() {
+    syncModeToBuilderBadge();
     try {
         const raw = localStorage.getItem('travelBuilderState');
         if (!raw) return;
         const st = JSON.parse(raw);
-        if (st.base) document.getElementById('cb-base').value = String(st.base);
-        if (st.suit !== undefined) document.getElementById('cb-suitcase').value = String(st.suit);
-        if (st.exc !== undefined) document.getElementById('cb-excursion').value = String(st.exc);
-        if (st.comp) document.getElementById('cb-company').value = st.comp;
-        if (st.outbound !== undefined) document.getElementById('cb-outbound').value = String(st.outbound);
-        if (st.bookSmug !== undefined) document.getElementById('cb-book-smuggling').checked = Boolean(st.bookSmug);
-        if (st.tourism !== undefined) document.getElementById('cb-tourism-day').checked = Boolean(st.tourism);
+        if (st.suit !== undefined && document.getElementById('cb-suitcase')) document.getElementById('cb-suitcase').value = String(st.suit);
+        if (st.exc !== undefined && document.getElementById('cb-excursion')) document.getElementById('cb-excursion').value = String(st.exc);
+        if (st.comp && document.getElementById('cb-company')) document.getElementById('cb-company').value = st.comp;
+        if (st.outbound !== undefined && document.getElementById('cb-outbound')) document.getElementById('cb-outbound').value = String(st.outbound);
+        if (st.bookSmug !== undefined && document.getElementById('cb-book-smuggling')) document.getElementById('cb-book-smuggling').checked = Boolean(st.bookSmug);
+        if (st.tourism !== undefined && document.getElementById('cb-tourism-day')) document.getElementById('cb-tourism-day').checked = Boolean(st.tourism);
     } catch (_) {}
 }
 
 function resetCapacityDefault() {
-    document.getElementById('cb-base').value = '15';
-    document.getElementById('cb-suitcase').value = '3';
-    document.getElementById('cb-excursion').value = '10';
-    document.getElementById('cb-company').value = 'none';
-    document.getElementById('cb-outbound').value = '0';
-    document.getElementById('cb-book-smuggling').checked = false;
-    document.getElementById('cb-tourism-day').checked = false;
+    flightProfile = 'airstrip';
+    localStorage.setItem('travelFlightProfile', flightProfile);
+    const fp = document.getElementById('flight-profile');
+    if (fp) fp.value = 'airstrip';
+    const lblFreeBct = document.getElementById('lbl-free-bct');
+    if (lblFreeBct) lblFreeBct.style.display = 'none';
+    if (document.getElementById('cb-suitcase')) document.getElementById('cb-suitcase').value = '3';
+    if (document.getElementById('cb-excursion')) document.getElementById('cb-excursion').value = '10';
+    if (document.getElementById('cb-company')) document.getElementById('cb-company').value = 'none';
+    if (document.getElementById('cb-outbound')) document.getElementById('cb-outbound').value = '0';
+    if (document.getElementById('cb-book-smuggling')) document.getElementById('cb-book-smuggling').checked = false;
+    if (document.getElementById('cb-tourism-day')) document.getElementById('cb-tourism-day').checked = false;
     recalcCapacityFromBuilder();
 }
 
 function autoPopulateCapacityFromApi() {
     if (livePlayerContext && livePlayerContext.detectedPerks) {
         const dp = livePlayerContext.detectedPerks;
-        document.getElementById('cb-base').value = dp.hasAirstrip !== false ? '15' : '10';
-        document.getElementById('cb-suitcase').value = dp.hasSuitcaseLarge !== false ? '3' : '3';
-        document.getElementById('cb-excursion').value = String(dp.factionExcursion ?? 10);
-        document.getElementById('cb-book-smuggling').checked = Boolean(dp.hasSmugglingBook);
+        if (dp.hasAirstrip !== undefined) {
+            flightProfile = dp.hasAirstrip !== false ? 'airstrip' : 'standard';
+            localStorage.setItem('travelFlightProfile', flightProfile);
+            const fp = document.getElementById('flight-profile');
+            if (fp) fp.value = flightProfile;
+        }
+        if (document.getElementById('cb-suitcase')) document.getElementById('cb-suitcase').value = dp.hasSuitcaseLarge !== false ? '3' : '3';
+        if (document.getElementById('cb-excursion')) document.getElementById('cb-excursion').value = String(dp.factionExcursion ?? 10);
+        if (document.getElementById('cb-book-smuggling')) document.getElementById('cb-book-smuggling').checked = Boolean(dp.hasSmugglingBook);
     }
     recalcCapacityFromBuilder();
 }
@@ -3413,11 +3603,9 @@ function applyFlightProfile() {
     if (!sel) return;
     flightProfile = sel.value || 'airstrip';
     localStorage.setItem('travelFlightProfile', flightProfile);
-    const cbBase = document.getElementById('cb-base');
-    if (cbBase) cbBase.value = flightProfile === 'standard' ? '10' : '15';
     const lblFreeBct = document.getElementById('lbl-free-bct');
     if (lblFreeBct) lblFreeBct.style.display = flightProfile === 'bct' ? 'inline-flex' : 'none';
-    refreshAllViews();
+    recalcCapacityFromBuilder();
 }
 
 function onFlightModifierChange() {
@@ -3451,23 +3639,12 @@ function applyCapacity() {
     refreshAllViews();
 }
 
-function applySort() {
-    const val = document.getElementById('sort-select')?.value || 'profitPerHr';
-    sortKey = val;
-    sortAsc = val === 'flightTimeMins' || val === 'name' || val === 'country' || val === 'rank';
-    renderTable();
-}
-
 function sortBy(key) {
     if (sortKey === key) {
         sortAsc = !sortAsc;
     } else {
         sortKey = key;
         sortAsc = ['flightTimeMins', 'name', 'country', 'rank'].includes(key);
-    }
-    const sel = document.getElementById('sort-select');
-    if (sel && [...sel.options].some(o => o.value === key)) {
-        sel.value = key;
     }
     renderTable();
 }
@@ -3579,10 +3756,28 @@ function switchTravelView(viewName, tabBtn) {
     document.querySelectorAll('.view-pane').forEach(p => {
         p.classList.toggle('active', p.id === 'pane-' + currentViewMode);
     });
+
+    // Scope Route & Filter Bar to Profit Table and By Country tabs ONLY; auto-close drawers on switch
+    const controlsBar = document.getElementById('controls-bar');
+    if (controlsBar) {
+        const showControls = currentViewMode === 'items' || currentViewMode === 'countries';
+        controlsBar.classList.toggle('hidden-for-tab', !showControls);
+    }
+    toggleCapacityBuilder(false);
+    toggleGuardrailsDrawer(false);
+    toggleQuickGuide(false);
+
     if (currentViewMode === 'analytics') {
         setTimeout(renderScatterChart, 60);
     }
 }
+
+document.addEventListener('click', (e) => {
+    const pop = document.getElementById('quick-guide-popover');
+    if (pop && pop.classList.contains('open') && !e.target.closest('#quick-guide-popover, #btn-quick-guide')) {
+        toggleQuickGuide(false);
+    }
+});
 
 // ── F.R.I.D.A.Y. Co-Pilot Direct Command Hook ────────────────────────────────
 window.applyFridayTravelCommand = function(action) {

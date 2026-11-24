@@ -14759,7 +14759,7 @@ app.get('/api/travel-profits', async (req, res) => {
                     sellPrice,
                     stock,
                     burnRatePerMin,
-                    nextRestockIso: ys?.nextRestock || null,
+                    nextRestockIso: stock <= 0 ? (ys?.nextRestock || null) : null,
                     predictedRestock,
                     lastRestockTs: htTrack?.lastRestockTs || vTrack?.lastRestockTs || null,
                     zeroSinceTs: htTrack?.zeroSinceTs || vTrack?.zeroSinceTs || null,
