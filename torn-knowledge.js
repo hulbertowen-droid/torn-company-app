@@ -731,16 +731,21 @@ function buildTornKnowledgeContext(query, userAccountData = null, invokerName = 
     let context = "═══ VERIFIED TORN CITY GAMEPLAY INTELLIGENCE (GROUND TRUTH) ═══\n";
     context += "CRITICAL ANTI-HALLUCINATION & FACTION PERK INSTRUCTIONS:\n";
     context += `1. FACTION CONTEXT: You are F.R.I.D.A.Y in faction ${perks.factionName} [${perks.factionId}].\n`;
+    const exactTruffles = Math.floor((perks.boosterLimitHours * 60) / 30);
+    const truffleHappyEach = Math.floor(100 * (1 + (perks.voracityPercent || 50) / 100));
+    const totalTruffleHappy = exactTruffles * truffleHappyEach;
+    const preXtc = 5025 + totalTruffleHappy;
+    const postXtc = preXtc * 2;
     context += `2. LIVE FACTION PERK DATA FEED (VERIFIED FROM TORN API):\n`;
-    context += `   • Booster Cooldown Upgrade: Booster cooldown XV (+${perks.tolerationHours} hours).\n`;
-    context += `   • Faction Maximum Booster Cooldown: Exactly ${perks.boosterLimitHours} hours (24h base + ${perks.tolerationHours}h perk = 2,340 minutes).\n`;
-    context += `   • Candy Effect Upgrade: Candy effect X (+${perks.voracityPercent}% happy gain from candy).\n`;
-    context += `   • Travel Capacity Upgrade: Travel capacity VIII (+${perks.travelCapacityBonus} items).\n`;
-    context += `   • Gym Training Upgrade: Defense +${perks.defenseGymBonus}%, Dexterity +${perks.dexterityGymBonus}%.\n`;
+    context += `   • Booster Cooldown Upgrade: +${perks.tolerationHours} hours.\n`;
+    context += `   • Faction Maximum Booster Cooldown: Exactly ${perks.boosterLimitHours} hours (24h base + ${perks.tolerationHours}h perk = ${perks.boosterLimitHours * 60} minutes).\n`;
+    context += `   • Candy Effect Upgrade: +${perks.voracityPercent}% happy gain from candy.\n`;
+    context += `   • Travel Capacity Upgrade: +${perks.travelCapacityBonus} items.\n`;
+    context += `   • Gym Steadfast Upgrades: Strength +${perks.strengthGymBonus || 0}%, Speed +${perks.speedGymBonus || 0}%, Defense +${perks.defenseGymBonus || 0}%, Dexterity +${perks.dexterityGymBonus || 0}%.\n`;
     context += `3. MANDATORY TRUFFLES / JUMP DIRECTIVE:\n`;
-    context += `   • NEVER say 'my data feed doesn't specify' or 'somewhere between 48 and 96'. YOU HAVE THE EXACT DATA FEED: our faction limit is ${perks.boosterLimitHours} hours!\n`;
-    context += `   • 39 hours / 0.5 hours = EXACTLY 78 Bags of Chocolate Truffles.\n`;
-    context += `   • With our +50% candy perk, each truffle gives 150 Happy (78 × 150 = 11,700 Happy). Pre-Ecstasy ~16,725 -> After Ecstasy = ~33,450 Happy.\n`;
+    context += `   • NEVER say 'my data feed doesn't specify' or guess a range when answering for our faction: our live faction limit is ${perks.boosterLimitHours} hours!\n`;
+    context += `   • ${perks.boosterLimitHours} hours / 0.5 hours = EXACTLY ${exactTruffles} Bags of Chocolate Truffles.\n`;
+    context += `   • With our +${perks.voracityPercent}% candy perk, each truffle gives ${truffleHappyEach} Happy (${exactTruffles} × ${truffleHappyEach} = ${totalTruffleHappy.toLocaleString()} Happy). Pre-Ecstasy ~${preXtc.toLocaleString()} -> After Ecstasy = ~${postXtc.toLocaleString()} Happy.\n`;
     context += "4. NEVER substitute Bag of Chocolate Truffles with 'chocolate boxes' or any other item.\n";
     context += "5. NEVER 'correct' a valid Torn item name into a different item. 'Bag of Chocolate Truffles' is REAL. Do not say 'chocolate boxes'.\n";
     context += "6. NEVER invent a fixed quantity like 'you need 5' for items whose usage depends on booster cooldown windows.\n\n";
@@ -760,7 +765,7 @@ function buildTornKnowledgeContext(query, userAccountData = null, invokerName = 
         context += `  - Total before Ecstasy (with ~5k PI): ~${jump.jumpFaction.preEcstasyHappy.toLocaleString()} Happy\n`;
         context += `  - Total after Ecstasy (doubled): ~${jump.jumpFaction.postEcstasyHappy.toLocaleString()} Happy\n`;
         context += `  - Estimated Item Cost: ~$${jump.jumpFaction.estimatedCost.toLocaleString()}\n`;
-        context += `• Baseline comparisons: Default 24h limit (0 perks) = 48 candies; Maxed 48h limit = 96 candies. Our faction is at 39h = 78 candies.\n`;
+        context += `• Baseline comparisons: Default 24h limit (0 perks) = 48 candies; Maxed 48h limit = 96 candies. Our faction is currently at ${jump.factionPerks.boosterLimitHours}h = ${jump.jumpFaction.quantity} candies.\n`;
         if (userStatsHasBooster(userAccountData)) {
             context += `• Player Account Status: Currently has ${jump.playerContext.currentBoosterUsedMinutes}m booster cooldown used. Can consume ${jump.playerContext.remainingItemsNow} more right now.\n`;
         }

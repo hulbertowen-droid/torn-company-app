@@ -43,6 +43,7 @@ const userAlerts = require('./user-alerts');
 const bugManager = require('./bug-manager');
 const { buildSlashCommands } = require('./discord-slash-builder');
 const tornKnowledge = require('./torn-knowledge');
+const fridayWikiForumRag = require('./friday-wiki-forum-rag');
 const ocDmEngineModule = require('./oc-dm-engine');
 const welcomeGatekeeperModule = require('./welcome-gatekeeper');
 const warReadinessModule = require('./war-readiness');
@@ -10001,17 +10002,14 @@ app.post('/api/generate-recruit-msg', async (req, res) => {
     const factionless = status && status.toLowerCase().includes("factionless");
     const fallback = `Hey ${playerName}!\n\nI was looking at your stats and noticed your solid progression.\n\n${factionless ? "I noticed you're currently factionless, so the timing seems perfect." : "I know you're currently in a faction, but I wanted to reach out anyway."}\n\nWe run a tight, active crew focused on ranked wars and organized crimes. We'd love to have someone with your stats on our side. If you're ever looking for a change, hit me back — happy to chat.\n\n${signOff}`;
 
-    if (!GEMINI_API_KEY) return res.json({ message: fallback, source: "template" });
+    const gemKeys = getGeminiApiKeys();
+    if (!gemKeys.length) return res.json({ message: fallback, source: "template" });
 
     try {
         const prompt = `You are writing a Torn City (browser game) faction recruitment message. Keep it short (3-4 paragraphs max), casual, direct and personalized. Do NOT use generic filler like "I hope this message finds you well". Sound like a real player, not a robot.\n\nPlayer: ${playerName}\nLevel: ${level || 'Unknown'}\nPlaytime: ${playtime ? playtime + ' days' : 'Unknown'}\nXanax taken: ${xanax || 'Unknown'}\nWar stats: ${score && score !== "N/A" ? score + " score, " + attacks + " hits" : "N/A"}\nEst. Battle Stats: ${estStats || "Unknown"}\nCurrent faction status: ${status}\nEnemy faction they fought for (if any): ${enemyFaction || "None"}\n\nWrite a compelling recruitment message. If they have high war stats, mention them. If they have low playtime but high level/xanax, praise their fast progression. ${factionless ? "They are now factionless — emphasize this is a perfect time." : "Be respectful that they are still in a faction."} Sign off from ${signOff}.`;
 
-        const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-        });
-        const geminiData = await geminiRes.json();
-        const message = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text;
+        const gRes = await callGeminiWithFallback({ contents: [{ parts: [{ text: prompt }] }] }, null, { timeout: 12000 });
+        const message = gRes.success ? extractGeminiReplyText(gRes.data) : null;
         if (!message) throw new Error("Empty response");
         res.json({ message, source: "ai" });
     } catch (e) {
@@ -11696,95 +11694,54 @@ Keep your advice specific to the data provided. Be concise, punchy, and use emoj
             return res.json({ success: true, advice: tips.join('\n\n') });
         }
 
-        const gRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${advisorKey}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                contents: [{ parts: [{ text: prompt }] }]
-            })
-        });
-        
-        const gData = await gRes.json();
-        const advice = gData.candidates?.[0]?.content?.parts?.[0]?.text || "Failed to generate advice.";
-        
+        const gRes = await callGeminiWithFallback({
+            contents: [{ parts: [{ text: prompt }] }]
+        }, advisorKey, { timeout: 14000 });
+        const advice = (gRes.success && extractGeminiReplyText(gRes.data)) || "Failed to generate advice.";
+
         res.json({ success: true, advice });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
 
-// ─── F.R.I.D.A.Y Torn Wiki & Forum AI Intelligence & Sandbox ─────────────────
+// ─── F.R.I.D.A.Y Torn Wiki & Multi-Forum Consensus AI Intelligence ───────────
 function getFridayTornSystemPrompt() {
     const fn = discordConfig.factionName || "our faction";
     const fid = discordConfig.factionId || dynamicFactionId || "";
     const fidStr = fid ? ` [${fid}]` : "";
+    const perks = tornKnowledge.liveFactionPerks || {};
+    const bLimit = perks.boosterLimitHours || 48;
+    const cBonus = perks.voracityPercent || 50;
     return `You are F.R.I.D.A.Y, the tactical Torn City intelligence advisor and operations specialist for ${fn}${fidStr}.
 
 CORE PERSONA & TEMPERAMENT (WARM, POLITE, ENCOURAGING, AND HIGHLY SUPPORTIVE):
 1. WARM, RESPECTFUL & ENCOURAGING:
-   - You are a loyal, encouraging, and supportive teammate. You celebrate members' achievements, empower them with actionable knowledge, and treat every question with respect and warmth.
-   - ABSOLUTE BAN ON MEANNESS, ROASTING, AND SARCASM: You NEVER roast, mock, demean, patronize, or insult anyone. You are NEVER sarcastic or dismissive. If someone asks a beginner question, guide them patiently, clearly, and warmly.
-   - You speak with the sharp competence and helpful poise of Tony Stark's F.R.I.D.A.Y. mixed with the practical wisdom of a veteran Torn City leader.
-
+   - You are a loyal, encouraging, and supportive teammate. Never roast, mock, demean, patronize, or use sarcasm.
+   - Speak with the sharp competence of Tony Stark's F.R.I.D.A.Y. combined with the precision of a veteran Torn City researcher.
 2. EXCLUSIVELY TORN CITY GAMEPLAY & FACTION OPERATIONS:
-   - You specialize in all aspects of Torn City gameplay: gym training math, stat curve, happy jumps, ranked warfare, chaining, Crimes 2.0 & OC 2.0, foreign travel, trading, economy, banking, stocks, and faction rules.
-   - NO WEBSITE / DEV DISCUSSIONS: If asked about website source code, HTML, CSS, JavaScript, or internal server architecture, politely decline: "I specialize exclusively in Torn City gameplay, tactical warfare, and faction operations. For web dashboard technical items, please reach out to leadership!"
+   - You specialize in Torn City gameplay: gym math, stat curves, happy jumps, ranked warfare, chaining, Crimes 2.0 & OC 2.0, travel, trading, stocks, companies, education, properties, honors/merits, and faction operations.
+   - If asked about website source code or server internals, politely decline and refer to leadership.
+3. CRISP, HIGH-YIELD FORMATTING:
+   - Lead with the direct, verified answer in the first 1-2 sentences (Bottom-Line Up Front), followed by clean bullet points with exact numbers.
 
-3. CRISP, CLEAR, AND HIGH-YIELD FORMATTING:
-   - Bottom-Line Up Front: Always lead with a clear, direct answer in the first 1-2 sentences.
-   - Follow with clean bullet points or numbered steps for the essential mechanics or action items.
-   - Keep answers easy to read on mobile and Discord — punchy, informative, and free of filler.
+MANDATORY TWO-TIER SOURCING & VERIFICATION PROTOCOL (NON-NEGOTIABLE):
+1. TIER 1 — OFFICIAL TORN WIKI FIRST (wiki.torn.com & Official Torn API Data):
+   - Always prioritize facts directly from the official Torn Wiki (wiki.torn.com) and the Official Torn API Encyclopedia block provided in your prompt.
+   - When Torn Wiki clearly answers the question, base your answer ONLY on Torn Wiki (plus the user's/faction's live Torn API telemetry when personal/faction numbers are asked) and cite the Torn Wiki page (e.g., "📖 Source: Torn Wiki — Drugs / Overdosing").
+   - NEVER mix in mechanics from other games, general internet trivia, or unverified LLM assumptions.
+2. TIER 2 — MULTI-ANSWER TORN FORUMS CONSENSUS FALLBACK (torn.com/forums.php):
+   - ONLY when Torn Wiki does NOT provide a clear or complete answer (e.g., undocumented formulas, Crimes 2.0 / OC 2.0 community research, optimal meta strategies, mugging/war tactics, or player comparisons), turn to the Torn Forums evidence provided in your prompt.
+   - CROSS-CHECK MULTIPLE ANSWERS: Synthesize across MULTIPLE Torn Forum threads and MULTIPLE replies. Weight high-karma veteran authors (e.g., Baldr, Proxima, Emforus, Vladar, Andyman, Chedburn's announcements), posts with strong positive ratings (👍 >> 👎), and recent post-patch dates over single unverified or outdated replies.
+   - Cite the forum consensus clearly (e.g., "💬 Source: Torn Forums Consensus — Tutorials & Guides / Q&A").
+   - If multiple credible forum veterans disagree or a formula isn't 100% settled, state both sides honestly instead of guessing.
+3. ZERO HALLUCINATION GUARANTEE:
+   - If neither Torn Wiki nor Torn Forums confirm an item, mechanic, or number, explicitly state: "This cannot be verified in the official Torn Wiki or Torn Forums." NEVER invent fake items, perks, percentages, or cooldowns.
 
-STRICT KNOWLEDGE & SOURCING RULES:
-1. STRICTLY GROUNDED IN TORN WIKI & TORN FORUMS: You derive your Torn City game knowledge exclusively from the official Torn City Wiki (wiki.torn.com) and the official Torn City Forums (site:torn.com/forums.php) including verified community guides (such as Baldr, Vladar, Proxima, and Chedburn's official announcements).
-2. ZERO HALLUCINATIONS: If a game mechanic, weapon, item, formula, or update is NOT documented in verified Torn Wiki articles or official Torn forum threads, you MUST explicitly state: "This item or mechanic cannot be verified in official Torn Wiki or Forum records." NEVER invent fake items, weapons, or formulas.
-3. WIKI & FORUM CITATIONS: Whenever applicable, cite the relevant Torn Wiki page or forum guide/author (e.g. "Torn Wiki: Happy", "Baldr's Basic Advice", "Vladar's FF Guide", "Chedburn's OC 2.0 Announcement").
-
-VERIFIED TORN CITY GAMEPLAY MASTERY:
-1. GYM TRAINING & BATTLE STAT CURVE:
-   - Happy Linear Scaling: Happiness linearly multiplies gym stat gains up to the softcap of ~50,000,000 in a single stat.
-   - Beyond 50M: Happy gains plateau. At this stage, Energy volume (3x daily Xanax, energy refills, cans, FHCs) becomes the primary training driver.
-   - Gym Dots & Gym Unlock Sequence: Higher dot gyms provide significantly higher gains per energy spent. Specialist gyms (e.g. George's for Strength, ISO-Gym for Defense, Frontline Fitness) offer the highest stat gains for focused builds.
-   - Happy Jumps vs Regular Training:
-     * Under 400k-800k stats: Happy jumps (stacking 1,000e via Xanax + eating candies/eDVDs + Ecstasy) offer massive exponential returns.
-     * Above 800k-1M stats: Choco jumps or direct 3x Xanax + energy refill training becomes more energy-efficient and cost-effective.
-
-2. CRIMES 2.0 & ORGANIZED CRIMES 2.0 (OC 2.0):
-   - Crimes 2.0: Individual crime progression based on Skill Level (1-100), Nerve investment, and Crime Pass Rate (CPR).
-   - OC 2.0 Structure: Organized Crimes require specific team roles, equipment, and CPR levels.
-   - Faction OC CPR Guidelines:
-     * Levels 1 & 2: 0% CPR requirement (open to all members).
-     * Levels 3 & 4: ~40%+ CPR recommended.
-     * Levels 5 & 6: >35%+ CPR recommended.
-     * Levels 7 & 8: High tier, coordinated execution.
-   - Equipment: Teams require items like Binoculars, Lockpicks, Flash Grenades, Heavy Artillery, C4, etc. Members can loan items from the faction armory.
-   - Inactivity policy: Members who haven't joined or participated in an OC for 24 hours receive alerts. Recruits under Torn's 3-day initial faction restriction are strictly exempt.
-
-3. RANKED WARFARE & CHAIN MECHANICS:
-   - Fair Fight (FF) Formula: Scales between 1.00 and 3.00 based on the defender's stats relative to the attacker. Maximum respect payout is attained near 3.00 FF.
-   - Retaliation Bonus: Landing a counter-hit within 5 minutes of an enemy attacking a friendly member awards a 1.5x respect multiplier!
-   - Chain Bonus Milestones: Key respect payout spikes occur at hits 10 (1.25x), 25 (1.5x), 50 (2.0x), 100 (2.5x), 250 (3.0x), 500 (3.5x), 1,000 (4.0x), 2,500 (4.5x), 5,000 (5.0x), 10,000 (5.0x).
-   - Chain Watch Alert: Chain warning alerts trigger when timer drops below 90 seconds.
-   - War Caches: Winning ranked wars awards faction war caches (Bronze, Silver, Gold, Platinum, Diamond) containing rare weapons and armor bonuses.
-   - Medical Items: Small First Aid Kits, First Aid Kits, and Morphine reduce hospital time. Blood Bags (Intravenous Therapy education) restore 20-30% life and reduce hospital time when blood types are compatible.
-
-4. ECONOMY, BANKING & PASSIVE INCOME:
-   - City Bank: The 3-month investment offers the highest APR in Torn. Maximized with 10/10 Bank Interest merits (+50% APR) and the Torn City Bank (TCB) stock benefit block (+10% APR).
-   - Foreign Travel: Unlocked at Level 15 (fast-tracked by hitting Baldr's leveling list). Maximum suitcase capacity is achieved with a Private Island + Airstrip (+10 items), Large Suitcase (+4 items), and Faction travel perks (+8 to +10 items), yielding 29-37 items per flight.
-   - Plushie & Flower Runs: Switzerland (rehab + edelweiss), UAE/UK/Argentina/Japan/Hawaii generate $2M–$4M+ daily passive profit.
-
-5. ADDICTION & REHABILITATION:
-   - Each Xanax adds ~35-40 addiction points. Overdoses hospitalize players for 24-72h, clear energy/nerve, and add heavy addiction.
-   - High addiction triggers a severe training stat penalty (up to -20% gym gains) and increases overdose risk.
-   - Rehab: Take a flight to Switzerland to clear addiction at the Swiss Clinic ($250,000 per rehab session).
-
-6. FACTION PERKS & JUMP REGIMEN:
-   - Faction: ${fn}${fidStr}.
-   - Faction Candy Perk: +50% Happy from candy boosters (e.g. Bag of Chocolate Truffles yields 150 Happy instead of 100).
-   - Faction Booster Cooldown: Upgraded with Toleration perks allowing up to 39 hours of booster capacity (holds up to 78 bags of candies!).
-   - Budget Jump: Stack to 850/900e with 3 Xanax, eat candies to reach ~15k Happy, train before the 15m tick.
-   - Medium Jump: Stack 1,000e with 4 Xanax, let cooldown clear, eat 69 Tootsie Rolls/candies, pop 1 Ecstasy to double happy to ~25k, train before the tick.
-   - 99k Jump: Advanced jump using 4-5 eDVDs + 1 Ecstasy + 1,000e for stats under 400k-800k.
+LIVE FACTION PERK BASELINE (${fn}${fidStr}):
+- Faction Booster Cooldown Limit: ${bLimit} hours (24h base + ${perks.tolerationHours || 24}h Toleration perk = ${Math.floor((bLimit * 60) / 30)} candies max).
+- Faction Candy Effect Perk: +${cBonus}% Happy from candy (e.g. Bag of Chocolate Truffles gives ${Math.floor(100 * (1 + cBonus / 100))} Happy).
+- Faction Travel Capacity Bonus: +${perks.travelCapacityBonus || 8} items.
 `;
 }
 
@@ -11834,17 +11791,52 @@ const modelQuotaCooldowns = new Map();
 const keyQuotaCooldowns = new Map();
 let geminiKeyRoundRobin = 0;
 
+function extractGeminiReplyText(data) {
+    const parts = data?.candidates?.[0]?.content?.parts;
+    if (!Array.isArray(parts) || parts.length === 0) return '';
+    // Filter out internal reasoning/thought blocks on Gemini 4 models so only the final response is returned
+    const answerParts = parts.filter(p => !p.thought && typeof p.text === 'string');
+    if (answerParts.length > 0) {
+        return answerParts.map(p => p.text).join('').trim();
+    }
+    return parts.map(p => p.text || '').join('').trim();
+}
+
+function sanitizePayloadForGeminiModel(rawPayload, model) {
+    const cloned = JSON.parse(JSON.stringify(rawPayload || {}));
+    // Gemini 4 and Gemini 3.5 models deprecate temperature/topP/topK in favor of native high reasoning
+    if (/^gemini-(4|3\.5)/i.test(model) && cloned.generationConfig) {
+        delete cloned.generationConfig.temperature;
+        delete cloned.generationConfig.topP;
+        delete cloned.generationConfig.topK;
+        delete cloned.generationConfig.top_p;
+        delete cloned.generationConfig.top_k;
+        if (Object.keys(cloned.generationConfig).length === 0) {
+            delete cloned.generationConfig;
+        }
+    }
+    return cloned;
+}
+
 async function callGeminiWithFallback(payload, specificKey = null, options = {}) {
     const allKeys = specificKey ? [specificKey] : getGeminiApiKeys();
     if (allKeys.length === 0) return { success: false, error: "Missing Gemini API key." };
 
-    // Order by verified active availability & high quota throughput
-    // Note: gemini-flash-lite-latest & gemini-2.5-flash have distinct quota pools from gemini-flash-latest
-    const candidateModels = [
-        'gemini-flash-lite-latest',  // High throughput, separate quota, verified 200 OK
-        'gemini-2.5-flash',          // Fast flash preview, separate quota, verified 200 OK
-        'gemini-flash-latest'        // Official production Flash (quota can be tight on free tier)
-    ];
+    const usesGoogleSearchTool = Array.isArray(payload?.tools) && payload.tools.some(t => t.googleSearch || t.google_search);
+
+    // Smarter Free-Tier Frontier Routing:
+    // - For reasoning & synthesis (no googleSearch tool): lead with gemini-4-hydrogen (1M context, high thinking, free tier!)
+    //   followed by gemini-3.5-flash-lite & gemini-3.1-flash-lite.
+    // - When googleSearch tool is directly attached: lead with the free-tier search-grounding quota model first.
+    const candidateModels = usesGoogleSearchTool
+        ? ['gemini-2.5-flash', 'gemini-4-hydrogen', 'gemini-3.5-flash-lite']
+        : [
+            'gemini-4-hydrogen',         // Strongest free-tier Gemini 4 frontier reasoner (verified 200 OK!)
+            'gemini-3.5-flash-lite',     // Fast Gemini 3.5 fallback with separate quota pool
+            'gemini-3.1-flash-lite',     // High-throughput backup pool
+            'gemma-4-31b-it',            // Open-weights Gemma 4 31B backup
+            'gemini-flash-lite-latest'   // Final emergency fallback
+        ];
 
     const now = Date.now();
 
@@ -11864,7 +11856,8 @@ async function callGeminiWithFallback(payload, specificKey = null, options = {})
 
     // Filter out models currently in a quota exhaustion cooldown
     const modelsToTry = candidateModels.filter(m => {
-        const cd = modelQuotaCooldowns.get(m);
+        const cdKey = `${m}:${usesGoogleSearchTool ? 'search' : 'plain'}`;
+        const cd = modelQuotaCooldowns.get(cdKey);
         return !cd || now > cd;
     });
     const activeModels = modelsToTry.length > 0 ? modelsToTry : candidateModels;
@@ -11878,14 +11871,18 @@ async function callGeminiWithFallback(payload, specificKey = null, options = {})
 
         // 2. Try each model in sequence for this key
         for (const model of activeModels) {
+            const cdKey = `${model}:${usesGoogleSearchTool ? 'search' : 'plain'}`;
+            const reqPayload = sanitizePayloadForGeminiModel(payload, model);
+            const perModelTimeout = model.startsWith('gemini-4') ? Math.max(options.timeout || 14000, 14000) : (options.timeout || 9000);
+
             for (let attempt = 0; attempt < 2; attempt++) {
                 try {
                     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
                     const res = await fetch(url, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload),
-                        signal: AbortSignal.timeout(options.timeout || 8000)
+                        body: JSON.stringify(reqPayload),
+                        signal: AbortSignal.timeout(perModelTimeout)
                     });
                     const data = await res.json();
                     if (data.error) {
@@ -11894,16 +11891,15 @@ async function callGeminiWithFallback(payload, specificKey = null, options = {})
                         const isHighDemand = (errMsg.toLowerCase().includes('high demand') || data.error.code === 503) && !isQuota;
 
                         if (isQuota) {
-                            // Cooldown this specific model for 3m, but CONTINUE to next model on THIS SAME KEY!
-                            modelQuotaCooldowns.set(model, Date.now() + 3 * 60 * 1000);
-                            console.warn(`[Gemini API] Key [${keyPreview}] hit quota limit for ${model}. Trying next model on this key...`);
+                            modelQuotaCooldowns.set(cdKey, Date.now() + 3 * 60 * 1000);
+                            console.warn(`[Gemini API] Key [${keyPreview}] hit quota limit for ${cdKey}. Trying next model on this key...`);
                             lastError = new Error(`[Key ${keyPreview} / ${model}] ${errMsg}`);
-                            break; // break attempt loop, try next model on this key
+                            break;
                         }
 
                         if (isHighDemand && attempt === 0) {
-                            await new Promise(r => setTimeout(r, 400));
-                            continue; // Quick retry once on transient 503 high demand
+                            await new Promise(r => setTimeout(r, 450));
+                            continue;
                         }
 
                         lastError = new Error(`[Key ${keyPreview} / ${model}] ${errMsg}`);
@@ -11926,7 +11922,6 @@ async function callGeminiWithFallback(payload, specificKey = null, options = {})
             }
         }
 
-        // If key failed on all candidate models, set a brief cooldown for this key
         if (!keySucceeded) {
             keyQuotaCooldowns.set(key, Date.now() + 2 * 60 * 1000);
         }
@@ -12028,9 +12023,9 @@ app.get('/api/ai/status', (req, res) => {
         geminiActiveKeys: activeCount,
         openRouterConfigured: Boolean(orKey),
         openRouterPreview: orKey ? `${orKey.slice(0, 8)}...${orKey.slice(-4)}` : null,
-        primaryProvider: keys.length > 0 ? "Gemini (3-Key Pool)" : "OpenRouter",
+        primaryProvider: keys.length > 0 ? "Gemini 4 Hydrogen + Torn Wiki/Forum RAG" : "OpenRouter",
         fallbackProvider: orKey ? "OpenRouter (Free Multi-Model Pool)" : "Deterministic Offline Engine",
-        model: "gemini-flash-latest (primary) with OpenRouter free failover (secondary)"
+        model: "gemini-4-hydrogen (reasoning) + Torn Wiki & Multi-Forum Consensus RAG"
     });
 });
 
@@ -12108,8 +12103,16 @@ async function askTornAI(message, history = [], userAccountData = null, invokerN
         tornKnowledge.fetchFactionPerks(primaryKey).catch(() => {});
     }
 
-    const key = getGeminiApiKey();
+    const allGemKeys = getGeminiApiKeys();
+    const key = allGemKeys[0] || "";
     const tornIntel = tornKnowledge.buildTornKnowledgeContext(message, userAccountData, invokerName);
+
+    // Stage 1: Gather Verified Torn Wiki (Tier 1) + Multi-Thread Torn Forum Consensus (Tier 2)
+    const ragEvidence = await fridayWikiForumRag.gatherTornWikiAndForumEvidence(message, primaryKey, allGemKeys).catch(() => ({
+        contextBlock: '',
+        sources: [],
+        usedWikiOrForum: false
+    }));
 
     // Build real-time account context if provided
     let accountContext = "";
@@ -12177,32 +12180,31 @@ async function askTornAI(message, history = [], userAccountData = null, invokerN
                 }
             }
         }
-        contents.push({ role: 'user', parts: [{ text: `${accountContext}${tornIntel}\n\nUser Question: ${message.trim()}` }] });
+        const sourcingReminder = `\n[SOURCING REMINDER: Answer strictly from Tier 1 (Torn Wiki / Official Torn API Encyclopedia) if it clearly answers the question. ONLY if Torn Wiki lacks a clear answer, synthesize across MULTIPLE answers in Tier 2 (Torn Forums) weighting high-karma & positively-rated replies. Never invent mechanics outside Torn Wiki & Torn Forums.]`;
+        contents.push({
+            role: 'user',
+            parts: [{ text: `${accountContext}${tornIntel}${ragEvidence.contextBlock}\nUser Question: ${message.trim()}${sourcingReminder}` }]
+        });
 
         const payload = {
             contents,
             systemInstruction: {
                 parts: [{ text: getFridayTornSystemPrompt() }]
-            },
-            tools: [{ googleSearch: {} }]
+            }
         };
 
-        result = await callGeminiWithFallback(payload, null, { timeout: 12000 });
-        if (!result.success) {
-            // Retry without web search tool (search tool can trigger quota/503 errors)
-            delete payload.tools;
-            result = await callGeminiWithFallback(payload, null, { timeout: 10000 });
-        }
+        // Stage 2: Frontier synthesis via Gemini 4 Hydrogen (falls back cleanly through Gemini 3.5 Flash-Lite -> OpenRouter)
+        result = await callGeminiWithFallback(payload, null, { timeout: 16000 });
     }
 
     if (!result.success && orKey) {
-        // Failover to OpenRouter
-        const userPrompt = `${accountContext}${tornIntel}\n\nUser Question: ${message.trim()}`;
+        // Failover to OpenRouter with the exact same Torn Wiki + Multi-Forum evidence!
+        const userPrompt = `${accountContext}${tornIntel}${ragEvidence.contextBlock}\nUser Question: ${message.trim()}`;
         const orResult = await callOpenRouterFallback(getFridayTornSystemPrompt(), userPrompt, history);
         if (orResult.success && orResult.text) {
             return {
                 reply: orResult.text.trim(),
-                sources: [],
+                sources: ragEvidence.sources || [],
                 modelUsed: orResult.modelUsed
             };
         }
@@ -12212,22 +12214,21 @@ async function askTornAI(message, history = [], userAccountData = null, invokerN
         // Grounded deterministic fallback
         if (userAccountData && accountIntent) {
             const detStats = userKeys.formatDeterministicStatsReply(userAccountData, invokerName || userAccountData.playerName, accountIntent, message);
-            if (detStats) return { reply: detStats, sources: [] };
+            if (detStats) return { reply: detStats, sources: ragEvidence.sources || [] };
         }
         const detReply = tornKnowledge.formatDeterministicTornAnswer(message, userAccountData, invokerName);
         if (detReply) {
-            return { reply: detReply, sources: [] };
+            return { reply: detReply, sources: ragEvidence.sources || [] };
         }
         throw new Error(result.error || "AI generation failed across all providers.");
     }
 
-    const candidate = result.data.candidates?.[0];
-    const reply = candidate?.content?.parts?.[0]?.text || "I was unable to generate a response. Please try rephrasing your question.";
+    const reply = extractGeminiReplyText(result.data) || "I was unable to generate a response. Please try rephrasing your question.";
 
-    const sources = [];
-    const chunks = candidate?.groundingMetadata?.groundingChunks || [];
+    const sources = [...(ragEvidence.sources || [])];
+    const chunks = result.data.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
     for (const ch of chunks) {
-        if (ch.web?.uri) {
+        if (ch.web?.uri && !sources.some(s => s.url === ch.web.uri)) {
             sources.push({
                 title: ch.web.title || "Torn City Reference",
                 url: ch.web.uri
@@ -12237,7 +12238,8 @@ async function askTornAI(message, history = [], userAccountData = null, invokerN
 
     return {
         reply,
-        sources: sources.slice(0, 5)
+        sources: sources.slice(0, 5),
+        modelUsed: result.modelUsed
     };
 }
 
@@ -12270,9 +12272,12 @@ Your job is to jump into the conversation naturally — like a friendly, experie
      * Bag of Chocolate Truffles (+100 Happy, 30m CD) is NOT Box of Chocolate Bars (+25 Happy) or Big Box of Chocolate Bars (+35 Happy).
      * Bag of Candy Kisses (+50 Happy) is NOT Bag of Chocolate Kisses (+25 Happy).
 
-2. GROUNDED IN TORN GAMEPLAY INTEL:
-   - Base all Torn City mechanics, perks, and calculations on verified game data provided in the prompt context.
-   - If no gameplay intel was provided, the user is chatting casually — keep your response friendly, welcoming, and lighthearted.
+2. STRICT TORN WIKI FIRST -> MULTI-FORUM CONSENSUS FALLBACK (MANDATORY FOR ALL GAMEPLAY QUESTIONS):
+   - Whenever a member asks about Torn City items, mechanics, perks, crimes, OCs, travel, gyms, wars, companies, or strategy:
+     * TIER 1 (PRIMARY — TORN WIKI): Answer ONLY using facts from the official Torn Wiki (wiki.torn.com) and Official Torn API Encyclopedia block provided in your prompt when Torn Wiki has a clear answer, and briefly credit it (e.g., "per Torn Wiki").
+     * TIER 2 (FALLBACK — TORN FORUMS CONSENSUS): ONLY if Torn Wiki does NOT clearly cover the answer (e.g., player strategy, meta builds, hidden formulas, Crimes 2.0 / OC 2.0 nuances), synthesize from MULTIPLE Torn Forum threads and MULTIPLE player replies provided in your prompt — weighting high-karma veteran guides & upvoted replies over single guesses, and briefly credit "per Torn Forums consensus".
+     * NEVER invent numbers, percentages, cooldowns, or items from memory or other games. If neither Torn Wiki nor Torn Forums confirm something, say so plainly.
+   - If the member is just greeting you or chatting casually (no gameplay question), keep your response warm, friendly, and brief (1-2 sentences) without reciting unprompted game stats.
 
 3. ACCOUNT-AWARE INTEL:
    - When the player's live account data is provided in the prompt, reference their real numbers (energy, happy, property, cooldowns).
@@ -12287,9 +12292,11 @@ Your job is to jump into the conversation naturally — like a friendly, experie
 }
 
 async function generateChatResponse(convoLines = [], hint = "", invokerName = "", replyContext = null, userAccountData = null, detectedIntent = null, userSpeech = "") {
-    const key = getGeminiApiKey();
+    const allGemKeys = getGeminiApiKeys();
+    const key = allGemKeys[0] || "";
     const orKey = getOpenRouterApiKey();
     const cleanSpeech = userSpeech || hint || (convoLines && convoLines.length > 0 ? convoLines[convoLines.length - 1] : "");
+    const primaryTornKey = discordConfig.apiKey || ADMIN_API_KEY || TORN_API_KEY || (apiPoolConfig && apiPoolConfig.keys && apiPoolConfig.keys[0]) || "";
 
     // If neither Gemini nor OpenRouter key is available, use deterministic fallback
     if (!key && !orKey) {
@@ -12312,9 +12319,18 @@ async function generateChatResponse(convoLines = [], hint = "", invokerName = ""
         convoPrompt += `Member speaking / pinging you: ${invokerName}\n\n`;
     }
 
-    // ── Verified Ground-Truth Torn City Intelligence Injection ──
+    // ── Verified Ground-Truth Torn City Intelligence + Live Torn Wiki / Multi-Forum RAG ──
     const tornIntel = tornKnowledge.buildTornKnowledgeContext(cleanSpeech, userAccountData, invokerName);
     convoPrompt += tornIntel;
+
+    let ragUsed = false;
+    if (fridayWikiForumRag.needsWikiOrForumLookup(cleanSpeech)) {
+        const ragEvidence = await fridayWikiForumRag.gatherTornWikiAndForumEvidence(cleanSpeech, primaryTornKey, allGemKeys).catch(() => null);
+        if (ragEvidence && ragEvidence.contextBlock) {
+            convoPrompt += ragEvidence.contextBlock;
+            ragUsed = true;
+        }
+    }
 
     // ── Verified Real-Time Live Torn Account Data Injection ──
     if (userAccountData) {
@@ -12388,24 +12404,22 @@ async function generateChatResponse(convoLines = [], hint = "", invokerName = ""
         convoPrompt += `\nExtra direction from member: "${hint.trim()}"\n`;
     }
 
-    convoPrompt += "\nNow respond naturally in 1-3 sentences to the latest message. If the user is asking about Torn gameplay or mechanics, adhere strictly to the verified facts above and do not guess or hallucinate. If the user is greeting you or chatting casually, respond warmly with your signature dry wit and banter without reciting unprompted game statistics or referencing prior conversations:";
+    convoPrompt += ragUsed
+        ? "\nNow respond naturally in 2-4 crisp sentences to the latest message. Adhere STRICTLY to Tier 1 (Torn Wiki / Official Torn API data) first; if Torn Wiki didn't have a clear answer, synthesize across MULTIPLE replies from Tier 2 (Torn Forums) so you are certain it is accurate, and briefly mention 'per Torn Wiki' or 'per Torn Forums consensus'. Do NOT guess or invent mechanics:"
+        : "\nNow respond naturally in 1-3 sentences to the latest message. If the user is asking about Torn gameplay or mechanics, adhere strictly to the verified facts above and do not guess or hallucinate. If the user is greeting you or chatting casually, respond warmly and naturally without reciting unprompted game statistics or referencing prior conversations:";
 
-    // 1. Primary AI Provider: Google Gemini Multi-Key Pool
+    // 1. Primary AI Provider: Gemini 4 Hydrogen Multi-Key Pool
     if (key) {
         const payload = {
             contents: [{ role: 'user', parts: [{ text: convoPrompt }] }],
             systemInstruction: {
                 parts: [{ text: getFridayResponderSystemPrompt() }]
-            },
-            generationConfig: {
-                temperature: 0.7
             }
         };
 
-        const result = await callGeminiWithFallback(payload, null, { timeout: 10000 });
+        const result = await callGeminiWithFallback(payload, null, { timeout: 15000 });
         if (result.success) {
-            const candidate = result.data.candidates?.[0];
-            const reply = candidate?.content?.parts?.[0]?.text?.trim() || "";
+            const reply = extractGeminiReplyText(result.data);
             if (reply) return reply;
         }
     }
@@ -12882,6 +12896,15 @@ Respond ONLY with valid JSON in this exact format:
 }`;
 
         const keys = getGeminiApiKeys();
+        const primaryTornKey = discordConfig.apiKey || ADMIN_API_KEY || TORN_API_KEY || (apiPoolConfig && apiPoolConfig.keys && apiPoolConfig.keys[0]) || "";
+        let webRagBlock = '';
+        if (mode === 'tactical' || fridayWikiForumRag.needsWikiOrForumLookup(cleanMsg)) {
+            const ragEv = await fridayWikiForumRag.gatherTornWikiAndForumEvidence(cleanMsg, primaryTornKey, keys).catch(() => null);
+            if (ragEv && ragEv.contextBlock) {
+                webRagBlock = `\n${ragEv.contextBlock}\nSTRICT SOURCING RULE: For any Torn City gameplay question, answer strictly from Tier 1 (Torn Wiki / Official Torn API data) first; if Torn Wiki lacks a clear answer, synthesize across MULTIPLE replies in Tier 2 (Torn Forums) to confirm consensus. Never invent mechanics.\n`;
+            }
+        }
+
         if (keys.length > 0) {
             const contents = [];
             if (Array.isArray(history)) {
@@ -12894,16 +12917,16 @@ Respond ONLY with valid JSON in this exact format:
                     }
                 }
             }
-            contents.push({ role: 'user', parts: [{ text: cleanMsg }] });
+            contents.push({ role: 'user', parts: [{ text: `${webRagBlock}User Request: ${cleanMsg}` }] });
 
             const payload = {
                 contents,
                 systemInstruction: { parts: [{ text: helperSystemPrompt }] },
                 generationConfig: { responseMimeType: 'application/json' }
             };
-            const gRes = await callGeminiWithFallback(payload, null, { timeout: 9000 });
+            const gRes = await callGeminiWithFallback(payload, null, { timeout: 15000 });
             if (gRes.success) {
-                const rawText = gRes.data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+                const rawText = extractGeminiReplyText(gRes.data);
                 try {
                     const parsed = JSON.parse(rawText);
                     if (parsed && parsed.reply) {
