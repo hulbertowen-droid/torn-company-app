@@ -44,6 +44,7 @@ const bugManager = require('./bug-manager');
 const { buildSlashCommands } = require('./discord-slash-builder');
 const tornKnowledge = require('./torn-knowledge');
 const fridayWikiForumRag = require('./friday-wiki-forum-rag');
+const fridayFreeroamTools = require('./friday-freeroam-tools');
 setTimeout(() => {
     const bootKey = discordConfig.apiKey || process.env.TORN_API_KEY || '';
     if (bootKey) {
@@ -11729,6 +11730,7 @@ CORE PERSONA & TEMPERAMENT (WARM, POLITE, ENCOURAGING, AND HIGHLY SUPPORTIVE):
 2. EXCLUSIVELY TORN CITY GAMEPLAY & FACTION OPERATIONS:
    - You specialize in Torn City gameplay: gym math, stat curves, happy jumps, ranked warfare, chaining, Crimes 2.0 & OC 2.0, travel, trading, stocks, companies, education, properties, honors/merits, and faction operations.
    - If asked about website source code or server internals, politely decline and refer to leadership.
+   - AUTONOMOUS FREEROAM TOOLS: You have live tool access to FactionOS's warboard, Ranked Wars, FF Scouter stat estimates, OC 2.0/Armory, Market/Travel profits, any public Torn player/faction API endpoint, Torn Wiki, and Torn Forums. Whenever a user asks about an upcoming/active war, enemy faction, specific player, market price, travel run, OC, or Torn mechanic, ALWAYS call your tools first to gather real live facts instead of giving generic advice!
 3. CRISP, HIGH-YIELD FORMATTING:
    - Lead with the direct, verified answer in the first 1-2 sentences (Bottom-Line Up Front), followed by clean bullet points with exact numbers.
 
@@ -11943,6 +11945,77 @@ async function callGeminiWithFallback(payload, specificKey = null, options = {})
     return { success: false, error: lastError ? lastError.message : 'All Gemini keys and models unavailable.' };
 }
 
+// ── Autonomous Multi-Turn Freeroam Tool-Calling Loop (Gemini 4 Hydrogen + Failover) ──
+async function runGeminiFreeroamLoop({ contents, systemInstruction, toolExecutor, maxSteps = 4, timeoutMs = 15000, thinkingLevel = 'medium' }) {
+    const workingContents = JSON.parse(JSON.stringify(contents || []));
+    const toolsPayload = [{ functionDeclarations: fridayFreeroamTools.FUNCTION_DECLARATIONS }];
+    const toolsUsed = [];
+    let lastModelUsed = null;
+
+    for (let step = 0; step < maxSteps; step++) {
+        const payload = {
+            contents: workingContents,
+            systemInstruction,
+            tools: toolsPayload
+        };
+        const res = await callGeminiWithFallback(payload, null, { timeout: timeoutMs, thinkingLevel });
+        if (!res.success) {
+            return { success: false, error: res.error, toolsUsed };
+        }
+        lastModelUsed = res.modelUsed;
+        const cand = res.data?.candidates?.[0];
+        const parts = cand?.content?.parts || [];
+        const fnCalls = parts.filter(p => p.functionCall && p.functionCall.name);
+
+        if (fnCalls.length === 0) {
+            const text = extractGeminiReplyText(res.data);
+            return {
+                success: Boolean(text),
+                reply: text,
+                data: res.data,
+                modelUsed: lastModelUsed,
+                toolsUsed
+            };
+        }
+
+        // Preserve exact model turn (including thoughtSignature!) for Gemini 4 multi-turn tool calling
+        workingContents.push(cand.content);
+
+        const fnResponses = await Promise.all(
+            fnCalls.map(async (p) => {
+                const fc = p.functionCall;
+                toolsUsed.push(fc.name);
+                const result = await toolExecutor.executeTool(fc.name, fc.args || {});
+                return {
+                    functionResponse: {
+                        name: fc.name,
+                        response: { result }
+                    }
+                };
+            })
+        );
+
+        workingContents.push({ role: 'user', parts: fnResponses });
+    }
+
+    // Final synthesis pass without tools if maxSteps reached
+    const finalRes = await callGeminiWithFallback(
+        { contents: workingContents, systemInstruction },
+        null,
+        { timeout: timeoutMs, thinkingLevel }
+    );
+    if (!finalRes.success) {
+        return { success: false, error: finalRes.error, toolsUsed };
+    }
+    return {
+        success: true,
+        reply: extractGeminiReplyText(finalRes.data),
+        data: finalRes.data,
+        modelUsed: finalRes.modelUsed || lastModelUsed,
+        toolsUsed
+    };
+}
+
 // ── OpenRouter Failover Caller (Free-Tier Uncapped Models) ──────────────────────
 function getOpenRouterApiKey() {
     if (discordConfig && typeof discordConfig.openrouterApiKey === 'string' && discordConfig.openrouterApiKey.trim()) {
@@ -12120,12 +12193,34 @@ async function askTornAI(message, history = [], userAccountData = null, invokerN
     const key = allGemKeys[0] || "";
     const tornIntel = tornKnowledge.buildTornKnowledgeContext(message, userAccountData, invokerName);
 
-    // Stage 1: Gather Verified Torn Wiki (Tier 1) + Multi-Thread Torn Forum Consensus (Tier 2)
+    // Stage 1: Fast pre-grounding for Torn Wiki / Multi-Forum evidence (skips if purely war/player/market lookup)
     const ragEvidence = await fridayWikiForumRag.gatherTornWikiAndForumEvidence(message, primaryKey, allGemKeys).catch(() => ({
         contextBlock: '',
         sources: [],
         usedWikiOrForum: false
     }));
+
+    const toolExecutor = fridayFreeroamTools.createFreeroamToolExecutor({
+        getTornApiKey: () => primaryKey || (typeof getNextApiKey === 'function' ? getNextApiKey() : ''),
+        getGeminiApiKeys,
+        getDefaultFactionId: () => discordConfig.factionId || dynamicFactionId || '52355',
+        getCachedWarboard: (fid) => (fid && lastGoodWarboardByFaction[fid]) || lastGoodWarboardPayload || null,
+        getBatchFFStats: getBatchPlayerStatsFromFFScouter,
+        getSingleFFStats: getPlayerStatsFromFFScouter,
+        getCachedTravelItems: async () => {
+            const cacheKey = 'travel_profits_default';
+            if (globalTornCache[cacheKey]?.data) return globalTornCache[cacheKey].data;
+            const r = await fetch(`http://127.0.0.1:${PORT}/api/travel-profits`, {
+                headers: primaryKey ? { 'x-api-key': primaryKey } : {},
+                signal: AbortSignal.timeout(6000)
+            }).then(x => x.json()).catch(() => null);
+            if (r && r.items) globalTornCache[cacheKey] = { timestamp: Date.now(), data: r };
+            return r;
+        },
+        formatCompactStats: formatCompactBattleStats,
+        userFactionId: userAccountData?.faction?.faction_id || discordConfig.factionId || '',
+        userTotalStats: Number(userAccountData?.battlestats?.total || 0)
+    });
 
     // Build real-time account context if provided
     let accountContext = "";
@@ -12193,21 +12288,21 @@ async function askTornAI(message, history = [], userAccountData = null, invokerN
                 }
             }
         }
-        const sourcingReminder = `\n[SOURCING REMINDER: Answer strictly from Tier 1 (Torn Wiki / Official Torn API Encyclopedia) if it clearly answers the question. ONLY if Torn Wiki lacks a clear answer, synthesize across MULTIPLE answers in Tier 2 (Torn Forums) weighting high-karma & positively-rated replies. Never invent mechanics outside Torn Wiki & Torn Forums.]`;
+        const sourcingReminder = `\n[AUTONOMOUS TOOL & SOURCING DIRECTIVE: You have live freeroam tools (get_faction_war_and_roster, inspect_torn_player_or_faction, get_faction_oc_and_armory, get_torn_market_and_travel, lookup_torn_wiki_and_encyclopedia, search_and_read_torn_forums, fetch_torn_public_endpoint). If the user asks about their war, enemy faction, any player, OCs, armory, market/travel prices, or public Torn data, CALL THE TOOLS FIRST to inspect real live numbers! For Torn game rules/mechanics, answer strictly from Tier 1 (Torn Wiki / Official Torn API) first, or Tier 2 (Multi-Answer Torn Forums consensus) if Wiki is incomplete. Never invent stats or mechanics.]`;
         contents.push({
             role: 'user',
             parts: [{ text: `${accountContext}${tornIntel}${ragEvidence.contextBlock}\nUser Question: ${message.trim()}${sourcingReminder}` }]
         });
 
-        const payload = {
+        // Stage 2: Autonomous Freeroam Tool Loop via Gemini 4 Hydrogen (with multi-model failover)
+        result = await runGeminiFreeroamLoop({
             contents,
-            systemInstruction: {
-                parts: [{ text: getFridayTornSystemPrompt() }]
-            }
-        };
-
-        // Stage 2: Frontier synthesis via Gemini 4 Hydrogen (falls back cleanly through Gemini 3.5 Flash-Lite -> OpenRouter)
-        result = await callGeminiWithFallback(payload, null, { timeout: 16000, thinkingLevel: 'medium' });
+            systemInstruction: { parts: [{ text: getFridayTornSystemPrompt() }] },
+            toolExecutor,
+            maxSteps: 4,
+            timeoutMs: 16000,
+            thinkingLevel: 'medium'
+        });
     }
 
     if (!result.success && orKey) {
@@ -12217,7 +12312,7 @@ async function askTornAI(message, history = [], userAccountData = null, invokerN
         if (orResult.success && orResult.text) {
             return {
                 reply: orResult.text.trim(),
-                sources: ragEvidence.sources || [],
+                sources: [...(ragEvidence.sources || []), ...toolExecutor.getCollectedSources()].slice(0, 5),
                 modelUsed: orResult.modelUsed
             };
         }
@@ -12236,10 +12331,13 @@ async function askTornAI(message, history = [], userAccountData = null, invokerN
         throw new Error(result.error || "AI generation failed across all providers.");
     }
 
-    const reply = extractGeminiReplyText(result.data) || "I was unable to generate a response. Please try rephrasing your question.";
+    const reply = result.reply || extractGeminiReplyText(result.data) || "I was unable to generate a response. Please try rephrasing your question.";
 
     const sources = [...(ragEvidence.sources || [])];
-    const chunks = result.data.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+    for (const ts of toolExecutor.getCollectedSources()) {
+        if (ts.url && !sources.some(s => s.url === ts.url)) sources.push(ts);
+    }
+    const chunks = result.data?.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
     for (const ch of chunks) {
         if (ch.web?.uri && !sources.some(s => s.url === ch.web.uri)) {
             sources.push({
@@ -12252,6 +12350,7 @@ async function askTornAI(message, history = [], userAccountData = null, invokerN
     return {
         reply,
         sources: sources.slice(0, 5),
+        toolsUsed: result.toolsUsed || [],
         modelUsed: result.modelUsed
     };
 }
@@ -12421,19 +12520,51 @@ async function generateChatResponse(convoLines = [], hint = "", invokerName = ""
         ? "\nNow respond naturally in 2-4 crisp sentences to the latest message. Adhere STRICTLY to Tier 1 (Torn Wiki / Official Torn API data) first; if Torn Wiki didn't have a clear answer, synthesize across MULTIPLE replies from Tier 2 (Torn Forums) so you are certain it is accurate, and briefly mention 'per Torn Wiki' or 'per Torn Forums consensus'. Do NOT guess or invent mechanics:"
         : "\nNow respond naturally in 1-3 sentences to the latest message. If the user is asking about Torn gameplay or mechanics, adhere strictly to the verified facts above and do not guess or hallucinate. If the user is greeting you or chatting casually, respond warmly and naturally without reciting unprompted game statistics or referencing prior conversations:";
 
-    // 1. Primary AI Provider: Gemini 4 Hydrogen Multi-Key Pool
+    // 1. Primary AI Provider: Gemini 4 Hydrogen Multi-Key Pool (with Freeroam Tools for live war/player/market/wiki/forum queries)
     if (key) {
-        const payload = {
-            contents: [{ role: 'user', parts: [{ text: convoPrompt }] }],
-            systemInstruction: {
-                parts: [{ text: getFridayResponderSystemPrompt() }]
+        if (!isCasualGreeting && (ragUsed || /\b(war|enemy|target|roster|player|faction|oc|armory|market|price|stock|travel|fly|wiki|forum|how|what|who|when|which)\b/i.test(cleanSpeech))) {
+            const chatToolExecutor = fridayFreeroamTools.createFreeroamToolExecutor({
+                getTornApiKey: () => primaryTornKey || (typeof getNextApiKey === 'function' ? getNextApiKey() : ''),
+                getGeminiApiKeys,
+                getDefaultFactionId: () => discordConfig.factionId || dynamicFactionId || '52355',
+                getCachedWarboard: (fid) => (fid && lastGoodWarboardByFaction[fid]) || lastGoodWarboardPayload || null,
+                getBatchFFStats: getBatchPlayerStatsFromFFScouter,
+                getSingleFFStats: getPlayerStatsFromFFScouter,
+                getCachedTravelItems: async () => {
+                    const cacheKey = 'travel_profits_default';
+                    if (globalTornCache[cacheKey]?.data) return globalTornCache[cacheKey].data;
+                    const r = await fetch(`http://127.0.0.1:${PORT}/api/travel-profits`, {
+                        headers: primaryTornKey ? { 'x-api-key': primaryTornKey } : {},
+                        signal: AbortSignal.timeout(5500)
+                    }).then(x => x.json()).catch(() => null);
+                    if (r && r.items) globalTornCache[cacheKey] = { timestamp: Date.now(), data: r };
+                    return r;
+                },
+                formatCompactStats: formatCompactBattleStats,
+                userFactionId: userAccountData?.faction?.faction_id || discordConfig.factionId || '',
+                userTotalStats: Number(userAccountData?.battlestats?.total || 0)
+            });
+            const loopRes = await runGeminiFreeroamLoop({
+                contents: [{ role: 'user', parts: [{ text: convoPrompt }] }],
+                systemInstruction: { parts: [{ text: getFridayResponderSystemPrompt() }] },
+                toolExecutor: chatToolExecutor,
+                maxSteps: 3,
+                timeoutMs: 14000,
+                thinkingLevel: 'low'
+            });
+            if (loopRes.success && loopRes.reply) return loopRes.reply;
+        } else {
+            const payload = {
+                contents: [{ role: 'user', parts: [{ text: convoPrompt }] }],
+                systemInstruction: {
+                    parts: [{ text: getFridayResponderSystemPrompt() }]
+                }
+            };
+            const result = await callGeminiWithFallback(payload, null, { timeout: 12000, thinkingLevel: 'low' });
+            if (result.success) {
+                const reply = extractGeminiReplyText(result.data);
+                if (reply) return reply;
             }
-        };
-
-        const result = await callGeminiWithFallback(payload, null, { timeout: 14000, thinkingLevel: 'low' });
-        if (result.success) {
-            const reply = extractGeminiReplyText(result.data);
-            if (reply) return reply;
         }
     }
 
@@ -12467,7 +12598,8 @@ app.post('/api/ai/chat', async (req, res) => {
         res.json({
             success: true,
             reply: result.reply,
-            sources: result.sources
+            sources: result.sources,
+            toolsUsed: result.toolsUsed || []
         });
     } catch(err) {
         res.status(500).json({ success: false, error: err.message });
