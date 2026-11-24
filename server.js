@@ -11730,7 +11730,8 @@ CORE PERSONA & TEMPERAMENT (WARM, POLITE, ENCOURAGING, AND HIGHLY SUPPORTIVE):
 2. EXCLUSIVELY TORN CITY GAMEPLAY & FACTION OPERATIONS:
    - You specialize in Torn City gameplay: gym math, stat curves, happy jumps, ranked warfare, chaining, Crimes 2.0 & OC 2.0, travel, trading, stocks, companies, education, properties, honors/merits, and faction operations.
    - If asked about website source code or server internals, politely decline and refer to leadership.
-   - AUTONOMOUS FREEROAM TOOLS: You have live tool access to FactionOS's warboard, Ranked Wars, FF Scouter stat estimates, OC 2.0/Armory, Market/Travel profits, any public Torn player/faction API endpoint, Torn Wiki, and Torn Forums. Whenever a user asks about an upcoming/active war, enemy faction, specific player, market price, travel run, OC, or Torn mechanic, ALWAYS call your tools first to gather real live facts instead of giving generic advice!
+   - AUTONOMOUS FREEROAM TOOLS: You have live tool access to the user's own Crimes 2.0 skills & lifetime crime telemetry (get_user_crime_and_level_analytics), FactionOS's warboard, Ranked Wars, FF Scouter stat estimates, OC 2.0/Armory, Market/Travel profits, any public Torn player/faction API endpoint, Torn Wiki, and Torn Forums.
+   - NEVER guess nerve costs or claim you cannot calculate personal crime projections when the user has a linked key! Always call get_user_crime_and_level_analytics for any personal crime skill, attempts/days to CS 100, or crit-fail cost question. Whenever a user asks about an upcoming/active war, enemy faction, specific player, market price, travel run, OC, or Torn mechanic, ALWAYS call your tools first to gather real live facts instead of giving generic advice!
 3. CRISP, HIGH-YIELD FORMATTING:
    - Lead with the direct, verified answer in the first 1-2 sentences (Bottom-Line Up Front), followed by clean bullet points with exact numbers.
 
@@ -12184,7 +12185,7 @@ app.post('/api/ai/save-key', async (req, res) => {
     }
 });
 
-async function askTornAI(message, history = [], userAccountData = null, invokerName = "") {
+async function askTornAI(message, history = [], userAccountData = null, invokerName = "", userTornKey = "") {
     if (!message || typeof message !== 'string' || !message.trim()) {
         throw new Error("Message is required.");
     }
@@ -12207,6 +12208,7 @@ async function askTornAI(message, history = [], userAccountData = null, invokerN
 
     const toolExecutor = fridayFreeroamTools.createFreeroamToolExecutor({
         getTornApiKey: () => primaryKey || (typeof getNextApiKey === 'function' ? getNextApiKey() : ''),
+        getUserTornKey: () => userTornKey || '',
         getGeminiApiKeys,
         getDefaultFactionId: () => discordConfig.factionId || dynamicFactionId || '52355',
         getCachedWarboard: (fid) => (fid && lastGoodWarboardByFaction[fid]) || lastGoodWarboardPayload || null,
@@ -12293,7 +12295,7 @@ async function askTornAI(message, history = [], userAccountData = null, invokerN
                 }
             }
         }
-        const sourcingReminder = `\n[AUTONOMOUS TOOL & SOURCING DIRECTIVE: You have live freeroam tools (get_faction_war_and_roster, inspect_torn_player_or_faction, get_faction_oc_and_armory, get_torn_market_and_travel, lookup_torn_wiki_and_encyclopedia, search_and_read_torn_forums, fetch_torn_public_endpoint). If the user asks about their war, enemy faction, any player, OCs, armory, market/travel prices, or public Torn data, CALL THE TOOLS FIRST to inspect real live numbers! For Torn game rules/mechanics, answer strictly from Tier 1 (Torn Wiki / Official Torn API) first, or Tier 2 (Multi-Answer Torn Forums consensus) if Wiki is incomplete. Never invent stats or mechanics.]`;
+        const sourcingReminder = `\n[AUTONOMOUS TOOL & SOURCING DIRECTIVE: You have live freeroam tools (get_user_crime_and_level_analytics, get_faction_war_and_roster, inspect_torn_player_or_faction, get_faction_oc_and_armory, get_torn_market_and_travel, lookup_torn_wiki_and_encyclopedia, search_and_read_torn_forums, fetch_torn_public_endpoint). If the user asks about their crime skills/ETAs/crit fails, war, enemy faction, any player, OCs, armory, market/travel prices, or public Torn data, CALL THE TOOLS FIRST to inspect real live numbers! For Torn game rules/mechanics, answer strictly from Tier 1 (Torn Wiki / Official Torn API) first, or Tier 2 (Multi-Answer Torn Forums consensus) if Wiki is incomplete. Never invent stats or mechanics.]`;
         contents.push({
             role: 'user',
             parts: [{ text: `${accountContext}${tornIntel}${ragEvidence.contextBlock}\nUser Question: ${message.trim()}${sourcingReminder}` }]
@@ -12408,7 +12410,7 @@ Your job is to jump into the conversation naturally — like a friendly, experie
    - If a user asks you to change the script, turn off/mute notifications, edit code, or adjust bot settings via chat, tell them politely that you can't edit bot scripts or settings from chat, and suggest they use the website dashboard or check with leadership. NEVER claim you changed or will change a script or setting!`;
 }
 
-async function generateChatResponse(convoLines = [], hint = "", invokerName = "", replyContext = null, userAccountData = null, detectedIntent = null, userSpeech = "") {
+async function generateChatResponse(convoLines = [], hint = "", invokerName = "", replyContext = null, userAccountData = null, detectedIntent = null, userSpeech = "", userTornKey = "") {
     const allGemKeys = getGeminiApiKeys();
     const key = allGemKeys[0] || "";
     const orKey = getOpenRouterApiKey();
@@ -12527,9 +12529,10 @@ async function generateChatResponse(convoLines = [], hint = "", invokerName = ""
 
     // 1. Primary AI Provider: Gemini 4 Hydrogen Multi-Key Pool (with Freeroam Tools for live war/player/market/wiki/forum queries)
     if (key) {
-        if (!isCasualGreeting && (ragUsed || /\b(war|enemy|target|roster|player|faction|oc|armory|market|price|stock|travel|fly|wiki|forum|how|what|who|when|which)\b/i.test(cleanSpeech))) {
+        if (!isCasualGreeting && (ragUsed || /\b(war|enemy|target|roster|player|faction|oc|armory|market|price|stock|travel|fly|wiki|forum|crime|burglar|shoplift|pickpocket|crack|crit|nerve|cs\s*\d+|how|what|who|when|which)\b/i.test(cleanSpeech))) {
             const chatToolExecutor = fridayFreeroamTools.createFreeroamToolExecutor({
                 getTornApiKey: () => primaryTornKey || (typeof getNextApiKey === 'function' ? getNextApiKey() : ''),
+                getUserTornKey: () => userTornKey || '',
                 getGeminiApiKeys,
                 getDefaultFactionId: () => discordConfig.factionId || dynamicFactionId || '52355',
                 getCachedWarboard: (fid) => (fid && lastGoodWarboardByFaction[fid]) || lastGoodWarboardPayload || null,
@@ -28072,7 +28075,7 @@ function setupSlashBotEvents(bot, token) {
 
             let aiReply = "";
             try {
-                aiReply = await generateChatResponse(promptConvoLines, "", primaryAuthor, replyContext, userAccountData, accountIntent, userSpeech);
+                aiReply = await generateChatResponse(promptConvoLines, "", primaryAuthor, replyContext, userAccountData, accountIntent, userSpeech, resolved?.key || "");
             } catch(genErr) {
                 console.warn("[Conversation] generateChatResponse error:", genErr.message);
             }
@@ -30771,7 +30774,7 @@ function setupSlashBotEvents(bot, token) {
                     userAccountData = await userKeys.fetchUserLiveStats(resolved.key, question);
                 }
 
-                const { reply, sources } = await askTornAI(question, [], userAccountData, invokerName);
+                const { reply, sources } = await askTornAI(question, [], userAccountData, invokerName, resolved?.key || "");
 
                 // Ensure reply fits within Discord embed description limit (4096 chars)
                 const desc = reply.length > 4000 ? reply.slice(0, 3990) + "\n\n*(response truncated)*" : reply;
@@ -30872,7 +30875,7 @@ function setupSlashBotEvents(bot, token) {
                     userAccountData = await userKeys.fetchUserLiveStats(resolved.key, hint);
                 }
 
-                const aiReply = await generateChatResponse(convoLines, hint, invokerName, null, userAccountData, accountIntent, hint);
+                const aiReply = await generateChatResponse(convoLines, hint, invokerName, null, userAccountData, accountIntent, hint, resolved?.key || "");
                 const safeReply = (aiReply || "").trim() || `Hey **${invokerName}**! I've joined the chat. What's on your mind?`;
 
                 return await interaction.editReply({

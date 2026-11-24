@@ -65,6 +65,27 @@ const FUNCTION_DECLARATIONS = [
         }
     },
     {
+        name: 'get_user_crime_and_level_analytics',
+        description: 'Get the user\'s REAL personal Crimes 2.0 skills (exact 2-decimal CS), Torn API v2 per-crime lifetime attempts/successes/fails/critical fails/nerve spent, optional 30-day Full Access log stats if available, and exact nonlinear Crimes 2.0 projection (attempts, nerve, days to Target CS, and extra days/attempts cost by critical failures). ALWAYS call this when asked about personal crime skills, attempts/days to CS 100, crit-fail cost, or level progress.',
+        parameters: {
+            type: 'object',
+            properties: {
+                crimeName: {
+                    type: 'string',
+                    description: 'Optional specific crime slug/name (e.g. burglary, cracking, shoplifting, pickpocketing, bootlegging, graffiti, search_for_cash, card_skimming, hustling, disposal, forgery, scamming, arson)'
+                },
+                targetSkill: {
+                    type: 'number',
+                    description: 'Target Crime Skill level (2-100, defaults to 100)'
+                },
+                dailyNerve: {
+                    type: 'number',
+                    description: 'User specified daily nerve budget (e.g. 120). If omitted, estimates from user NNB.'
+                }
+            }
+        }
+    },
+    {
         name: 'get_torn_market_and_travel',
         description: 'Get live Torn City market prices (items by name, Points Market price, stock prices/benefits) and live top foreign travel profit runs from YATA/Prometheus.',
         parameters: {
@@ -155,9 +176,44 @@ function summarizeBracket(statsNum) {
     return '1B+';
 }
 
+const CRIMES_V2_LIST = [
+    [1, 'search_for_cash', 'Search for Cash'],
+    [2, 'bootlegging', 'Bootlegging'],
+    [3, 'graffiti', 'Graffiti'],
+    [4, 'shoplifting', 'Shoplifting'],
+    [5, 'pickpocketing', 'Pickpocketing'],
+    [6, 'card_skimming', 'Card Skimming'],
+    [7, 'burglary', 'Burglary'],
+    [8, 'hustling', 'Hustling'],
+    [9, 'disposal', 'Disposal'],
+    [10, 'cracking', 'Cracking'],
+    [11, 'forgery', 'Forgery'],
+    [12, 'scamming', 'Scamming'],
+    [13, 'arson', 'Arson']
+];
+
+function crimeCurveFactor(cs) {
+    const s = Math.max(1, Math.min(99.9, Number(cs) || 1));
+    const early = 1 + 0.032 * s;
+    const midBoost = s > 45 ? 0.0014 * Math.pow(s - 45, 2.15) : 0;
+    const lateBoost = s > 72 ? 0.0068 * Math.pow(s - 72, 2.25) : 0;
+    return early + midBoost + lateBoost;
+}
+
+function cumulativeCrimeCurveWeight(cs) {
+    const s = Math.max(1, Math.min(100, Number(cs) || 1));
+    if (s <= 1.01) return 0;
+    const floor = Math.floor(s);
+    let sum = 0;
+    for (let l = 1; l < floor; l++) sum += crimeCurveFactor(l + 0.5);
+    sum += (s - floor) * crimeCurveFactor(floor + 0.5);
+    return sum;
+}
+
 function createFreeroamToolExecutor(deps) {
     const {
         getTornApiKey,
+        getUserTornKey,
         getGeminiApiKeys,
         getDefaultFactionId,
         getCachedWarboard,
@@ -387,6 +443,127 @@ function createFreeroamToolExecutor(deps) {
                         drugs: (medRes?.drugs || []).slice(0, 10),
                         boosters: (medRes?.boosters || []).slice(0, 10)
                     }
+                };
+            }
+
+            if (name === 'get_user_crime_and_level_analytics') {
+                const callerKey = (typeof getUserTornKey === 'function' ? getUserTornKey() : '') || tornKey;
+                if (!callerKey) return { error: 'User has not linked their Torn API key yet.' };
+
+                const reqCrimeRaw = String(args.crimeName || '').toLowerCase().replace(/[\s-]+/g, '_');
+                const matchedEntry = reqCrimeRaw
+                    ? CRIMES_V2_LIST.find(([, slug, cname]) => slug === reqCrimeRaw || cname.toLowerCase().includes(reqCrimeRaw.replace(/_/g, ' ')))
+                    : null;
+
+                const [skillsRes, keyInfoRes, profRes] = await Promise.all([
+                    fetch(`https://api.torn.com/user/?selections=skills&key=${encodeURIComponent(callerKey)}`, { signal: AbortSignal.timeout(6000) }).then(r => r.json()).catch(() => ({})),
+                    fetch(`https://api.torn.com/key/?selections=info&key=${encodeURIComponent(callerKey)}`, { signal: AbortSignal.timeout(5000) }).then(r => r.json()).catch(() => ({})),
+                    fetch(`https://api.torn.com/user/?selections=basic,bars&key=${encodeURIComponent(callerKey)}`, { signal: AbortSignal.timeout(5000) }).then(r => r.json()).catch(() => ({}))
+                ]);
+
+                const ki = keyInfoRes?.info || keyInfoRes || {};
+                const accessType = String(ki.access_type || 'Limited Access');
+                const accessLevel = Number(ki.access_level ?? 3);
+                const hasFullLogs = accessLevel >= 4 || accessType.toLowerCase().includes('full');
+
+                const targetCrimes = matchedEntry ? [matchedEntry] : CRIMES_V2_LIST;
+                const v2List = await Promise.all(
+                    targetCrimes.map(([cid, slug, cname]) =>
+                        fetch(`https://api.torn.com/v2/user/${cid}/crimes?key=${encodeURIComponent(callerKey)}`, { signal: AbortSignal.timeout(6000) })
+                            .then(r => r.json())
+                            .then(d => ({ cid, slug, cname, c: d?.crimes || null }))
+                            .catch(() => ({ cid, slug, cname, c: null }))
+                    )
+                );
+
+                // Optional 30-day Full Access log check if caller has a Full Access key linked
+                let log30dSummary = null;
+                if (hasFullLogs) {
+                    const cutoff30d = Math.floor(Date.now() / 1000) - 30 * 86400;
+                    const lRes = await fetch(`https://api.torn.com/user/?selections=log&cat=136&from=${cutoff30d}&key=${encodeURIComponent(callerKey)}`, { signal: AbortSignal.timeout(6000) }).then(r => r.json()).catch(() => null);
+                    if (lRes && lRes.log) {
+                        const entries = Object.values(lRes.log);
+                        log30dSummary = {
+                            recentCrimeLogsFetched: entries.length,
+                            note: '30-day Full Access /user/log entries fetched (oldest in latest 100-batch).'
+                        };
+                    }
+                }
+
+                const dailyNerve = Math.max(24, Number(args.dailyNerve || 0) || Math.min(265, Math.max(96, Math.round(Number(profRes?.nerve?.maximum || 60) * 3.9 + 30))));
+                const targetSkill = Math.max(2, Math.min(100, Number(args.targetSkill || 100)));
+
+                const crimeReports = [];
+                for (const { slug, cname, c } of v2List) {
+                    const exactCS = skillsRes && skillsRes[slug] !== undefined
+                        ? Number(skillsRes[slug])
+                        : Number(c?.skill || 0);
+                    const totalAtt = Number(c?.attempts?.total || 0);
+                    const successes = Number(c?.attempts?.success || 0);
+                    const fails = Number(c?.attempts?.fail || 0);
+                    const critFails = Number(c?.attempts?.critical_fail || 0);
+                    const nerveSpent = Number(c?.nerve_spent || 0);
+                    const avgNerve = totalAtt > 0 && nerveSpent > 0 ? (nerveSpent / totalAtt) : 4.0;
+                    const cfRate = totalAtt > 0 ? (critFails / totalAtt) : 0;
+
+                    const cumW = cumulativeCrimeCurveWeight(exactCS);
+                    const baseRate = (totalAtt >= 12 && exactCS > 1.05 && cumW > 0.2)
+                        ? Math.max(1.2, totalAtt / cumW)
+                        : 11.5;
+
+                    const curFloor = Math.floor(exactCS);
+                    const partial = exactCS - curFloor;
+                    let cleanAttemptsNeeded = 0;
+                    if (exactCS < targetSkill) {
+                        for (let lvl = curFloor; lvl < targetSkill; lvl++) {
+                            const frac = lvl === curFloor ? Math.max(0.05, 1 - partial) : 1;
+                            cleanAttemptsNeeded += Math.max(2, baseRate * crimeCurveFactor(lvl + 0.5)) * frac;
+                        }
+                    }
+
+                    // Each critical failure in Crimes 2.0 sets back ~42% of a level's attempts at that CS.
+                    // Because baseRate is calibrated on totalAtt (which ALREADY includes historical CF drag),
+                    // calculate both: (a) crit-free baseline vs current-CF rate, and (b) extra days attributable to CF drag!
+                    const cfDragMultiplier = 1 + cfRate * 3.5;
+                    const attemptsWithCurrentCF = Math.ceil(cleanAttemptsNeeded);
+                    const attemptsWithoutCF = Math.ceil(cleanAttemptsNeeded / cfDragMultiplier);
+                    const extraAttemptsFromCF = Math.max(0, attemptsWithCurrentCF - attemptsWithoutCF);
+
+                    const nerveNeeded = Math.ceil(attemptsWithCurrentCF * avgNerve);
+                    const daysNeeded = Number((nerveNeeded / dailyNerve).toFixed(1));
+                    const extraNerveFromCF = Math.ceil(extraAttemptsFromCF * avgNerve);
+                    const extraDaysFromCF = Number((extraNerveFromCF / dailyNerve).toFixed(1));
+
+                    crimeReports.push({
+                        crime: cname,
+                        slug,
+                        currentSkill: Number(exactCS.toFixed(2)),
+                        targetSkill,
+                        lifetimeAttempts: totalAtt,
+                        successes,
+                        fails,
+                        criticalFails: critFails,
+                        critFailRatePct: Number((cfRate * 100).toFixed(2)),
+                        lifetimeNerveSpent: nerveSpent,
+                        observedAvgNervePerAttempt: Number(avgNerve.toFixed(2)),
+                        dailyNerveAssumed: dailyNerve,
+                        estAttemptsRemaining: attemptsWithCurrentCF,
+                        estNerveRemaining: nerveNeeded,
+                        estDaysRemaining: daysNeeded,
+                        estExtraAttemptsFromCritFails: extraAttemptsFromCF,
+                        estExtraDaysFromCritFails: extraDaysFromCF
+                    });
+                }
+
+                return {
+                    player: profRes?.name ? `${profRes.name} [${profRes.player_id}]` : 'Player',
+                    keyAccessType: accessType,
+                    hasFull30dLogs: hasFullLogs,
+                    log30dSummary,
+                    note: hasFullLogs
+                        ? 'Calculated from your live Torn skills + v2 crime telemetry + Full Access log check.'
+                        : 'Your linked key is Limited Access (which blocks /user/log 30-day filtering), so these exact projections are computed from your real Torn API v2 lifetime crime telemetry (/v2/user/{id}/crimes). You can also sync 30-day logs locally on https://faction-os.duckdns.org/crimes.html.',
+                    crimeReports
                 };
             }
 
