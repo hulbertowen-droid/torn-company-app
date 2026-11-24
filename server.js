@@ -12948,45 +12948,225 @@ app.use('/api/bazaar', bazaarRoutes);
 const gymTrackerRoutes = require('./routes/gym-tracker');
 app.use('/api/gym-tracker', gymTrackerRoutes);
 
-// Read-only Crime & Level Analytics Limited-Access Snapshot (uses authenticated session key; never persists Full Access keys)
+// Read-only Crime & Level Analytics Snapshot (hydrates Torn v1 + v2 skills, lifetime crime telemetry, HoF & public fallback; never persists Full Access keys)
+const CRIMES_V2_META = [
+    [1, 'search_for_cash', 'searchforcashskill'],
+    [2, 'bootlegging', 'bootleggingskill'],
+    [3, 'graffiti', 'graffitiskill'],
+    [4, 'shoplifting', 'shopliftingskill'],
+    [5, 'pickpocketing', 'pickpocketingskill'],
+    [6, 'card_skimming', 'cardskimmingskill'],
+    [7, 'burglary', 'burglaryskill'],
+    [8, 'hustling', 'hustlingskill'],
+    [9, 'disposal', 'disposalskill'],
+    [10, 'cracking', 'crackingskill'],
+    [11, 'forgery', 'forgeryskill'],
+    [12, 'scamming', 'scammingskill'],
+    [13, 'arson', 'arsonskill']
+];
+
 app.get('/api/crimes/snapshot', async (req, res) => {
     const rawKey = req.userTornKey || req.headers['x-api-key'] || '';
-    const userKey = (rawKey && rawKey !== 'null' && rawKey !== 'undefined' && String(rawKey).trim().length >= 16)
+    let userKey = (rawKey && rawKey !== 'null' && rawKey !== 'undefined' && String(rawKey).trim().length >= 16)
         ? String(rawKey).trim()
         : null;
-    if (!userKey) {
-        return res.status(401).json({ success: false, error: 'Sign in with your Torn API key to load live skills & stats.' });
+
+    const sessionPlayerId = req.userSession?.playerId ? String(req.userSession.playerId).trim() : '';
+    const hintPlayerId = String(req.query?.playerId || '').replace(/\D+/g, '');
+    const targetPlayerId = sessionPlayerId || hintPlayerId;
+
+    // Secondary session key lookup if middleware missed decryption or reload
+    if (!userKey && sessionPlayerId && userKeys && typeof userKeys.resolveUserApiKeyByTornId === 'function') {
+        const rec = userKeys.resolveUserApiKeyByTornId(sessionPlayerId);
+        if (rec && rec.key && rec.key.length >= 16) userKey = rec.key;
     }
+
+    const serverPublicKey = (typeof getNextApiKey === 'function' ? getNextApiKey() : null) || discordConfig.apiKey || TORN_API_KEY || null;
+
+    // Public-profile fallback when user is not yet key-authed in this tab, but FactionOS knows their Torn playerId
+    if (!userKey) {
+        if (!targetPlayerId || !serverPublicKey) {
+            return res.status(401).json({ success: false, error: 'Sign in with your Torn API key to load live skills & stats.' });
+        }
+        try {
+            const pubProf = await cachedTornFetch(
+                `https://api.torn.com/user/${encodeURIComponent(targetPlayerId)}?selections=profile,personalstats&key=${encodeURIComponent(serverPublicKey)}`,
+                `crimes_pub_${targetPlayerId}`,
+                30000
+            ).catch(() => null);
+            if (!pubProf || pubProf.error || !pubProf.player_id) {
+                return res.status(401).json({ success: false, error: 'Sign in with your Torn API key to load live skills & stats.' });
+            }
+            const ps = pubProf.personalstats || {};
+            const pubSkills = {};
+            for (const [, slug, psKey] of CRIMES_V2_META) {
+                if (ps[psKey] !== undefined && !isNaN(Number(ps[psKey]))) {
+                    pubSkills[slug] = Number(ps[psKey]);
+                }
+            }
+            return res.json({
+                success: true,
+                keyInfo: {
+                    accessType: 'Public Profile (Sign in for exact decimals & profit)',
+                    accessLevel: 1,
+                    hasLogAccess: false,
+                    isPublicFallback: true
+                },
+                snapshot: {
+                    source: 'public_profile',
+                    fetchedAt: Date.now(),
+                    userId: String(pubProf.player_id),
+                    name: pubProf.name || 'Operative',
+                    level: Number(pubProf.level || 1),
+                    rank: pubProf.rank || '',
+                    age: Number(pubProf.age || 0),
+                    bars: { nerve: { current: 0, maximum: 60 }, energy: { current: 0, maximum: 150 } },
+                    skills: pubSkills,
+                    v2Crimes: null,
+                    criminalrecord: {},
+                    personalstats: ps,
+                    hof: {},
+                    attacks: {}
+                }
+            });
+        } catch (err) {
+            return res.status(401).json({ success: false, error: 'Sign in with your Torn API key to load live skills & stats.' });
+        }
+    }
+
     try {
         const kHash = userKey.slice(0, 8);
-        const [profile, skillsRaw, hofRaw, attacksRaw, keyInfoRaw] = await Promise.all([
-            cachedTornFetch(`https://api.torn.com/user/?selections=basic,profile,bars,personalstats&key=${encodeURIComponent(userKey)}`, `crimes_prof_${kHash}`, 15000).catch(() => null),
+        const catalogKey = serverPublicKey || userKey;
+        const [profile, skillsRaw, v2SkillsRaw, hofRaw, attacksRaw, keyInfoRaw, itemsCatalogRaw] = await Promise.all([
+            cachedTornFetch(`https://api.torn.com/user/?selections=basic,profile,bars,personalstats,crimes&key=${encodeURIComponent(userKey)}`, `crimes_prof_${kHash}`, 15000).catch(() => null),
             cachedTornFetch(`https://api.torn.com/user/?selections=skills&key=${encodeURIComponent(userKey)}`, `crimes_sk_${kHash}`, 15000).catch(() => ({})),
+            cachedTornFetch(`https://api.torn.com/v2/user/skills?key=${encodeURIComponent(userKey)}`, `crimes_v2sk_${kHash}`, 15000).catch(() => ({})),
             cachedTornFetch(`https://api.torn.com/user/?selections=hof&key=${encodeURIComponent(userKey)}`, `crimes_hof_${kHash}`, 60000).catch(() => ({})),
             cachedTornFetch(`https://api.torn.com/user/?selections=attacks&key=${encodeURIComponent(userKey)}`, `crimes_atk_${kHash}`, 30000).catch(() => ({})),
-            cachedTornFetch(`https://api.torn.com/key/?selections=info&key=${encodeURIComponent(userKey)}`, `crimes_ki_${kHash}`, 60000).catch(() => ({}))
+            cachedTornFetch(`https://api.torn.com/key/?selections=info&key=${encodeURIComponent(userKey)}`, `crimes_ki_${kHash}`, 60000).catch(() => ({})),
+            cachedTornFetch(`https://api.torn.com/torn/?selections=items&key=${encodeURIComponent(catalogKey)}`, 'torn_items_catalog', 3600000).catch(() => null)
         ]);
 
         if (!profile || profile.error) {
             return res.status(400).json({ success: false, error: profile?.error?.error || 'Failed to read Torn user profile.' });
         }
 
-        const skillsSrc = (skillsRaw && (skillsRaw.skills || skillsRaw)) || {};
+        const itemsMap = itemsCatalogRaw?.items || globalTornCache['torn_items_catalog']?.data?.items || {};
+        const ps = profile.personalstats || {};
         const skills = {};
-        for (const [k, v] of Object.entries(skillsSrc)) {
-            if (typeof v === 'number' || (typeof v === 'string' && !isNaN(Number(v)))) {
-                skills[k.toLowerCase()] = Number(v);
+
+        // Layer 1: v1 user/?selections=skills (exact 2-decimal strings like "75.91")
+        if (skillsRaw && !skillsRaw.error) {
+            const src = skillsRaw.skills && !Array.isArray(skillsRaw.skills) ? skillsRaw.skills : skillsRaw;
+            for (const [k, v] of Object.entries(src)) {
+                const lk = k.toLowerCase();
+                if (lk === 'player_id') continue;
+                if (typeof v === 'number' || (typeof v === 'string' && v.trim() !== '' && !isNaN(Number(v)))) {
+                    skills[lk] = Number(v);
+                }
+            }
+        }
+        // Layer 2: v2 /v2/user/skills array [{ slug, level }]
+        if (Array.isArray(v2SkillsRaw?.skills)) {
+            for (const entry of v2SkillsRaw.skills) {
+                const slug = String(entry?.slug || '').toLowerCase();
+                if (slug && skills[slug] === undefined && entry.level !== undefined && !isNaN(Number(entry.level))) {
+                    skills[slug] = Number(entry.level);
+                }
             }
         }
 
         const ki = keyInfoRaw?.info || keyInfoRaw || {};
         const accessType = String(ki.access_type || 'Limited Access');
-        const accessLevel = Number(ki.access_level ?? 2);
+        const accessLevel = Number(ki.access_level ?? 3);
         const hasLogAccess = accessLevel >= 4 || accessType.toLowerCase().includes('full');
+
+        // Layer 3: Fetch Torn API v2 per-crime lifetime telemetry (/v2/user/{1..13}/crimes) when key has Limited+ scope
+        let v2Crimes = null;
+        if (accessLevel >= 3 || Object.keys(skills).length > 0) {
+            const perCrimeRaw = await Promise.all(
+                CRIMES_V2_META.map(([cid, slug]) =>
+                    cachedTornFetch(
+                        `https://api.torn.com/v2/user/${cid}/crimes?key=${encodeURIComponent(userKey)}`,
+                        `crimes_v2c_${kHash}_${cid}`,
+                        30000
+                    ).then(d => [slug, d?.crimes || null]).catch(() => [slug, null])
+                )
+            );
+            const built = {};
+            let anyV2 = false;
+            for (const [slug, c] of perCrimeRaw) {
+                if (!c || typeof c !== 'object') continue;
+                anyV2 = true;
+                if (skills[slug] === undefined && c.skill !== undefined && !isNaN(Number(c.skill))) {
+                    skills[slug] = Number(c.skill);
+                }
+                const cashRewards = Number(c.rewards?.money || 0);
+                let itemRewardsValue = 0;
+                const rewardItemsScored = [];
+                for (const it of (c.rewards?.items || [])) {
+                    const idStr = String(it.id || '');
+                    const amt = Number(it.amount || 0);
+                    const meta = itemsMap[idStr];
+                    const unitVal = Number(meta?.market_value || meta?.sell_price || 0);
+                    const totalVal = amt * unitVal;
+                    itemRewardsValue += totalVal;
+                    if (amt > 0) {
+                        rewardItemsScored.push({
+                            id: Number(it.id),
+                            name: meta?.name || `Item #${idStr}`,
+                            amount: amt,
+                            totalValue: Math.round(totalVal)
+                        });
+                    }
+                }
+                rewardItemsScored.sort((a, b) => b.totalValue - a.totalValue);
+
+                const uniquesRaw = Array.isArray(c.uniques) ? c.uniques : [];
+                const uniquesFormatted = uniquesRaw.map((u, idx) => {
+                    const uMoney = Number(u?.rewards?.money || 0);
+                    const uItems = (u?.rewards?.items || []).map(ui => {
+                        const nm = itemsMap[String(ui.id)]?.name || `Item #${ui.id}`;
+                        return `${ui.amount}× ${nm}`;
+                    });
+                    const parts = [];
+                    if (uMoney > 0) parts.push(`$${uMoney.toLocaleString()}`);
+                    if (uItems.length) parts.push(uItems.join(', '));
+                    return parts.length ? `Unique #${u.id || (idx + 1)}: ${parts.join(' + ')}` : `Unique #${u.id || (idx + 1)}`;
+                });
+
+                built[slug] = {
+                    skill: Number(c.skill || 0),
+                    progressionBonus: Number(c.progression_bonus || 0),
+                    nerveSpent: Number(c.nerve_spent || 0),
+                    attempts: {
+                        total: Number(c.attempts?.total || 0),
+                        success: Number(c.attempts?.success || 0),
+                        fail: Number(c.attempts?.fail || 0),
+                        criticalFail: Number(c.attempts?.critical_fail || 0),
+                        subcrimes: Array.isArray(c.attempts?.subcrimes) ? c.attempts.subcrimes : []
+                    },
+                    cashRewards,
+                    itemRewardsValue: Math.round(itemRewardsValue),
+                    topItems: rewardItemsScored.slice(0, 5),
+                    uniquesCount: uniquesRaw.length,
+                    uniquesList: uniquesFormatted,
+                    misc: c.miscellaneous || null
+                };
+            }
+            if (anyV2) v2Crimes = built;
+        }
+
+        // Layer 4: Fallback to personalstats integer skill keys (e.g. Minimal Access keys)
+        for (const [, slug, psKey] of CRIMES_V2_META) {
+            if (skills[slug] === undefined && ps[psKey] !== undefined && !isNaN(Number(ps[psKey]))) {
+                skills[slug] = Number(ps[psKey]);
+            }
+        }
 
         return res.json({
             success: true,
-            keyInfo: { accessType, accessLevel, hasLogAccess },
+            keyInfo: { accessType, accessLevel, hasLogAccess, isPublicFallback: false },
             snapshot: {
                 source: 'session_snapshot',
                 fetchedAt: Date.now(),
@@ -13000,7 +13180,9 @@ app.get('/api/crimes/snapshot', async (req, res) => {
                     energy: profile.energy || { current: 0, maximum: 150 }
                 },
                 skills,
-                personalstats: profile.personalstats || {},
+                v2Crimes,
+                criminalrecord: profile.criminalrecord || {},
+                personalstats: ps,
                 hof: hofRaw?.halloffame || profile.halloffame || {},
                 attacks: attacksRaw?.attacks || {}
             }
@@ -14374,7 +14556,7 @@ setInterval(() => {
 
 app.get('/api/items', async (req, res) => {
     try {
-        const apiKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey || getNextApiKey();
+        const apiKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey || getNextApiKey() || discordConfig.apiKey || TORN_API_KEY;
         const cached = await cachedTornFetch(`https://api.torn.com/torn/?selections=items&key=${apiKey || 'null'}`, 'torn_items_catalog', 3600000);
         if (cached && cached.items) {
             return res.json({ success: true, items: cached.items });

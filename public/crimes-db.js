@@ -344,13 +344,106 @@
         };
     }
 
-    async function fetchDirectSnapshot(apiKey) {
-        const [profile, skillsData, hofData, attacksData] = await Promise.all([
-            fetchTornDirect('user/?selections=basic,profile,bars,personalstats', apiKey, 2),
+    const V2_CRIME_ID_MAP = [
+        [1, 'search_for_cash', 'searchforcashskill'],
+        [2, 'bootlegging', 'bootleggingskill'],
+        [3, 'graffiti', 'graffitiskill'],
+        [4, 'shoplifting', 'shopliftingskill'],
+        [5, 'pickpocketing', 'pickpocketingskill'],
+        [6, 'card_skimming', 'cardskimmingskill'],
+        [7, 'burglary', 'burglaryskill'],
+        [8, 'hustling', 'hustlingskill'],
+        [9, 'disposal', 'disposalskill'],
+        [10, 'cracking', 'crackingskill'],
+        [11, 'forgery', 'forgeryskill'],
+        [12, 'scamming', 'scammingskill'],
+        [13, 'arson', 'arsonskill']
+    ];
+
+    async function fetchDirectSnapshot(apiKey, itemPrices = {}, itemNames = {}) {
+        const [profile, skillsData, v2SkillsData, hofData, attacksData] = await Promise.all([
+            fetchTornDirect('user/?selections=basic,profile,bars,personalstats,crimes', apiKey, 2),
             fetchTornDirect('user/?selections=skills', apiKey, 1).catch(() => ({})),
+            fetchTornDirect('v2/user/skills', apiKey, 1).catch(() => ({})),
             fetchTornDirect('user/?selections=hof', apiKey, 1).catch(() => ({})),
             fetchTornDirect('user/?selections=attacks', apiKey, 1).catch(() => ({}))
         ]);
+
+        const ps = profile.personalstats || {};
+        const skills = normalizeSkillsPayload(skillsData, v2SkillsData, ps);
+
+        // Fetch Torn v2 per-crime lifetime telemetry (/v2/user/{1..13}/crimes) directly in browser
+        let v2Crimes = null;
+        try {
+            const perCrimeRaw = await Promise.all(
+                V2_CRIME_ID_MAP.map(([cid, slug]) =>
+                    fetchTornDirect(`v2/user/${cid}/crimes`, apiKey, 1)
+                        .then(d => [slug, d?.crimes || null])
+                        .catch(() => [slug, null])
+                )
+            );
+            const built = {};
+            let anyV2 = false;
+            for (const [slug, c] of perCrimeRaw) {
+                if (!c || typeof c !== 'object') continue;
+                anyV2 = true;
+                if (skills[slug] === undefined && c.skill !== undefined && !isNaN(Number(c.skill))) {
+                    skills[slug] = Number(c.skill);
+                }
+                const cashRewards = Number(c.rewards?.money || 0);
+                let itemRewardsValue = 0;
+                const rewardItemsScored = [];
+                for (const it of (c.rewards?.items || [])) {
+                    const idStr = String(it.id || '');
+                    const amt = Number(it.amount || 0);
+                    const unitVal = Number(itemPrices[idStr] || 0);
+                    const totalVal = amt * unitVal;
+                    itemRewardsValue += totalVal;
+                    if (amt > 0) {
+                        rewardItemsScored.push({
+                            id: Number(it.id),
+                            name: itemNames[idStr] || `Item #${idStr}`,
+                            amount: amt,
+                            totalValue: Math.round(totalVal)
+                        });
+                    }
+                }
+                rewardItemsScored.sort((a, b) => b.totalValue - a.totalValue);
+                const uniquesRaw = Array.isArray(c.uniques) ? c.uniques : [];
+                const uniquesFormatted = uniquesRaw.map((u, idx) => {
+                    const uMoney = Number(u?.rewards?.money || 0);
+                    const uItems = (u?.rewards?.items || []).map(ui => {
+                        const nm = itemNames[String(ui.id)] || `Item #${ui.id}`;
+                        return `${ui.amount}× ${nm}`;
+                    });
+                    const parts = [];
+                    if (uMoney > 0) parts.push(`$${uMoney.toLocaleString()}`);
+                    if (uItems.length) parts.push(uItems.join(', '));
+                    return parts.length ? `Unique #${u.id || (idx + 1)}: ${parts.join(' + ')}` : `Unique #${u.id || (idx + 1)}`;
+                });
+
+                built[slug] = {
+                    skill: Number(c.skill || 0),
+                    progressionBonus: Number(c.progression_bonus || 0),
+                    nerveSpent: Number(c.nerve_spent || 0),
+                    attempts: {
+                        total: Number(c.attempts?.total || 0),
+                        success: Number(c.attempts?.success || 0),
+                        fail: Number(c.attempts?.fail || 0),
+                        criticalFail: Number(c.attempts?.critical_fail || 0),
+                        subcrimes: Array.isArray(c.attempts?.subcrimes) ? c.attempts.subcrimes : []
+                    },
+                    cashRewards,
+                    itemRewardsValue: Math.round(itemRewardsValue),
+                    rawRewardItems: c.rewards?.items || [],
+                    topItems: rewardItemsScored.slice(0, 5),
+                    uniquesCount: uniquesRaw.length,
+                    uniquesList: uniquesFormatted,
+                    misc: c.miscellaneous || null
+                };
+            }
+            if (anyV2) v2Crimes = built;
+        } catch (_) {}
 
         return {
             source: 'direct_browser',
@@ -364,22 +457,42 @@
                 nerve: profile.nerve || { current: 0, maximum: 60 },
                 energy: profile.energy || { current: 0, maximum: 150 }
             },
-            skills: normalizeSkillsPayload(skillsData),
-            personalstats: profile.personalstats || {},
+            skills,
+            v2Crimes,
+            criminalrecord: profile.criminalrecord || {},
+            personalstats: ps,
             hof: hofData.halloffame || profile.halloffame || {},
             attacks: attacksData.attacks || {}
         };
     }
 
-    function normalizeSkillsPayload(raw) {
-        if (!raw || typeof raw !== 'object') return {};
-        const src = raw.skills || raw;
+    function normalizeSkillsPayload(rawV1, rawV2 = null, ps = {}) {
         const out = {};
-        for (const [k, v] of Object.entries(src)) {
-            if (typeof v === 'number' || (typeof v === 'string' && !isNaN(Number(v)))) {
-                out[k.toLowerCase()] = Number(v);
-            } else if (v && typeof v === 'object' && v.slug && v.level !== undefined) {
-                out[String(v.slug).toLowerCase()] = Number(v.level);
+        if (rawV1 && typeof rawV1 === 'object' && !rawV1.error) {
+            const src = (rawV1.skills && !Array.isArray(rawV1.skills)) ? rawV1.skills : rawV1;
+            for (const [k, v] of Object.entries(src)) {
+                const lk = k.toLowerCase();
+                if (lk === 'player_id') continue;
+                if (typeof v === 'number' || (typeof v === 'string' && v.trim() !== '' && !isNaN(Number(v)))) {
+                    out[lk] = Number(v);
+                } else if (v && typeof v === 'object' && v.slug && v.level !== undefined) {
+                    out[String(v.slug).toLowerCase()] = Number(v.level);
+                }
+            }
+        }
+        if (Array.isArray(rawV2?.skills)) {
+            for (const entry of rawV2.skills) {
+                const slug = String(entry?.slug || '').toLowerCase();
+                if (slug && out[slug] === undefined && entry.level !== undefined && !isNaN(Number(entry.level))) {
+                    out[slug] = Number(entry.level);
+                }
+            }
+        }
+        if (ps && typeof ps === 'object') {
+            for (const [, slug, psKey] of V2_CRIME_ID_MAP) {
+                if (out[slug] === undefined && ps[psKey] !== undefined && !isNaN(Number(ps[psKey]))) {
+                    out[slug] = Number(ps[psKey]);
+                }
             }
         }
         return out;

@@ -1311,8 +1311,8 @@
                     const p = window.FactionOSCrimeIntelProject(matchedCrimeKey, targetCS);
                     if (p) { estAtt = p.attemptsRemaining; estNerve = p.nerveRemaining; estDays = Number(p.daysRemaining.toFixed(1)); }
                 } else if (targetCS < 100 && c.currentSkill < targetCS) {
-                    const cf = (s) => 1 + 0.022 * s + (s > 50 ? 0.00055 * Math.pow(s - 50, 2.2) : 0) + (s > 75 ? 0.0018 * Math.pow(s - 75, 2.1) : 0);
-                    const base = c.calibratedBaseRate || 5;
+                    const cf = (s) => 1 + 0.032 * s + (s > 45 ? 0.0014 * Math.pow(s - 45, 2.15) : 0) + (s > 72 ? 0.0068 * Math.pow(s - 72, 2.25) : 0);
+                    const base = c.calibratedBaseRate || 11.5;
                     const floor = Math.floor(c.currentSkill);
                     let sumA = 0;
                     for (let l = floor; l < targetCS; l++) {

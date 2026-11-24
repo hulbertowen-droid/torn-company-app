@@ -13,6 +13,7 @@
         logs: [],
         meta: null,
         itemPrices: {},
+        itemNames: {},
         analytics: null,
         demoMode: false,
         timeframe: 'all',
@@ -93,6 +94,9 @@
         }
 
         await hydrateUserData();
+        window.addEventListener('sv-auth-changed', () => {
+            if (!state.demoMode) hydrateUserData();
+        });
         if (state.pendingFridayAction) {
             const act = state.pendingFridayAction;
             state.pendingFridayAction = null;
@@ -118,15 +122,29 @@
             const data = await res.json();
             if (data && data.items) {
                 const map = {};
+                const names = {};
                 for (const [id, meta] of Object.entries(data.items)) {
                     map[id] = Number(meta?.market_value || meta?.sell_price || 0);
+                    if (meta?.name) names[id] = meta.name;
                 }
                 state.itemPrices = map;
-                if (state.analytics && !state.demoMode && state.logs.length > 0) {
+                state.itemNames = names;
+                if (state.analytics && !state.demoMode && (state.logs.length > 0 || state.snapshot?.v2Crimes)) {
                     recomputeAndRender();
                 }
             }
         } catch (_) {}
+    }
+
+    function getKnownPlayerIdHint() {
+        try {
+            const prof = typeof window.getUserProfile === 'function' ? window.getUserProfile() : null;
+            if (prof && prof.playerId) return String(prof.playerId).trim();
+            const lsId = localStorage.getItem('warboard_myPlayerId') || localStorage.getItem('warboard_my_id') || '';
+            return String(lsId).replace(/\D+/g, '');
+        } catch (_) {
+            return '';
+        }
     }
 
     async function hydrateUserData() {
@@ -138,7 +156,7 @@
             try {
                 const keyInfo = await DB.inspectKeyAccess(fullKey);
                 state.keyAccess = keyInfo;
-                const snap = await DB.fetchDirectSnapshot(fullKey);
+                const snap = await DB.fetchDirectSnapshot(fullKey, state.itemPrices, state.itemNames);
                 state.snapshot = snap;
                 state.userId = snap.userId || keyInfo.userId || 'local';
                 updateKeyScopeUI();
@@ -151,15 +169,19 @@
             }
         }
 
-        // 2. Otherwise try FactionOS authenticated session snapshot (/api/crimes/snapshot)
+        // 2. Try FactionOS authenticated session snapshot (/api/crimes/snapshot), passing playerId hint for public-profile fallback if session expired
+        const pidHint = getKnownPlayerIdHint();
         try {
-            const res = await fetch('/api/crimes/snapshot');
+            const snapUrl = pidHint
+                ? `/api/crimes/snapshot?playerId=${encodeURIComponent(pidHint)}`
+                : '/api/crimes/snapshot';
+            const res = await fetch(snapUrl);
             if (res.ok) {
                 const data = await res.json();
                 if (data && data.success && data.snapshot) {
                     state.snapshot = data.snapshot;
                     state.keyAccess = data.keyInfo || { accessType: 'Limited Access', hasLogAccess: false };
-                    state.userId = data.snapshot.userId || 'session_user';
+                    state.userId = data.snapshot.userId || pidHint || 'session_user';
                     updateKeyScopeUI();
                     await loadCachedLogsForCurrentUser();
                     recomputeAndRender();
@@ -168,20 +190,14 @@
             }
         } catch (_) {}
 
-        // 3. Fallback: check if any user profile exists in localStorage, or start ready for Demo / Key
-        const prof = typeof window.getUserProfile === 'function' ? window.getUserProfile() : null;
-        if (prof && prof.playerId) {
-            state.userId = String(prof.playerId);
+        // 3. Signed-out state: NEVER silently load fake Demo data — show clear Sign-In CTA and only load Demo when explicitly clicked!
+        if (pidHint) {
+            state.userId = pidHint;
             await loadCachedLogsForCurrentUser();
         }
         state.keyAccess = { accessType: 'Not Connected', hasLogAccess: false };
         updateKeyScopeUI();
-        // If zero logs and no snapshot, auto-load Demo preview so page is immediately rich & interactive!
-        if (!state.snapshot && (!state.logs || state.logs.length === 0)) {
-            toggleDemoMode(true, true);
-        } else {
-            recomputeAndRender();
-        }
+        recomputeAndRender();
     }
 
     async function loadCachedLogsForCurrentUser() {
@@ -208,15 +224,36 @@
     function updateKeyScopeUI() {
         const badge = document.getElementById('key-scope-badge');
         const banner = document.getElementById('limited-scope-banner');
+        const bannerText = document.getElementById('limited-scope-text');
+        const signInBtn = document.getElementById('btn-signin-cta');
+        const demoBanner = document.getElementById('demo-active-banner');
+        const playerChip = document.getElementById('active-player-chip');
         const btnNew = document.getElementById('btn-sync-new');
         const btnBack = document.getElementById('btn-sync-backfill');
 
         if (state.demoMode) {
             if (badge) { badge.className = 'cr-badge purple'; badge.textContent = '✨ Preview Demo Mode'; }
+            if (playerChip) { playerChip.className = 'cr-badge purple'; playerChip.textContent = '✨ DEMO PREVIEW (Simulated Lvl 63 — Not Your Account)'; }
+            if (demoBanner) demoBanner.classList.add('visible');
             if (banner) banner.classList.remove('visible');
             if (btnNew) btnNew.disabled = true;
             if (btnBack) btnBack.disabled = true;
             return;
+        }
+
+        if (demoBanner) demoBanner.classList.remove('visible');
+        if (state.snapshot && state.snapshot.name) {
+            const uidTxt = state.snapshot.userId ? ` [${state.snapshot.userId}]` : '';
+            const pubTag = state.keyAccess?.isPublicFallback ? ' • Public View' : '';
+            if (playerChip) {
+                playerChip.className = state.keyAccess?.isPublicFallback ? 'cr-badge amber' : 'cr-badge green';
+                playerChip.textContent = `👤 ${state.snapshot.name}${uidTxt} • Lvl ${state.snapshot.level || 1}${pubTag}`;
+            }
+        } else {
+            if (playerChip) {
+                playerChip.className = 'cr-badge red';
+                playerChip.textContent = '🔑 Not Signed In';
+            }
         }
 
         const hasFull = Boolean(state.keyAccess?.hasLogAccess && window.FactionOSCrimesDB.getBrowserFullKey());
@@ -225,13 +262,33 @@
             if (banner) banner.classList.remove('visible');
             if (btnNew) btnNew.disabled = false;
             if (btnBack) btnBack.disabled = false;
+        } else if (state.snapshot && state.keyAccess?.isPublicFallback) {
+            if (badge) { badge.className = 'cr-badge amber'; badge.textContent = '🌐 Public Profile Fallback'; }
+            if (bannerText) {
+                bannerText.innerHTML = `<strong>🌐 Public Profile Loaded for ${esc(state.snapshot.name)}:</strong> Showing your real integer Crime Skills &amp; 10k Merits from public <code>personalstats</code>. <strong>Sign in with your Torn API key</strong> (Limited or Full) to unlock exact 2-decimal skills, Torn v2 lifetime attempts, nerve, $/nerve profit, and uniques!`;
+            }
+            if (signInBtn) signInBtn.style.display = 'inline-flex';
+            if (banner) banner.classList.add('visible');
+            if (btnNew) btnNew.disabled = true;
+            if (btnBack) btnBack.disabled = true;
         } else if (state.snapshot) {
-            if (badge) { badge.className = 'cr-badge amber'; badge.textContent = `🔒 ${state.keyAccess?.accessType || 'Limited Access'}`; }
+            const hasV2 = Boolean(state.snapshot.v2Crimes);
+            if (badge) { badge.className = 'cr-badge cyan'; badge.textContent = `🔐 ${state.keyAccess?.accessType || 'Limited Access'}${hasV2 ? ' (Torn v2 Active)' : ''}`; }
+            if (bannerText) {
+                bannerText.innerHTML = hasV2
+                    ? `<strong>✅ Live Torn v1 + v2 Telemetry Active (${esc(state.snapshot.name)}):</strong> Loaded your <strong>exact 2-decimal Crime Skills, lifetime Attempts, Nerve, Cash + Item Rewards, and Uniques</strong>! Paste an optional <strong>Full Access</strong> key above (stored <em>strictly in your browser</em>) only if you want 7d/30d date filtering, daily nerve timeline spikes, and per-level transition histograms.`
+                    : `<strong>🔐 ${esc(state.keyAccess?.accessType || 'Minimal Access')} Active (${esc(state.snapshot.name)}):</strong> Showing your live Crime Skills &amp; offense counts. Use a <strong>Limited Access</strong> key for full Torn v2 crime attempts/profit, or a browser-only <strong>Full Access</strong> key for log history.`;
+            }
+            if (signInBtn) signInBtn.style.display = 'none';
             if (banner) banner.classList.add('visible');
             if (btnNew) btnNew.disabled = true;
             if (btnBack) btnBack.disabled = true;
         } else {
-            if (badge) { badge.className = 'cr-badge red'; badge.textContent = '🔑 Connect Key or Preview Demo'; }
+            if (badge) { badge.className = 'cr-badge red'; badge.textContent = '🔑 Sign In to Load Skills'; }
+            if (bannerText) {
+                bannerText.innerHTML = `<strong>🔑 Torn Account Not Connected:</strong> Sign in to FactionOS with your Torn API key (or paste a browser-only key above) to load your <strong>real Crime Skills, $/Nerve efficiency, Uniques, and Level Progress</strong> — or click <em>Preview Demo</em> to explore simulated data.`;
+            }
+            if (signInBtn) signInBtn.style.display = 'inline-flex';
             if (banner) banner.classList.add('visible');
             if (btnNew) btnNew.disabled = true;
             if (btnBack) btnBack.disabled = true;
@@ -247,7 +304,11 @@
         }
         const m = state.meta;
         if (!m || !m.totalLogs) {
-            el.textContent = '0 cached logs in Browser IndexedDB';
+            if (state.snapshot?.v2Crimes) {
+                el.textContent = 'Live Torn v1 + v2 telemetry loaded • 0 /user/log entries cached in IndexedDB';
+            } else {
+                el.textContent = '0 cached logs in Browser IndexedDB';
+            }
             return;
         }
         const fromStr = m.minTs ? new Date(m.minTs * 1000).toLocaleDateString() : '—';
@@ -284,7 +345,7 @@
             state.demoMode = false;
             updateDemoBtnState();
             state.keyAccess = info;
-            const snap = await DB.fetchDirectSnapshot(raw);
+            const snap = await DB.fetchDirectSnapshot(raw, state.itemPrices, state.itemNames);
             state.snapshot = snap;
             state.userId = snap.userId || info.userId || 'local';
             await loadCachedLogsForCurrentUser();
@@ -777,7 +838,11 @@
 
         document.getElementById('dd-icon').textContent = crime.meta.icon;
         document.getElementById('dd-title').textContent = `${crime.meta.name} — Skill Estimator & History`;
-        document.getElementById('dd-subtitle').textContent = `Current CS ${crime.currentSkill.toFixed(2)} / 100 • ${crime.attempts.toLocaleString()} logged attempts • ${Math.round(crime.totalNerve).toLocaleString()} nerve spent`;
+        const uniqPart = crime.meta.uniquesTotal > 0
+            ? ` • ✨ ${crime.uniquesUnlockedCount || 0}/${crime.meta.uniquesTotal} Uniques`
+            : '';
+        const enhPart = crime.meta.enhancerName ? ` • Enhancer: ${crime.meta.enhancerName}` : '';
+        document.getElementById('dd-subtitle').textContent = `Current CS ${crime.currentSkill.toFixed(2)} / 100 • ${crime.attempts.toLocaleString()} attempts • ${Math.round(crime.totalNerve).toLocaleString()} nerve${uniqPart}${enhPart}`;
 
         const cb = document.getElementById('dd-conf-badge');
         cb.className = `cr-badge ${crime.confidence === 'High' ? 'green' : (crime.confidence === 'Medium' ? 'cyan' : 'amber')}`;
@@ -1081,13 +1146,17 @@
 
         const uGrid = document.getElementById('uniques-list-grid');
         const allUniques = [];
+        let totalUniquesPossible = 0;
+        let totalUniquesUnlocked = 0;
         for (const c of state.analytics.crimes) {
+            totalUniquesPossible += Number(c.meta.uniquesTotal || 0);
+            totalUniquesUnlocked += Number(c.uniquesUnlockedCount || c.uniquesList.length || 0);
             for (const u of c.uniquesList) {
                 allUniques.push({ icon: c.meta.icon, crime: c.meta.name, label: u });
             }
         }
         const ub = document.getElementById('uniques-total-badge');
-        if (ub) ub.textContent = `${allUniques.length} Logged`;
+        if (ub) ub.textContent = totalUniquesPossible > 0 ? `${totalUniquesUnlocked} / ${totalUniquesPossible} Unlocked` : `${allUniques.length} Logged`;
         if (uGrid) {
             uGrid.innerHTML = allUniques.length
                 ? allUniques.map(u => `

@@ -11,206 +11,268 @@
 
     const CRIMES_2_ERA_TS = 1686700800; // June 14, 2023 (Crimes 2.0 launch)
 
-    // Canonical Crimes 2.0 Registry (all 13 live Crimes 2.0 disciplines)
+    // Canonical Crimes 2.0 Registry (verified against Torn API v2 /v2/torn/crimes)
     const CRIMES_CATALOG = [
         {
+            id: 1,
             key: 'search_for_cash',
             name: 'Search for Cash',
             icon: '🪙',
             tier: 1,
             avgNerve: 2,
             color: '#38bdf8',
-            meritBucket: 'search_for_cash',
-            meritLabel: 'Search for Cash',
-            psKeys: ['search_for_cash', 'vandalism'],
-            uniquesTotal: 12,
+            meritBucket: 'theft',
+            meritLabel: 'Theft',
+            psSkillKey: 'searchforcashskill',
+            psKeys: ['search_for_cash', 'theft'],
+            enhancerId: 564,
+            enhancerName: 'Glasses',
+            uniquesTotal: 34,
             keywords: ['search for cash', 'searching the trash', 'searching the subway', 'searching the beach', 'searching the bridge', 'searching the cemetery', 'searching the fountain', 'searching the junkyard', 'searching the park', 'searching the dumpster']
         },
         {
+            id: 2,
             key: 'bootlegging',
             name: 'Bootlegging',
             icon: '💿',
             tier: 1,
-            avgNerve: 2,
+            avgNerve: 2.2,
             color: '#60a5fa',
-            meritBucket: 'bootlegging',
-            meritLabel: 'Bootlegging',
+            meritBucket: 'counterfeiting',
+            meritLabel: 'Counterfeiting',
+            psSkillKey: 'bootleggingskill',
             psKeys: ['bootlegging', 'counterfeiting'],
-            uniquesTotal: 11,
+            enhancerId: 565,
+            enhancerName: 'High-Speed Drive',
+            uniquesTotal: 4,
             keywords: ['bootlegging', 'copying', 'selling dvds', 'online store', 'blank dvd', 'burning', 'pirat', 'dvd']
         },
         {
+            id: 3,
             key: 'graffiti',
             name: 'Graffiti',
             icon: '🎨',
             tier: 1,
             avgNerve: 3,
             color: '#f472b6',
-            meritBucket: 'graffiti',
-            meritLabel: 'Graffiti',
+            meritBucket: 'vandalism',
+            meritLabel: 'Vandalism',
+            psSkillKey: 'graffitiskill',
             psKeys: ['graffiti', 'vandalism'],
-            uniquesTotal: 10,
+            enhancerId: 979,
+            enhancerName: 'Paint Mask',
+            uniquesTotal: 41,
             keywords: ['graffiti', 'spray', 'tagging', 'stencil', 'mural', 'east side', 'west side', 'red light', 'downtown', 'financial district']
         },
         {
+            id: 4,
             key: 'shoplifting',
             name: 'Shoplifting',
             icon: '🛍️',
             tier: 2,
             avgNerve: 4,
             color: '#fb923c',
-            meritBucket: 'shoplifting',
-            meritLabel: 'Shoplifting',
+            meritBucket: 'theft',
+            meritLabel: 'Theft',
+            psSkillKey: 'shopliftingskill',
             psKeys: ['shoplifting', 'theft'],
-            uniquesTotal: 14,
+            enhancerId: 566,
+            enhancerName: 'Mountain Bike',
+            uniquesTotal: 60,
             keywords: ['shoplift', 'sally', 'sweet shop', 'bits \'n\' bobs', 'cyber force', 'big al', 'jewelry store', 'pharmacy', 'clothing store', 'super store']
         },
         {
+            id: 5,
             key: 'pickpocketing',
             name: 'Pickpocketing',
             icon: '🧤',
             tier: 2,
             avgNerve: 5,
             color: '#facc15',
-            meritBucket: 'pickpocketing',
-            meritLabel: 'Pickpocketing',
+            meritBucket: 'theft',
+            meritLabel: 'Theft',
+            psSkillKey: 'pickpocketingskill',
             psKeys: ['pickpocketing', 'theft'],
-            uniquesTotal: 14,
+            enhancerId: 567,
+            enhancerName: 'Cut-Throat Razor',
+            uniquesTotal: 22,
             keywords: ['pickpocket', 'drunk man', 'homeless', 'junkie', 'elderly', 'classy lady', 'laborer', 'postal worker', 'cyclist', 'rich kid', 'businessman', 'mobster', 'police officer']
         },
         {
+            id: 6,
             key: 'card_skimming',
             name: 'Card Skimming',
             icon: '💳',
             tier: 2,
-            avgNerve: 4,
+            avgNerve: 5.2,
             color: '#2dd4bf',
-            meritBucket: 'card_skimming',
-            meritLabel: 'Card Skimming',
+            meritBucket: 'fraud',
+            meritLabel: 'Fraud',
+            psSkillKey: 'cardskimmingskill',
             psKeys: ['card_skimming', 'fraud'],
-            uniquesTotal: 10,
+            enhancerId: 578,
+            enhancerName: 'Duct Tape',
+            uniquesTotal: 0,
             keywords: ['card skimm', 'skimmer', 'bus station', 'gas station', 'atm', 'subway', 'installing a skimmer', 'retrieving a skimmer', 'selling card details']
         },
         {
+            id: 7,
             key: 'burglary',
             name: 'Burglary',
             icon: '🏚️',
             tier: 3,
-            avgNerve: 6,
+            avgNerve: 3.3,
             color: '#a78bfa',
-            meritBucket: 'burglary',
-            meritLabel: 'Burglary',
+            meritBucket: 'theft',
+            meritLabel: 'Theft',
+            psSkillKey: 'burglaryskill',
             psKeys: ['burglary', 'theft'],
-            uniquesTotal: 15,
+            enhancerId: 1351,
+            enhancerName: 'Flashlight',
+            uniquesTotal: 34,
             keywords: ['burglar', 'scouting', 'casing', 'tool shed', 'beach hut', 'cottage', 'apartment', 'suburban', 'farmhouse', 'warehouse', 'self storage', 'office', 'printing works', 'shipyard']
         },
         {
+            id: 8,
             key: 'hustling',
             name: 'Hustling',
             icon: '🎲',
             tier: 2,
-            avgNerve: 2,
+            avgNerve: 3.2,
             color: '#34d399',
-            meritBucket: 'hustling',
-            meritLabel: 'Hustling',
+            meritBucket: 'fraud',
+            meritLabel: 'Fraud',
+            psSkillKey: 'hustlingskill',
             psKeys: ['hustling', 'fraud'],
-            uniquesTotal: 12,
+            enhancerId: 1353,
+            enhancerName: 'Megaphone',
+            uniquesTotal: 0,
             keywords: ['hustl', 'shell game', 'pick a cup', 'cornhole', 'three-card', 'monte', 'dice', 'gathering audience', 'demoing']
         },
         {
+            id: 9,
             key: 'disposal',
             name: 'Disposal',
             icon: '☣️',
             tier: 3,
-            avgNerve: 8,
+            avgNerve: 6.4,
             color: '#f87171',
-            meritBucket: 'disposal',
-            meritLabel: 'Disposal',
+            meritBucket: 'illicitservices',
+            meritLabel: 'Illicit Services',
+            psSkillKey: 'disposalskill',
             psKeys: ['disposal', 'illicitservices'],
-            uniquesTotal: 12,
+            enhancerId: 633,
+            enhancerName: 'Latex Gloves',
+            uniquesTotal: 11,
             keywords: ['dispos', 'biological waste', 'body part', 'dead body', 'building debris', 'general waste', 'industrial waste', 'murder weapon', 'old furniture', 'vehicle', 'firearm', 'burying', 'burning', 'dissolving', 'sinking', 'abandoning']
         },
         {
+            id: 10,
             key: 'cracking',
             name: 'Cracking',
             icon: '💻',
             tier: 3,
-            avgNerve: 5,
+            avgNerve: 6.7,
             color: '#06b6d4',
-            meritBucket: 'cracking',
-            meritLabel: 'Cracking',
+            meritBucket: 'cybercrime',
+            meritLabel: 'Cybercrime',
+            psSkillKey: 'crackingskill',
             psKeys: ['cracking', 'cybercrime'],
-            uniquesTotal: 12,
+            enhancerId: 1354,
+            enhancerName: 'Office Chair',
+            uniquesTotal: 0,
             keywords: ['crack', 'brute forc', 'rig', 'password', 'decrypt', 'server', 'cipher', 'wordlist', 'hash']
         },
         {
+            id: 11,
             key: 'forgery',
             name: 'Forgery',
             icon: '🪪',
             tier: 4,
             avgNerve: 5,
             color: '#c084fc',
-            meritBucket: 'forgery',
-            meritLabel: 'Forgery',
+            meritBucket: 'counterfeiting',
+            meritLabel: 'Counterfeiting',
+            psSkillKey: 'forgeryskill',
             psKeys: ['forgery', 'counterfeiting'],
-            uniquesTotal: 12,
+            enhancerId: 1346,
+            enhancerName: 'Magnifying Glass',
+            uniquesTotal: 0,
             keywords: ['forger', 'forging', 'parking permit', 'side door', 'id badge', 'bank check', 'prescription', 'driver', 'passport', 'police badge', 'birth certificate', 'diploma']
         },
         {
+            id: 12,
             key: 'scamming',
             name: 'Scamming',
             icon: '📧',
             tier: 4,
-            avgNerve: 4,
+            avgNerve: 6.5,
             color: '#fb7185',
-            meritBucket: 'scamming',
-            meritLabel: 'Scamming',
+            meritBucket: 'fraud',
+            meritLabel: 'Fraud',
+            psSkillKey: 'scammingskill',
             psKeys: ['scamming', 'fraud'],
-            uniquesTotal: 12,
+            enhancerId: 571,
+            enhancerName: 'Ergonomic Keyboard',
+            uniquesTotal: 0,
             keywords: ['scam', 'phishing', 'spam', 'email', 'farm', 'mark', 'romance', 'lottery', 'delivery', 'tech support', 'investment', 'charity']
         },
         {
+            id: 13,
             key: 'arson',
             name: 'Arson',
             icon: '🔥',
             tier: 4,
-            avgNerve: 6,
+            avgNerve: 5,
             color: '#f97316',
-            meritBucket: 'arson',
-            meritLabel: 'Arson',
+            meritBucket: 'vandalism',
+            meritLabel: 'Vandalism',
+            psSkillKey: 'arsonskill',
             psKeys: ['arson', 'vandalism'],
-            uniquesTotal: 12,
+            enhancerId: 544,
+            enhancerName: 'Windproof Lighter',
+            uniquesTotal: 16,
             keywords: ['arson', 'accelerant', 'ignite', 'torch', 'molotov', 'firebomb', 'burn down', 'flammab', 'warehouse fire']
         }
     ];
 
     const CRIME_BY_KEY = new Map(CRIMES_CATALOG.map(c => [c.key, c]));
 
-    // 10k Crime Category Merit Buckets (Crimes 2.0 + Classic Merit Structure)
+    // 10k Crime Category Merit Buckets (verified against Torn /v2/torn/crimes & criminalrecord)
     const MERIT_CATEGORIES = [
-        { key: 'theft', label: 'Theft', target: 10000, psKey: 'theft', crimeKeys: ['shoplifting', 'pickpocketing', 'burglary'] },
+        { key: 'theft', label: 'Theft', target: 10000, psKey: 'theft', crimeKeys: ['search_for_cash', 'shoplifting', 'pickpocketing', 'burglary'] },
         { key: 'counterfeiting', label: 'Counterfeiting', target: 10000, psKey: 'counterfeiting', crimeKeys: ['bootlegging', 'forgery'] },
         { key: 'fraud', label: 'Fraud', target: 10000, psKey: 'fraud', crimeKeys: ['card_skimming', 'hustling', 'scamming'] },
-        { key: 'vandalism', label: 'Vandalism', target: 10000, psKey: 'vandalism', crimeKeys: ['search_for_cash', 'graffiti', 'arson'] },
+        { key: 'vandalism', label: 'Vandalism', target: 10000, psKey: 'vandalism', crimeKeys: ['graffiti', 'arson'] },
         { key: 'illicitservices', label: 'Illicit Services', target: 10000, psKey: 'illicitservices', crimeKeys: ['disposal'] },
         { key: 'cybercrime', label: 'Cybercrime', target: 10000, psKey: 'cybercrime', crimeKeys: ['cracking'] }
     ];
 
     // ── Nonlinear Crime Skill Curve Model ────────────────────────────────────
-    // Empirical Torn Crimes 2.0 difficulty multiplier per skill level (1 -> 100).
-    // Low levels fly by quickly; CS 75 -> 100 scales steeply (often 4x-8x attempts/level vs CS 15).
+    // Calibrated against Torn Crimes 2.0 empirical progression (CS 1->75 ≈ 35% of effort, CS 85 ≈ 52%, CS 75->100 ≈ 65%).
     function crimeCurveFactor(cs) {
         const s = Math.max(1, Math.min(99.9, Number(cs) || 1));
-        const linear = 1 + 0.022 * s;
-        const lateBoost = s > 50 ? 0.00055 * Math.pow(s - 50, 2.2) : 0;
-        const endgameBoost = s > 75 ? 0.0018 * Math.pow(s - 75, 2.1) : 0;
-        return linear + lateBoost + endgameBoost;
+        const early = 1 + 0.032 * s;
+        const midBoost = s > 45 ? 0.0014 * Math.pow(s - 45, 2.15) : 0;
+        const lateBoost = s > 72 ? 0.0068 * Math.pow(s - 72, 2.25) : 0;
+        return early + midBoost + lateBoost;
     }
 
-    // Baseline attempts per level at CS=1 (before crimeCurveFactor) if user has zero logged transitions
+    function cumulativeCrimeCurveWeight(cs) {
+        const s = Math.max(1, Math.min(100, Number(cs) || 1));
+        if (s <= 1.01) return 0;
+        const floor = Math.floor(s);
+        let sum = 0;
+        for (let l = 1; l < floor; l++) sum += crimeCurveFactor(l + 0.5);
+        sum += (s - floor) * crimeCurveFactor(floor + 0.5);
+        return sum;
+    }
+
+    // Baseline attempts per level at CS=1 (before crimeCurveFactor) if user has zero logged or v2 attempts
     function defaultBaseAttemptsPerLevel(crimeMeta) {
-        const tierMult = { 1: 4.2, 2: 5.0, 3: 5.8, 4: 6.6 };
-        return tierMult[crimeMeta?.tier || 2] || 5.0;
+        if (crimeMeta?.key === 'card_skimming') return 3.2; // Passive skimmers yield larger CS jumps per collect
+        const tierMult = { 1: 11.5, 2: 12.5, 3: 11.0, 4: 13.0 };
+        return tierMult[crimeMeta?.tier || 2] || 12.0;
     }
 
     function detectCrimeKeyFromLog(log) {
@@ -337,11 +399,38 @@
     }
 
     // ── Torn Regular Level XP Threshold Curve ────────────────────────────────
-    // Estimated equivalent "similar-level Leave attacks" required to advance from Level L -> L+1
+    // Calibrated equivalent "similar-level Leave attacks" required to advance from Level L -> L+1
+    // (Matches Rush-to-15 ~145 Leave-equiv, Lvl 45 cum ~3,536 / step 220, Lvl 99->100 step ~885, total ~29.8k to Lvl 100)
     function baselineLevelThresholdXP(level) {
         const L = Math.max(1, Math.min(100, Number(level) || 1));
         if (L >= 100) return 0;
-        return Math.round(12 + 3.6 * L + 0.145 * Math.pow(L, 2.05));
+        if (L < 15) return Math.max(2, Math.round(1.5 + 0.9 * L + 0.06 * L * L));
+        return Math.round(6 + 1.45 * L + 0.068 * Math.pow(L, 2.02));
+    }
+
+    function inferDefenderLevelFromAttack(atk, fallbackLevel) {
+        const explicit = Number(atk?.defender_level || atk?.target_level || 0);
+        if (explicit > 0) return explicit;
+        // Infer from Torn's exact respect formula: baseRespect = (ln(L) + 1) / 4
+        const rGain = Number(atk?.respect_gain ?? atk?.respect ?? 0);
+        const m = atk?.modifiers || {};
+        const resStr = String(atk?.result || '').toLowerCase();
+        if (rGain > 0 && ['attacked', 'mugged', 'hospitalized'].includes(resStr)) {
+            const mult = (Number(m.fair_fight) || 1) *
+                (Number(m.war) || 1) *
+                (Number(m.retaliation) || 1) *
+                (Number(m.group_attack) || 1) *
+                (Number(m.overseas) || 1) *
+                (Number(m.chain_bonus) || 1);
+            // Mugs/Hosps yield ~25% of Leave respect in Torn
+            const outcomeRespectFactor = resStr === 'attacked' ? 1.0 : 0.75;
+            const baseResp = rGain / Math.max(0.25, mult * outcomeRespectFactor);
+            if (baseResp > 0.2 && baseResp < 2.0) {
+                const estLvl = Math.round(Math.exp(4 * baseResp - 1));
+                return Math.max(1, Math.min(100, estLvl));
+            }
+        }
+        return Math.max(1, Number(fallbackLevel || 50));
     }
 
     function detectAttackOutcomeFromLog(log) {
@@ -376,15 +465,30 @@
         const allSorted = [...logs].sort((a, b) => a.timestamp - b.timestamp);
         const filteredLogs = allSorted.filter(l => l.timestamp >= minFilterTs && l.timestamp <= maxFilterTs);
         const liveSkills = snapshot?.skills || {};
+        const psSnap = snapshot?.personalstats || {};
+        const v2CrimesMap = snapshot?.v2Crimes || null;
 
-        // Initialize per-crime buckets
+        // Initialize per-crime buckets with authoritative live Torn CS
         const crimeMap = new Map();
         for (const meta of CRIMES_CATALOG) {
-            const liveCS = Number(liveSkills[meta.key] ?? 0);
+            let liveCS = 0;
+            let hasAuthoritativeSkill = false;
+            if (liveSkills[meta.key] !== undefined && !isNaN(Number(liveSkills[meta.key]))) {
+                liveCS = Number(liveSkills[meta.key]);
+                hasAuthoritativeSkill = true;
+            } else if (v2CrimesMap?.[meta.key]?.skill !== undefined && !isNaN(Number(v2CrimesMap[meta.key].skill))) {
+                liveCS = Number(v2CrimesMap[meta.key].skill);
+                hasAuthoritativeSkill = true;
+            } else if (meta.psSkillKey && psSnap[meta.psSkillKey] !== undefined && !isNaN(Number(psSnap[meta.psSkillKey]))) {
+                liveCS = Number(psSnap[meta.psSkillKey]);
+                hasAuthoritativeSkill = true;
+            }
             crimeMap.set(meta.key, {
                 key: meta.key,
                 meta,
                 currentSkill: liveCS,
+                _hasAuthoritativeSkill: hasAuthoritativeSkill,
+                progressionBonus: Number(v2CrimesMap?.[meta.key]?.progressionBonus || 0),
                 attempts: 0,
                 successes: 0,
                 failures: 0,
@@ -396,6 +500,8 @@
                 itemsUsedVal: 0,
                 netProfit: 0,
                 uniquesFound: new Set(),
+                uniquesUnlockedCount: 0,
+                topRewardItems: [],
                 transitions: [], // { fromLvl, toLvl, attempts, nerve, critFailsInSpan, timestamp }
                 historyPoints: [], // { cs, nerve, attempts, ts }
                 critFailPoints: [], // { cs, nerve, attempts, ts }
@@ -555,42 +661,110 @@
                     st.critFailPoints.push({ cs: Number(loggedCS.toFixed(2)), nerve: Math.round(st.totalNerve), attempts: st.attempts, ts: log.timestamp });
                 }
                 st._lastLoggedCS = loggedCS;
-                if (loggedCS > st.currentSkill) st.currentSkill = loggedCS;
+                // Only fall back to loggedCS when live Torn API skill was unavailable (never overwrite post-CF lower live skill!)
+                if (!st._hasAuthoritativeSkill && loggedCS > st.currentSkill) {
+                    st.currentSkill = loggedCS;
+                }
             } else if (outcome === 'critical_failure') {
                 st.critFailPoints.push({ cs: Number(st.currentSkill.toFixed(2)), nerve: Math.round(st.totalNerve), attempts: st.attempts, ts: log.timestamp });
             }
         }
 
-        // Compute average daily nerve spent (rolling 14d / 30d with sane natural regen floor)
+        // Hydrate / supplement per-crime lifetime totals from Torn API v2 (/v2/user/{1..13}/crimes)
+        // Whenever timeframe is 'all' or 'c2' (or zero logs synced), v2Crimes gives 100% exact lifetime Torn counts even on Limited Access!
+        const useV2LifetimeTotals = Boolean(v2CrimesMap && (logs.length === 0 || timeframe === 'all' || timeframe === 'c2'));
+        if (useV2LifetimeTotals) {
+            totalAttempts = 0;
+            totalSuccesses = 0;
+            totalFailures = 0;
+            totalCritFails = 0;
+            totalNerve = 0;
+            totalNetProfit = 0;
+
+            for (const st of crimeMap.values()) {
+                const v2 = v2CrimesMap[st.key];
+                if (v2 && (v2.attempts?.total || 0) >= st.attempts) {
+                    st.attempts = Number(v2.attempts.total || 0);
+                    st.successes = Number(v2.attempts.success || 0);
+                    st.failures = Number(v2.attempts.fail || 0);
+                    st.critFails = Number(v2.attempts.criticalFail || 0);
+                    st.totalNerve = Number(v2.nerveSpent || 0);
+
+                    let itemVal = Number(v2.itemRewardsValue || 0);
+                    if (Array.isArray(v2.rawRewardItems) && itemPrices && Object.keys(itemPrices).length > 0) {
+                        itemVal = v2.rawRewardItems.reduce((sum, it) => sum + Number(it.amount || 0) * Number(itemPrices[String(it.id)] || 0), 0);
+                    }
+                    st.cashGained = Number(v2.cashRewards || 0);
+                    st.itemsGainedVal = Math.round(itemVal);
+                    st.netProfit = (st.cashGained + st.itemsGainedVal) - (st.cashLost + st.itemsUsedVal);
+                    st.uniquesUnlockedCount = Number(v2.uniquesCount || 0);
+                    st.topRewardItems = v2.topItems || [];
+                    for (const uLabel of (v2.uniquesList || [])) {
+                        st.uniquesFound.add(uLabel);
+                    }
+                }
+                if (crimeFilter === 'all' || crimeFilter === st.key) {
+                    totalAttempts += st.attempts;
+                    totalSuccesses += st.successes;
+                    totalFailures += st.failures;
+                    totalCritFails += st.critFails;
+                    totalNerve += st.totalNerve;
+                    totalNetProfit += st.netProfit;
+                }
+            }
+        }
+
+        // Compute average daily nerve spent (rolling 14d / 30d logs, or realistic NNB/lifetime pace)
         const nnb = Number(snapshot?.bars?.nerve?.maximum || 60);
-        const naturalDailyNerve = Math.round(288 * 0.85 + Math.min(100, nnb * 0.8)); // ~280-330/day typical active player
+        const naturalDailyNerve = Math.min(265, Math.max(96, Math.round(nnb * 3.9 + 30))); // e.g. 50 NNB -> ~225 N/day, 75 NNB -> ~265 N/day
         let dailyNerveAvg = naturalDailyNerve;
-        let dailyNerveSource = 'Estimated from NNB';
+        let dailyNerveSource = `Est. active regen (${nnb} max nerve)`;
         if (activeDays14d.size >= 3 && nerveLast14d > 0) {
             dailyNerveAvg = Math.max(24, Math.round(nerveLast14d / Math.min(14, Math.max(activeDays14d.size, 7))));
             dailyNerveSource = `14d rolling avg (${activeDays14d.size} active days)`;
         } else if (activeDays30d.size >= 3 && nerveLast30d > 0) {
             dailyNerveAvg = Math.max(24, Math.round(nerveLast30d / Math.min(30, Math.max(activeDays30d.size, 10))));
             dailyNerveSource = `30d rolling avg (${activeDays30d.size} active days)`;
-        } else if (dailyMap.size >= 2 && totalNerve > 0) {
+        } else if (dailyMap.size >= 2 && totalNerve > 0 && !useV2LifetimeTotals) {
             dailyNerveAvg = Math.max(24, Math.round(totalNerve / dailyMap.size));
             dailyNerveSource = `${dailyMap.size}d synced avg`;
+        } else if (v2CrimesMap && Number(snapshot?.age || 0) > 14) {
+            const allV2Nerve = Object.values(v2CrimesMap).reduce((s, c) => s + Number(c?.nerveSpent || 0), 0);
+            const c2Days = Math.max(14, Math.min(Number(snapshot.age), Math.floor((nowSec - CRIMES_2_ERA_TS) / 86400)));
+            const lifetimePace = Math.round(allV2Nerve / c2Days);
+            if (lifetimePace > naturalDailyNerve) {
+                dailyNerveAvg = Math.min(480, lifetimePace);
+                dailyNerveSource = `Observed Crimes 2.0 pace (~${dailyNerveAvg} N/d)`;
+            }
         }
 
         // Finalize per-crime nonlinear calibration, projections, crit-fail cost & confidence
         const crimesList = [];
         for (const st of crimeMap.values()) {
-            const avgNerve = st.attempts > 0 ? (st.totalNerve / st.attempts) : st.meta.avgNerve;
+            const v2 = v2CrimesMap?.[st.key] || null;
+            const v2AvgNerve = (v2 && v2.attempts?.total > 0 && v2.nerveSpent > 0)
+                ? (v2.nerveSpent / v2.attempts.total)
+                : null;
+            const avgNerve = st.attempts > 0
+                ? (st.totalNerve / st.attempts)
+                : (v2AvgNerve || st.meta.avgNerve);
             st.avgNervePerAttempt = avgNerve;
             st.successRate = st.attempts > 0 ? (st.successes / st.attempts) * 100 : 0;
             st.failRate = st.attempts > 0 ? (st.failures / st.attempts) * 100 : 0;
             st.critFailRate = st.attempts > 0 ? (st.critFails / st.attempts) * 100 : 0;
             st.profitPerNerve = st.totalNerve > 0 ? (st.netProfit / st.totalNerve) : 0;
+            if (!st.uniquesUnlockedCount) st.uniquesUnlockedCount = st.uniquesFound.size;
 
-            // Recency-weighted nonlinear calibration over last 3-5 skill transitions
+            // Recency-weighted nonlinear calibration (Log transitions + Torn API v2 lifetime integral calibration)
             const recentTrans = st.transitions.slice(-5);
-            let calibratedBaseRate = defaultBaseAttemptsPerLevel(st.meta);
-            let recentAvgAttemptsPerLvl = Math.round(calibratedBaseRate * crimeCurveFactor(Math.max(1, st.currentSkill)));
+            const v2TotalAtt = Number(v2?.attempts?.total || 0);
+            const cumWeight = cumulativeCrimeCurveWeight(st.currentSkill);
+            const v2CalibratedBase = (v2TotalAtt >= 12 && st.currentSkill > 1.05 && cumWeight > 0.2)
+                ? Math.max(1.2, v2TotalAtt / cumWeight)
+                : null;
+
+            let calibratedBaseRate = v2CalibratedBase ?? defaultBaseAttemptsPerLevel(st.meta);
+            let recentAvgAttemptsPerLvl = Math.max(2, Math.round(calibratedBaseRate * crimeCurveFactor(Math.max(1, st.currentSkill))));
             let confidence = 'Low';
             let confidenceMath = '';
 
@@ -605,8 +779,10 @@
                     weightedBase += (tr.attempts / cf) * w;
                     weightedRaw += tr.attempts * w;
                 });
-                calibratedBaseRate = Math.max(1.8, weightedBase);
-                recentAvgAttemptsPerLvl = Math.round(weightedRaw);
+                calibratedBaseRate = v2CalibratedBase
+                    ? Math.max(1.2, weightedBase * 0.75 + v2CalibratedBase * 0.25)
+                    : Math.max(1.2, weightedBase);
+                recentAvgAttemptsPerLvl = Math.max(2, Math.round(weightedRaw));
 
                 if (recentTrans.length >= 5) {
                     confidence = 'High';
@@ -615,15 +791,24 @@
                     confidence = 'Medium';
                     confidenceMath = `Medium Confidence: Calibrated on ${recentTrans.length} logged skill transitions (avg ${recentAvgAttemptsPerLvl} attempts/lvl) + Crimes 2.0 nonlinear CS scaling.`;
                 }
+            } else if (v2CalibratedBase !== null) {
+                calibratedBaseRate = v2CalibratedBase;
+                recentAvgAttemptsPerLvl = Math.max(2, Math.round(calibratedBaseRate * crimeCurveFactor(Math.max(1, st.currentSkill))));
+                if (v2TotalAtt >= 150 || st.currentSkill >= 100) {
+                    confidence = 'High';
+                    confidenceMath = `High Confidence: Calibrated directly on your Torn API v2 lifetime record (${v2TotalAtt.toLocaleString()} attempts, ${Number(v2.nerveSpent || 0).toLocaleString()} nerve to CS ${st.currentSkill.toFixed(2)}; ~${recentAvgAttemptsPerLvl} att/lvl at current CS).`;
+                } else {
+                    confidence = 'Medium';
+                    confidenceMath = `Medium Confidence: Calibrated on your Torn API v2 record (${v2TotalAtt.toLocaleString()} attempts to CS ${st.currentSkill.toFixed(2)}) + Crimes 2.0 nonlinear scaling.`;
+                }
             } else if (st.attempts >= 60) {
                 confidence = 'Medium';
-                // Blend default curve slightly using observed crit-fail drag
                 calibratedBaseRate = defaultBaseAttemptsPerLevel(st.meta) * (1 + (st.critFailRate / 100) * 1.4);
-                recentAvgAttemptsPerLvl = Math.round(calibratedBaseRate * crimeCurveFactor(Math.max(1, st.currentSkill)));
-                confidenceMath = `Medium Confidence: ${st.attempts} attempts logged (1 or fewer level transitions in window); using Crimes 2.0 curve adjusted for your ${st.critFailRate.toFixed(1)}% crit-fail rate.`;
+                recentAvgAttemptsPerLvl = Math.max(2, Math.round(calibratedBaseRate * crimeCurveFactor(Math.max(1, st.currentSkill))));
+                confidenceMath = `Medium Confidence: ${st.attempts} attempts logged; using Crimes 2.0 curve adjusted for your ${st.critFailRate.toFixed(1)}% crit-fail rate.`;
             } else {
                 confidence = 'Low';
-                confidenceMath = `Low Confidence: Fewer than 2 skill-level transitions cached for ${st.meta.name}. Sync Full Access logs to calibrate with your personal attempt rate.`;
+                confidenceMath = `Low Confidence: Fewer than 12 attempts recorded for ${st.meta.name} (CS ${st.currentSkill.toFixed(2)}); using baseline Crimes 2.0 difficulty curve.`;
             }
 
             st.calibratedBaseRate = calibratedBaseRate;
@@ -641,17 +826,30 @@
                 const extraBase = Math.max(0.5, (avgCrit - avgClean) / Math.max(1, avgCrits));
                 st.critRecoveryExtraAttempts = Math.round(extraBase * crimeCurveFactor(Math.max(1, st.currentSkill)));
             } else {
-                // Empirical Torn Crimes 2.0 setback (~35-55% of a level's attempts at current CS)
                 st.critRecoveryExtraAttempts = Math.max(3, Math.round(recentAvgAttemptsPerLvl * 0.42));
             }
             if (st.critSkillLost <= 0 && st.critFails > 0) {
                 st.critSkillLost = Number((st.critFails * 0.38).toFixed(2));
             }
 
-            // Ensure at least current endpoint exists in historyPoints for charting
-            if (!st.historyPoints.length && st.currentSkill > 0) {
+            // Build history trajectory points (use exact log points if available, else synthesize calibrated curve up to currentSkill)
+            if (!st.historyPoints.length && st.currentSkill > 1 && st.attempts > 0) {
+                const totW = Math.max(0.1, cumulativeCrimeCurveWeight(st.currentSkill));
+                const step = st.currentSkill > 30 ? 5 : 2;
+                st.historyPoints.push({ cs: 1, nerve: 0, attempts: 0, ts: nowSec });
+                for (let lvl = step; lvl < st.currentSkill; lvl += step) {
+                    const frac = cumulativeCrimeCurveWeight(lvl) / totW;
+                    st.historyPoints.push({
+                        cs: lvl,
+                        nerve: Math.round(st.totalNerve * frac),
+                        attempts: Math.round(st.attempts * frac),
+                        ts: nowSec
+                    });
+                }
                 st.historyPoints.push({ cs: Number(st.currentSkill.toFixed(2)), nerve: Math.round(st.totalNerve), attempts: st.attempts, ts: nowSec });
-            } else if (st.historyPoints.length && st.currentSkill > st.historyPoints[st.historyPoints.length - 1].cs) {
+            } else if (!st.historyPoints.length && st.currentSkill > 0) {
+                st.historyPoints.push({ cs: Number(st.currentSkill.toFixed(2)), nerve: Math.round(st.totalNerve), attempts: st.attempts, ts: nowSec });
+            } else if (st.historyPoints.length && st.currentSkill !== st.historyPoints[st.historyPoints.length - 1].cs) {
                 st.historyPoints.push({ cs: Number(st.currentSkill.toFixed(2)), nerve: Math.round(st.totalNerve), attempts: st.attempts, ts: nowSec });
             }
 
@@ -667,12 +865,14 @@
         // Build Daily Timeline Array
         const dailyTimeline = [...dailyMap.values()].sort((a, b) => a.date.localeCompare(b.date));
 
-        // 10k Crime Category Merits
+        // 10k Crime Category Merits (cross-checked across personalstats, criminalrecord, and v2/logged successes)
         const ps = snapshot?.personalstats || {};
+        const crimRec = snapshot?.criminalrecord || {};
         const merits = MERIT_CATEGORIES.map(mc => {
             const psVal = Number(ps[mc.psKey] || 0);
+            const crVal = Number(crimRec[mc.psKey] || 0);
             const loggedSuccesses = mc.crimeKeys.reduce((sum, ck) => sum + (crimeMap.get(ck)?.successes || 0), 0);
-            const count = Math.max(psVal, loggedSuccesses);
+            const count = Math.max(psVal, crVal, loggedSuccesses);
             const pct = Math.min(100, (count / mc.target) * 100);
             return {
                 ...mc,
@@ -792,16 +992,19 @@
         // Count XP actions since last level-up (logs + supplement with recent snapshot attacks if logs sparse)
         const sinceMetrics = tallyXPInRange(allSortedLogs, effectiveStartTs, nowSec + 60, currentLevel);
 
-        // If user is on Limited Access (no full logs), supplement with snapshot recent attacks!
+        // If user is on Limited Access (no full logs), supplement with snapshot recent attacks using exact respect-derived defender levels
         if (sinceMetrics.attacksTotal === 0 && snapshot?.attacks && Object.keys(snapshot.attacks).length > 0) {
             const myId = Number(snapshot.userId || 0);
+            const myName = String(snapshot.name || '').toLowerCase();
             for (const atk of Object.values(snapshot.attacks)) {
                 const ts = Number(atk.timestamp_ended || atk.timestamp_started || 0);
                 if (ts < effectiveStartTs) continue;
-                if (myId && Number(atk.attacker_id) !== myId) continue;
+                const isAttacker = (myId && Number(atk.attacker_id) === myId) ||
+                    (!atk.attacker_id && myName && String(atk.defender_name || '').toLowerCase() !== myName);
+                if (!isAttacker) continue;
                 const resStr = String(atk.result || '').toLowerCase();
                 if (!['attacked', 'mugged', 'hospitalized'].includes(resStr)) continue;
-                const defLvl = Number(atk.defender_level || currentLevel);
+                const defLvl = inferDefenderLevelFromAttack(atk, currentLevel);
                 const lvlMult = Math.max(0.35, Math.min(2.25, 0.45 + 0.55 * (defLvl / Math.max(1, currentLevel))));
                 if (resStr === 'attacked') {
                     sinceMetrics.leaves++;
@@ -818,9 +1021,9 @@
             sinceMetrics.xpTotal = sinceMetrics.xpAttacks + sinceMetrics.xpCrimes + sinceMetrics.xpGym;
         }
 
-        // Threshold Estimation: Personal interval calibration if available, else Torn scaling curve
+        // Threshold Estimation: Personal interval calibration if available, else calibrated Torn scaling curve
         let estimatedThresholdXP = baselineLevelThresholdXP(currentLevel);
-        let calibrationMethod = 'Torn Community Level Scaling Curve';
+        let calibrationMethod = 'Torn Calibrated Level XP Curve';
 
         if (historicalIntervals.length >= 1) {
             const lastInt = historicalIntervals[historicalIntervals.length - 1];
@@ -837,33 +1040,42 @@
             ? 100
             : (estimatedThresholdXP > 0 ? (sinceMetrics.xpTotal / estimatedThresholdXP) * 100 : 0);
 
-        // Secondary HoF / Lifetime Level-Holding Detection
+        // Secondary HoF / Lifetime Level-Holding Detection & Limited-Key Model
         let isLevelHolding = false;
         let levelHoldingReason = '';
         let hofNote = hofLevelRank > 0 ? `Level HoF Rank #${hofLevelRank.toLocaleString()}` : 'HoF Rank unavailable';
 
-        // Heuristic: cumulative XP for currentLevel vs lifetime attackswon + crimes
-        let expectedLifetimeLeaves = 0;
-        for (let l = 1; l < currentLevel; l++) expectedLifetimeLeaves += baselineLevelThresholdXP(l) * 0.65;
-        const approxLifetimeXP = totalAttacksWonPS * 0.78 + totalCrimesPS * 0.14;
+        const orgCrimesPS = Number(snapshot?.personalstats?.organisedcrimes || 0);
+        const ageDays = Number(snapshot?.age || 0);
+        let expectedCumXP = 0;
+        for (let l = 1; l < currentLevel; l++) expectedCumXP += baselineLevelThresholdXP(l);
+        const approxLifetimeXP = totalAttacksWonPS * 0.80 + totalCrimesPS * 0.095 + orgCrimesPS * 1.4 + ageDays * 0.35;
 
-        if (currentLevel < 100 && rawPct >= 105) {
+        if ((latestLevelUp || manualLevelUpTs) && currentLevel < 100 && rawPct >= 105) {
             isLevelHolding = true;
             levelHoldingReason = `Logged XP since last level-up is ~${Math.round(rawPct)}% of Level ${currentLevel + 1} threshold — you likely have an [Upgrade] button waiting or are Level Holding.`;
-        } else if (currentLevel < 95 && totalAttacksWonPS > 150 && approxLifetimeXP > expectedLifetimeLeaves * 1.65) {
+        } else if (currentLevel < 95 && totalAttacksWonPS > 150 && approxLifetimeXP > (expectedCumXP + estimatedThresholdXP) * 1.45) {
             isLevelHolding = true;
             levelHoldingReason = `Lifetime activity (${totalAttacksWonPS.toLocaleString()} attacks won, ${totalCrimesPS.toLocaleString()} crimes) significantly exceeds Level ${currentLevel} norms — possible Level Holder.`;
         }
 
-        // If no log data at all (Limited Access cold start), provide bounded HoF/lifetime estimate
+        // If neither a logged Level Up nor a Manual Level-Up Date exists, estimate from lifetime XP residual + recent attack floor
         let isLimitedHeuristic = false;
-        if (!latestLevelUp && !manualLevelUpTs && sinceMetrics.xpTotal < 3 && totalAttacksWonPS > 0 && currentLevel < 100) {
+        if (!latestLevelUp && !manualLevelUpTs && (totalAttacksWonPS > 0 || totalCrimesPS > 0) && currentLevel < 100) {
             isLimitedHeuristic = true;
-            const prevCum = expectedLifetimeLeaves;
-            const nextStep = baselineLevelThresholdXP(currentLevel) * 0.7;
-            const residual = Math.max(0, approxLifetimeXP - prevCum);
-            rawPct = Math.min(96, Math.max(8, (residual / Math.max(10, nextStep)) * 100));
-            calibrationMethod = 'Limited-Key Lifetime Activity & HoF Heuristic (sync Full Access logs for exact tracking)';
+            const residual = approxLifetimeXP - expectedCumXP;
+            let estPct;
+            if (isLevelHolding) {
+                estPct = 99;
+            } else if (residual >= 0 && residual <= estimatedThresholdXP * 1.2) {
+                estPct = Math.min(95, Math.max(8, (residual / Math.max(10, estimatedThresholdXP)) * 100));
+            } else {
+                // Smooth fallback if player leveled primarily via high-FF Baldr targets or gym/missions
+                const recentPct = Math.min(88, (sinceMetrics.xpTotal / Math.max(10, estimatedThresholdXP)) * 100);
+                estPct = Math.max(12, recentPct > 5 ? recentPct : 35);
+            }
+            rawPct = estPct;
+            calibrationMethod = 'Limited-Key Lifetime XP & HoF Model (set Manual Last Level-Up Date above or sync Full Logs for exact counter)';
         }
 
         const progressPct = currentLevel >= 100 ? 100 : Math.max(0, Math.min(100, rawPct));

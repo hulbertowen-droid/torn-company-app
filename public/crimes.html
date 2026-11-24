@@ -32,11 +32,11 @@
     <script src="/global_settings.js?v=4.4.0"></script>
     <script src="/global-topbar.js?v=4.5.0"></script>
     <script src="/instant-nav.js?v=4.5.0" defer></script>
-    <script src="/friday-helper.js?v=4.5.0" defer></script>
+    <script src="/friday-helper.js?v=4.5.1" defer></script>
     <script src="/pwa-helper.js?v=1.3.0" defer></script>
-    <script src="/crimes-db.js?v=1.0.0" defer></script>
-    <script src="/crimes-engine.js?v=1.0.0" defer></script>
-    <script src="/crimes-app.js?v=1.0.0" defer></script>
+    <script src="/crimes-db.js?v=1.1.0" defer></script>
+    <script src="/crimes-engine.js?v=1.1.0" defer></script>
+    <script src="/crimes-app.js?v=1.1.0" defer></script>
 
     <style>
     /* ─── Crime & Level Analytics (torn.report Style + FactionOS Theme) ─── */
@@ -730,14 +730,26 @@
         <main class="main-content">
             <!-- Header Row -->
             <div class="crimes-header">
-                <div>
+                <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
                     <h1 class="page-title">🕵️ Crime &amp; <span>Level Analytics</span> Engine</h1>
+                    <span id="active-player-chip" class="cr-badge cyan" style="font-size:11.5px;padding:3px 9px;">Loading Account...</span>
                 </div>
                 <div class="header-actions">
                     <button type="button" class="cr-btn" id="btn-demo-toggle" onclick="toggleDemoMode()" title="Preview realistic Crimes 2.0 & Level telemetry without syncing logs">✨ Preview Demo Data</button>
                     <button type="button" class="cr-btn success" onclick="copyDiscordSummary()" title="Copy formatted Discord markdown summary of your crime ETAs and level progress">📋 Copy Discord Summary</button>
                     <button type="button" class="cr-btn" onclick="exportCrimeData('csv')" title="Export parsed crime stats to CSV">📥 CSV</button>
                     <button type="button" class="cr-btn" onclick="exportCrimeData('json')" title="Export complete crime & level-transition JSON">📥 JSON</button>
+                </div>
+            </div>
+
+            <!-- Prominent Demo Mode Notice Banner (never confused with real user skills) -->
+            <div class="scope-banner" id="demo-active-banner" style="background:rgba(124,58,237,0.14);border-color:rgba(167,139,250,0.55);color:#e9d5ff;">
+                <div>
+                    <strong>✨ Preview Demo Data Active:</strong> Currently displaying <strong>simulated sample data (Level 63)</strong> — these are <em>not</em> your Torn account's skills. Sign in to FactionOS or exit Demo Preview to view your real Crime Skills &amp; telemetry.
+                </div>
+                <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                    <button type="button" class="cr-btn primary" onclick="if(window.openAuthModal){window.openAuthModal();}else{toggleDemoMode(false);}">🔑 Sign In / Connect Key</button>
+                    <button type="button" class="cr-btn" onclick="toggleDemoMode(false)">✕ Exit Demo</button>
                 </div>
             </div>
 
@@ -780,12 +792,15 @@
                 </div>
             </div>
 
-            <!-- Graceful Limited Access Non-Blocking Banner -->
+            <!-- Graceful Limited Access / Sign-In Non-Blocking Banner -->
             <div class="scope-banner" id="limited-scope-banner">
-                <div>
-                    <strong>🔐 Limited Access Mode Active:</strong> Showing your live Crime Skills, personal offense stats, and Hall-of-Fame level estimate. To unlock <strong>per-attempt skill-level transition tracking</strong>, exact crit-fail recovery math, and log-based XP tracking, paste a <strong>Full Access</strong> Torn API key above (stored <em>strictly in your browser</em> and sent directly to <code>api.torn.com</code>).
+                <div id="limited-scope-text">
+                    <strong>🔐 Limited Access Mode Active:</strong> Loaded your <strong>exact Torn Crime Skills, lifetime Attempts, Nerve, Cash + Item Rewards, and Uniques</strong> via Torn API v2! Paste an optional <strong>Full Access</strong> key above (stored <em>strictly in your browser</em>) only if you want 7d/30d custom date filtering, daily nerve timeline spikes, and per-level transition histograms.
                 </div>
-                <button type="button" class="cr-btn primary" onclick="toggleDemoMode(true)">✨ Preview Full Demo</button>
+                <div style="display:flex;gap:6px;flex-wrap:wrap;" id="limited-scope-actions">
+                    <button type="button" class="cr-btn primary" id="btn-signin-cta" style="display:none;" onclick="if(window.openAuthModal){window.openAuthModal();}">🔑 Sign In with Torn</button>
+                    <button type="button" class="cr-btn" onclick="toggleDemoMode(true)">✨ Preview Demo</button>
+                </div>
             </div>
 
             <!-- Timeframe & Crime Filter Bar -->
