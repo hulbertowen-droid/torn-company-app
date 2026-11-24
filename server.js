@@ -14165,6 +14165,44 @@ function trackStockVelocities(data) {
 
 let lastYataSource = 'yata';
 
+function fetchJsonWithHardTimeout(url, options = {}, timeoutMs = 5000) {
+    const controller = new AbortController();
+    let timer = null;
+    const timeoutPromise = new Promise((_, reject) => {
+        timer = setTimeout(() => {
+            try { controller.abort(); } catch (_) {}
+            reject(new Error(`Hard timeout after ${timeoutMs}ms`));
+        }, timeoutMs);
+    });
+    const execPromise = (async () => {
+        const resp = await fetch(url, { ...options, signal: controller.signal });
+        if (!resp.ok) {
+            const err = new Error(`HTTP ${resp.status} ${resp.statusText}`);
+            err.httpStatus = resp.status;
+            throw err;
+        }
+        return await resp.json();
+    })();
+    return Promise.race([execPromise, timeoutPromise]).finally(() => {
+        if (timer) clearTimeout(timer);
+    });
+}
+
+function resolveWithFallbackTimeout(promise, timeoutMs, fallbackVal, label = '') {
+    let timer = null;
+    return Promise.race([
+        Promise.resolve(promise),
+        new Promise((resolve) => {
+            timer = setTimeout(() => {
+                if (label) console.warn(`[TravelProfits] ${label} timed out at ${timeoutMs}ms — using fallback`);
+                resolve(fallbackVal);
+            }, timeoutMs);
+        })
+    ]).finally(() => {
+        if (timer) clearTimeout(timer);
+    });
+}
+
 function triggerYataBackgroundFetch() {
     if (yataFetchPromise) return yataFetchPromise;
 
@@ -14176,26 +14214,19 @@ function triggerYataBackgroundFetch() {
         try {
             for (const ep of endpoints) {
                 try {
-                    const resp = await fetch(ep.url, {
-                        signal: AbortSignal.timeout(7500),
+                    const data = await fetchJsonWithHardTimeout(ep.url, {
                         headers: {
-                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                            'User-Agent': 'FactionOS-TravelDesk/2.2',
                             'Accept': 'application/json, text/plain, */*',
-                            'Accept-Language': 'en-US,en;q=0.9',
                             'Cache-Control': 'no-cache'
                         }
-                    });
-                    if (resp.ok) {
-                        const data = await resp.json();
-                        if (data && data.stocks) {
-                            cachedYataStocks = data;
-                            lastYataFetchTime = Date.now();
-                            lastYataSource = ep.name;
-                            trackStockVelocities(data);
-                            return cachedYataStocks;
-                        }
-                    } else {
-                        console.warn(`[YATA Stock] ${ep.name} returned HTTP ${resp.status} ${resp.statusText}`);
+                    }, 4500);
+                    if (data && data.stocks) {
+                        cachedYataStocks = data;
+                        lastYataFetchTime = Date.now();
+                        lastYataSource = ep.name;
+                        trackStockVelocities(data);
+                        return cachedYataStocks;
                     }
                 } catch (innerErr) {
                     console.warn(`[YATA Stock] ${ep.name} notice: ${innerErr.message}`);
@@ -14219,21 +14250,18 @@ async function getLiveYataStocks() {
     const now = Date.now();
     // 1. Stale-While-Revalidate: Return memory cache IMMEDIATELY (0ms latency!)
     if (cachedYataStocks && cachedYataStocks.stocks) {
-        // If older than 45 seconds and no fetch is currently running, refresh in the background
-        if (now - lastYataFetchTime >= 45 * 1000 && !yataFetchPromise) {
+        // If older than 55 seconds and no fetch is currently running, refresh in the background
+        if (now - lastYataFetchTime >= 55 * 1000 && !yataFetchPromise) {
             triggerYataBackgroundFetch().catch(() => {});
         }
         return cachedYataStocks;
     }
 
-    // 2. Cold start fallback (only before initial warm-up completes)
-    if (yataFetchPromise) {
-        return await yataFetchPromise;
-    }
-    return await triggerYataBackgroundFetch();
+    // 2. Cold start fallback (bound request wait to 4s so slow YATA never stalls /api/travel-profits)
+    return await resolveWithFallbackTimeout(triggerYataBackgroundFetch(), 4000, cachedYataStocks, 'YATA');
 }
 
-// Auto-warm YATA overseas cache on boot and refresh every 30 seconds
+// Auto-warm YATA overseas cache on boot and refresh every 65 seconds (respects YATA 1m cache/rate-limit)
 setTimeout(() => {
     triggerYataBackgroundFetch().then(data => {
         if (data && data.stocks) {
@@ -14244,7 +14272,7 @@ setTimeout(() => {
 
 setInterval(() => {
     triggerYataBackgroundFetch().catch(() => {});
-}, 30 * 1000);
+}, 65 * 1000);
 
 
 app.get('/api/items', async (req, res) => {
@@ -14321,20 +14349,16 @@ function triggerPrometheusBackgroundFetch() {
     if (prometheusFetchPromise) return prometheusFetchPromise;
     prometheusFetchPromise = (async () => {
         try {
-            const resp = await fetch('https://api.prombot.co.uk/api/travel', {
-                signal: AbortSignal.timeout(3500),
+            const data = await fetchJsonWithHardTimeout('https://api.prombot.co.uk/api/travel', {
                 headers: {
-                    'User-Agent': 'FactionOS-TravelDesk/2.1',
+                    'User-Agent': 'FactionOS-TravelDesk/2.2',
                     'Accept': 'application/json'
                 }
-            });
-            if (resp.ok) {
-                const data = await resp.json();
-                if (data && data.stocks) {
-                    cachedPrometheusStocks = data;
-                    lastPrometheusFetchTime = Date.now();
-                    return cachedPrometheusStocks;
-                }
+            }, 3500);
+            if (data && data.stocks) {
+                cachedPrometheusStocks = data;
+                lastPrometheusFetchTime = Date.now();
+                return cachedPrometheusStocks;
             }
         } catch (_) {
             // Short timeout / offline fallback: never block YATA
@@ -14354,7 +14378,7 @@ async function getLivePrometheusStocks() {
         }
         return cachedPrometheusStocks;
     }
-    return await triggerPrometheusBackgroundFetch();
+    return await resolveWithFallbackTimeout(triggerPrometheusBackgroundFetch(), 3800, cachedPrometheusStocks, 'Prometheus');
 }
 
 setTimeout(() => {
@@ -14610,15 +14634,30 @@ app.get('/api/travel-profits', async (req, res) => {
     if (!apiKey) return res.status(401).json({ error: "API Key required" });
     try {
         if (userOwnKey) {
-            await verifySubscription(userOwnKey).catch(() => null);
+            await resolveWithFallbackTimeout(
+                verifySubscription(userOwnKey).catch(() => null),
+                3000,
+                null,
+                'verifySubscription'
+            );
         }
 
-        // Fetch Torn items catalog + live Points Market + dual-feed YATA & Prometheus in parallel
+        // Fetch Torn items catalog + live Points Market + dual-feed YATA & Prometheus in parallel (bounded by hard timeouts)
         const [cachedCatalog, livePointPrice, rawYata, rawProm] = await Promise.all([
-            cachedTornFetch(`https://api.torn.com/torn/?selections=items&key=${encodeURIComponent(apiKey)}`, 'torn_items_catalog', 3600000),
-            getLivePointMarketPrice(apiKey),
-            getLiveYataStocks().catch(() => null),
-            getLivePrometheusStocks().catch(() => null)
+            resolveWithFallbackTimeout(
+                cachedTornFetch(`https://api.torn.com/torn/?selections=items&key=${encodeURIComponent(apiKey)}`, 'torn_items_catalog', 3600000).catch(() => null),
+                6000,
+                globalTornCache['torn_items_catalog']?.data || null,
+                'itemsCatalog'
+            ),
+            resolveWithFallbackTimeout(
+                getLivePointMarketPrice(apiKey).catch(() => lastCachedPointMarketPrice),
+                4500,
+                lastCachedPointMarketPrice,
+                'pointsMarket'
+            ),
+            getLiveYataStocks().catch(() => cachedYataStocks),
+            getLivePrometheusStocks().catch(() => cachedPrometheusStocks)
         ]);
 
         if (!cachedCatalog || !cachedCatalog.items) {
@@ -14780,10 +14819,15 @@ app.get('/api/travel-profits', async (req, res) => {
         if (userOwnKey) {
             try {
                 const pHash = userOwnKey.slice(0, 8);
-                const pData = await cachedTornFetch(
-                    `https://api.torn.com/user/?selections=basic,bars,cooldowns,travel,money,perks&key=${encodeURIComponent(userOwnKey)}`,
-                    `travel_player_ctx_${pHash}`,
-                    30000
+                const pData = await resolveWithFallbackTimeout(
+                    cachedTornFetch(
+                        `https://api.torn.com/user/?selections=basic,bars,cooldowns,travel,money,perks&key=${encodeURIComponent(userOwnKey)}`,
+                        `travel_player_ctx_${pHash}`,
+                        30000
+                    ).catch(() => null),
+                    4000,
+                    null,
+                    'playerContext'
                 );
                 if (pData && !pData.error) {
                     const allPerks = [
