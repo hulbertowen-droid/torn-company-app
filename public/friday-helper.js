@@ -105,6 +105,17 @@
             }
         },
         {
+            label: '🕵️ Crime & Level ETAs',
+            prompt: 'Open Crime & Level Analytics estimators',
+            instantReply: 'Opening **Crime & Level Analytics** to view your Crimes 2.0 skill estimators, $/nerve efficiency, and regular level progress.',
+            instantAction: {
+                type: 'crimes_action',
+                page: '/crimes.html',
+                tab: 'overview',
+                label: 'Opened Crime & Level Analytics'
+            }
+        },
+        {
             label: '🌓 Toggle Theme',
             prompt: 'Toggle dark or light mode',
             instantReply: 'Toggled your FactionOS visual theme.',
@@ -420,6 +431,13 @@
                                 window.setFilter('instock', stockBtn, true);
                             }
                         }
+                    }
+                }
+
+                // CRIME & LEVEL ANALYTICS (/crimes.html)
+                if (action.type === 'crimes_action') {
+                    if (typeof window.applyFridayCrimesCommand === 'function') {
+                        window.applyFridayCrimesCommand(action);
                     }
                 }
 
@@ -1226,8 +1244,174 @@
             return;
         }
 
-        // Fast client-side Travel Co-Pilot intent parser ("overnight sleep flight", "swiss rehab", "instant npc cash", "best run under 2 hours with $2M budget")
+        // Fast client-side Crime & Level Analytics Intel Co-Pilot Q&A (works on ANY page using cached FactionOSCrimeIntel!)
         const qLow = text.trim().toLowerCase();
+        const crimeIntelObj = (() => {
+            try {
+                if (window.FactionOSCrimeIntel && window.FactionOSCrimeIntel.crimes) return window.FactionOSCrimeIntel;
+                const raw = localStorage.getItem('factionos_crime_intel_summary_v1');
+                return raw ? JSON.parse(raw) : null;
+            } catch (_) { return null; }
+        })();
+
+        const CRIME_ALIAS_MAP = [
+            ['search_for_cash', /\bsearch\s*for\s*cash\b|\bsfc\b/],
+            ['bootlegging', /\bbootlegg/],
+            ['graffiti', /\bgraffiti\b/],
+            ['shoplifting', /\bshoplift/],
+            ['pickpocketing', /\bpickpocket/],
+            ['card_skimming', /\bcard\s*skimm|\bskimm/],
+            ['burglary', /\bburglar/],
+            ['hustling', /\bhustl/],
+            ['disposal', /\bdispos/],
+            ['cracking', /\bcrack/],
+            ['forgery', /\bforger/],
+            ['scamming', /\bscamm/],
+            ['arson', /\barson\b/]
+        ];
+        let matchedCrimeKey = null;
+        for (const [ck, rx] of CRIME_ALIAS_MAP) {
+            if (rx.test(qLow)) { matchedCrimeKey = ck; break; }
+        }
+
+        const asksLevelProgress = /\b(next\s*level|hit\s*(my\s*)?next\s*level|level\s*progress|level\s*estimator|level\s*holding|how\s*close.*level|when\s*will\s*i\s*(hit|reach).*level)\b/.test(qLow) && !matchedCrimeKey && !/\bcrime\s*skill\b/.test(qLow);
+        const asksBestCrime = /\b(most\s*\$?\s*\/?\s*nerve|best\s*\$?\s*\/?\s*nerve|best\s*crime\s*(profit|money)|highest\s*\$?\s*\/?\s*nerve|fastest\s*crime|fastest\s*to\s*(cs\s*)?100|safest\s*crime|lowest\s*crit)\b/.test(qLow);
+        const asksSpecificCrime = Boolean(matchedCrimeKey && /\b(how\s*many|attempts?|nerve|days?|time|long|until|to\s*(cs|level|lvl)?\s*\d+|eta|estimate|skill|profit|progress|inspect|open|check)\b/.test(qLow));
+
+        if (asksSpecificCrime || asksLevelProgress || asksBestCrime) {
+            if (!crimeIntelObj || !crimeIntelObj.crimes) {
+                const openAct = {
+                    type: 'crimes_action',
+                    page: asksLevelProgress ? '/crimes.html#level' : '/crimes.html',
+                    tab: asksLevelProgress ? 'level' : 'overview',
+                    crime: matchedCrimeKey,
+                    label: 'Open Crime & Level Analytics'
+                };
+                hist.push({
+                    role: 'assistant',
+                    text: `I don't have synced crime or level telemetry cached in this browser yet. Opening **Crime & Level Analytics** so you can sync your logs (or toggle **Preview Demo Data**).`,
+                    action: openAct
+                });
+                saveHistory(hist);
+                renderMessages();
+                executeHelperAction(openAct);
+                return;
+            }
+
+            if (asksSpecificCrime && matchedCrimeKey && crimeIntelObj.crimes[matchedCrimeKey]) {
+                const c = crimeIntelObj.crimes[matchedCrimeKey];
+                const tgtMatch = qLow.match(/\b(?:level|lvl|cs|to|until|reach)\s*(\d{1,3})\b/);
+                const targetCS = tgtMatch ? Math.min(100, Math.max(Math.ceil(c.currentSkill + 0.01), parseInt(tgtMatch[1], 10))) : 100;
+
+                // Exact nonlinear projection (reuse page helper if available, else local curve matching crimes-engine.js)
+                let estAtt = c.cs100Attempts;
+                let estNerve = c.cs100Nerve;
+                let estDays = c.cs100Days;
+                if (typeof window.FactionOSCrimeIntelProject === 'function') {
+                    const p = window.FactionOSCrimeIntelProject(matchedCrimeKey, targetCS);
+                    if (p) { estAtt = p.attemptsRemaining; estNerve = p.nerveRemaining; estDays = Number(p.daysRemaining.toFixed(1)); }
+                } else if (targetCS < 100 && c.currentSkill < targetCS) {
+                    const cf = (s) => 1 + 0.022 * s + (s > 50 ? 0.00055 * Math.pow(s - 50, 2.2) : 0) + (s > 75 ? 0.0018 * Math.pow(s - 75, 2.1) : 0);
+                    const base = c.calibratedBaseRate || 5;
+                    const floor = Math.floor(c.currentSkill);
+                    let sumA = 0;
+                    for (let l = floor; l < targetCS; l++) {
+                        const frac = l === floor ? Math.max(0.05, 1 - (c.currentSkill - floor)) : 1;
+                        sumA += Math.max(2, base * cf(l + 0.5)) * frac;
+                    }
+                    estAtt = Math.ceil(sumA);
+                    estNerve = Math.ceil(estAtt * (c.avgNerve || 4));
+                    estDays = Number((estNerve / Math.max(24, crimeIntelObj.dailyNerveAvg || 150)).toFixed(1));
+                }
+
+                const act = {
+                    type: 'crimes_action',
+                    page: '/crimes.html',
+                    tab: 'overview',
+                    crime: matchedCrimeKey,
+                    targetSkill: targetCS,
+                    label: `Inspect ${c.name} (Target CS ${targetCS})`
+                };
+                const demoNote = crimeIntelObj.isDemo ? ' *(Preview Demo Data)*' : '';
+                const replyTxt = c.currentSkill >= 100
+                    ? `${c.icon} **${c.name}** is already maxed at **CS 100**${demoNote}! Your efficiency is **$${c.profitPerNerve.toLocaleString()}/nerve** (${c.successRate}% success).`
+                    : `${c.icon} **${c.name}** is currently **CS ${c.currentSkill} / 100**${demoNote} (${c.confidence} confidence):\n• **Next Level (CS ${Math.min(100, Math.floor(c.currentSkill) + 1)}):** ~**${c.nextAttempts.toLocaleString()} attempts** (${c.nextNerve.toLocaleString()} nerve)\n• **Target CS ${targetCS}:** ~**${estAtt.toLocaleString()} attempts** • **${estNerve.toLocaleString()} nerve** • ~**${estDays} days** at ${crimeIntelObj.dailyNerveAvg} N/day\n• **Efficiency:** **$${c.profitPerNerve.toLocaleString()}/nerve** (${c.critFailRate}% crit-fail rate)`;
+
+                hist.push({ role: 'assistant', text: replyTxt, action: act });
+                saveHistory(hist);
+                renderMessages();
+                if (normalizePath(window.location.pathname) === '/crimes.html') {
+                    executeHelperAction(act);
+                }
+                return;
+            }
+
+            if (asksLevelProgress) {
+                const lv = crimeIntelObj.levelEstimate;
+                const demoNote = crimeIntelObj.isDemo ? ' *(Preview Demo Data)*' : '';
+                const act = {
+                    type: 'crimes_action',
+                    page: '/crimes.html#level',
+                    tab: 'level',
+                    label: `Open Level ${lv.currentLevel}→${lv.nextLevel} Estimator`
+                };
+                const holdTxt = lv.isLevelHolding ? `\n🔒 **Heads-up:** Your XP activity suggests you may be **Level Holding** (or have an Upgrade ready).` : '';
+                const replyTxt = `⭐ **Regular Level Progress (Lvl ${lv.currentLevel} → ${lv.nextLevel})**${demoNote}:\n• **Estimated Progress:** **~${lv.progressPct}%**${lv.hofLevelRank ? ` (HoF Rank #${lv.hofLevelRank.toLocaleString()})` : ''}\n• **Remaining Effort:** ~**${lv.leavesRemaining.toLocaleString()} similar-level Leave attacks** OR ~**${lv.crimesRemaining.toLocaleString()} crimes**\n• **Projected ETA:** ~**${lv.estDaysToLevel} days** at your recent pace.${holdTxt}`;
+
+                hist.push({ role: 'assistant', text: replyTxt, action: act });
+                saveHistory(hist);
+                renderMessages();
+                if (normalizePath(window.location.pathname) === '/crimes.html') {
+                    executeHelperAction(act);
+                }
+                return;
+            }
+
+            if (asksBestCrime) {
+                const allC = Object.values(crimeIntelObj.crimes);
+                const demoNote = crimeIntelObj.isDemo ? ' *(Preview Demo Data)*' : '';
+                let recMode = 'profit';
+                let ranked = [];
+                let heading = '';
+                if (/fastest|100/.test(qLow)) {
+                    recMode = 'fastest';
+                    ranked = allC.filter(c => c.currentSkill < 100).sort((a, b) => a.cs100Nerve - b.cs100Nerve).slice(0, 3);
+                    heading = '🚀 **Fastest Crimes to CS 100**';
+                } else if (/safest|lowest\s*crit/.test(qLow)) {
+                    recMode = 'safest';
+                    ranked = allC.filter(c => c.attempts > 0 && c.currentSkill < 100).sort((a, b) => a.critFailRate - b.critFailRate).slice(0, 3);
+                    heading = '🛡️ **Safest Crimes (Lowest Crit-Fail Rate)**';
+                } else {
+                    recMode = 'profit';
+                    ranked = allC.filter(c => c.attempts > 0).sort((a, b) => b.profitPerNerve - a.profitPerNerve).slice(0, 3);
+                    heading = '💰 **Highest $/Nerve Crimes**';
+                }
+                const lines = ranked.map((c, idx) => {
+                    if (recMode === 'fastest') return `${idx + 1}. ${c.icon} **${c.name}** (CS ${c.currentSkill}) — ~**${c.cs100Days}d** (${c.cs100Attempts.toLocaleString()} att)`;
+                    if (recMode === 'safest') return `${idx + 1}. ${c.icon} **${c.name}** (CS ${c.currentSkill}) — **${c.critFailRate}% CF** (${c.successRate}% success)`;
+                    return `${idx + 1}. ${c.icon} **${c.name}** — **$${c.profitPerNerve.toLocaleString()}/nerve** ($${c.netProfit.toLocaleString()} net)`;
+                });
+                const topPick = ranked[0];
+                const act = {
+                    type: 'crimes_action',
+                    page: '/crimes.html',
+                    tab: 'overview',
+                    recommendMode: recMode,
+                    crime: topPick?.key || null,
+                    label: topPick ? `Inspect #1 ${topPick.name}` : 'Open Crime Recommender'
+                };
+                hist.push({
+                    role: 'assistant',
+                    text: `${heading}${demoNote}:\n${lines.join('\n') || 'Sync logs to rank your crimes.'}`,
+                    action: act
+                });
+                saveHistory(hist);
+                renderMessages();
+                return;
+            }
+        }
+
+        // Fast client-side Travel Co-Pilot intent parser ("overnight sleep flight", "swiss rehab", "instant npc cash", "best run under 2 hours with $2M budget")
         if (/\b(best\s+run|best\s+flight|sleep\s+flight|overnight\s+flight|before\s+bed|swiss\s+rehab|zurich\s+rehab|rehab\s+flight|rehab\s+combo|instant\s+npc|npc\s+cash|museum\s+set|set\s+planner|fly\s+for\s+a\s+set|contraband|mug\s+risk|50[\s-]*flight|travel\s+merit|country\s+cards)\b/.test(qLow)) {
             let preset = null;
             if (/\bsleep\s+flight|overnight\s+flight|before\s+bed/.test(qLow)) preset = 'sleep';
@@ -1311,7 +1495,8 @@
                     message: text,
                     mode: currentMode,
                     currentPage: window.location.pathname + window.location.hash,
-                    history: hist.slice(-8)
+                    history: hist.slice(-8),
+                    crimeIntel: crimeIntelObj || null
                 })
             });
             const data = await res.json();

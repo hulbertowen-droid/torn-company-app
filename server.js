@@ -12764,8 +12764,37 @@ function resolveSiteHelperIntent(rawMsg, currentPage = '/') {
         };
     }
 
+    // 13.5 Crime & Level Analytics
+    if (/\b(crime\s*(skill|level|analytics|estimator|profit|nerve|history|report)|torn\.report|attempts?\s*(to|until|for)\s*(level|cs)|next\s*level|level\s*progress|level\s*estimator|level\s*holding|burglary|pickpocketing|bootlegging|card\s*skimming|shoplifting|hustling|disposal|cracking|forgery|scamming|arson|graffiti|search\s*for\s*cash)\b/.test(q)) {
+        let tab = 'overview';
+        if (/\b(next\s*level|level\s*progress|level\s*estimator|level\s*holding|in[\s-]*game\s*level)\b/.test(q) && !/\b(burglary|pickpocketing|bootlegging|card\s*skimming|shoplifting|hustling|disposal|cracking|forgery|scamming|arson|graffiti|search\s*for\s*cash|crime\s*skill)\b/.test(q)) {
+            tab = 'level';
+        } else if (/\b(\$\/nerve|profit\s*per\s*nerve|crime\s*profit|outcome\s*chart|10k\s*merit|unique)\b/.test(q)) {
+            tab = 'analytics';
+        }
+        let crime = null;
+        const crimeKeywords = [
+            ['search_for_cash', /search\s*for\s*cash/], ['bootlegging', /bootlegging/], ['graffiti', /graffiti/],
+            ['shoplifting', /shoplifting/], ['pickpocketing', /pickpocketing/], ['card_skimming', /card\s*skimm/],
+            ['burglary', /burglar/], ['hustling', /hustl/], ['disposal', /disposal/],
+            ['cracking', /cracking/], ['forgery', /forgery/], ['scamming', /scamming/], ['arson', /arson/]
+        ];
+        for (const [k, rx] of crimeKeywords) {
+            if (rx.test(q)) { crime = k; break; }
+        }
+        const tgtM = q.match(/\b(?:level|lvl|cs)\s*(\d{1,3})\b/);
+        const targetSkill = tgtM ? Math.min(100, Math.max(2, parseInt(tgtM[1], 10))) : null;
+        return {
+            reply: crime
+                ? `Opening **Crime & Level Analytics** focused on **${crime.replace(/_/g, ' ').toUpperCase()}**${targetSkill ? ` (Target CS ${targetSkill})` : ''}.`
+                : `Opening **Crime & Level Analytics** on the **${tab.toUpperCase()}** tab.`,
+            action: { type: 'crimes_action', page: '/crimes.html' + (tab !== 'overview' ? '#' + tab : ''), tab, crime, targetSkill, label: crime ? `Inspect ${crime.replace(/_/g, ' ')}` : 'Open Crime & Level Analytics' }
+        };
+    }
+
     // 14. Fast Generic Page Navigation ("navigate to ...", "go to ...", "open ...")
     if (/\b(navigate|go\s*to|open|take\s*me\s*to|switch\s*to)\b/.test(q)) {
+        if (/\bcrime/.test(q) && !/\borganized\s*crime|\boc\b/.test(q)) return { reply: "Navigating to **Crime & Level Analytics** (`/crimes.html`).", action: { type: 'crimes_action', page: '/crimes.html', tab: 'overview', label: 'Crime & Level Analytics' } };
         if (/\bpayout/.test(q)) return { reply: "Navigating to **War Payouts** (`/payout.html`).", action: { type: 'payout_action', page: '/payout.html', label: 'War Payouts' } };
         if (/\bwarboard|\bhome\b/.test(q)) return { reply: "Navigating to **Live Warboard** (`/`).", action: { type: 'warboard_action', page: '/', label: 'Live Warboard' } };
         if (/\bchain/.test(q)) return { reply: "Navigating to **Chain Sentinel** (`/chain.html`).", action: { type: 'chain_action', page: '/chain.html', label: 'Chain Sentinel' } };
@@ -12784,7 +12813,7 @@ function resolveSiteHelperIntent(rawMsg, currentPage = '/') {
 
 app.post('/api/ai/helper', async (req, res) => {
     try {
-        const { message = '', mode = 'copilot', currentPage = '/', history = [] } = req.body || {};
+        const { message = '', mode = 'copilot', currentPage = '/', history = [], crimeIntel = null } = req.body || {};
         const cleanMsg = String(message || '').trim();
         if (!cleanMsg) {
             return res.status(400).json({ success: false, error: 'Message is required.' });
@@ -12803,6 +12832,10 @@ app.post('/api/ai/helper', async (req, res) => {
             }
         }
 
+        const crimeContextBlock = crimeIntel && typeof crimeIntel === 'object'
+            ? `\nLive User Crime & Level Analytics Snapshot (use this directly if asked about their crimes, attempts to CS, $/nerve, or regular level progress):\n${JSON.stringify(crimeIntel).slice(0, 2600)}\n`
+            : '';
+
         // 2. LLM Co-Pilot (uses server-wide Gemini pool + OpenRouter failover — no user key needed)
         const helperSystemPrompt = `You are F.R.I.D.A.Y., the built-in AI Co-Pilot located in the bottom-left corner of the FactionOS web app for the Spider-Verse Torn City faction.
 Your job is to:
@@ -12810,7 +12843,7 @@ Your job is to:
 2. Answer Torn City gameplay & Spider-Verse faction questions concisely (1-3 short paragraphs max).
 
 Current page the user is viewing: ${currentPage}
-
+${crimeContextBlock}
 Available FactionOS pages & actions you can trigger automatically by including an "action" object in your JSON response:
 - Live Warboard ("/"):
   { "type": "warboard_action", "page": "/", "enemyFilter": "all|online|idle|offline|okay|hosp3m|travel|optimalff|unclaimed|revive", "friendlyFilter": "all|online|hosp|travel|exposed", "enemySort": "hosp_asc|ff_desc|stats_asc|stats_desc|score_desc|level_desc|online_first", "toggleHud": true/false, "toggleSim": true/false, "label": "Short button label" }
@@ -12827,7 +12860,9 @@ Available FactionOS pages & actions you can trigger automatically by including a
 - OC Manager ("/oc.html"):
   { "type": "oc_action", "page": "/oc.html", "tab": "recruiting|planning|ready", "label": "Short button label" }
 - Travel Profit Desk ("/travel.html"):
-  { "type": "travel_action", "page": "/travel.html", "filter": "all|plushie|flower|drug|instock", "capacity": 29, "flightProfile": "airstrip|wlt|bct|standard", "label": "Short button label" }
+  { "type": "travel_action", "page": "/travel.html", "filter": "all|plushie|flower|drug|instock", "capacity": 28, "flightProfile": "airstrip|wlt|bct|standard", "label": "Short button label" }
+- Crime & Level Analytics ("/crimes.html"):
+  { "type": "crimes_action", "page": "/crimes.html", "tab": "overview|analytics|level", "crime": "search_for_cash|bootlegging|graffiti|shoplifting|pickpocketing|card_skimming|burglary|hustling|disposal|cracking|forgery|scamming|arson|null", "targetSkill": 80, "recommendMode": "fastest|profit|safest|null", "label": "Short button label" }
 - Company Hub ("/company.html"):
   { "type": "company_action", "page": "/company.html", "runAdvisor": true/false, "openAlerts": true/false, "label": "Short button label" }
 - Casino Analytics ("/gamble.html"):
@@ -12912,6 +12947,68 @@ app.use('/api/bazaar', bazaarRoutes);
 
 const gymTrackerRoutes = require('./routes/gym-tracker');
 app.use('/api/gym-tracker', gymTrackerRoutes);
+
+// Read-only Crime & Level Analytics Limited-Access Snapshot (uses authenticated session key; never persists Full Access keys)
+app.get('/api/crimes/snapshot', async (req, res) => {
+    const rawKey = req.userTornKey || req.headers['x-api-key'] || '';
+    const userKey = (rawKey && rawKey !== 'null' && rawKey !== 'undefined' && String(rawKey).trim().length >= 16)
+        ? String(rawKey).trim()
+        : null;
+    if (!userKey) {
+        return res.status(401).json({ success: false, error: 'Sign in with your Torn API key to load live skills & stats.' });
+    }
+    try {
+        const kHash = userKey.slice(0, 8);
+        const [profile, skillsRaw, hofRaw, attacksRaw, keyInfoRaw] = await Promise.all([
+            cachedTornFetch(`https://api.torn.com/user/?selections=basic,profile,bars,personalstats&key=${encodeURIComponent(userKey)}`, `crimes_prof_${kHash}`, 15000).catch(() => null),
+            cachedTornFetch(`https://api.torn.com/user/?selections=skills&key=${encodeURIComponent(userKey)}`, `crimes_sk_${kHash}`, 15000).catch(() => ({})),
+            cachedTornFetch(`https://api.torn.com/user/?selections=hof&key=${encodeURIComponent(userKey)}`, `crimes_hof_${kHash}`, 60000).catch(() => ({})),
+            cachedTornFetch(`https://api.torn.com/user/?selections=attacks&key=${encodeURIComponent(userKey)}`, `crimes_atk_${kHash}`, 30000).catch(() => ({})),
+            cachedTornFetch(`https://api.torn.com/key/?selections=info&key=${encodeURIComponent(userKey)}`, `crimes_ki_${kHash}`, 60000).catch(() => ({}))
+        ]);
+
+        if (!profile || profile.error) {
+            return res.status(400).json({ success: false, error: profile?.error?.error || 'Failed to read Torn user profile.' });
+        }
+
+        const skillsSrc = (skillsRaw && (skillsRaw.skills || skillsRaw)) || {};
+        const skills = {};
+        for (const [k, v] of Object.entries(skillsSrc)) {
+            if (typeof v === 'number' || (typeof v === 'string' && !isNaN(Number(v)))) {
+                skills[k.toLowerCase()] = Number(v);
+            }
+        }
+
+        const ki = keyInfoRaw?.info || keyInfoRaw || {};
+        const accessType = String(ki.access_type || 'Limited Access');
+        const accessLevel = Number(ki.access_level ?? 2);
+        const hasLogAccess = accessLevel >= 4 || accessType.toLowerCase().includes('full');
+
+        return res.json({
+            success: true,
+            keyInfo: { accessType, accessLevel, hasLogAccess },
+            snapshot: {
+                source: 'session_snapshot',
+                fetchedAt: Date.now(),
+                userId: String(profile.player_id || ''),
+                name: profile.name || 'Operative',
+                level: Number(profile.level || 1),
+                rank: profile.rank || '',
+                age: Number(profile.age || 0),
+                bars: profile.bars || {
+                    nerve: profile.nerve || { current: 0, maximum: 60 },
+                    energy: profile.energy || { current: 0, maximum: 150 }
+                },
+                skills,
+                personalstats: profile.personalstats || {},
+                hof: hofRaw?.halloffame || profile.halloffame || {},
+                attacks: attacksRaw?.attacks || {}
+            }
+        });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message || 'Snapshot lookup failed' });
+    }
+});
 
 // Package A: Pre-War Energy Stacking & Booster Readiness API
 app.get('/api/war-readiness', async (req, res) => {

@@ -67,6 +67,7 @@
             '/payout.html',
             '/oc.html',
             '/travel.html',
+            '/crimes.html',
             '/company.html',
             '/gamble.html',
             '/discord.html',

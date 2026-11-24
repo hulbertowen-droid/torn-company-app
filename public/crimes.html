@@ -1,0 +1,1182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <!-- PWA & Mobile Web Capabilities -->
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#0d1117">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="FactionOS">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="application-name" content="FactionOS">
+    <meta name="format-detection" content="telephone=no">
+
+    <!-- PWA Icons -->
+    <link rel="icon" type="image/svg+xml" href="/icons/icon.svg">
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
+    <link rel="apple-touch-icon" href="/icons/icon-180.png">
+    <title>Crime &amp; Level Analytics | FactionOS</title>
+    <meta name="description" content="torn.report-style Crimes 2.0 visual analytics, nonlinear Crime Skill Level Estimator, and Regular In-Game Level Progress Estimator for Torn City.">
+
+    <!-- Fonts & Core Design System -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/global.css?v=4.4.0">
+
+    <!-- Scripts & Core Modules -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
+    <script src="/auth-gate.js?v=4.4.0"></script>
+    <script src="/global_settings.js?v=4.4.0"></script>
+    <script src="/global-topbar.js?v=4.5.0"></script>
+    <script src="/instant-nav.js?v=4.5.0" defer></script>
+    <script src="/friday-helper.js?v=4.5.0" defer></script>
+    <script src="/pwa-helper.js?v=1.3.0" defer></script>
+    <script src="/crimes-db.js?v=1.0.0" defer></script>
+    <script src="/crimes-engine.js?v=1.0.0" defer></script>
+    <script src="/crimes-app.js?v=1.0.0" defer></script>
+
+    <style>
+    /* ─── Crime & Level Analytics (torn.report Style + FactionOS Theme) ─── */
+    @media (min-width: 769px) {
+        .main-content {
+            padding: 12px 20px 44px !important;
+        }
+    }
+    .crimes-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-bottom: 10px;
+    }
+    .crimes-header .page-title {
+        display: block !important;
+        font-size: 1.32em;
+        letter-spacing: -0.02em;
+        margin: 0;
+    }
+    .crimes-header .page-title span { color: var(--accent-cobalt); }
+    .header-actions {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        flex-wrap: wrap;
+    }
+
+    /* Buttons & Pills */
+    .cr-btn {
+        padding: 5px 10px;
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--border-default);
+        background: var(--bg-elevated);
+        color: var(--text-secondary);
+        font-size: 12px;
+        font-weight: 700;
+        cursor: pointer;
+        font-family: inherit;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        white-space: nowrap;
+        transition: all 0.15s ease;
+        text-decoration: none;
+    }
+    .cr-btn:hover:not(:disabled) {
+        border-color: #38bdf8;
+        color: var(--text-primary);
+    }
+    .cr-btn:disabled { opacity: 0.48; cursor: not-allowed; }
+    .cr-btn.primary {
+        background: #0284c7;
+        border-color: #38bdf8;
+        color: #ffffff;
+    }
+    .cr-btn.primary:hover:not(:disabled) { background: #0369a1; }
+    .cr-btn.success {
+        background: rgba(16, 185, 129, 0.16);
+        border-color: rgba(16, 185, 129, 0.45);
+        color: #34d399;
+    }
+    .cr-btn.warn {
+        background: rgba(245, 158, 11, 0.14);
+        border-color: rgba(245, 158, 11, 0.45);
+        color: #fbbf24;
+    }
+    .cr-btn.danger {
+        background: rgba(239, 68, 68, 0.12);
+        border-color: rgba(239, 68, 68, 0.42);
+        color: #f87171;
+    }
+    .cr-btn.demo-active {
+        background: linear-gradient(135deg, #7c3aed, #2563eb);
+        border-color: #a78bfa;
+        color: #ffffff;
+        box-shadow: 0 2px 12px rgba(124, 58, 237, 0.35);
+    }
+
+    .cr-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 7px;
+        border-radius: 99px;
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 0.2px;
+        white-space: nowrap;
+    }
+    .cr-badge.green { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.35); }
+    .cr-badge.cyan  { background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.35); }
+    .cr-badge.amber { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.35); }
+    .cr-badge.red   { background: rgba(239, 68, 68, 0.15);  color: #f87171; border: 1px solid rgba(239, 68, 68, 0.35); }
+    .cr-badge.purple{ background: rgba(168, 85, 247, 0.16); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.38); }
+    body.light-mode .cr-badge.green { color: #059669; }
+    body.light-mode .cr-badge.cyan  { color: #0284c7; }
+    body.light-mode .cr-badge.amber { color: #b45309; }
+    body.light-mode .cr-badge.red   { color: #dc2626; }
+    body.light-mode .cr-badge.purple{ color: #7c3aed; }
+
+    /* Sync Control Bar */
+    .sync-card {
+        background: var(--bg-surface);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-md);
+        padding: 10px 14px;
+        margin-bottom: 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16);
+    }
+    .sync-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+    .sync-left, .sync-right {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        flex-wrap: wrap;
+    }
+    .key-input-wrap {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-sm);
+        padding: 2px 6px;
+    }
+    .key-input-wrap input {
+        border: none !important;
+        background: transparent !important;
+        color: var(--text-primary);
+        font-family: var(--font-mono);
+        font-size: 12px;
+        width: 155px !important;
+        padding: 3px 4px !important;
+        outline: none !important;
+    }
+    .sync-progress-wrap {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        font-size: 11.5px;
+        color: var(--text-secondary);
+    }
+    .sync-progress-track {
+        flex: 1 1 180px;
+        height: 6px;
+        border-radius: 99px;
+        background: rgba(148, 163, 184, 0.16);
+        overflow: hidden;
+        min-width: 120px;
+    }
+    .sync-progress-fill {
+        height: 100%;
+        width: 0%;
+        border-radius: 99px;
+        background: linear-gradient(90deg, #0284c7, #38bdf8, #10b981);
+        transition: width 0.25s ease;
+    }
+
+    /* Non-Blocking Scope / Privacy Notice Banner */
+    .scope-banner {
+        display: none;
+        padding: 9px 13px;
+        border-radius: var(--radius-sm);
+        background: rgba(245, 158, 11, 0.1);
+        border: 1px solid rgba(245, 158, 11, 0.35);
+        color: var(--text-primary);
+        font-size: 12.5px;
+        line-height: 1.45;
+        margin-bottom: 10px;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+    }
+    .scope-banner.visible { display: flex; }
+
+    /* Filter Bar */
+    .filter-bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        flex-wrap: wrap;
+        background: var(--bg-surface);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-md);
+        padding: 7px 12px;
+        margin-bottom: 10px;
+    }
+    .pill-group {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        flex-wrap: wrap;
+    }
+    .tf-pill {
+        padding: 4px 10px;
+        border-radius: 99px;
+        border: 1px solid var(--border-default);
+        background: transparent;
+        color: var(--text-secondary);
+        font-size: 12px;
+        font-weight: 700;
+        cursor: pointer;
+        font-family: inherit;
+        transition: all 0.15s ease;
+    }
+    .tf-pill:hover { border-color: #38bdf8; color: var(--text-primary); }
+    .tf-pill.active {
+        background: #0284c7;
+        border-color: #38bdf8;
+        color: #ffffff;
+    }
+    .cr-select, .cr-input {
+        padding: 4px 8px !important;
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--border-default);
+        background: var(--bg-elevated);
+        color: var(--text-primary);
+        font-size: 12px;
+        font-family: inherit;
+    }
+    .cr-input.mono { font-family: var(--font-mono); }
+
+    /* 6-Card Hero KPI Strip */
+    .kpi-grid-6 {
+        display: grid;
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+        gap: 8px;
+        margin-bottom: 10px;
+    }
+    @media (max-width: 1200px) { .kpi-grid-6 { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+    @media (max-width: 640px)  { .kpi-grid-6 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    .kpi-box {
+        background: var(--bg-surface);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-sm);
+        padding: 9px 11px;
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        min-width: 0;
+        transition: border-color 0.15s ease;
+    }
+    .kpi-box.clickable { cursor: pointer; }
+    .kpi-box.clickable:hover { border-color: #38bdf8; }
+    .kpi-lbl {
+        font-size: 10.5px;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+        color: var(--text-tertiary);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .kpi-val {
+        font-size: 1.18em;
+        font-weight: 900;
+        font-family: var(--font-mono);
+        color: var(--text-primary);
+        line-height: 1.2;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .kpi-sub {
+        font-size: 11px;
+        color: var(--text-secondary);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .outcome-bar {
+        display: flex;
+        height: 5px;
+        border-radius: 99px;
+        overflow: hidden;
+        background: rgba(148, 163, 184, 0.15);
+        margin-top: 2px;
+    }
+    .outcome-bar .seg-s  { background: #10b981; }
+    .outcome-bar .seg-f  { background: #f59e0b; }
+    .outcome-bar .seg-cf { background: #ef4444; }
+
+    /* Best Next Crime Recommendation Strip */
+    .rec-panel {
+        background: var(--bg-surface);
+        border: 1px solid rgba(56, 189, 248, 0.28);
+        border-radius: var(--radius-md);
+        padding: 10px 13px;
+        margin-bottom: 10px;
+    }
+    .rec-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-bottom: 8px;
+    }
+    .rec-cards {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+    }
+    @media (max-width: 900px) { .rec-cards { grid-template-columns: 1fr; } }
+    .rec-card {
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-sm);
+        padding: 8px 11px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        cursor: pointer;
+        transition: all 0.15s ease;
+    }
+    .rec-card:hover {
+        border-color: #38bdf8;
+        transform: translateY(-1px);
+    }
+    .rec-card.top-pick {
+        border-color: rgba(16, 185, 129, 0.45);
+        background: linear-gradient(135deg, rgba(16, 185, 129, 0.09), var(--bg-elevated));
+    }
+
+    /* Sub-Navigation Tabs */
+    .crime-tabs {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 10px;
+        padding: 2px 1px;
+        overflow-x: auto;
+    }
+    .crime-tab-btn {
+        padding: 7px 14px;
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--border-default);
+        background: var(--bg-surface);
+        color: var(--text-secondary);
+        font-size: 12.5px;
+        font-weight: 800;
+        cursor: pointer;
+        white-space: nowrap;
+        font-family: inherit;
+        transition: all 0.15s ease;
+    }
+    .crime-tab-btn:hover { border-color: #38bdf8; color: var(--text-primary); }
+    .crime-tab-btn.active {
+        background: #0284c7;
+        border-color: #38bdf8;
+        color: #ffffff;
+        box-shadow: 0 2px 10px rgba(14, 165, 233, 0.28);
+    }
+    .crime-pane { display: none; }
+    .crime-pane.active { display: block; }
+
+    /* Table & Skill Bars */
+    .panel-card {
+        background: var(--bg-surface);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-md);
+        overflow: hidden;
+        margin-bottom: 14px;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.16);
+    }
+    .panel-head {
+        padding: 9px 14px;
+        border-bottom: 1px solid var(--border-subtle);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        flex-wrap: wrap;
+        background: rgba(255, 255, 255, 0.015);
+    }
+    .panel-title {
+        font-size: 13px;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.45px;
+        color: var(--text-primary);
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 7px;
+    }
+    .panel-body { padding: 14px; }
+    .table-wrap { width: 100%; overflow-x: auto; }
+    table.crime-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+    }
+    table.crime-table th {
+        padding: 8px 9px;
+        text-align: left;
+        font-size: 11px;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.35px;
+        color: var(--text-tertiary);
+        background: var(--bg-elevated);
+        border-bottom: 1px solid var(--border-default);
+        white-space: nowrap;
+        cursor: pointer;
+        user-select: none;
+    }
+    table.crime-table th.sorted { color: #38bdf8; }
+    table.crime-table td {
+        padding: 8px 9px;
+        border-bottom: 1px solid var(--border-subtle);
+        vertical-align: middle;
+        white-space: nowrap;
+    }
+    table.crime-table tbody tr {
+        cursor: pointer;
+        transition: background 0.12s ease;
+    }
+    table.crime-table tbody tr:hover {
+        background: rgba(56, 189, 248, 0.07);
+    }
+    .seg-bar {
+        display: grid;
+        grid-template-columns: repeat(10, 1fr);
+        gap: 2px;
+        width: 120px;
+        height: 6px;
+        margin-top: 4px;
+    }
+    .seg-cell {
+        border-radius: 2px;
+        background: rgba(148, 163, 184, 0.18);
+        overflow: hidden;
+    }
+    .seg-cell-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #0284c7, #38bdf8);
+    }
+    .seg-bar.maxed .seg-cell-fill {
+        background: linear-gradient(90deg, #059669, #34d399);
+    }
+
+    /* Visual Analytics 2-Column Grid */
+    .charts-grid-2 {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+    }
+    @media (max-width: 1024px) { .charts-grid-2 { grid-template-columns: 1fr; } }
+    .chart-box {
+        position: relative;
+        height: 320px;
+        width: 100%;
+    }
+
+    /* Uniques & 10k Merits */
+    .merit-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+        gap: 10px;
+    }
+    .merit-item {
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-sm);
+        padding: 10px 12px;
+    }
+    .merit-item.done { border-color: rgba(16, 185, 129, 0.45); }
+    .merit-track {
+        height: 7px;
+        border-radius: 99px;
+        background: rgba(148, 163, 184, 0.16);
+        overflow: hidden;
+        margin: 6px 0 4px;
+    }
+    .merit-fill {
+        height: 100%;
+        border-radius: 99px;
+        background: linear-gradient(90deg, #38bdf8, #10b981);
+    }
+    .unique-list {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+        gap: 8px;
+        max-height: 280px;
+        overflow-y: auto;
+    }
+    .unique-chip {
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-sm);
+        padding: 7px 10px;
+        font-size: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+    }
+
+    /* Sub-Tab 3: In-Game Level Estimator */
+    .level-hero-grid {
+        display: grid;
+        grid-template-columns: 310px 1fr;
+        gap: 14px;
+        margin-bottom: 14px;
+    }
+    @media (max-width: 960px) { .level-hero-grid { grid-template-columns: 1fr; } }
+    .radial-wrap {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        gap: 8px;
+        padding: 12px;
+    }
+    .radial-svg { width: 196px; height: 196px; }
+    .planner-sliders {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+        gap: 12px;
+        margin-top: 10px;
+    }
+    .slider-card {
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-sm);
+        padding: 10px 12px;
+    }
+    .slider-card input[type="range"] {
+        width: 100%;
+        accent-color: #38bdf8;
+        margin-top: 6px;
+    }
+    .path-cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(185px, 1fr));
+        gap: 9px;
+        margin-top: 10px;
+    }
+    .path-card {
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-sm);
+        padding: 9px 11px;
+    }
+
+    /* Deep-Dive Crime Modal */
+    .crime-modal-backdrop {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 9980;
+        background: rgba(4, 8, 16, 0.78);
+        backdrop-filter: blur(6px);
+        align-items: center;
+        justify-content: center;
+        padding: 16px;
+    }
+    .crime-modal-backdrop.open { display: flex; }
+    .crime-modal {
+        background: var(--bg-surface);
+        border: 1px solid rgba(56, 189, 248, 0.38);
+        border-radius: var(--radius-md);
+        width: 960px;
+        max-width: 100%;
+        max-height: 90vh;
+        overflow-y: auto;
+        box-shadow: 0 24px 60px rgba(0, 0, 0, 0.7);
+    }
+    .modal-head {
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--border-subtle);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        position: sticky;
+        top: 0;
+        background: var(--bg-surface);
+        z-index: 5;
+    }
+    .modal-body {
+        padding: 14px 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+    }
+    .modal-kpis {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 8px;
+    }
+    @media (max-width: 720px) { .modal-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    .toast-msg {
+        position: fixed;
+        bottom: 22px;
+        right: 22px;
+        z-index: 10050;
+        background: #0f172a;
+        border: 1px solid #38bdf8;
+        color: #f8fafc;
+        padding: 9px 14px;
+        border-radius: 8px;
+        font-size: 12.5px;
+        font-weight: 700;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+        opacity: 0;
+        pointer-events: none;
+        transform: translateY(10px);
+        transition: all 0.2s ease;
+    }
+    .toast-msg.show { opacity: 1; transform: translateY(0); }
+    </style>
+</head>
+<body>
+    <nav class="sidebar" id="app-sidebar">
+        <div class="sidebar-header">
+            <div class="sidebar-logo">
+                <span class="brand-icon">🕷️</span>
+                <span class="brand-text">FactionOS</span>
+            </div>
+            <div class="sidebar-actions">
+                <button type="button" class="theme-toggle" onclick="toggleTheme()" title="Toggle Dark/Light Mode" aria-label="Toggle Dark/Light Mode"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg></button>
+                <button type="button" class="toggle-btn" onclick="toggleSidebar()" title="Collapse Sidebar" aria-label="Collapse Sidebar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
+            </div>
+        </div>
+        <div class="nav-items">
+            <div class="nav-section-title">Live Operations</div>
+            <a href="/" class="nav-link"><span class="nav-icon">📡</span> <span class="nav-text">Live Warboard</span></a>
+            <a href="/chain.html" class="nav-link"><span class="nav-icon">🔗</span> <span class="nav-text">Chain Sentinel</span></a>
+            <a href="/dashboard.html" class="nav-link" id="nav-link-overview"><span class="nav-icon">📊</span> <span class="nav-text">Operations Overview</span></a>
+            <a href="/armory.html" class="nav-link" id="nav-link-armory"><span class="nav-icon">🛡️</span> <span class="nav-text">Armory &amp; Logistics</span> <span class="nav-badge" id="nav-armory-badge" style="display:none;"></span></a>
+            <a href="/gym-stats.html" class="nav-link"><span class="nav-icon">🏋️</span> <span class="nav-text">Gym &amp; Stat Tracker</span></a>
+            <a href="/payout.html" class="nav-link"><span class="nav-icon">💰</span> <span class="nav-text">War Payouts</span></a>
+            <a href="/oc.html" class="nav-link"><span class="nav-icon">💼</span> <span class="nav-text">OC Manager</span></a>
+
+            <div class="nav-section-title">Tactical Desk</div>
+            <a href="/travel.html" class="nav-link"><span class="nav-icon">🌍</span> <span class="nav-text">Travel Profit Desk</span></a>
+            <a href="/crimes.html" class="nav-link active"><span class="nav-icon">🕵️</span> <span class="nav-text">Crime &amp; Level Analytics</span></a>
+            <a href="/company.html" class="nav-link"><span class="nav-icon">🏢</span> <span class="nav-text">Company Hub</span></a>
+            <a href="/gamble.html" class="nav-link"><span class="nav-icon">🎰</span> <span class="nav-text">Casino Analytics</span></a>
+
+            <div class="nav-section-title">Intelligence &amp; Alerts</div>
+            <a href="/discord.html" class="nav-link"><span class="nav-icon">📢</span> <span class="nav-text">Discord Sentinel</span></a>
+            <a href="/bugs.html" class="nav-link"><span class="nav-icon">🐛</span> <span class="nav-text">Bug Tracker</span></a>
+        </div>
+    </nav>
+
+    <div class="main-wrapper">
+        <header class="app-topbar">
+            <div class="topbar-left">
+                <button class="toggle-btn" onclick="toggleSidebar()" title="Toggle Sidebar" id="mobile-nav-toggle" style="display:none;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
+                <div class="topbar-crumb">
+                    <span>TACTICAL DESK</span> / <strong style="color:var(--text-primary);">CRIME &amp; LEVEL ANALYTICS</strong>
+                </div>
+            </div>
+            <div class="topbar-right">
+                <div class="tct-clock-chip" title="Torn City Time (TCT)">
+                    <span class="tct-label">TCT</span>
+                    <span id="global-tct-clock">--:--:--</span>
+                </div>
+                <div class="telemetry-chip live-ws" id="global-ws-badge">
+                    <span class="status-dot"></span>
+                    <span id="global-ws-status">LOCAL IDB</span>
+                </div>
+                <div class="topbar-user-chip" id="topbar-user-badge" onclick="openGlobalSettings ? openGlobalSettings() : null" style="cursor:pointer;">
+                    <span class="topbar-user-avatar" id="nav-user-avatar">U</span>
+                    <span class="topbar-user-name" id="nav-user-name">Operative</span>
+                </div>
+                <button class="btn btn-secondary btn-sm" onclick="openGlobalSettings ? openGlobalSettings() : null" title="Settings" style="padding:4px 8px;">⚙️</button>
+            </div>
+        </header>
+
+        <main class="main-content">
+            <!-- Header Row -->
+            <div class="crimes-header">
+                <div>
+                    <h1 class="page-title">🕵️ Crime &amp; <span>Level Analytics</span> Engine</h1>
+                </div>
+                <div class="header-actions">
+                    <button type="button" class="cr-btn" id="btn-demo-toggle" onclick="toggleDemoMode()" title="Preview realistic Crimes 2.0 & Level telemetry without syncing logs">✨ Preview Demo Data</button>
+                    <button type="button" class="cr-btn success" onclick="copyDiscordSummary()" title="Copy formatted Discord markdown summary of your crime ETAs and level progress">📋 Copy Discord Summary</button>
+                    <button type="button" class="cr-btn" onclick="exportCrimeData('csv')" title="Export parsed crime stats to CSV">📥 CSV</button>
+                    <button type="button" class="cr-btn" onclick="exportCrimeData('json')" title="Export complete crime & level-transition JSON">📥 JSON</button>
+                </div>
+            </div>
+
+            <!-- Client-Side IndexedDB Log Sync Control Bar -->
+            <div class="sync-card" id="sync-control-bar">
+                <div class="sync-row">
+                    <div class="sync-left">
+                        <span id="key-scope-badge" class="cr-badge amber">Detecting Key Scope...</span>
+                        <div class="key-input-wrap" title="Full Access API key is stored strictly in this browser and sent directly to api.torn.com — never to FactionOS servers.">
+                            <span style="font-size:12px;">🔑</span>
+                            <input type="password" id="browser-full-key" placeholder="Full Access Key (Browser-Only)" autocomplete="off">
+                            <button type="button" class="cr-btn" style="padding:2px 6px;font-size:11px;" onclick="toggleKeyMask()" id="btn-mask-key" title="Show/Hide key">👁️</button>
+                            <button type="button" class="cr-btn primary" style="padding:2px 8px;font-size:11px;" onclick="saveBrowserFullKey()">Verify</button>
+                        </div>
+                        <select id="sync-scope-select" class="cr-select" title="Choose which Torn log streams to pull">
+                            <option value="all" selected>Full Logs (Crimes + Levels + Attacks + Gym)</option>
+                            <option value="crimes_only">Fast Mode (Crimes cat=136 + Level-Ups)</option>
+                        </select>
+                        <select id="sync-pages-select" class="cr-select" title="Pages per sync batch (100 logs per page)">
+                            <option value="15">15 pages (~1.5k logs)</option>
+                            <option value="30" selected>30 pages (~3k logs)</option>
+                            <option value="60">60 pages (~6k logs)</option>
+                            <option value="120">120 pages (~12k logs)</option>
+                        </select>
+                    </div>
+                    <div class="sync-right">
+                        <button type="button" class="cr-btn primary" id="btn-sync-new" onclick="startLogSync('incremental')">🔄 Sync New Logs</button>
+                        <button type="button" class="cr-btn" id="btn-sync-backfill" onclick="startLogSync('backfill')" title="Walk backward through older Torn history">⏪ Backfill Older</button>
+                        <button type="button" class="cr-btn warn" id="btn-sync-pause" onclick="togglePauseSync()" style="display:none;">⏸️ Pause</button>
+                        <button type="button" class="cr-btn danger" id="btn-sync-stop" onclick="stopLogSync()" style="display:none;">⏹️ Stop</button>
+                        <button type="button" class="cr-btn danger" id="btn-manage-data" onclick="openManageLocalDataModal()">🗑️ Manage Local Data</button>
+                    </div>
+                </div>
+                <div class="sync-progress-wrap">
+                    <span id="sync-status-pill" class="cr-badge cyan">Idle</span>
+                    <div class="sync-progress-track">
+                        <div class="sync-progress-fill" id="sync-progress-fill"></div>
+                    </div>
+                    <span id="sync-stats-text" style="font-family:var(--font-mono);">0 cached logs • Browser IndexedDB</span>
+                </div>
+            </div>
+
+            <!-- Graceful Limited Access Non-Blocking Banner -->
+            <div class="scope-banner" id="limited-scope-banner">
+                <div>
+                    <strong>🔐 Limited Access Mode Active:</strong> Showing your live Crime Skills, personal offense stats, and Hall-of-Fame level estimate. To unlock <strong>per-attempt skill-level transition tracking</strong>, exact crit-fail recovery math, and log-based XP tracking, paste a <strong>Full Access</strong> Torn API key above (stored <em>strictly in your browser</em> and sent directly to <code>api.torn.com</code>).
+                </div>
+                <button type="button" class="cr-btn primary" onclick="toggleDemoMode(true)">✨ Preview Full Demo</button>
+            </div>
+
+            <!-- Timeframe & Crime Filter Bar -->
+            <div class="filter-bar">
+                <div class="pill-group" id="timeframe-pills">
+                    <button type="button" class="tf-pill active" data-tf="all" onclick="setTimeframe('all')">All Time</button>
+                    <button type="button" class="tf-pill" data-tf="c2" onclick="setTimeframe('c2')">Crimes 2.0 Era</button>
+                    <button type="button" class="tf-pill" data-tf="90d" onclick="setTimeframe('90d')">Last 90d</button>
+                    <button type="button" class="tf-pill" data-tf="30d" onclick="setTimeframe('30d')">Last 30d</button>
+                    <button type="button" class="tf-pill" data-tf="7d" onclick="setTimeframe('7d')">Last 7d</button>
+                    <button type="button" class="tf-pill" data-tf="custom" onclick="setTimeframe('custom')">Custom</button>
+                    <span id="custom-date-wrap" style="display:none;align-items:center;gap:5px;">
+                        <input type="date" id="custom-from-date" class="cr-input" onchange="recomputeAndRender()">
+                        <span style="color:var(--text-tertiary);">→</span>
+                        <input type="date" id="custom-to-date" class="cr-input" onchange="recomputeAndRender()">
+                    </span>
+                </div>
+                <div class="pill-group">
+                    <label for="crime-filter-select" style="font-size:11px;font-weight:800;color:var(--text-tertiary);text-transform:uppercase;">Crime:</label>
+                    <select id="crime-filter-select" class="cr-select" onchange="onCrimeFilterChange()">
+                        <option value="all">All Crimes 2.0 (13)</option>
+                    </select>
+                    <button type="button" class="cr-btn" onclick="refreshSnapshotAndRender()" title="Refresh live Torn skills &amp; bars">↻ Refresh Live</button>
+                </div>
+            </div>
+
+            <!-- 6-Card Hero KPI Strip -->
+            <div class="kpi-grid-6">
+                <div class="kpi-box">
+                    <div class="kpi-lbl">Total Nerve Spent</div>
+                    <div class="kpi-val" id="kpi-nerve">0</div>
+                    <div class="kpi-sub" id="kpi-nerve-sub">Avg —/day</div>
+                </div>
+                <div class="kpi-box">
+                    <div class="kpi-lbl">Total Attempts</div>
+                    <div class="kpi-val" id="kpi-attempts">0</div>
+                    <div class="kpi-sub" id="kpi-attempts-sub">0 S • 0 F • 0 CF</div>
+                </div>
+                <div class="kpi-box">
+                    <div class="kpi-lbl">Success / Fail / Crit</div>
+                    <div class="kpi-val" id="kpi-rates" style="font-size:1.0em;">—</div>
+                    <div class="outcome-bar" id="kpi-outcome-bar">
+                        <div class="seg-s" style="width:100%;"></div>
+                        <div class="seg-f" style="width:0%;"></div>
+                        <div class="seg-cf" style="width:0%;"></div>
+                    </div>
+                </div>
+                <div class="kpi-box">
+                    <div class="kpi-lbl">Crime Chain / Streak</div>
+                    <div class="kpi-val" id="kpi-streak" style="color:#38bdf8;">0</div>
+                    <div class="kpi-sub" id="kpi-streak-sub">Longest: 0 • Max Chain: 0</div>
+                </div>
+                <div class="kpi-box">
+                    <div class="kpi-lbl">Net Profit &amp; $/Nerve</div>
+                    <div class="kpi-val" id="kpi-profit" style="color:#10b981;">$0</div>
+                    <div class="kpi-sub" id="kpi-profit-sub">Avg $0 / Nerve</div>
+                </div>
+                <div class="kpi-box clickable" onclick="switchCrimeTab('level')" title="Open Regular In-Game Level Estimator">
+                    <div class="kpi-lbl">Est. Level Progress ↗</div>
+                    <div class="kpi-val" id="kpi-level-pct" style="color:#c084fc;">Lvl —</div>
+                    <div class="kpi-sub" id="kpi-level-sub">Click for XP breakdown</div>
+                </div>
+            </div>
+
+            <!-- Smart "Best Next Crime" Recommendation Card -->
+            <div class="rec-panel" id="rec-panel">
+                <div class="rec-header">
+                    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                        <strong style="font-size:12.5px;color:#38bdf8;text-transform:uppercase;letter-spacing:0.4px;">🎯 Best Next Crime Recommender</strong>
+                        <span style="font-size:11.5px;color:var(--text-tertiary);">Click any card to open its forecast curve</span>
+                    </div>
+                    <div class="pill-group" id="rec-mode-pills">
+                        <button type="button" class="tf-pill active" data-rec="fastest" onclick="setRecMode('fastest')">🚀 Fastest to CS 100</button>
+                        <button type="button" class="tf-pill" data-rec="profit" onclick="setRecMode('profit')">💰 Highest $/Nerve</button>
+                        <button type="button" class="tf-pill" data-rec="safest" onclick="setRecMode('safest')">🛡️ Safest (Lowest CF%)</button>
+                    </div>
+                </div>
+                <div class="rec-cards" id="rec-cards-grid"></div>
+            </div>
+
+            <!-- 3 Workspace Sub-Tabs -->
+            <div class="crime-tabs" role="tablist">
+                <button type="button" class="crime-tab-btn active" data-tab="overview" onclick="switchCrimeTab('overview')">📊 Overview &amp; Skill Estimators</button>
+                <button type="button" class="crime-tab-btn" data-tab="analytics" onclick="switchCrimeTab('analytics')">📈 Visual Analytics &amp; Profit</button>
+                <button type="button" class="crime-tab-btn" data-tab="level" onclick="switchCrimeTab('level')">⭐ In-Game Level Estimator</button>
+            </div>
+
+            <!-- =================================================================
+                 SUB-TAB 1: OVERVIEW & CRIME SKILL LEVEL ESTIMATORS
+                 ================================================================= -->
+            <div class="crime-pane active" id="pane-overview">
+                <div class="panel-card">
+                    <div class="panel-head">
+                        <h2 class="panel-title">🧠 Crime Skill Level Estimator <span style="font-size:11.5px;font-weight:500;color:var(--text-secondary);text-transform:none;">Nonlinear weighted-window projection • Click any row for forecast chart &amp; crit-fail recovery</span></h2>
+                        <div class="pill-group">
+                            <span style="font-size:11px;font-weight:800;color:var(--text-tertiary);text-transform:uppercase;">Target CS:</span>
+                            <button type="button" class="tf-pill" data-target="plus5" onclick="setGlobalTarget('plus5')">+5</button>
+                            <button type="button" class="tf-pill" data-target="50" onclick="setGlobalTarget(50)">50</button>
+                            <button type="button" class="tf-pill" data-target="75" onclick="setGlobalTarget(75)">75</button>
+                            <button type="button" class="tf-pill active" data-target="100" onclick="setGlobalTarget(100)">100</button>
+                            <input type="number" id="global-target-input" class="cr-input mono" value="100" min="2" max="100" style="width:54px;" onchange="setGlobalTarget(this.value)" title="Custom target Crime Skill (2–100)">
+                        </div>
+                    </div>
+                    <div class="table-wrap">
+                        <table class="crime-table">
+                            <thead>
+                                <tr>
+                                    <th data-sort="name" onclick="sortCrimeTable('name')">Crime &amp; Skill ↕</th>
+                                    <th data-sort="successRate" onclick="sortCrimeTable('successRate')">S / F / CF % ↕</th>
+                                    <th data-sort="recentAvgAttemptsPerLvl" onclick="sortCrimeTable('recentAvgAttemptsPerLvl')">Avg Att / Lvl ↕</th>
+                                    <th data-sort="nextAttempts" onclick="sortCrimeTable('nextAttempts')">Est. Next Level (CS+1) ↕</th>
+                                    <th data-sort="targetAttempts" onclick="sortCrimeTable('targetAttempts')" id="th-target-col">Est. to CS 100 ↕</th>
+                                    <th data-sort="profitPerNerve" onclick="sortCrimeTable('profitPerNerve')">$/Nerve ↕</th>
+                                    <th data-sort="confidence" onclick="sortCrimeTable('confidence')">Confidence</th>
+                                </tr>
+                            </thead>
+                            <tbody id="crime-estimator-tbody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- =================================================================
+                 SUB-TAB 2: VISUAL ANALYTICS & PROFIT (torn.report STYLE)
+                 ================================================================= -->
+            <div class="crime-pane" id="pane-analytics">
+                <div class="charts-grid-2">
+                    <div class="panel-card">
+                        <div class="panel-head">
+                            <h2 class="panel-title">🎯 Outcome Breakdown (Success / Fail / Crit-Fail %)</h2>
+                        </div>
+                        <div class="panel-body">
+                            <div class="chart-box"><canvas id="chart-outcomes"></canvas></div>
+                        </div>
+                    </div>
+                    <div class="panel-card">
+                        <div class="panel-head">
+                            <h2 class="panel-title">💵 Profit &amp; Efficiency</h2>
+                            <div class="pill-group">
+                                <button type="button" class="tf-pill active" id="btn-prof-nerve" onclick="setProfitChartMode('per_nerve')">$/Nerve</button>
+                                <button type="button" class="tf-pill" id="btn-prof-total" onclick="setProfitChartMode('total')">Total Net $</button>
+                            </div>
+                        </div>
+                        <div class="panel-body">
+                            <div class="chart-box"><canvas id="chart-profit"></canvas></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="panel-card">
+                    <div class="panel-head">
+                        <h2 class="panel-title">📅 Daily Nerve Spent &amp; Crit-Fail Spikes Timeline</h2>
+                        <span id="timeline-span-badge" class="cr-badge cyan">0 days</span>
+                    </div>
+                    <div class="panel-body">
+                        <div class="chart-box" style="height:260px;"><canvas id="chart-timeline"></canvas></div>
+                    </div>
+                </div>
+
+                <div class="charts-grid-2">
+                    <div class="panel-card">
+                        <div class="panel-head">
+                            <h2 class="panel-title">🏅 10,000-Crime Category Merit Tracker</h2>
+                        </div>
+                        <div class="panel-body">
+                            <div class="merit-grid" id="merit-tracker-grid"></div>
+                        </div>
+                    </div>
+                    <div class="panel-card">
+                        <div class="panel-head">
+                            <h2 class="panel-title">✨ Crimes 2.0 Unique Outcomes Found in Logs</h2>
+                            <span id="uniques-total-badge" class="cr-badge purple">0 Logged</span>
+                        </div>
+                        <div class="panel-body">
+                            <div class="unique-list" id="uniques-list-grid"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- =================================================================
+                 SUB-TAB 3: REGULAR IN-GAME LEVEL PROGRESS ESTIMATOR
+                 ================================================================= -->
+            <div class="crime-pane" id="pane-level">
+                <div class="level-hero-grid">
+                    <!-- Left: Radial Gauge & Calibration Controls -->
+                    <div class="panel-card">
+                        <div class="panel-head">
+                            <h2 class="panel-title">⭐ Level Progress Gauge</h2>
+                            <span id="lvl-hof-badge" class="cr-badge cyan">HoF —</span>
+                        </div>
+                        <div class="radial-wrap">
+                            <svg class="radial-svg" viewBox="0 0 180 180" aria-label="Level Progress Gauge">
+                                <defs>
+                                    <linearGradient id="lvlGaugeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                                        <stop offset="0%" stop-color="#38bdf8"/>
+                                        <stop offset="55%" stop-color="#818cf8"/>
+                                        <stop offset="100%" stop-color="#10b981"/>
+                                    </linearGradient>
+                                </defs>
+                                <circle cx="90" cy="90" r="74" fill="none" stroke="rgba(148,163,184,0.16)" stroke-width="14"/>
+                                <circle id="lvl-gauge-arc" cx="90" cy="90" r="74" fill="none" stroke="url(#lvlGaugeGrad)" stroke-width="14" stroke-linecap="round"
+                                    stroke-dasharray="465" stroke-dashoffset="465" transform="rotate(-90 90 90)" style="transition:stroke-dashoffset 0.55s ease;"/>
+                                <text x="90" y="74" text-anchor="middle" fill="var(--text-tertiary)" font-size="11" font-weight="800" id="lvl-gauge-label">LVL — → —</text>
+                                <text x="90" y="103" text-anchor="middle" fill="var(--text-primary)" font-size="28" font-weight="900" font-family="JetBrains Mono, monospace" id="lvl-gauge-pct">0%</text>
+                                <text x="90" y="123" text-anchor="middle" fill="#34d399" font-size="11" font-weight="700" id="lvl-gauge-eta">Est. — days</text>
+                            </svg>
+                            <div id="lvl-holding-banner" style="display:none;width:100%;padding:7px 9px;border-radius:6px;background:rgba(168,85,247,0.14);border:1px solid rgba(168,85,247,0.42);font-size:11.5px;color:#e9d5ff;text-align:left;"></div>
+                            <div id="lvl-calibration-note" style="font-size:11.5px;color:var(--text-secondary);line-height:1.4;">—</div>
+                            <div style="width:100%;border-top:1px solid var(--border-subtle);padding-top:9px;margin-top:4px;text-align:left;">
+                                <label for="manual-levelup-date" style="font-size:11px;font-weight:800;color:var(--text-tertiary);text-transform:uppercase;display:block;margin-bottom:4px;">Manual Last Level-Up Date Override</label>
+                                <div style="display:flex;gap:5px;">
+                                    <input type="date" id="manual-levelup-date" class="cr-input" style="flex:1;" onchange="onManualLevelUpDateChange()">
+                                    <button type="button" class="cr-btn" onclick="clearManualLevelUpDate()">Reset</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right: Path to Next Level + XP Source Breakdown -->
+                    <div class="panel-card">
+                        <div class="panel-head">
+                            <h2 class="panel-title">🧭 Path to Next Level &amp; Interactive Planner</h2>
+                            <span id="lvl-start-source" class="cr-badge purple">—</span>
+                        </div>
+                        <div class="panel-body">
+                            <div class="charts-grid-2" style="align-items:center;">
+                                <div style="position:relative;height:210px;"><canvas id="chart-xp-donut"></canvas></div>
+                                <div id="xp-breakdown-list" style="display:flex;flex-direction:column;gap:8px;font-size:12.5px;"></div>
+                            </div>
+
+                            <div class="path-cards" id="lvl-remaining-cards"></div>
+
+                            <div class="planner-sliders">
+                                <div class="slider-card">
+                                    <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700;">
+                                        <span>⚖️ Attack / Crime Mix</span>
+                                        <span id="mix-label" style="color:#38bdf8;font-family:var(--font-mono);">65% Attacks / 35% Crimes</span>
+                                    </div>
+                                    <input type="range" id="slider-xp-mix" min="0" max="100" value="65" oninput="updateLevelPlannerUI(true)">
+                                    <div id="mix-output" style="font-size:11.5px;color:var(--text-secondary);margin-top:4px;">—</div>
+                                </div>
+                                <div class="slider-card">
+                                    <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700;">
+                                        <span>⚔️ Daily Leave Attacks</span>
+                                        <span id="daily-leaves-val" style="color:#34d399;font-family:var(--font-mono);">6 / day</span>
+                                    </div>
+                                    <input type="range" id="slider-daily-leaves" min="0" max="40" step="1" value="6" oninput="updateLevelPlannerUI(true)">
+                                    <div style="font-size:11px;color:var(--text-tertiary);margin-top:4px;">Similar-level Leave targets (100% XP rate)</div>
+                                </div>
+                                <div class="slider-card">
+                                    <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700;">
+                                        <span>🧠 Daily Nerve Spent</span>
+                                        <span id="daily-nerve-val" style="color:#fbbf24;font-family:var(--font-mono);">180 / day</span>
+                                    </div>
+                                    <input type="range" id="slider-daily-nerve" min="0" max="600" step="10" value="180" oninput="updateLevelPlannerUI(true)">
+                                    <div id="planner-eta-date" style="font-size:12px;font-weight:800;color:#38bdf8;margin-top:5px;">Projected Date: —</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Historical Level-Up Log Table -->
+                <div class="panel-card">
+                    <div class="panel-head">
+                        <h2 class="panel-title">📜 Historical Level-Up Milestones Found in Logs</h2>
+                        <span id="lvl-history-count" class="cr-badge cyan">0 Logged</span>
+                    </div>
+                    <div class="table-wrap">
+                        <table class="crime-table">
+                            <thead>
+                                <tr>
+                                    <th>Level Reached</th>
+                                    <th>Date Achieved (TCT)</th>
+                                    <th>Days Spent</th>
+                                    <th>Attacks Won (L / M / H)</th>
+                                    <th>Successful Crimes</th>
+                                    <th>Est. XP Interval</th>
+                                </tr>
+                            </thead>
+                            <tbody id="lvl-history-tbody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Crime Deep-Dive Modal / Drawer -->
+    <div class="crime-modal-backdrop" id="crime-deepdive-backdrop" onclick="if(event.target===this) closeCrimeDeepDive()">
+        <div class="crime-modal" role="dialog" aria-modal="true" aria-label="Crime Skill Deep Dive">
+            <div class="modal-head">
+                <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                    <span id="dd-icon" style="font-size:1.4em;">🕵️</span>
+                    <div>
+                        <div style="font-size:1.05em;font-weight:900;color:var(--text-primary);" id="dd-title">Crime Deep Dive</div>
+                        <div style="font-size:11.5px;color:var(--text-secondary);" id="dd-subtitle">—</div>
+                    </div>
+                    <span id="dd-conf-badge" class="cr-badge cyan">Confidence</span>
+                </div>
+                <button type="button" class="cr-btn" onclick="closeCrimeDeepDive()">✕ Close</button>
+            </div>
+            <div class="modal-body">
+                <!-- Interactive Target Skill Slider -->
+                <div style="background:var(--bg-elevated);border:1px solid var(--border-subtle);border-radius:8px;padding:10px 13px;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:6px;">
+                        <strong style="font-size:12.5px;color:#38bdf8;">🎯 Target Skill Level Projection: <span id="dd-target-val" style="font-family:var(--font-mono);font-size:1.15em;">CS 100</span></strong>
+                        <div class="pill-group">
+                            <button type="button" class="tf-pill" onclick="setDeepDiveTarget('plus1')">Next (+1)</button>
+                            <button type="button" class="tf-pill" onclick="setDeepDiveTarget('plus5')">+5</button>
+                            <button type="button" class="tf-pill" onclick="setDeepDiveTarget(50)">50</button>
+                            <button type="button" class="tf-pill" onclick="setDeepDiveTarget(75)">75</button>
+                            <button type="button" class="tf-pill" onclick="setDeepDiveTarget(100)">100</button>
+                        </div>
+                    </div>
+                    <input type="range" id="dd-target-slider" min="2" max="100" value="100" style="width:100%;accent-color:#38bdf8;" oninput="onDeepDiveSliderChange(this.value)">
+                </div>
+
+                <!-- 4 Projection KPIs -->
+                <div class="modal-kpis">
+                    <div class="kpi-box">
+                        <div class="kpi-lbl">Est. Attempts Left</div>
+                        <div class="kpi-val" id="dd-est-attempts" style="color:#38bdf8;">—</div>
+                        <div class="kpi-sub" id="dd-est-next-sub">Next CS: —</div>
+                    </div>
+                    <div class="kpi-box">
+                        <div class="kpi-lbl">Est. Nerve Required</div>
+                        <div class="kpi-val" id="dd-est-nerve" style="color:#fbbf24;">—</div>
+                        <div class="kpi-sub" id="dd-avg-nerve-sub">Avg — N / att</div>
+                    </div>
+                    <div class="kpi-box">
+                        <div class="kpi-lbl">Estimated Time</div>
+                        <div class="kpi-val" id="dd-est-time" style="color:#10b981;">—</div>
+                        <div class="kpi-sub" id="dd-daily-pace-sub">At — N/day</div>
+                    </div>
+                    <div class="kpi-box">
+                        <div class="kpi-lbl">Crit-Fail Recovery</div>
+                        <div class="kpi-val" id="dd-cf-cost" style="color:#f87171;">—</div>
+                        <div class="kpi-sub" id="dd-cf-lost-sub">0 crit fails logged</div>
+                    </div>
+                </div>
+
+                <!-- Math Confidence Box -->
+                <div id="dd-math-box" style="font-size:12px;color:var(--text-secondary);background:rgba(56,189,248,0.07);border:1px solid rgba(56,189,248,0.25);border-radius:6px;padding:8px 11px;line-height:1.45;"></div>
+
+                <!-- Charts inside Modal -->
+                <div class="charts-grid-2">
+                    <div class="panel-card" style="margin-bottom:0;">
+                        <div class="panel-head">
+                            <h3 class="panel-title">📈 Skill Progression &amp; Forecast Curve</h3>
+                            <div class="pill-group">
+                                <button type="button" class="tf-pill active" id="dd-x-nerve" onclick="setDeepDiveXAxis('nerve')">Nerve</button>
+                                <button type="button" class="tf-pill" id="dd-x-att" onclick="setDeepDiveXAxis('attempts')">Attempts</button>
+                            </div>
+                        </div>
+                        <div class="panel-body">
+                            <div style="position:relative;height:250px;"><canvas id="chart-dd-forecast"></canvas></div>
+                        </div>
+                    </div>
+                    <div class="panel-card" style="margin-bottom:0;">
+                        <div class="panel-head">
+                            <h3 class="panel-title">📊 Attempts Per Past Skill Level</h3>
+                        </div>
+                        <div class="panel-body">
+                            <div style="position:relative;height:250px;"><canvas id="chart-dd-histogram"></canvas></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Manage Local Data Modal -->
+    <div class="crime-modal-backdrop" id="manage-data-backdrop" onclick="if(event.target===this) closeManageDataModal()">
+        <div class="crime-modal" style="width:480px;" role="dialog" aria-modal="true" aria-label="Manage Local Crime Data">
+            <div class="modal-head">
+                <strong style="font-size:14px;color:var(--text-primary);">🗑️ Manage Local Browser Data</strong>
+                <button type="button" class="cr-btn" onclick="closeManageDataModal()">✕</button>
+            </div>
+            <div class="modal-body">
+                <div id="manage-data-summary" style="font-size:12.5px;color:var(--text-secondary);line-height:1.5;">—</div>
+                <div style="display:flex;flex-direction:column;gap:8px;">
+                    <button type="button" class="cr-btn warn" onclick="clearBrowserFullKeyOnly()">🔑 Remove Saved Full Access Key Only</button>
+                    <button type="button" class="cr-btn danger" onclick="clearCachedLogsOnly()">🧹 Clear IndexedDB Cached Logs for Current User</button>
+                    <button type="button" class="cr-btn danger" onclick="wipeEverythingLocal()">⚠️ Wipe ALL Local Crime Logs &amp; Key</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast-msg" id="cr-toast">Copied!</div>
+</body>
+</html>

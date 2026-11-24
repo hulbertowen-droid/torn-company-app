@@ -357,6 +357,10 @@
                         <div class="app-tile-icon" style="background: rgba(171, 71, 188, 0.16); color: #ab47bc;">✈️</div>
                         <div class="app-tile-name">Travel Radar</div>
                     </a>
+                    <a href="/crimes.html" class="mobile-app-tile">
+                        <div class="app-tile-icon" style="background: rgba(56, 189, 248, 0.16); color: #38bdf8;">🕵️</div>
+                        <div class="app-tile-name">Crime Intel</div>
+                    </a>
                     <a href="/gym-stats.html#roster" class="mobile-app-tile">
                         <div class="app-tile-icon" style="background: rgba(77, 182, 172, 0.16); color: #4db6ac;">👥</div>
                         <div class="app-tile-name">Member Roster</div>

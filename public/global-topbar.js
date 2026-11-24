@@ -91,6 +91,7 @@
         if (p.includes('payout')) return 'War Payouts';
         if (p.includes('oc.html')) return 'OC 2.0';
         if (p.includes('travel')) return 'Travel Radar';
+        if (p.includes('crimes')) return 'Crime Intel';
         if (p.includes('company')) return 'Company';
         if (p.includes('gamble')) return 'Casino Hub';
         if (p.includes('discord')) return 'Discord Bot';
@@ -310,6 +311,22 @@
         }
         syncTopbarToggleVisibility();
         ensureMobileDrawerSupport();
+        // Ensure Crime & Level Analytics nav link is present on every FactionOS sidebar
+        try {
+            const navItems = document.querySelector('#app-sidebar .nav-items, .sidebar .nav-items');
+            if (navItems && !navItems.querySelector('a[href="/crimes.html"]')) {
+                const link = document.createElement('a');
+                link.href = '/crimes.html';
+                link.className = 'nav-link' + (window.location.pathname.toLowerCase().includes('crimes') ? ' active' : '');
+                link.innerHTML = '<span class="nav-icon">🕵️</span> <span class="nav-text">Crime &amp; Level Analytics</span>';
+                const travelLink = navItems.querySelector('a[href="/travel.html"]');
+                if (travelLink && travelLink.parentNode === navItems) {
+                    travelLink.insertAdjacentElement('afterend', link);
+                } else {
+                    navItems.appendChild(link);
+                }
+            }
+        } catch (_) {}
         window.addEventListener('resize', syncTopbarToggleVisibility);
         syncUserIdentity();
         // Ensure bottom-left Helper AI Co-Pilot is loaded on every page
