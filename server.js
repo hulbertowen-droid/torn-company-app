@@ -11809,16 +11809,22 @@ function extractGeminiReplyText(data) {
     return parts.map(p => p.text || '').join('').trim();
 }
 
-function sanitizePayloadForGeminiModel(rawPayload, model) {
+function sanitizePayloadForGeminiModel(rawPayload, model, thinkingLevel = null) {
     const cloned = JSON.parse(JSON.stringify(rawPayload || {}));
-    // Gemini 4 and Gemini 3.5 models deprecate temperature/topP/topK in favor of native high reasoning
-    if (/^gemini-(4|3\.5)/i.test(model) && cloned.generationConfig) {
-        delete cloned.generationConfig.temperature;
-        delete cloned.generationConfig.topP;
-        delete cloned.generationConfig.topK;
-        delete cloned.generationConfig.top_p;
-        delete cloned.generationConfig.top_k;
-        if (Object.keys(cloned.generationConfig).length === 0) {
+    // Gemini 4 and Gemini 3.5 models deprecate temperature/topP/topK and support fast thinkingLevel tuning
+    if (/^gemini-(4|3\.5)/i.test(model)) {
+        if (cloned.generationConfig) {
+            delete cloned.generationConfig.temperature;
+            delete cloned.generationConfig.topP;
+            delete cloned.generationConfig.topK;
+            delete cloned.generationConfig.top_p;
+            delete cloned.generationConfig.top_k;
+        }
+        if (thinkingLevel && /^gemini-4/i.test(model)) {
+            cloned.generationConfig = cloned.generationConfig || {};
+            cloned.generationConfig.thinkingConfig = { thinkingLevel };
+        }
+        if (cloned.generationConfig && Object.keys(cloned.generationConfig).length === 0) {
             delete cloned.generationConfig;
         }
     }
@@ -11879,7 +11885,7 @@ async function callGeminiWithFallback(payload, specificKey = null, options = {})
         // 2. Try each model in sequence for this key
         for (const model of activeModels) {
             const cdKey = `${model}:${usesGoogleSearchTool ? 'search' : 'plain'}`;
-            const reqPayload = sanitizePayloadForGeminiModel(payload, model);
+            const reqPayload = sanitizePayloadForGeminiModel(payload, model, options.thinkingLevel || null);
             const perModelTimeout = model.startsWith('gemini-4') ? Math.max(options.timeout || 14000, 14000) : (options.timeout || 9000);
 
             for (let attempt = 0; attempt < 2; attempt++) {
@@ -12201,7 +12207,7 @@ async function askTornAI(message, history = [], userAccountData = null, invokerN
         };
 
         // Stage 2: Frontier synthesis via Gemini 4 Hydrogen (falls back cleanly through Gemini 3.5 Flash-Lite -> OpenRouter)
-        result = await callGeminiWithFallback(payload, null, { timeout: 16000 });
+        result = await callGeminiWithFallback(payload, null, { timeout: 16000, thinkingLevel: 'medium' });
     }
 
     if (!result.success && orKey) {
@@ -12424,7 +12430,7 @@ async function generateChatResponse(convoLines = [], hint = "", invokerName = ""
             }
         };
 
-        const result = await callGeminiWithFallback(payload, null, { timeout: 15000 });
+        const result = await callGeminiWithFallback(payload, null, { timeout: 14000, thinkingLevel: 'low' });
         if (result.success) {
             const reply = extractGeminiReplyText(result.data);
             if (reply) return reply;
@@ -12931,7 +12937,7 @@ Respond ONLY with valid JSON in this exact format:
                 systemInstruction: { parts: [{ text: helperSystemPrompt }] },
                 generationConfig: { responseMimeType: 'application/json' }
             };
-            const gRes = await callGeminiWithFallback(payload, null, { timeout: 15000 });
+            const gRes = await callGeminiWithFallback(payload, null, { timeout: 14000, thinkingLevel: 'low' });
             if (gRes.success) {
                 const rawText = extractGeminiReplyText(gRes.data);
                 try {
