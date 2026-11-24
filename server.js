@@ -11999,6 +11999,10 @@ async function runGeminiFreeroamLoop({ contents, systemInstruction, toolExecutor
     }
 
     // Final synthesis pass without tools if maxSteps reached
+    workingContents.push({
+        role: 'user',
+        parts: [{ text: 'Synthesize your final, clear answer now using ONLY the tool results gathered above.' }]
+    });
     const finalRes = await callGeminiWithFallback(
         { contents: workingContents, systemInstruction },
         null,
@@ -12007,9 +12011,10 @@ async function runGeminiFreeroamLoop({ contents, systemInstruction, toolExecutor
     if (!finalRes.success) {
         return { success: false, error: finalRes.error, toolsUsed };
     }
+    const finalReply = extractGeminiReplyText(finalRes.data);
     return {
-        success: true,
-        reply: extractGeminiReplyText(finalRes.data),
+        success: Boolean(finalReply),
+        reply: finalReply,
         data: finalRes.data,
         modelUsed: finalRes.modelUsed || lastModelUsed,
         toolsUsed

@@ -406,22 +406,28 @@ function createFreeroamToolExecutor(deps) {
                 if (args.includeTravelTop !== false && typeof getCachedTravelItems === 'function') {
                     const travelData = await getCachedTravelItems().catch(() => null);
                     if (travelData && Array.isArray(travelData.items)) {
+                        if (travelData.pointMarketPrice) out.pointMarketPrice = travelData.pointMarketPrice;
+                        if (travelData.bctMarketPrice) out.bctMarketPrice = travelData.bctMarketPrice;
+                        out.dataSource = travelData.dataSource || 'yata+prom';
                         out.topTravelRuns = travelData.items
-                            .filter(it => it.stock > 0 && it.profitPerHour > 0)
-                            .sort((a, b) => b.profitPerHour - a.profitPerHour)
-                            .slice(0, 6)
+                            .filter(it => Number(it.stock || 0) > 0 && Number(it.profitPerHr || 0) > 0 && it.liquidityTier !== 'trap')
+                            .sort((a, b) => Number(b.profitPerHr || 0) - Number(a.profitPerHr || 0))
+                            .slice(0, 8)
                             .map(it => ({
                                 name: it.name,
+                                category: it.category,
+                                liquidityTier: it.liquidityTier,
                                 country: it.country,
                                 stock: it.stock,
                                 buyCost: it.cost,
                                 marketSell: it.marketPrice,
-                                profitPerItem: it.profitPerItem,
-                                profitPerHourAt29Cap: it.profitPerHour
+                                profitPerItem: it.profit,
+                                profitPerHourAt29Cap: Math.round(Number(it.profitPerHr || 0)),
+                                roundTripMinsAirstrip: it.roundTrip
                             }));
                     }
                 }
-                return out;
+                return Object.keys(out).length ? out : { note: 'No matching live market/travel data available right now.' };
             }
 
             if (name === 'lookup_torn_wiki_and_encyclopedia') {
