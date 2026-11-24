@@ -21108,91 +21108,231 @@ async function buildInactiveMembersEmbed(apiKey) {
     }
 }
 
-async function buildDonatorStatusEmbed(playerQuery, apiKey) {
-    if (!apiKey) {
+const donatorAuditCache = {}; // factionId -> { fetchedAt, payload }
+const DONATOR_AUDIT_CACHE_TTL_MS = 2 * 60 * 1000;
+
+async function buildDonatorStatusEmbed(apiKey, callerFacId = null) {
+    const candidateKeys = [
+        apiKey,
+        getNextApiKey(),
+        ...(apiPoolConfig && Array.isArray(apiPoolConfig.keys) ? apiPoolConfig.keys : []),
+        discordConfig.apiKey,
+        TORN_API_KEY,
+        process.env.TORN_API_KEY
+    ].filter(k => k && typeof k === 'string' && k.trim().length >= 16);
+
+    const uniqueKeys = [...new Set(candidateKeys)];
+    if (uniqueKeys.length === 0) {
         const embed = UI.sleekCard({
             color: UI.COLORS.RED,
-            title: "⭐️ Donator Status",
+            title: "⭐️ Faction Non-Donator Audit",
             heroValue: "API Key Required",
-            subtitle: "`Configuration Required`  ·  Player Telemetry",
+            subtitle: "`Configuration Required`  ·  Faction Telemetry",
             note: "⚠️ No Torn API key configured."
         });
         return { embeds: [sanitizeEmbed(embed)], components: [] };
     }
+
     try {
-        let url = `https://api.torn.com/user/?selections=profile,bars&key=${apiKey}`;
-        let isSelf = true;
+        let targetFacId = callerFacId ? String(callerFacId).trim() : null;
+        let facName = null;
 
-        if (playerQuery && String(playerQuery).trim()) {
-            let clean = String(playerQuery).trim();
-            const idMatch = clean.match(/\d{3,10}/);
-            let targetId = idMatch ? idMatch[0] : null;
-
-            if (!targetId) {
-                const lower = clean.toLowerCase();
-                for (const [id, name] of Object.entries(playerNameCache)) {
-                    if (name && (name.toLowerCase() === lower || name.toLowerCase().includes(lower))) {
-                        targetId = id;
-                        break;
-                    }
+        if (!targetFacId && apiKey) {
+            try {
+                const uRes = await fetch(`https://api.torn.com/user/?selections=profile&key=${encodeURIComponent(apiKey)}`, {
+                    signal: AbortSignal.timeout(5000)
+                });
+                const uData = await uRes.json();
+                if (uData && uData.faction?.faction_id) {
+                    targetFacId = String(uData.faction.faction_id);
+                    facName = uData.faction.faction_name || null;
                 }
-            }
+            } catch (_) {}
+        }
+        if (!targetFacId) {
+            targetFacId = String(discordConfig.factionId || dynamicFactionId || '52355');
+        }
 
-            if (targetId) {
-                url = `https://api.torn.com/user/${targetId}?selections=profile,bars&key=${apiKey}`;
-                isSelf = false;
+        const cached = donatorAuditCache[targetFacId];
+        if (cached && (Date.now() - cached.fetchedAt) < DONATOR_AUDIT_CACHE_TTL_MS && cached.payload) {
+            return cached.payload;
+        }
+
+        let facData = null;
+        let lastApiError = null;
+        for (const key of uniqueKeys) {
+            try {
+                const fRes = await fetch(`https://api.torn.com/faction/${encodeURIComponent(targetFacId)}?selections=basic&key=${encodeURIComponent(key)}`, {
+                    signal: AbortSignal.timeout(8000)
+                });
+                const parsed = await fRes.json();
+                if (parsed && parsed.members && Object.keys(parsed.members).length > 0) {
+                    facData = parsed;
+                    break;
+                } else if (parsed?.error) {
+                    lastApiError = parsed.error.error || 'Torn API error';
+                }
+            } catch (err) {
+                lastApiError = err.message;
             }
         }
 
-        const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
-        const data = await res.json();
-        if (data.error) throw new Error(data.error.error || "Player not found");
+        if (!facData || !facData.members) {
+            throw new Error(lastApiError || 'Failed to fetch faction member roster.');
+        }
 
-        const name = data.name || "Unknown";
-        const id = data.player_id || "—";
-        const isDonator = data.donator === 1 || data.donator === true || Boolean(data.donator);
-        const daysLeft = data.donatordays || data.donator_days || null;
-        const level = data.level || "—";
-        const age = data.age || 0;
-        const statusDesc = data.status?.description || data.status?.state || (data.last_action?.status || "Offline");
+        facName = facData.name || facName || (String(targetFacId) === String(discordConfig.factionId) ? discordConfig.factionName : null) || `Faction [${targetFacId}]`;
 
-        const energyMax = isDonator ? 150 : 100;
+        const members = Object.entries(facData.members).map(([id, m]) => ({
+            id: String(id),
+            name: m?.name || `Player #${id}`,
+            level: m?.level || '—',
+            lastActionRel: m?.last_action?.relative || ''
+        }));
 
-        const subtitle = isDonator
-            ? `\`150 Max Energy\`  ·  ✨ +50 Bonus Cap`
-            : `\`100 Max Energy\`  ·  ⚠️ Standard Cap`;
+        const nonDonators = [];
+        let checkedCount = 0;
+        let failedCount = 0;
+        let keyRotIdx = 0;
+        const nextKey = () => uniqueKeys[(keyRotIdx++) % uniqueKeys.length];
 
-        const bodyLines = [
-            `• **Status**: ${isDonator ? '🟢 Active Monthly Subscriber / Donator' : '🔴 Non-Donator'}`,
-            daysLeft ? `• **Days Remaining**: **${daysLeft} days**` : (isDonator ? `• **Status Type**: **Active Monthly Subscriber**` : `• **Status Type**: **Standard Account**`),
-            `• **Energy Regen**: ${isDonator ? '**5 Energy / 10m** (720 daily natural potential)' : '**5 Energy / 15m** (480 daily natural potential)'}`,
-            `• **Level / Age**: Level **${level}** · **${age.toLocaleString()} days** old`,
-            `• **Activity**: *${statusDesc}*`
-        ];
+        const batchSize = uniqueKeys.length >= 2 ? Math.min(12, uniqueKeys.length * 3) : 6;
+        const batchDelayMs = uniqueKeys.length >= 2 ? 180 : 320;
+        const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-        const embed = UI.sleekCard({
-            color: isDonator ? UI.COLORS.GREEN : UI.COLORS.BLUE,
-            authorName: `${name} [${id}]`,
-            authorUrl: `https://www.torn.com/profiles.php?XID=${id}`,
-            title: "⭐️ Donator Status",
-            heroValue: isDonator ? "Active Donator" : "Non-Donator",
-            subtitle,
-            body: bodyLines.join('\n'),
-            note: isDonator ? "Donator perks active: +50 max energy, 50% faster regen, and advanced search." : "Activate a Donator Pack via the Item Market or subscribe for +50 energy cap and 50% faster regen."
-        });
+        const fetchMemberDonator = async (member) => {
+            for (let attempt = 0; attempt < 2; attempt++) {
+                const useKey = nextKey();
+                try {
+                    const pRes = await fetch(`https://api.torn.com/user/${member.id}?selections=profile&key=${encodeURIComponent(useKey)}`, {
+                        signal: AbortSignal.timeout(6000)
+                    });
+                    const pData = await pRes.json();
+                    if (pData && pData.error) {
+                        if ([5, 8, 9, 17].includes(Number(pData.error.code)) && attempt === 0) {
+                            await sleep(900);
+                            continue;
+                        }
+                        return { ok: false };
+                    }
+                    const isDonator = pData.donator === 1 || pData.donator === true || Boolean(pData.donator);
+                    return { ok: true, isDonator };
+                } catch (_) {
+                    if (attempt === 0) {
+                        await sleep(400);
+                        continue;
+                    }
+                    return { ok: false };
+                }
+            }
+            return { ok: false };
+        };
 
-        const components = [
-            UI.actionRow(
-                UI.linkBtn(`https://www.torn.com/profiles.php?XID=${id}`, 'Profile ↗', '👤'),
-                UI.linkBtn('https://www.torn.com/donator.php', 'Subscribe ↗', '💳')
-            )
-        ];
+        for (let i = 0; i < members.length; i += batchSize) {
+            const batch = members.slice(i, i + batchSize);
+            const batchResults = await Promise.all(batch.map(async (m) => ({ m, res: await fetchMemberDonator(m) })));
+            for (const { m, res } of batchResults) {
+                if (!res.ok) {
+                    failedCount++;
+                    continue;
+                }
+                checkedCount++;
+                if (!res.isDonator) {
+                    nonDonators.push(m);
+                }
+            }
+            if (i + batchSize < members.length) {
+                await sleep(batchDelayMs);
+            }
+        }
 
-        return { embeds: [sanitizeEmbed(embed)], components };
-    } catch(e) {
+        nonDonators.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
+        let payload;
+        if (nonDonators.length === 0) {
+            const note = failedCount > 0
+                ? `⚠️ ${failedCount} member(s) could not be verified due to API rate limits or timeouts.`
+                : `All checked members in ${facName} have active Donator or Subscriber status.`;
+            const embed = UI.sleekCard({
+                color: failedCount > 0 ? UI.COLORS.GOLD : UI.COLORS.GREEN,
+                title: "⭐️ Faction Non-Donator Check",
+                heroValue: "0 Non-Donators",
+                subtitle: `\`${checkedCount}/${members.length} Checked\`  ·  ${facName}`,
+                body: `Every checked member in **${facName}** currently has active Donator or Subscriber status.`,
+                note
+            });
+            payload = { embeds: [sanitizeEmbed(embed)], components: [] };
+        } else {
+            const formatted = nonDonators.map(m => {
+                const act = m.lastActionRel ? ` · *${m.lastActionRel}*` : '';
+                return `• **[${m.name}](https://www.torn.com/profiles.php?XID=${m.id})** \`[${m.id}]\` — Lvl ${m.level}${act}`;
+            });
+
+            const fields = [];
+            let chunk = [];
+            let chunkLen = 0;
+            let part = 1;
+            for (const line of formatted) {
+                const lineLen = line.length + 1;
+                if (chunkLen + lineLen > 980 && chunk.length > 0) {
+                    fields.push({
+                        name: part === 1 ? `🔴 Without Donator (${nonDonators.length})` : `🔴 Without Donator (Cont. ${part})`,
+                        value: chunk.join('\n'),
+                        inline: false
+                    });
+                    chunk = [line];
+                    chunkLen = lineLen;
+                    part++;
+                } else {
+                    chunk.push(line);
+                    chunkLen += lineLen;
+                }
+            }
+            if (chunk.length > 0) {
+                fields.push({
+                    name: part === 1 ? `🔴 Without Donator (${nonDonators.length})` : `🔴 Without Donator (Cont. ${part})`,
+                    value: chunk.join('\n'),
+                    inline: false
+                });
+            }
+
+            const note = failedCount > 0
+                ? `⚠️ ${failedCount} member(s) skipped due to API errors/timeouts. Showing verified non-donators only.`
+                : "Only faction members without active Donator or Subscriber status are shown.";
+
+            const embeds = [];
+            for (let fIdx = 0; fIdx < fields.length; fIdx += 4) {
+                const fieldSlice = fields.slice(fIdx, fIdx + 4);
+                const pageNum = Math.floor(fIdx / 4) + 1;
+                const totalPages = Math.ceil(fields.length / 4);
+                const isFirst = pageNum === 1;
+                const isLast = pageNum === totalPages;
+
+                const embed = UI.sleekCard({
+                    color: UI.COLORS.ORANGE,
+                    title: isFirst ? `⭐️ Faction Non-Donators (${nonDonators.length})` : `⭐️ Faction Non-Donators (${nonDonators.length}) — Page ${pageNum}/${totalPages}`,
+                    heroValue: isFirst ? `${nonDonators.length} Without Donator` : undefined,
+                    subtitle: isFirst ? `\`${checkedCount}/${members.length} Checked\`  ·  ${facName}` : `\`Continued\`  ·  ${facName}`,
+                    body: isFirst ? `Faction members in **${facName}** who do not have Donator status:` : undefined,
+                    fields: fieldSlice,
+                    note: isLast ? note : undefined
+                });
+                embeds.push(sanitizeEmbed(embed));
+            }
+            const components = [
+                UI.actionRow(UI.linkBtn(`https://www.torn.com/factions.php?step=profile&ID=${targetFacId}`, 'Faction Roster ↗', '🛡️'))
+            ];
+            payload = { embeds, components };
+        }
+
+        if (checkedCount > 0) {
+            donatorAuditCache[targetFacId] = { fetchedAt: Date.now(), payload };
+        }
+        return payload;
+    } catch (e) {
         const embed = UI.sleekCard({
             color: UI.COLORS.RED,
-            title: "⭐️ Donator Status",
+            title: "⭐️ Faction Non-Donator Check",
             heroValue: "Error",
             subtitle: "`Lookup Failed`",
             note: `⚠️ Error: ${e.message}`
@@ -27015,7 +27155,7 @@ const TUTORIAL_CATALOG = [
             { name: 'merits', text: '`/merits` — Shows where your Torn merits are spent.' },
             { name: 'bs', text: '`/bs` — Logs your current battle stats and tracks your training gains over time.' },
             { name: 'bsupdate', text: '`/bsupdate` — Shortcut to update your battle stats and see recent gains.' },
-            { name: 'donator', text: '`/donator` — Checks if a player has active Donator or Subscriber status.' },
+            { name: 'donator', text: '`/donator` — Lists faction members who do not currently have active Donator status.' },
             { name: 'balance', text: '`/balance` — Checks your faction vault balance and donations.' },
             { name: 'withdraw', text: '`/withdraw` — Asks a banker for a cash payout from the faction vault.' },
             { name: 'with', text: '`/with` — Shortcut alias for `/withdraw`.' },
@@ -31221,7 +31361,7 @@ function setupSlashBotEvents(bot, token) {
                 }
             }
             // Multi-faction guard: If running in an external faction's Discord server and caller has no linked key
-            else if (isExternalGuild && !callerKey && (new Set(['war', 'warboard', 'targets', 'snipers', 'chain', 'chainwatch', 'roster', 'online', 'oc', 'myoc', 'payout', 'mvp', 'top'])).has(cmd)) {
+            else if (isExternalGuild && !callerKey && (new Set(['war', 'warboard', 'targets', 'snipers', 'chain', 'chainwatch', 'roster', 'online', 'oc', 'myoc', 'payout', 'mvp', 'top', 'donator', 'subscriber', 'sub'])).has(cmd)) {
                 return await safeReply({
                     embeds: [sanitizeEmbed(UI.info(
                         `⚔️ Faction Operations — ${interaction.guild?.name || 'Your Server'}`,
@@ -31391,8 +31531,7 @@ function setupSlashBotEvents(bot, token) {
             } else if (cmd === 'inactive' || cmd === 'inactivity') {
                 embed = await buildInactiveMembersEmbed(apiKey);
             } else if (cmd === 'donator' || cmd === 'subscriber' || cmd === 'sub') {
-                const player = interaction.options.getString('player');
-                embed = await buildDonatorStatusEmbed(player, apiKey);
+                embed = await buildDonatorStatusEmbed(apiKey, invokerKeyRecord?.factionId || null);
             } else if (cmd === 'warflights' || cmd === 'warflight' || cmd === 'flights') {
                 const ffKey = getGlobalFFKey() || discordConfig.ffKey;
                 embed = await buildWarFlightsEmbed(apiKey, ffKey);

@@ -205,8 +205,7 @@ function buildSlashCommands() {
                     { name: '🇿🇦 South Africa', value: 'South Africa' }
                 )
             ).toJSON(),
-        new SlashCommandBuilder().setName('donator').setDescription('Check player Torn donator and subscriber status')
-            .addStringOption(opt => opt.setName('player').setDescription('Player name or ID (optional)')).toJSON(),
+        new SlashCommandBuilder().setName('donator').setDescription('List faction members who do not have active Donator status').toJSON(),
 
         // 13. Alert Control Shortcuts
         new SlashCommandBuilder().setName('pause').setDescription('Quick shortcut to pause all automated notifications').toJSON(),
