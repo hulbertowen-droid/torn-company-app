@@ -35,6 +35,19 @@ const FUNCTION_DECLARATIONS = [
         }
     },
     {
+        name: 'get_faction_roster_and_leaderboard',
+        description: 'Get OUR faction\'s own member roster, Leader & Co-leaders, and top members ranked by battle stats (FF Scouter / Warboard) and level. ALWAYS call this when someone asks who in the faction is the strongest, highest stats, highest level, leader, or asks "who is that?" about faction members.',
+        parameters: {
+            type: 'object',
+            properties: {
+                factionId: {
+                    type: 'string',
+                    description: 'Optional Torn faction ID (defaults to our faction)'
+                }
+            }
+        }
+    },
+    {
         name: 'inspect_torn_player_or_faction',
         description: 'Look up any Torn City player (by numeric Torn ID) or any Torn faction (by numeric Faction ID) including public profile, level, status, faction, personalstats highlights, and FF Scouter battle stat estimate.',
         parameters: {
@@ -240,6 +253,57 @@ function createFreeroamToolExecutor(deps) {
         const defaultFid = String(args.factionId || userFactionId || getDefaultFactionId() || '52355').replace(/\D+/g, '') || '52355';
 
         try {
+            if (name === 'get_faction_roster_and_leaderboard') {
+                if (!tornKey) return { error: 'No Torn API key available.' };
+                const facData = await fetch(`https://api.torn.com/faction/${defaultFid}?selections=basic&key=${encodeURIComponent(tornKey)}`, {
+                    signal: AbortSignal.timeout(6500)
+                }).then(r => r.json()).catch(() => null);
+                if (!facData || facData.error || !facData.members) {
+                    return { error: facData?.error?.error || 'Failed to fetch faction roster.' };
+                }
+
+                const memberIds = Object.keys(facData.members);
+                const ffMap = await getBatchFFStats(memberIds).catch(() => new Map());
+                const wb = getCachedWarboard(defaultFid);
+                const wbFriendlyMap = new Map((wb?.friendly || []).map(m => [String(m.id || m.playerId), m]));
+
+                const roster = Object.entries(facData.members).map(([id, m]) => {
+                    const ff = ffMap.get(id);
+                    const wbM = wbFriendlyMap.get(id);
+                    const estStats = Number(ff?.total || wbM?.stats || 0);
+                    return {
+                        id,
+                        name: m.name,
+                        level: Number(m.level || 1),
+                        position: m.position || 'Member',
+                        daysInFaction: Number(m.days_in_faction || 0),
+                        estStats,
+                        estStatsHuman: ff?.human || (estStats > 0 && formatCompactStats ? formatCompactStats(estStats) : 'unknown'),
+                        status: m.status?.state || 'Okay'
+                    };
+                });
+
+                const leadership = roster.filter(m => /leader/i.test(m.position));
+                const topByStats = [...roster]
+                    .filter(m => m.estStats > 0)
+                    .sort((a, b) => b.estStats - a.estStats)
+                    .slice(0, 8)
+                    .map(m => `${m.name} [${m.id}] (${m.position}, Lvl ${m.level}, ~${m.estStatsHuman} stats)`);
+                const topByLevel = [...roster]
+                    .sort((a, b) => b.level - a.level)
+                    .slice(0, 6)
+                    .map(m => `${m.name} [${m.id}] (Lvl ${m.level}, ${m.position})`);
+
+                return {
+                    factionId: defaultFid,
+                    factionName: facData.name,
+                    memberCount: roster.length,
+                    leadership: leadership.map(m => `${m.name} [${m.id}] — ${m.position} (Lvl ${m.level}, ~${m.estStatsHuman} stats)`),
+                    topByBattleStats: topByStats,
+                    topByLevel
+                };
+            }
+
             if (name === 'get_faction_war_and_roster') {
                 if (!tornKey) return { error: 'No Torn API key available on server.' };
 

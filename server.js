@@ -12375,12 +12375,12 @@ Your job is to jump into the conversation naturally — like a friendly, experie
   - Celebrate wins, encourage members during gym training and ranked wars, and offer helpful tactical guidance with cheerful confidence.
   - BREVITY: In chat banter and conversation, keep responses short and punchy (1 to 3 sentences).
 
-═══ CONVERSATION RELEVANCE & FOCUS ═══
-• RESPOND TO THE IMMEDIATE MESSAGE:
-  - Focus strictly on what the member is saying right now.
-  - Do NOT bring up past conversations, previous jump discussions, or old topics unless the user explicitly asks you about them.
+═══ CONVERSATION RELEVANCE, DIRECT ANSWERS & ANTI-REPETITION ═══
+• RESPOND DIRECTLY TO THE IMMEDIATE QUESTION OR FOLLOW-UP:
+  - Focus strictly on what the member is saying right now, using the channel history and any replied-to message to resolve pronouns like "that", "they", "who is that?", or "which one?".
+  - NEVER REPEAT YOURSELF: If the recent channel history shows you just made a claim (e.g. "our top stat-builders and leaders") and the user asks "and who is that?" or "give me a real answer", DO NOT rephrase your previous message! Immediately call your freeroam tools (e.g. `get_faction_roster_and_leaderboard`, `get_faction_war_and_roster`, `inspect_torn_player_or_faction`) to fetch and state the actual names and numbers.
+  - NO VAGUE DODGING: Never say "it's hard to pick just one" or give empty platitudes when someone asks for a real answer about faction members, stats, or leaders — pull the live roster/leaderboard and give specific names and facts!
   - When someone greets you (e.g. "hi friday", "hey", "sup"), greet them back warmly and cheerfully — do not recite game mechanics or numbers unprompted.
-  - When asked a gameplay or tactical question, give a clear, smart, and direct answer.
 
 ═══ CRITICAL TORN CITY KNOWLEDGE & ANTI-HALLUCINATION MANDATES ═══
 1. NEVER "CORRECT" VALID TORN TERMINOLOGY OR ITEMS:
@@ -12525,11 +12525,11 @@ async function generateChatResponse(convoLines = [], hint = "", invokerName = ""
 
     convoPrompt += ragUsed
         ? "\nNow respond naturally in 2-4 crisp sentences to the latest message. Adhere STRICTLY to Tier 1 (Torn Wiki / Official Torn API data) first; if Torn Wiki didn't have a clear answer, synthesize across MULTIPLE replies from Tier 2 (Torn Forums) so you are certain it is accurate, and briefly mention 'per Torn Wiki' or 'per Torn Forums consensus'. Do NOT guess or invent mechanics:"
-        : "\nNow respond naturally in 1-3 sentences to the latest message. If the user is asking about Torn gameplay or mechanics, adhere strictly to the verified facts above and do not guess or hallucinate. If the user is greeting you or chatting casually, respond warmly and naturally without reciting unprompted game statistics or referencing prior conversations:";
+        : "\nNow respond naturally in 1-3 sentences to the latest message. Resolve follow-up references ('who is that?', 'which one?') using the recent messages above and your freeroam tools — NEVER repeat or paraphrase what you already said in the previous message, and NEVER dodge with vague 'everyone is great' answers. If greeting/casual chat, keep it warm and brief:";
 
     // 1. Primary AI Provider: Gemini 4 Hydrogen Multi-Key Pool (with Freeroam Tools for live war/player/market/wiki/forum queries)
     if (key) {
-        if (!isCasualGreeting && (ragUsed || /\b(war|enemy|target|roster|player|faction|oc|armory|market|price|stock|travel|fly|wiki|forum|crime|burglar|shoplift|pickpocket|crack|crit|nerve|cs\s*\d+|how|what|who|when|which)\b/i.test(cleanSpeech))) {
+        if (!isCasualGreeting && (ragUsed || replyContext || /\b(war|enemy|target|roster|player|faction|leader|smartest|strongest|stat|who|what|when|which|where|how|that|they|him|her|oc|armory|market|price|stock|travel|fly|wiki|forum|crime|burglar|shoplift|pickpocket|crack|crit|nerve|cs\s*\d+)\b/i.test(cleanSpeech))) {
             const chatToolExecutor = fridayFreeroamTools.createFreeroamToolExecutor({
                 getTornApiKey: () => primaryTornKey || (typeof getNextApiKey === 'function' ? getNextApiKey() : ''),
                 getUserTornKey: () => userTornKey || '',
