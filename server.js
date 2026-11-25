@@ -27858,10 +27858,33 @@ function setupSlashBotEvents(bot, token) {
             clean = clean.replace(new RegExp(`<@!?${bot.user.id}>`, 'g'), '');
         }
         if (bot.user?.username) {
-            clean = clean.replace(new RegExp(`@${bot.user.username}\\b`, 'gi'), '');
+            const escapedUser = bot.user.username.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            clean = clean.replace(new RegExp(`@${escapedUser}\\b`, 'gi'), '');
         }
-        clean = clean.replace(/^(?:hey|hi|yo)?\s*friday\b/i, '');
+        clean = clean.replace(/@f\.?r\.?i\.?d\.?a\.?y\b/gi, '');
+        clean = clean.replace(/^(?:hey|hi|yo)?\s*f\.?r\.?i\.?d\.?a\.?y\b/i, '');
         return clean.replace(/^[\s,:!-]+/, '').replace(/[\s]+$/, '').trim();
+    }
+
+    function splitDiscordChunks(text, maxLen = 1950) {
+        const clean = String(text || '').trim();
+        if (!clean) return [];
+        if (clean.length <= maxLen) return [clean];
+        const chunks = [];
+        let remaining = clean;
+        while (remaining.length > maxLen) {
+            let splitIdx = remaining.lastIndexOf('\n', maxLen);
+            if (splitIdx < Math.floor(maxLen * 0.5)) {
+                splitIdx = remaining.lastIndexOf(' ', maxLen);
+            }
+            if (splitIdx <= 0) {
+                splitIdx = maxLen;
+            }
+            chunks.push(remaining.slice(0, splitIdx).trim());
+            remaining = remaining.slice(splitIdx).trim();
+        }
+        if (remaining.length > 0) chunks.push(remaining);
+        return chunks.filter(Boolean);
     }
 
     bot.on(Events.TypingStart, async (typing) => {
@@ -28091,14 +28114,27 @@ function setupSlashBotEvents(bot, token) {
             }
 
             if (aiReply && aiReply.trim()) {
-                await latestMsg.reply({
-                    content: aiReply.trim(),
-                    allowedMentions: { repliedUser: false }
-                }).catch(async () => {
-                    if (channel && channel.send) {
-                        await channel.send({ content: aiReply.trim() }).catch(() => {});
+                const chunks = splitDiscordChunks(aiReply.trim(), 1950);
+                for (let i = 0; i < chunks.length; i++) {
+                    const chunk = chunks[i];
+                    if (i === 0) {
+                        await latestMsg.reply({
+                            content: chunk,
+                            allowedMentions: { repliedUser: false }
+                        }).catch(async (replyErr) => {
+                            console.warn('[FRIDAY Convo] reply() failed, falling back to channel.send():', replyErr?.message || replyErr);
+                            if (channel && channel.send) {
+                                await channel.send({ content: chunk }).catch((sendErr) => {
+                                    console.error('[FRIDAY Convo] fallback channel.send() failed:', sendErr?.message || sendErr);
+                                });
+                            }
+                        });
+                    } else if (channel && channel.send) {
+                        await channel.send({ content: chunk }).catch((sendErr) => {
+                            console.error('[FRIDAY Convo] chunk channel.send() failed:', sendErr?.message || sendErr);
+                        });
                     }
-                });
+                }
             } else if (batch.some(b => b.isMention)) {
                 // If explicitly @mentioned or addressed by name, give a friendly in-character greeting
                 const friendlyGreeting = (userSpeech && userSpeech.length > 20)
@@ -28133,13 +28169,22 @@ function setupSlashBotEvents(bot, token) {
         if (msg.author?.bot) return;
         const text = (msg.content || '').trim().toLowerCase();
 
-        // 1. Direct mention (@F.R.I.D.A.Y, <@ID>, or explicit @friday tag)
+        // 1. Direct mention (@F.R.I.D.A.Y, <@ID>, managed bot role <@&roleId>, or explicit @friday tag)
         const botId = bot.user?.id;
         const botUsername = bot.user?.username;
+        const meMember = msg.guild?.members?.me;
+        const mentionedRoles = msg.mentions?.roles ? Array.from(msg.mentions.roles.values()) : [];
+        const isBotRoleMentioned = mentionedRoles.some(r =>
+            (r.managed && meMember?.roles?.cache?.has(r.id)) ||
+            /f\.?r\.?i\.?d\.?a\.?y/i.test(r.name || '') ||
+            (botUsername && (r.name || '').toLowerCase() === botUsername.toLowerCase())
+        );
         const isBotDirectlyMentioned = Boolean(
             (botId && (msg.mentions?.users?.has(botId) || new RegExp(`<@!?${botId}>`).test(msg.content || ''))) ||
-            (botUsername && new RegExp(`@${botUsername}\\b`, 'i').test(msg.content || '')) ||
-            /@friday\b/i.test(msg.content || '')
+            isBotRoleMentioned ||
+            (botUsername && new RegExp(`@${botUsername.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(msg.content || '')) ||
+            /@f\.?r\.?i\.?d\.?a\.?y\b/i.test(msg.content || '') ||
+            /@f\.?r\.?i\.?d\.?a\.?y\b/i.test(msg.cleanContent || '')
         );
         const isBotMentioned = isBotDirectlyMentioned;
 
@@ -28167,11 +28212,12 @@ function setupSlashBotEvents(bot, token) {
             /@(?:everyone|here)\b/i.test(msg.content || '')
         );
 
-        // - Role mentions (<@&roleId>)
-        const hasRolePing = Boolean(
-            (msg.mentions?.roles && msg.mentions.roles.size > 0) || 
-            /<@&\d+>/.test(msg.content || '')
-        );
+        // - Role mentions (<@&roleId>), excluding Friday's own bot role
+        const hasOtherRolePing = mentionedRoles.some(r => !(
+            (r.managed && meMember?.roles?.cache?.has(r.id)) ||
+            /f\.?r\.?i\.?d\.?a\.?y/i.test(r.name || '') ||
+            (botUsername && (r.name || '').toLowerCase() === botUsername.toLowerCase())
+        )) || (/<@&\d+>/.test(msg.content || '') && !isBotRoleMentioned);
 
         // - Mentions of other users (excluding Friday herself)
         const hasOtherUserPing = Boolean(
@@ -28179,7 +28225,7 @@ function setupSlashBotEvents(bot, token) {
             (/<@!?(\d+)>/.test(msg.content || '') && !isBotDirectlyMentioned)
         );
 
-        const hasNonBotPing = hasEveryoneOrHerePing || hasRolePing || hasOtherUserPing;
+        const hasNonBotPing = hasEveryoneOrHerePing || hasOtherRolePing || hasOtherUserPing;
 
         // CRITICAL RULE: If the message contains any pings that aren't directly her
         // (like @everyone, @here, roles, or other users) and Friday was NOT directly mentioned,
