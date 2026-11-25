@@ -28316,6 +28316,247 @@ function setupSlashBotEvents(bot, token) {
         }
     });
 
+    function resolvePromotionApplicant(interaction, facData) {
+        let targetTornId = null;
+        let memberName = interaction.member?.displayName || interaction.user?.username || 'Member';
+
+        if (verifiedDiscordToTorn[interaction.user.id]) {
+            targetTornId = verifiedDiscordToTorn[interaction.user.id].tornId;
+            memberName = verifiedDiscordToTorn[interaction.user.id].tornName || memberName;
+        }
+        if (!targetTornId && userKeys && typeof userKeys.hasLinkedKey === 'function' && userKeys.hasLinkedKey(interaction.user.id)) {
+            const rec = userKeys.userKeysStore?.get(interaction.user.id);
+            if (rec && rec.tornId) {
+                targetTornId = rec.tornId;
+                memberName = rec.playerName || memberName;
+            }
+        }
+        if (!targetTornId && interaction.member?.displayName) {
+            const match = interaction.member.displayName.match(/\[(\d+)\]|\((\d+)\)/);
+            if (match) targetTornId = match[1] || match[2];
+        }
+        if (!targetTornId && (interaction.user.id === '992561850057240578' || (discordConfig.personalDiscordId && interaction.user.id === discordConfig.personalDiscordId))) {
+            targetTornId = '3776908';
+            memberName = 'Owen777';
+        }
+        if (!targetTornId && facData?.members) {
+            const candidateNames = [
+                interaction.member?.displayName,
+                interaction.member?.nickname,
+                interaction.user?.globalName,
+                interaction.user?.username
+            ].filter(Boolean);
+
+            for (const cName of candidateNames) {
+                const cleanCName = cName.replace(/\[\d+\]|\(\d+\)/g, '').trim().toLowerCase();
+                if (!cleanCName) continue;
+                for (const [mId, mObj] of Object.entries(facData.members)) {
+                    const mName = (mObj.name || '').toLowerCase();
+                    if (mName && (mName === cleanCName || mName.includes(cleanCName) || cleanCName.includes(mName))) {
+                        targetTornId = mId;
+                        memberName = mObj.name || memberName;
+                        break;
+                    }
+                }
+                if (targetTornId) break;
+            }
+        }
+
+        if (!targetTornId) {
+            return {
+                errorEmbed: sanitizeEmbed(UI.warning(
+                    '🛡️ Verification Required',
+                    `You must be verified with your Torn account to view or submit promotion requests.\n\nPlease click **🛡️ Verify Me** or run \`/verify\` first.`
+                ))
+            };
+        }
+
+        const memberObj = facData.members?.[String(targetTornId)] || facData.members?.[targetTornId];
+        if (!memberObj) {
+            return {
+                errorEmbed: sanitizeEmbed(UI.error(
+                    'Faction Member Only',
+                    `⚠️ You [${targetTornId}] are not listed as an active member of **${facData.name || 'our faction'}**${facData.id ? ` [${facData.id}]` : ''}. Only active faction members can request promotions.`
+                ))
+            };
+        }
+
+        return {
+            targetTornId,
+            memberName: memberObj.name || memberName,
+            memberObj,
+            currentRole: memberObj.position || 'Member',
+            daysInFaction: memberObj.days_in_faction || 0
+        };
+    }
+
+    function buildPendingPromotionReplyPayload(existing) {
+        const cancelRow = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId(`btn_promo_cancel_${existing.id}`)
+                .setLabel('Cancel & Withdraw Request')
+                .setStyle(ButtonStyle.Danger)
+                .setEmoji('🗑️'),
+            new ButtonBuilder()
+                .setCustomId(`btn_promo_recheck_${existing.id}`)
+                .setLabel('Recheck Discord Message')
+                .setStyle(ButtonStyle.Secondary)
+                .setEmoji('🔄')
+        );
+        return {
+            embeds: [sanitizeEmbed(UI.warning(
+                'Promotion Request Pending',
+                `⏳ You already have a pending promotion request for **${existing.requestedRole}** submitted <t:${Math.floor(existing.createdAt / 1000)}:R>!\n` +
+                (existing.rankAdvancement ? `• **Advancement:** ${existing.rankAdvancement}\n` : '') +
+                `\nIf you deleted the Discord message or wish to withdraw this request, click **Cancel & Withdraw Request** below to immediately clear it.`
+            ))],
+            components: [cancelRow]
+        };
+    }
+
+    async function submitPromotionApplication({ interaction, facData, applicant, requestedRole, reason }) {
+        const { targetTornId, memberName, memberObj, currentRole, daysInFaction } = applicant;
+
+        if (promotionManager.isRestrictedPromotionRole(requestedRole)) {
+            return {
+                embeds: [sanitizeEmbed(UI.error(
+                    '🚫 Restricted Role',
+                    `Leader and Co-leader positions are appointed directly by faction leadership and cannot be requested.`
+                ))]
+            };
+        }
+
+        if (requestedRole.toLowerCase() === currentRole.toLowerCase()) {
+            return {
+                embeds: [sanitizeEmbed(UI.warning(
+                    'Already Assigned',
+                    `You are already assigned as **${requestedRole}** in **${facData.name}**!`
+                ))]
+            };
+        }
+
+        const existing = await promotionManager.getPendingRequestForPlayer(targetTornId, bot, discordConfig);
+        if (existing) {
+            return buildPendingPromotionReplyPayload(existing);
+        }
+
+        const rankAdvancement = promotionManager.calculateRankMovement(facData.positions, currentRole, requestedRole, facData.members);
+        const unlockedSummary = promotionManager.formatNewPerksUnlocked(facData.positions, currentRole, requestedRole, 5);
+        const statsProgression = resolvePlayerStatsProgression(targetTornId, interaction.user.id);
+        const memberLevel = memberObj.level || 0;
+        const lastAction = memberObj.last_action?.relative || '';
+
+        const promoReq = await promotionManager.createPromotionRequest({
+            discordUserId: interaction.user.id,
+            playerId: targetTornId,
+            playerName: memberName,
+            currentRole,
+            requestedRole,
+            reason,
+            daysInFaction,
+            level: memberLevel,
+            lastAction,
+            rankAdvancement,
+            statsProgression,
+            guildId: interaction.guild?.id
+        });
+
+        const dispatched = await promotionManager.dispatchPromotionToLeadership(bot, interaction.guild, promoReq, discordConfig, facData);
+        if (!dispatched) {
+            await promotionManager.deletePendingRequestsForPlayer(targetTornId, 'Leadership channel dispatch failed');
+            return {
+                embeds: [sanitizeEmbed(UI.error(
+                    'Promotion Channel Unavailable',
+                    `⚠️ Could not deliver your promotion request to the faction leadership review channel.\n\nPlease ask an admin to verify the **Promotion / Leadership Channel** setting on the FactionOS dashboard and confirm the bot has permission to post there.`
+                ))]
+            };
+        }
+
+        return {
+            embeds: [sanitizeEmbed(UI.success(
+                '🎖️ Promotion Request Submitted!',
+                `Your application to be promoted to **${requestedRole}** has been sent to faction leadership for review!\n\n` +
+                `• **Current Role:** ${currentRole} (${daysInFaction} days in faction)\n` +
+                `• **Target Role:** **${requestedRole}**\n` +
+                `• **Progression:** ${rankAdvancement}\n` +
+                `• **New Perks Unlocked:** ${unlockedSummary.replace(/\n/g, ' | ')}\n` +
+                (reason ? `• **Pitch:** _"${reason}"_\n` : '') +
+                `\nF.R.I.D.A.Y will DM you once leadership reviews your application.`
+            ))]
+        };
+    }
+
+    async function finalizePromotionReview({ interaction, promoReq, decision, reviewReason = '', isModal = false }) {
+        const isApprove = (decision === 'approved');
+        const reviewerName = interaction.member?.displayName || interaction.user?.username || 'Leadership';
+        const updated = await promotionManager.reviewPromotionRequest(promoReq.id, interaction.user.id, reviewerName, decision, reviewReason);
+
+        const apiKey = discordConfig.apiKey || TORN_API_KEY || getNextApiKey();
+        let facId = discordConfig.factionId || dynamicFactionId || null;
+        const facData = await promotionManager.getFactionData(apiKey, facId);
+        if (facData && facData.id) {
+            if (!discordConfig.factionId) dynamicFactionId = String(facData.id);
+            if (!discordConfig.factionName && facData.name) {
+                discordConfig.factionName = facData.name;
+                UI.setFactionName(facData.name);
+            }
+        }
+
+        const { embed, actionRow } = promotionManager.buildReviewedNotificationEmbed(
+            updated, decision, reviewerName, interaction.user.id, facData.positions, facData.name
+        );
+
+        const updatePayload = {
+            content: isApprove
+                ? `✅ **Promotion Request Approved** by <@${interaction.user.id}>`
+                : `❌ **Promotion Request Denied** by <@${interaction.user.id}>`,
+            embeds: [sanitizeEmbed(embed)],
+            components: [actionRow]
+        };
+
+        if (!isModal) {
+            await interaction.editReply(updatePayload).catch(async () => {
+                if (interaction.message?.edit) {
+                    await interaction.message.edit(updatePayload).catch(() => {});
+                }
+            });
+        } else {
+            let edited = false;
+            if (interaction.message?.edit) {
+                await interaction.message.edit(updatePayload).then(() => { edited = true; }).catch(() => {});
+            }
+            if (!edited && promoReq.channelId && promoReq.messageId) {
+                try {
+                    const chan = bot.channels.cache.get(promoReq.channelId) || await bot.channels.fetch(promoReq.channelId).catch(() => null);
+                    const origMsg = chan?.isTextBased?.() ? await chan.messages.fetch(promoReq.messageId).catch(() => null) : null;
+                    if (origMsg) await origMsg.edit(updatePayload).catch(() => {});
+                } catch (_) {}
+            }
+            await interaction.editReply({
+                content: `❌ Denied **${promoReq.playerName}**'s promotion request to **${promoReq.requestedRole}** with reason:\n> ${reviewReason}`
+            }).catch(() => {});
+        }
+
+        // Notify applicant via direct message
+        try {
+            const applicantUser = await (interaction.client || bot).users.fetch(promoReq.discordUserId).catch(() => null);
+            if (applicantUser) {
+                const dmEmbed = isApprove ? UI.success(
+                    `🎉 Faction Promotion Approved!`,
+                    `Congratulations! Your promotion request from **${promoReq.currentRole}** to **${promoReq.requestedRole}** in **${facData.name}** was **APPROVED** by <@${interaction.user.id}> (${reviewerName})!\n\n` +
+                    `Leadership has been provided the direct link to update your position in Torn Faction Controls.`
+                ) : UI.error(
+                    `Faction Promotion Request Update`,
+                    `Your promotion request to **${promoReq.requestedRole}** in **${facData.name}** was **DENIED** by <@${interaction.user.id}> (${reviewerName}).` +
+                    (reviewReason ? `\n\n💬 **Leadership Feedback:**\n> ${reviewReason}` : `\n\nKeep contributing and reach out to leadership if you have questions on requirements needed for this role!`)
+                );
+                await applicantUser.send({ embeds: [sanitizeEmbed(dmEmbed)] }).catch(() => {});
+            }
+        } catch (dmErr) {
+            console.warn('[Promotions] DM to applicant failed:', dmErr.message);
+        }
+    }
+
     bot.on(Events.InteractionCreate, async (interaction) => {
         try {
 
@@ -28370,11 +28611,42 @@ function setupSlashBotEvents(bot, token) {
                 return await interaction.editReply(replyPayload);
             }
 
+            // ── Faction Promotion Deny-with-Reason Submission ──
+            if (interaction.customId.startsWith('modal_promo_deny_')) {
+                await interaction.deferReply({ ephemeral: true });
+                try {
+                    const reqId = interaction.customId.replace('modal_promo_deny_', '').trim();
+                    const denyReason = (interaction.fields.getTextInputValue('deny_reason') || '').trim();
+                    const promoReq = promotionManager.getPromotionRequest(reqId);
+                    if (!promoReq) {
+                        return await interaction.editReply({ content: '⚠️ Promotion request not found or expired.' });
+                    }
+                    if (promoReq.status !== 'pending') {
+                        return await interaction.editReply({
+                            content: `⚠️ This promotion request was already **${promoReq.status}** by <@${promoReq.reviewedBy}> on <t:${Math.floor((promoReq.reviewedAt || Date.now()) / 1000)}:f>.`
+                        });
+                    }
+                    await finalizePromotionReview({
+                        interaction,
+                        promoReq,
+                        decision: 'denied',
+                        reviewReason: denyReason,
+                        isModal: true
+                    });
+                    return;
+                } catch (err) {
+                    console.error('[Slash Bot] modal_promo_deny_ error:', err);
+                    return await interaction.editReply({
+                        content: `⚠️ Failed to record denial: ${err.message || 'Unknown error'}`
+                    }).catch(() => {});
+                }
+            }
+
             // ── Faction Promotion Pitch Submission ──
             if (interaction.customId.startsWith('modal_promo_')) {
                 await interaction.deferReply({ ephemeral: true });
                 try {
-                    const selectedRole = decodeURIComponent(interaction.customId.replace('modal_promo_', ''));
+                    const selectedRole = promotionManager.resolveModalRole(interaction.customId);
                     const reason = (interaction.fields.getTextInputValue('promo_reason') || '').trim();
 
                     const apiKey = discordConfig.apiKey || TORN_API_KEY || getNextApiKey();
@@ -28388,156 +28660,19 @@ function setupSlashBotEvents(bot, token) {
                         }
                     }
 
-                    // Resolve member identity
-                    let targetTornId = null;
-                    let memberName = interaction.member?.displayName || interaction.user?.username || 'Member';
-
-                    if (verifiedDiscordToTorn[interaction.user.id]) {
-                        targetTornId = verifiedDiscordToTorn[interaction.user.id].tornId;
-                        memberName = verifiedDiscordToTorn[interaction.user.id].tornName || memberName;
-                    }
-                    if (!targetTornId && userKeys && typeof userKeys.hasLinkedKey === 'function' && userKeys.hasLinkedKey(interaction.user.id)) {
-                        const rec = userKeys.userKeysStore?.get(interaction.user.id);
-                        if (rec && rec.tornId) {
-                            targetTornId = rec.tornId;
-                            memberName = rec.playerName || memberName;
-                        }
-                    }
-                    if (!targetTornId && interaction.member?.displayName) {
-                        const match = interaction.member.displayName.match(/\[(\d+)\]|\((\d+)\)/);
-                        if (match) targetTornId = match[1] || match[2];
+                    const applicant = resolvePromotionApplicant(interaction, facData);
+                    if (applicant.errorEmbed) {
+                        return await interaction.editReply({ embeds: [applicant.errorEmbed] });
                     }
 
-                    // Fast-track server owner/admin (Owen)
-                    if (!targetTornId && (interaction.user.id === '992561850057240578' || (discordConfig.personalDiscordId && interaction.user.id === discordConfig.personalDiscordId))) {
-                        targetTornId = '3776908';
-                        memberName = 'Owen777';
-                    }
-
-                    // Name match against facData.members if still not found
-                    if (!targetTornId && facData.members) {
-                        const candidateNames = [
-                            interaction.member?.displayName,
-                            interaction.member?.nickname,
-                            interaction.user?.globalName,
-                            interaction.user?.username
-                        ].filter(Boolean);
-
-                        for (const cName of candidateNames) {
-                            const cleanCName = cName.replace(/\[\d+\]|\(\d+\)/g, '').trim().toLowerCase();
-                            if (!cleanCName) continue;
-                            for (const [mId, mObj] of Object.entries(facData.members)) {
-                                const mName = (mObj.name || '').toLowerCase();
-                                if (mName && (mName === cleanCName || mName.includes(cleanCName) || cleanCName.includes(mName))) {
-                                    targetTornId = mId;
-                                    memberName = mObj.name || memberName;
-                                    break;
-                                }
-                            }
-                            if (targetTornId) break;
-                        }
-                    }
-
-                    if (!targetTornId) {
-                        return await interaction.editReply({
-                            embeds: [sanitizeEmbed(UI.warning(
-                                '🛡️ Verification Required',
-                                `You must be verified with your Torn account to submit a promotion request. Please click **🛡️ Verify Me** or run \`/verify\` first.`
-                            ))]
-                        });
-                    }
-
-                    const memberObj = facData.members?.[String(targetTornId)] || facData.members?.[targetTornId];
-                    if (!memberObj) {
-                        return await interaction.editReply({
-                            embeds: [sanitizeEmbed(UI.error(
-                                'Faction Member Only',
-                                `⚠️ You [${targetTornId}] are not listed as an active member of **${facData.name || 'our faction'}** [${facId}].`
-                            ))]
-                        });
-                    }
-
-                    const currentRole = memberObj.position || 'Member';
-                    const daysInFaction = memberObj.days_in_faction || 0;
-                    const memberLevel = memberObj.level || 0;
-
-                    // Check restricted role
-                    if (promotionManager.isRestrictedPromotionRole(selectedRole)) {
-                        return await interaction.editReply({
-                            embeds: [sanitizeEmbed(UI.error(
-                                '🚫 Restricted Role',
-                                `Leader and Co-leader positions cannot be requested.`
-                            ))]
-                        });
-                    }
-
-                    // Check already assigned
-                    if (selectedRole.toLowerCase() === currentRole.toLowerCase()) {
-                        return await interaction.editReply({
-                            embeds: [sanitizeEmbed(UI.warning(
-                                'Already Assigned',
-                                `You are already assigned as **${selectedRole}** in **${facData.name}**!`
-                            ))]
-                        });
-                    }
-
-                    // Check pending (with Discord message existence validation)
-                    const existing = await promotionManager.getPendingRequestForPlayer(targetTornId, bot, discordConfig);
-                    if (existing) {
-                        const cancelRow = new ActionRowBuilder().addComponents(
-                            new ButtonBuilder()
-                                .setCustomId(`btn_promo_cancel_${existing.id}`)
-                                .setLabel('Cancel & Withdraw Request')
-                                .setStyle(ButtonStyle.Danger)
-                                .setEmoji('🗑️'),
-                            new ButtonBuilder()
-                                .setCustomId(`btn_promo_recheck_${existing.id}`)
-                                .setLabel('Recheck Discord Message')
-                                .setStyle(ButtonStyle.Secondary)
-                                .setEmoji('🔄')
-                        );
-                        return await interaction.editReply({
-                            embeds: [sanitizeEmbed(UI.warning(
-                                'Promotion Request Pending',
-                                `⏳ You already have a pending promotion request for **${existing.requestedRole}** submitted <t:${Math.floor(existing.createdAt / 1000)}:R>!\n\n` +
-                                `If you deleted the Discord message or wish to withdraw this request, click **Cancel & Withdraw Request** below to immediately clear it.`
-                            ))],
-                            components: [cancelRow]
-                        });
-                    }
-
-                    // Calculate rank movement and battle stats progression
-                    const rankAdvancement = promotionManager.calculateRankMovement(facData.positions, currentRole, selectedRole);
-                    const statsProgression = resolvePlayerStatsProgression(targetTornId, interaction.user.id);
-
-                    // Create request
-                    const promoReq = await promotionManager.createPromotionRequest({
-                        discordUserId: interaction.user.id,
-                        playerId: targetTornId,
-                        playerName: memberObj.name || memberName,
-                        currentRole,
+                    const replyPayload = await submitPromotionApplication({
+                        interaction,
+                        facData,
+                        applicant,
                         requestedRole: selectedRole,
-                        reason,
-                        daysInFaction,
-                        level: memberLevel,
-                        rankAdvancement,
-                        statsProgression,
-                        guildId: interaction.guild?.id
+                        reason
                     });
-
-                    // Dispatch to leadership channel
-                    await promotionManager.dispatchPromotionToLeadership(bot, interaction.guild, promoReq, discordConfig, facData);
-
-                    return await interaction.editReply({
-                        embeds: [sanitizeEmbed(UI.success(
-                            '🎖️ Promotion Request Submitted!',
-                            `Your application to be promoted to **${selectedRole}** has been sent to faction leadership for review!\n\n` +
-                            `• **Current Role:** ${currentRole} (${daysInFaction} days in faction)\n` +
-                            `• **Target Role:** **${selectedRole}**\n` +
-                            (reason ? `• **Pitch:** _"${reason}"_\n` : '') +
-                            `\nF.R.I.D.A.Y will notify you once leadership reviews your application.`
-                        ))]
-                    });
+                    return await interaction.editReply(replyPayload);
                 } catch (err) {
                     console.error('[Slash Bot] modal_promo_ submission error:', err);
                     return await interaction.editReply({
@@ -28787,9 +28922,26 @@ function setupSlashBotEvents(bot, token) {
                             UI.setFactionName(facData.name);
                         }
                     }
-                    const requestableRoles = promotionManager.getRequestableFactionRoles(facData.positions);
-                    const filtered = requestableRoles.filter(r => !typed || r.toLowerCase().includes(typed)).slice(0, 24);
-                    const options = filtered.map(r => ({ name: r, value: r }));
+                    const requestableRoles = promotionManager.getRequestableFactionRoles(facData.positions, facData.members);
+                    const verifiedRec = verifiedDiscordToTorn[interaction.user.id];
+                    const linkedRec = (!verifiedRec && userKeys?.hasLinkedKey?.(interaction.user.id)) ? userKeys.userKeysStore?.get(interaction.user.id) : null;
+                    const myTornId = verifiedRec?.tornId || linkedRec?.tornId || null;
+                    const myRole = myTornId ? (facData.members?.[String(myTornId)]?.position || '') : '';
+
+                    const rankedOptions = requestableRoles.map((r, idx) => ({
+                        role: r,
+                        rankNum: idx + 1,
+                        isCurrent: myRole && r.toLowerCase() === myRole.toLowerCase()
+                    }));
+
+                    const filtered = rankedOptions
+                        .filter(o => !typed || o.role.toLowerCase().includes(typed) || `rank ${o.rankNum}`.includes(typed))
+                        .slice(0, 24);
+
+                    const options = filtered.map(o => ({
+                        name: `Rank ${o.rankNum}: ${o.role}${o.isCurrent ? ' (Current Role)' : ''}`.slice(0, 100),
+                        value: o.role
+                    }));
 
                     if (!typed || 'cancel'.includes(typed) || 'withdraw'.includes(typed) || 'delete'.includes(typed)) {
                         options.unshift({ name: '🗑️ Cancel / Withdraw Current Promotion Request', value: 'cancel' });
@@ -29996,9 +30148,14 @@ function setupSlashBotEvents(bot, token) {
             }
 
             // ── Faction Promotion Leadership Approval / Denial ──
-            if (customId.startsWith('btn_promo_approve_') || customId.startsWith('btn_promo_deny_')) {
+            if (customId.startsWith('btn_promo_approve_') || customId.startsWith('btn_promo_deny_') || customId.startsWith('btn_promo_denynote_')) {
                 const isApprove = customId.startsWith('btn_promo_approve_');
-                const reqId = customId.replace(isApprove ? 'btn_promo_approve_' : 'btn_promo_deny_', '').trim();
+                const isDenyWithReason = customId.startsWith('btn_promo_denynote_');
+                const reqId = customId
+                    .replace('btn_promo_approve_', '')
+                    .replace('btn_promo_denynote_', '')
+                    .replace('btn_promo_deny_', '')
+                    .trim();
 
                 const isAuthorized = interaction.member?.permissions?.has?.('Administrator') ||
                                      (discordConfig.leaderRoleId && interaction.member?.roles?.cache?.has?.(discordConfig.leaderRoleId)) ||
@@ -30010,70 +30167,31 @@ function setupSlashBotEvents(bot, token) {
                     }).catch(() => {});
                 }
 
-                await interaction.deferUpdate().catch(() => {});
-
                 const promoReq = promotionManager.getPromotionRequest(reqId);
                 if (!promoReq) {
-                    return interaction.followUp({ content: "⚠️ Promotion request not found or expired.", ephemeral: true }).catch(() => {});
+                    return interaction.reply({ content: "⚠️ Promotion request not found or expired.", ephemeral: true }).catch(() => {});
                 }
 
                 if (promoReq.status !== 'pending') {
-                    return interaction.followUp({
+                    return interaction.reply({
                         content: `⚠️ This promotion request was already **${promoReq.status}** by <@${promoReq.reviewedBy}> on <t:${Math.floor((promoReq.reviewedAt || Date.now()) / 1000)}:f>.`,
                         ephemeral: true
                     }).catch(() => {});
                 }
 
-                const reviewerName = interaction.member?.displayName || interaction.user?.username || 'Leadership';
-                const decision = isApprove ? 'approved' : 'denied';
-                const updated = await promotionManager.reviewPromotionRequest(reqId, interaction.user.id, reviewerName, decision);
-
-                const apiKey = discordConfig.apiKey || TORN_API_KEY || getNextApiKey();
-                let facId = discordConfig.factionId || dynamicFactionId || null;
-                const facData = await promotionManager.getFactionData(apiKey, facId);
-                if (facData && facData.id) {
-                    if (!discordConfig.factionId) dynamicFactionId = String(facData.id);
-                    if (!discordConfig.factionName && facData.name) {
-                        discordConfig.factionName = facData.name;
-                        UI.setFactionName(facData.name);
-                    }
+                if (isDenyWithReason) {
+                    const denyModal = promotionManager.buildDenyReasonModal(reqId);
+                    return await interaction.showModal(denyModal);
                 }
 
-                const { embed, actionRow } = promotionManager.buildReviewedNotificationEmbed(
-                    updated, decision, reviewerName, interaction.user.id, facData.positions, facData.name
-                );
-
-                const updatePayload = {
-                    content: isApprove ? `✅ **Promotion Request Approved** by <@${interaction.user.id}>` : `❌ **Promotion Request Denied** by <@${interaction.user.id}>`,
-                    embeds: [sanitizeEmbed(embed)],
-                    components: [actionRow]
-                };
-
-                await interaction.editReply(updatePayload).catch(async () => {
-                    if (interaction.message?.edit) {
-                        await interaction.message.edit(updatePayload).catch(() => {});
-                    }
+                await interaction.deferUpdate().catch(() => {});
+                await finalizePromotionReview({
+                    interaction,
+                    promoReq,
+                    decision: isApprove ? 'approved' : 'denied',
+                    reviewReason: '',
+                    isModal: false
                 });
-
-                // Notify applicant via direct message
-                try {
-                    const applicantUser = await (interaction.client || bot).users.fetch(promoReq.discordUserId).catch(() => null);
-                    if (applicantUser) {
-                        const dmEmbed = isApprove ? UI.success(
-                            `🎉 Faction Promotion Approved!`,
-                            `Congratulations! Your promotion request to **${promoReq.requestedRole}** in **${facData.name}** was **APPROVED** by <@${interaction.user.id}> (${reviewerName})!\n\n` +
-                            `Leadership has been provided the direct link to update your position in Torn Faction Controls.`
-                        ) : UI.error(
-                            `Faction Promotion Request Update`,
-                            `Your promotion request to **${promoReq.requestedRole}** in **${facData.name}** was **DENIED** by <@${interaction.user.id}> (${reviewerName}).\n\n` +
-                            `Keep contributing and reach out to leadership if you have questions on requirements needed for this role!`
-                        );
-                        await applicantUser.send({ embeds: [sanitizeEmbed(dmEmbed)] }).catch(() => {});
-                    }
-                } catch(dmErr) {
-                    console.warn('[Promotions] DM to applicant failed:', dmErr.message);
-                }
-
                 return;
             }
 
@@ -31085,83 +31203,18 @@ function setupSlashBotEvents(bot, token) {
                     });
                 }
 
-                // Resolve applicant's identity
-                let targetTornId = null;
-                let memberName = interaction.member?.displayName || interaction.user?.username || 'Member';
-
-                if (verifiedDiscordToTorn[interaction.user.id]) {
-                    targetTornId = verifiedDiscordToTorn[interaction.user.id].tornId;
-                    memberName = verifiedDiscordToTorn[interaction.user.id].tornName || memberName;
-                }
-                if (!targetTornId && userKeys && typeof userKeys.hasLinkedKey === 'function' && userKeys.hasLinkedKey(interaction.user.id)) {
-                    const rec = userKeys.userKeysStore?.get(interaction.user.id);
-                    if (rec && rec.tornId) {
-                        targetTornId = rec.tornId;
-                        memberName = rec.playerName || memberName;
-                    }
-                }
-                if (!targetTornId && interaction.member?.displayName) {
-                    const match = interaction.member.displayName.match(/\[(\d+)\]|\((\d+)\)/);
-                    if (match) targetTornId = match[1] || match[2];
+                const applicant = resolvePromotionApplicant(interaction, facData);
+                if (applicant.errorEmbed) {
+                    return await interaction.editReply({ embeds: [applicant.errorEmbed] });
                 }
 
-                // Fast-track server owner/admin (Owen)
-                if (!targetTornId && (interaction.user.id === '992561850057240578' || (discordConfig.personalDiscordId && interaction.user.id === discordConfig.personalDiscordId))) {
-                    targetTornId = '3776908';
-                    memberName = 'Owen777';
-                }
-
-                // Name match against facData.members if still not found
-                if (!targetTornId && facData.members) {
-                    const candidateNames = [
-                        interaction.member?.displayName,
-                        interaction.member?.nickname,
-                        interaction.user?.globalName,
-                        interaction.user?.username
-                    ].filter(Boolean);
-
-                    for (const cName of candidateNames) {
-                        const cleanCName = cName.replace(/\[\d+\]|\(\d+\)/g, '').trim().toLowerCase();
-                        if (!cleanCName) continue;
-                        for (const [mId, mObj] of Object.entries(facData.members)) {
-                            const mName = (mObj.name || '').toLowerCase();
-                            if (mName && (mName === cleanCName || mName.includes(cleanCName) || cleanCName.includes(mName))) {
-                                targetTornId = mId;
-                                memberName = mObj.name || memberName;
-                                break;
-                            }
-                        }
-                        if (targetTornId) break;
-                    }
-                }
-
-                if (!targetTornId) {
-                    return await interaction.editReply({
-                        embeds: [sanitizeEmbed(UI.warning(
-                            '🛡️ Verification Required',
-                            `You must be verified with your Torn account to view or submit promotion requests.\n\nPlease click **🛡️ Verify Me** or run \`/verify\` first.`
-                        ))]
-                    });
-                }
-
-                const memberObj = facData.members?.[String(targetTornId)] || facData.members?.[targetTornId];
-                if (!memberObj) {
-                    return await interaction.editReply({
-                        embeds: [sanitizeEmbed(UI.error(
-                            'Faction Member Only',
-                            `⚠️ You [${targetTornId}] are not listed as an active member of **${facData.name || 'our faction'}** [${facId}]. Only active faction members can request promotions.`
-                        ))]
-                    });
-                }
-
-                const currentRole = memberObj.position || 'Member';
-                const daysInFaction = memberObj.days_in_faction || 0;
+                const { targetTornId, memberName, currentRole, daysInFaction } = applicant;
                 const requestedRoleInput = interaction.options.getString('role');
                 const reasonInput = (interaction.options.getString('reason') || '').trim();
 
                 // Case A: User specified a role directly via argument
                 if (requestedRoleInput) {
-                    const cleanRole = requestedRoleInput.trim();
+                    const cleanRole = requestedRoleInput.replace(/^Rank\s+\d+\s*:\s*/i, '').replace(/\s*\(Current Role\)\s*$/i, '').trim();
 
                     // Check if user requested to cancel their promotion
                     if (cleanRole.toLowerCase() === 'cancel' || cleanRole.toLowerCase() === 'delete' || cleanRole.toLowerCase() === 'withdraw') {
@@ -31192,120 +31245,50 @@ function setupSlashBotEvents(bot, token) {
                         });
                     }
 
-                    const requestableRoles = promotionManager.getRequestableFactionRoles(facData.positions);
-                    const exactRole = requestableRoles.find(r => r.toLowerCase() === cleanRole.toLowerCase());
+                    const requestableRoles = promotionManager.getRequestableFactionRoles(facData.positions, facData.members);
+                    let exactRole = requestableRoles.find(r => r.toLowerCase() === cleanRole.toLowerCase());
                     if (!exactRole) {
-                        const roleList = requestableRoles.map(r => `• **${r}**`).join('\n');
+                        const partialMatches = requestableRoles.filter(r => r.toLowerCase().includes(cleanRole.toLowerCase()));
+                        if (partialMatches.length === 1) exactRole = partialMatches[0];
+                    }
+                    if (!exactRole) {
+                        const roleList = requestableRoles.map((r, idx) => `• **Rank ${idx + 1}:** ${r}`).join('\n');
                         return await interaction.editReply({
                             embeds: [sanitizeEmbed(UI.warning(
                                 'Invalid Role Specified',
-                                `**${cleanRole}** is not an active role in **${facData.name}**.\n\n**Available Roles:**\n${roleList}`
+                                `**${cleanRole}** is not an active promotional role in **${facData.name}**.\n\n**Available Roles (Rank Order):**\n${roleList}`
                             ))]
                         });
                     }
 
-                    if (exactRole.toLowerCase() === currentRole.toLowerCase()) {
-                        return await interaction.editReply({
-                            embeds: [sanitizeEmbed(UI.warning(
-                                'Already Assigned',
-                                `You are already assigned as **${exactRole}** in **${facData.name}**!`
-                            ))]
-                        });
-                    }
-
-                    const existing = await promotionManager.getPendingRequestForPlayer(targetTornId, bot, discordConfig);
-                    if (existing) {
-                        const cancelRow = new ActionRowBuilder().addComponents(
-                            new ButtonBuilder()
-                                .setCustomId(`btn_promo_cancel_${existing.id}`)
-                                .setLabel('Cancel & Withdraw Request')
-                                .setStyle(ButtonStyle.Danger)
-                                .setEmoji('🗑️'),
-                            new ButtonBuilder()
-                                .setCustomId(`btn_promo_recheck_${existing.id}`)
-                                .setLabel('Recheck Discord Message')
-                                .setStyle(ButtonStyle.Secondary)
-                                .setEmoji('🔄')
-                        );
-                        return await interaction.editReply({
-                            embeds: [sanitizeEmbed(UI.warning(
-                                'Promotion Request Pending',
-                                `⏳ You already have a pending promotion request for **${existing.requestedRole}** submitted <t:${Math.floor(existing.createdAt / 1000)}:R>!\n\n` +
-                                `If you deleted the Discord message or wish to withdraw this request, click **Cancel & Withdraw Request** below to immediately clear it.`
-                            ))],
-                            components: [cancelRow]
-                        });
-                    }
-
-                    // Calculate rank movement and battle stats progression
-                    const rankAdvancement = promotionManager.calculateRankMovement(facData.positions, currentRole, exactRole);
-                    const statsProgression = resolvePlayerStatsProgression(targetTornId, interaction.user.id);
-                    const memberLevel = memberObj.level || 0;
-
-                    const promoReq = await promotionManager.createPromotionRequest({
-                        discordUserId: interaction.user.id,
-                        playerId: targetTornId,
-                        playerName: memberObj.name || memberName,
-                        currentRole,
+                    const replyPayload = await submitPromotionApplication({
+                        interaction,
+                        facData,
+                        applicant,
                         requestedRole: exactRole,
-                        reason: reasonInput,
-                        daysInFaction,
-                        level: memberLevel,
-                        rankAdvancement,
-                        statsProgression,
-                        guildId: interaction.guild?.id
+                        reason: reasonInput
                     });
-
-                    await promotionManager.dispatchPromotionToLeadership(bot, interaction.guild, promoReq, discordConfig, facData);
-
-                    return await interaction.editReply({
-                        embeds: [sanitizeEmbed(UI.success(
-                            '🎖️ Promotion Request Submitted!',
-                            `Your application to be promoted to **${exactRole}** has been sent to faction leadership for review!\n\n` +
-                            `• **Current Role:** ${currentRole} (${daysInFaction} days in faction)\n` +
-                            `• **Target Role:** **${exactRole}**\n` +
-                            (reasonInput ? `• **Pitch:** _"${reasonInput}"_\n` : '') +
-                            `\nF.R.I.D.A.Y will notify you once leadership reviews your application.`
-                        ))]
-                    });
+                    return await interaction.editReply(replyPayload);
                 }
 
                 // Check if user already has an active pending promotion request before showing menu
                 const existing = await promotionManager.getPendingRequestForPlayer(targetTornId, bot, discordConfig);
                 if (existing) {
-                    const cancelRow = new ActionRowBuilder().addComponents(
-                        new ButtonBuilder()
-                            .setCustomId(`btn_promo_cancel_${existing.id}`)
-                            .setLabel('Cancel & Withdraw Request')
-                            .setStyle(ButtonStyle.Danger)
-                            .setEmoji('🗑️'),
-                        new ButtonBuilder()
-                            .setCustomId(`btn_promo_recheck_${existing.id}`)
-                            .setLabel('Recheck Discord Message')
-                            .setStyle(ButtonStyle.Secondary)
-                            .setEmoji('🔄')
-                    );
-                    return await interaction.editReply({
-                        embeds: [sanitizeEmbed(UI.warning(
-                            'Promotion Request Pending',
-                            `⏳ You already have a pending promotion request for **${existing.requestedRole}** submitted <t:${Math.floor(existing.createdAt / 1000)}:R>!\n\n` +
-                            `If you deleted the Discord message or wish to withdraw this request, click **Cancel & Withdraw Request** below to immediately clear it.`
-                        ))],
-                        components: [cancelRow]
-                    });
+                    return await interaction.editReply(buildPendingPromotionReplyPayload(existing));
                 }
 
                 // Case B: No role provided — display interactive overview embed + Select Menu dropdown
                 const menuEmbed = promotionManager.buildPromotionMenuEmbed({
-                    memberName: memberObj.name || memberName,
+                    memberName,
                     memberId: targetTornId,
                     currentRole,
                     daysInFaction,
                     facName: facData.name,
-                    positions: facData.positions
+                    positions: facData.positions,
+                    members: facData.members
                 });
 
-                const selectActionRow = promotionManager.buildPromotionSelectMenu(facData.positions, currentRole);
+                const selectActionRow = promotionManager.buildPromotionSelectMenu(facData.positions, currentRole, facData.members);
                 const components = selectActionRow ? [selectActionRow] : [];
 
                 return await interaction.editReply({

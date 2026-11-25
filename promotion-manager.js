@@ -2,9 +2,10 @@
  * F.R.I.D.A.Y. - Faction Promotion Management Engine
  * 
  * Provides:
- * - Dynamic retrieval of actual faction roles from Torn API (excluding Leader and Co-leader).
- * - Interactive Discord promotion menu and modal submission.
- * - Leadership dispatch, notifications, and 1-click Approve/Deny buttons.
+ * - Dynamic retrieval of actual faction roles from Torn API (excluding Leader, Co-leader, and unused phantom roles like empty Recruit).
+ * - True progression hierarchy ordering & accurate rank movement calculations.
+ * - Interactive Discord promotion menu, role-perk diffing, and modal submission.
+ * - Leadership dispatch, notifications, 1-click Approve/Deny, and Deny-with-Reason feedback.
  * - Persistent storage across disk (data/promotion_requests.json) and MongoDB Atlas.
  */
 
@@ -29,10 +30,13 @@ const PROMOTIONS_FILE = path.join(__dirname, 'data', 'promotion_requests.json');
 // In-memory store: id => promotionRecord
 const promotionsStore = new Map();
 
-// 5-minute cache for Torn faction data (positions + members)
-let cachedFactionData = null;
-let cachedFactionTimestamp = 0;
+// Per-faction 5-minute cache for Torn faction data (positions + members)
+const factionDataCache = new Map();
 const CACHE_TTL_MS = 5 * 60 * 1000;
+
+// Short-lived token map for very long role names in modal customIds (> 95 chars encoded)
+const modalRoleTokens = new Map();
+let modalTokenCounter = 0;
 
 // MongoDB collection reference
 let promoCollection = null;
@@ -143,88 +147,261 @@ function isRestrictedPromotionRole(roleName) {
 }
 
 /**
- * Format key perks/powers of a Torn faction position.
+ * Count enabled permission flags in a Torn v1 position object.
  */
-function formatPositionPerks(posObj) {
-    if (!posObj || typeof posObj !== 'object') return 'Standard member permissions';
-    const perks = [];
-
-    if (posObj.canUseEnergyRefill || posObj.canUseNerveRefill) perks.push('⚡ Energy/Nerve Refills');
-    if (posObj.canLoanDragItem) perks.push('💊 Drug Armory Loans');
-    if (posObj.canLoanBoosterItem) perks.push('💉 Booster Armory Loans');
-    if (posObj.canManageOC2) perks.push('🎯 OC 2.0 Management');
-    if (posObj.canManageWars) perks.push('⚔️ War Controls');
-    if (posObj.canGiveMoney || posObj.canAdjustMemberBalance) perks.push('🏦 Vault Access');
-    if (posObj.canManageApplications) perks.push('📋 Recruit Processing');
-    if (posObj.canAccessFactionApi) perks.push('🔑 Faction API');
-    if (posObj.canRetrieveLoanedArmory) perks.push('🛡️ Armory Retrieval');
-    if (posObj.canSendNewsletter) perks.push('📬 Newsletters');
-
-    if (perks.length === 0) {
-        if (posObj.canLoanWeaponAndArmory) perks.push('⚔️ Weapon/Armory Loans');
-        if (posObj.canUseMedicalItem) perks.push('🩹 Medical Armory Access');
-    }
-
-    return perks.length > 0 ? perks.join(' • ') : 'Basic Faction Access';
+function countEnabledPermissions(posObj) {
+    if (!posObj || typeof posObj !== 'object') return 0;
+    return Object.keys(posObj).filter(k =>
+        k !== 'title' &&
+        k !== 'default' &&
+        (posObj[k] === 1 || posObj[k] === true)
+    ).length;
 }
 
 /**
- * Fetch live faction positions & members from Torn API (cached for 5 min).
+ * Detect Torn's phantom/unused positions (most notably the legacy "Recruit" slot
+ * returned by Torn API v1 with 0 permissions, default: 0, and 0 active members).
+ */
+function isPhantomUnusedRole(roleName, posObj, positionsObj = {}, membersObj = null) {
+    if (!roleName || !posObj || typeof posObj !== 'object') return true;
+    const isDefault = Boolean(posObj.default == 1 || posObj.default === true);
+    if (isDefault) return false;
+
+    const permCount = countEnabledPermissions(posObj);
+    if (permCount > 0) return false;
+
+    if (membersObj && typeof membersObj === 'object') {
+        const lowerRole = roleName.toLowerCase();
+        const heldByMember = Object.values(membersObj).some(
+            m => m && (m.position || '').toLowerCase() === lowerRole
+        );
+        if (heldByMember) return false;
+        // 0 permissions, not default, and 0 members hold it -> unused phantom slot
+        return true;
+    }
+
+    // Without membersObj, Torn's built-in "Recruit" with 0 perms when another default role exists is phantom
+    if (roleName.toLowerCase().trim() === 'recruit') {
+        const hasOtherDefault = Object.entries(positionsObj || {}).some(
+            ([name, p]) => name.toLowerCase().trim() !== 'recruit' && Boolean(p && (p.default == 1 || p.default === true))
+        );
+        if (hasOtherDefault) return true;
+    }
+
+    return false;
+}
+
+const PERMISSION_LABELS = [
+    // Leadership & Vault
+    { key: 'canManageWars', label: '⚔️ War Controls', weight: 10 },
+    { key: 'canManageApplications', label: '📋 Recruit Processing', weight: 9 },
+    { key: 'canKickMembers', label: '🥾 Kick Members', weight: 10 },
+    { key: 'canAdjustMemberBalance', label: '⚖️ Balance Adjustments', weight: 9 },
+    { key: 'canGiveMoney', label: '🏦 Vault Payouts', weight: 8 },
+    { key: 'canGiveItem', label: '📦 Give Items', weight: 7 },
+    { key: 'canGivePoints', label: '🪙 Give Points', weight: 7 },
+    { key: 'canManageUpgrades', label: '🌳 Faction Upgrades', weight: 9 },
+    { key: 'canManageOC2', label: '🎯 OC 2.0 Management', weight: 7 },
+    { key: 'canAccessFactionApi', label: '🔑 Faction API', weight: 6 },
+    { key: 'canRetrieveLoanedArmory', label: '🛡️ Armory Retrieval', weight: 6 },
+    { key: 'canManageForum', label: '💬 Forum Management', weight: 5 },
+    { key: 'canSendNewsletter', label: '📬 Newsletters', weight: 4 },
+    { key: 'canChangeAnnouncement', label: '📢 Announcements', weight: 5 },
+    { key: 'canChangeDescription', label: '📝 Faction Description', weight: 5 },
+    // Refills & Armory Loans
+    { key: 'canUseEnergyRefill', label: '⚡ Energy Refills', weight: 4 },
+    { key: 'canUseNerveRefill', label: '🔥 Nerve Refills', weight: 4 },
+    { key: 'canLoanDragItem', label: '💊 Drug Loans', weight: 4 }, // Torn API v1 typo: canLoanDragItem
+    { key: 'canLoanBoosterItem', label: '💉 Booster Loans', weight: 3 },
+    { key: 'canLoanMedicalItem', label: '🩹 Med Loans', weight: 3 },
+    { key: 'canLoanConsumableItem', label: '🍬 Consumable Loans', weight: 2 },
+    { key: 'canLoanUtilityItem', label: '🔧 Utility Loans', weight: 2 },
+    // Basic Member Usage
+    { key: 'canUseDrugItem', label: '💊 Drug Usage', weight: 2 },
+    { key: 'canLoanTemporaryItem', label: '💣 Temp Loans', weight: 1 },
+    { key: 'canLoanWeaponAndArmory', label: '⚔️ Weapon/Armor Loans', weight: 1 },
+    { key: 'canUseMedicalItem', label: '🩹 Med Usage', weight: 1 },
+    { key: 'canUseBoosterItem', label: '💉 Booster Usage', weight: 1 },
+    { key: 'canUseConsumableItem', label: '🍬 Consumable Usage', weight: 1 }
+];
+
+/**
+ * Format key perks/powers of a Torn faction position concisely.
+ */
+function formatPositionPerks(posObj, maxItems = 6) {
+    if (!posObj || typeof posObj !== 'object') return 'Standard member permissions';
+
+    const enabled = PERMISSION_LABELS.filter(p => posObj[p.key] === 1 || posObj[p.key] === true);
+    if (enabled.length === 0) return 'No special armory or admin permissions';
+
+    // Combine Energy + Nerve refills cleanly when both are enabled
+    const labels = [];
+    const hasEnergy = posObj.canUseEnergyRefill === 1 || posObj.canUseEnergyRefill === true;
+    const hasNerve = posObj.canUseNerveRefill === 1 || posObj.canUseNerveRefill === true;
+    let combinedRefillAdded = false;
+
+    for (const p of enabled) {
+        if ((p.key === 'canUseEnergyRefill' || p.key === 'canUseNerveRefill') && hasEnergy && hasNerve) {
+            if (!combinedRefillAdded) {
+                labels.push('⚡ Energy/Nerve Refills');
+                combinedRefillAdded = true;
+            }
+            continue;
+        }
+        labels.push(p.label);
+    }
+
+    if (labels.length > maxItems) {
+        const shown = labels.slice(0, maxItems);
+        return `${shown.join(' • ')} *(+${labels.length - maxItems} more)*`;
+    }
+    return labels.join(' • ');
+}
+
+/**
+ * Compute newly unlocked (and lost, if any) permissions between currentRole and requestedRole.
+ */
+function getPositionPermissionDiff(positionsObj, currentRole, requestedRole) {
+    if (!positionsObj || typeof positionsObj !== 'object') {
+        return { gained: [], lost: [] };
+    }
+    const currKey = Object.keys(positionsObj).find(k => k.toLowerCase() === (currentRole || '').toLowerCase());
+    const reqKey = Object.keys(positionsObj).find(k => k.toLowerCase() === (requestedRole || '').toLowerCase());
+    const currPos = currKey ? (positionsObj[currKey] || {}) : {};
+    const reqPos = reqKey ? (positionsObj[reqKey] || {}) : {};
+
+    const gained = [];
+    const lost = [];
+    for (const p of PERMISSION_LABELS) {
+        const had = currPos[p.key] === 1 || currPos[p.key] === true;
+        const has = reqPos[p.key] === 1 || reqPos[p.key] === true;
+        if (!had && has) gained.push(p.label);
+        if (had && !has) lost.push(p.label);
+    }
+    return { gained, lost };
+}
+
+/**
+ * Format newly unlocked permissions into a single scannable string.
+ */
+function formatNewPerksUnlocked(positionsObj, currentRole, requestedRole, maxItems = 6) {
+    const { gained, lost } = getPositionPermissionDiff(positionsObj, currentRole, requestedRole);
+    const parts = [];
+    if (gained.length > 0) {
+        const shown = gained.slice(0, maxItems).map(l => `+${l}`).join(' • ');
+        parts.push(gained.length > maxItems ? `${shown} (+${gained.length - maxItems} more)` : shown);
+    }
+    if (lost.length > 0) {
+        const shownLost = lost.slice(0, 3).map(l => `-${l}`).join(' • ');
+        parts.push(lost.length > 3 ? `⚠️ Lost: ${shownLost} (+${lost.length - 3} more)` : `⚠️ Lost: ${shownLost}`);
+    }
+    if (parts.length === 0) return 'Same permission set (title/tier change only)';
+    return parts.join('\n');
+}
+
+/**
+ * Fetch live faction positions & members from Torn API (cached per faction for 5 min).
+ * Automatically cross-checks Torn API v2 /positions to drop phantom legacy roles (e.g. unused "Recruit").
  */
 async function getFactionData(apiKey, facId = null, forceRefresh = false) {
+    const cacheKey = String(facId || 'default');
     const now = Date.now();
-    if (!forceRefresh && cachedFactionData && (now - cachedFactionTimestamp < CACHE_TTL_MS)) {
-        return cachedFactionData;
+    const existingCache = factionDataCache.get(cacheKey);
+    if (!forceRefresh && existingCache && (now - existingCache.ts < CACHE_TTL_MS)) {
+        return existingCache.data;
     }
 
     if (!apiKey) {
-        return cachedFactionData || { name: 'Faction', id: facId, positions: {}, members: {} };
+        return existingCache?.data || { name: 'Faction', id: facId, positions: {}, members: {} };
     }
 
     try {
-        const url = facId
+        const v1Url = facId
             ? `https://api.torn.com/faction/${facId}?selections=basic,positions&key=${apiKey}`
             : `https://api.torn.com/faction/?selections=basic,positions&key=${apiKey}`;
-        const res = await fetch(url, {
-            signal: AbortSignal.timeout(8000)
-        });
-        const data = await res.json();
+        const v2Url = facId
+            ? `https://api.torn.com/v2/faction/${facId}/positions?key=${apiKey}`
+            : `https://api.torn.com/v2/faction/positions?key=${apiKey}`;
+
+        const [v1Res, v2Res] = await Promise.allSettled([
+            fetch(v1Url, { signal: AbortSignal.timeout(8000) }).then(r => r.json()),
+            fetch(v2Url, { signal: AbortSignal.timeout(6000) }).then(r => r.json()).catch(() => null)
+        ]);
+
+        const data = v1Res.status === 'fulfilled' ? v1Res.value : null;
+        const v2Data = v2Res.status === 'fulfilled' ? v2Res.value : null;
+
         if (data && !data.error && data.positions) {
-            cachedFactionData = {
+            const members = data.members || {};
+            const v2Names = Array.isArray(v2Data?.positions)
+                ? new Set(v2Data.positions.map(p => String(p.name || '').toLowerCase()))
+                : null;
+
+            // Keep only real, active positions (drop phantom unused v1-only roles like empty "Recruit")
+            const cleanPositions = {};
+            for (const [roleName, posObj] of Object.entries(data.positions)) {
+                const lower = roleName.toLowerCase();
+                const inV2 = v2Names ? v2Names.has(lower) : true;
+                const isPhantom = isPhantomUnusedRole(roleName, posObj, data.positions, members);
+
+                if (!inV2 && !isRestrictedPromotionRole(roleName) && countEnabledPermissions(posObj) === 0) {
+                    const heldByMember = Object.values(members).some(m => (m?.position || '').toLowerCase() === lower);
+                    if (!heldByMember) continue;
+                }
+                if (isPhantom) continue;
+
+                cleanPositions[roleName] = posObj;
+            }
+
+            const facRecord = {
                 name: data.name || 'Faction',
                 id: data.ID || facId,
-                positions: data.positions || {},
-                members: data.members || {}
+                positions: cleanPositions,
+                members
             };
-            cachedFactionTimestamp = now;
-            return cachedFactionData;
+            factionDataCache.set(cacheKey, { data: facRecord, ts: now });
+            if (facRecord.id && String(facRecord.id) !== cacheKey) {
+                factionDataCache.set(String(facRecord.id), { data: facRecord, ts: now });
+            }
+            return facRecord;
         }
     } catch(err) {
         console.warn('[Promotions] Error fetching faction data from Torn API:', err.message);
     }
 
-    return cachedFactionData || { name: 'Faction', id: facId, positions: {}, members: {} };
+    return existingCache?.data || { name: 'Faction', id: facId, positions: {}, members: {} };
 }
 
 /**
- * Get all requestable roles (excluding Leader and Co-leader).
+ * Compute power score tiebreaker for sorting positions of equal permission count.
  */
-function getRequestableFactionRoles(positionsObj) {
-    if (!positionsObj || typeof positionsObj !== 'object') return [];
-    return Object.keys(positionsObj).filter(roleName => !isRestrictedPromotionRole(roleName));
+function getPositionPowerScore(posObj) {
+    if (!posObj || typeof posObj !== 'object') return 0;
+    let score = 0;
+    for (const p of PERMISSION_LABELS) {
+        if (posObj[p.key] === 1 || posObj[p.key] === true) {
+            score += p.weight;
+        }
+    }
+    return score;
 }
 
 /**
- * Sort faction roles into an ordered progression hierarchy:
- * 1. Default role (default: 1) is entry base rank (Rank 1).
- * 2. Roles with fewer permissions come before roles with higher permissions.
- * 3. Ties preserve faction API order.
+ * Sort faction roles into an ordered progression hierarchy (Rank 1 -> Rank N):
+ * 1. Excludes Leader / Co-leader and phantom unused roles (e.g. empty Recruit).
+ * 2. Default role (default: 1) is entry base rank (Rank 1).
+ * 3. Roles with fewer permissions come before roles with higher permissions.
+ * 4. Ties break by power weight, then faction API order.
  */
-function getRoleHierarchy(positionsObj) {
+function getRoleHierarchy(positionsObj, membersObj = null) {
     if (!positionsObj || typeof positionsObj !== 'object') return [];
-    const roles = getRequestableFactionRoles(positionsObj);
+    const rawKeys = Object.keys(positionsObj);
+    const activeRoles = rawKeys.filter(roleName =>
+        !isRestrictedPromotionRole(roleName) &&
+        !isPhantomUnusedRole(roleName, positionsObj[roleName], positionsObj, membersObj)
+    );
 
-    return [...roles].sort((a, b) => {
+    return [...activeRoles].sort((a, b) => {
         const posA = positionsObj[a] || {};
         const posB = positionsObj[b] || {};
 
@@ -233,25 +410,61 @@ function getRoleHierarchy(positionsObj) {
         if (isDefA && !isDefB) return -1;
         if (!isDefA && isDefB) return 1;
 
-        const countA = Object.keys(posA).filter(k => k !== 'title' && k !== 'default' && (posA[k] === 1 || posA[k] === true)).length;
-        const countB = Object.keys(posB).filter(k => k !== 'title' && k !== 'default' && (posB[k] === 1 || posB[k] === true)).length;
-
+        const countA = countEnabledPermissions(posA);
+        const countB = countEnabledPermissions(posB);
         if (countA !== countB) return countA - countB;
-        const keys = Object.keys(positionsObj);
-        return keys.indexOf(a) - keys.indexOf(b);
+
+        const powerA = getPositionPowerScore(posA);
+        const powerB = getPositionPowerScore(posB);
+        if (powerA !== powerB) return powerA - powerB;
+
+        return rawKeys.indexOf(a) - rawKeys.indexOf(b);
     });
+}
+
+/**
+ * Get all requestable roles sorted in true progression order (Rank 1 -> Rank N),
+ * excluding Leader, Co-leader, and unused phantom roles.
+ */
+function getRequestableFactionRoles(positionsObj, membersObj = null) {
+    return getRoleHierarchy(positionsObj, membersObj);
+}
+
+/**
+ * Get a role's 1-based rank index within the active hierarchy.
+ */
+function getRoleRankInfo(positionsObj, roleName, membersObj = null) {
+    const hierarchy = getRoleHierarchy(positionsObj, membersObj);
+    const idx = hierarchy.findIndex(r => r.toLowerCase() === (roleName || '').toLowerCase());
+    return {
+        rank: idx !== -1 ? idx + 1 : null,
+        totalRanks: hierarchy.length,
+        hierarchy
+    };
 }
 
 /**
  * Calculate how many ranks up/down a requested promotion moves the user.
  */
-function calculateRankMovement(positionsObj, currentRole, requestedRole) {
-    const hierarchy = getRoleHierarchy(positionsObj);
+function calculateRankMovement(positionsObj, currentRole, requestedRole, membersObj = null) {
+    const hierarchy = getRoleHierarchy(positionsObj, membersObj);
     const currIdx = hierarchy.findIndex(r => r.toLowerCase() === (currentRole || '').toLowerCase());
     const targetIdx = hierarchy.findIndex(r => r.toLowerCase() === (requestedRole || '').toLowerCase());
 
-    const currRank = currIdx !== -1 ? currIdx + 1 : 1;
-    const targetRank = targetIdx !== -1 ? targetIdx + 1 : currRank;
+    if (targetIdx === -1) {
+        return `⭐ **Role Change** *(${currentRole || 'Current'} ➔ ${requestedRole})*`;
+    }
+
+    if (currIdx === -1) {
+        // Handle Leader/Co-leader or unlisted current role cleanly without fabricating Rank 1
+        if (isRestrictedPromotionRole(currentRole)) {
+            return `⬇️ **Step Down from Leadership** *(${currentRole} ➔ Rank ${targetIdx + 1})*`;
+        }
+        return `🎯 **Target: Rank ${targetIdx + 1}** *(${currentRole || 'Unlisted'} ➔ ${requestedRole})*`;
+    }
+
+    const currRank = currIdx + 1;
+    const targetRank = targetIdx + 1;
     const delta = targetRank - currRank;
 
     if (delta > 0) {
@@ -259,39 +472,102 @@ function calculateRankMovement(positionsObj, currentRole, requestedRole) {
     } else if (delta === 0) {
         return `➡️ **Lateral Move** *(Same tier: Rank ${currRank})*`;
     } else {
-        return `⬇️ **${delta} Rank${Math.abs(delta) === 1 ? '' : 's'}** *(Rank ${currRank} ➔ Rank ${targetRank})*`;
+        const down = Math.abs(delta);
+        return `⬇️ **${down} Rank${down === 1 ? '' : 's'} Down** *(Rank ${currRank} ➔ Rank ${targetRank})*`;
     }
 }
 
 /**
- * Build the interactive Promotion Overview embed listing all actual faction roles.
+ * Get past promotion request summary for a Torn player.
  */
-function buildPromotionMenuEmbed({ memberName, memberId, currentRole, daysInFaction, facName, positions }) {
-    const requestableRoles = getRequestableFactionRoles(positions);
+function getPlayerRequestHistory(playerId) {
+    const numId = Number(playerId);
+    if (!numId) return [];
+    return Array.from(promotionsStore.values())
+        .filter(r => Number(r.playerId) === numId)
+        .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+}
 
-    let fields = requestableRoles.slice(0, 25).map(role => {
-        const perks = formatPositionPerks(positions[role]);
+function formatPastHistorySummary(playerId) {
+    const history = getPlayerRequestHistory(playerId).filter(r => r.status !== 'deleted');
+    if (history.length === 0) return 'First request on record';
+    const approved = history.filter(r => r.status === 'approved').length;
+    const denied = history.filter(r => r.status === 'denied').length;
+    const cancelled = history.filter(r => r.status === 'cancelled').length;
+    const latest = history[0];
+    const parts = [];
+    if (approved) parts.push(`${approved} approved`);
+    if (denied) parts.push(`${denied} denied`);
+    if (cancelled) parts.push(`${cancelled} cancelled`);
+    const summary = parts.length > 0 ? parts.join(', ') : `${history.length} previous`;
+    const lastTs = latest?.createdAt ? ` (last <t:${Math.floor(latest.createdAt / 1000)}:R>)` : '';
+    return `${summary}${lastTs}`;
+}
+
+/**
+ * Build the interactive Promotion Overview embed listing all active faction roles in rank order.
+ */
+function buildPromotionMenuEmbed({ memberName, memberId, currentRole, daysInFaction, facName, positions, members = null }) {
+    const hierarchy = getRoleHierarchy(positions, members);
+    const currIdx = hierarchy.findIndex(r => r.toLowerCase() === (currentRole || '').toLowerCase());
+    const currRankText = currIdx !== -1 ? ` (Rank ${currIdx + 1}/${hierarchy.length})` : '';
+
+    // Count members currently in each position if member roster is provided
+    const roleCounts = {};
+    if (members && typeof members === 'object') {
+        for (const m of Object.values(members)) {
+            if (m && m.position) {
+                const key = m.position.toLowerCase();
+                roleCounts[key] = (roleCounts[key] || 0) + 1;
+            }
+        }
+    }
+
+    let fields = hierarchy.slice(0, 25).map((role, idx) => {
+        const rankNum = idx + 1;
         const isCurrent = (role.toLowerCase() === (currentRole || '').toLowerCase());
+        const perks = formatPositionPerks(positions[role], 5);
+        const count = roleCounts[role.toLowerCase()];
+        const countBadge = (typeof count === 'number') ? ` · ${count} member${count === 1 ? '' : 's'}` : '';
+
+        let stepTag = '';
+        if (!isCurrent && currIdx !== -1) {
+            const delta = idx - currIdx;
+            if (delta > 0) stepTag = ` (+${delta} Rank${delta === 1 ? '' : 's'})`;
+            else if (delta < 0) stepTag = ` (${delta} Rank${Math.abs(delta) === 1 ? '' : 's'})`;
+        }
+
+        let valueLines = [`• **Perks:** ${perks}`];
+        if (!isCurrent && currIdx !== -1 && idx > currIdx) {
+            const { gained } = getPositionPermissionDiff(positions, currentRole, role);
+            if (gained.length > 0) {
+                const shown = gained.slice(0, 4).map(l => `+${l}`).join(' • ');
+                valueLines.push(`• **Unlocks:** ${shown}${gained.length > 4 ? ` *(+${gained.length - 4} more)*` : ''}`);
+            }
+        }
+
         return {
-            name: `${isCurrent ? '📌' : '⭐'} ${role}${isCurrent ? ' *(Your Current Role)*' : ''}`.slice(0, 250),
-            value: `• ${perks}`.slice(0, 1020),
+            name: `${isCurrent ? '📌' : '⭐'} Rank ${rankNum}: ${role}${isCurrent ? ' *(Current Role)*' : stepTag}${countBadge}`.slice(0, 250),
+            value: valueLines.join('\n').slice(0, 1020),
             inline: false
         };
     });
 
     if (fields.length === 0) {
         fields = [{
-            name: 'No Additional Roles Available',
+            name: 'No Promotional Roles Available',
             value: 'All current faction positions are leadership roles or no promotional roles are currently defined.',
             inline: false
         }];
     }
 
+    const historyLine = memberId ? `\n📜 **Your Request History:** ${formatPastHistorySummary(memberId)}` : '';
+
     return {
         title: `🎖️ ${facName} — Faction Promotion Request`,
-        description: `Hey **${memberName}**! You are currently assigned as **${currentRole || 'Member'}** in **${facName}**${daysInFaction ? ` (${daysInFaction} days in faction)` : ''}.\n\n` +
-                     `Below are the **official faction roles** currently active in our faction. You can select a role from the dropdown below to apply for a promotion, and faction leadership will review your application.\n\n` +
-                     `👑 **Note:** *Leader and Co-leader positions cannot be requested.*`,
+        description: `Hey **${memberName}**! You are currently assigned as **${currentRole || 'Member'}**${currRankText} in **${facName}**${daysInFaction ? ` (${daysInFaction} days in faction)` : ''}.${historyLine}\n\n` +
+                     `Below are our **${hierarchy.length} faction ranks** ordered from entry tier up to senior non-command positions. Pick a role from the dropdown below to submit your application!\n\n` +
+                     `👑 **Note:** *Leader and Co-leader positions are appointed directly and cannot be requested.*`,
         color: UI.COLORS.BRAND,
         fields,
         footer: UI.FOOTER,
@@ -300,45 +576,72 @@ function buildPromotionMenuEmbed({ memberName, memberId, currentRole, daysInFact
 }
 
 /**
- * Build the StringSelectMenu listing requestable roles.
+ * Build the StringSelectMenu listing requestable roles in rank order (excluding currentRole).
  */
-function buildPromotionSelectMenu(positions, currentRole) {
-    const requestableRoles = getRequestableFactionRoles(positions);
+function buildPromotionSelectMenu(positions, currentRole, members = null) {
+    const hierarchy = getRoleHierarchy(positions, members);
+    const currIdx = hierarchy.findIndex(r => r.toLowerCase() === (currentRole || '').toLowerCase());
 
-    const options = requestableRoles.map(role => {
-        const posObj = positions[role];
-        const rawPerks = formatPositionPerks(posObj).replace(/[•*]/g, '');
+    const options = [];
+    for (let idx = 0; idx < hierarchy.length; idx++) {
+        const role = hierarchy[idx];
         const isCurrent = (role.toLowerCase() === (currentRole || '').toLowerCase());
-        let desc = (isCurrent ? 'Current Role: ' : 'Perks: ') + rawPerks;
-        let cleanDesc = desc ? desc.replace(/\s+/g, ' ').trim() : 'Official faction role';
-        if (!cleanDesc) cleanDesc = 'Official faction role';
-        if (cleanDesc.length > 95) cleanDesc = cleanDesc.slice(0, 92) + '...';
+        if (isCurrent) continue;
 
-        return new StringSelectMenuOptionBuilder()
-            .setLabel(role.slice(0, 100))
-            .setValue(role)
-            .setDescription(cleanDesc)
-            .setEmoji(isCurrent ? '📌' : '⭐');
-    });
+        const rankNum = idx + 1;
+        const delta = currIdx !== -1 ? idx - currIdx : null;
+        const deltaLabel = delta === null ? '' : (delta > 0 ? ` (+${delta} Rank${delta === 1 ? '' : 's'})` : ` (${delta} Rank${Math.abs(delta) === 1 ? '' : 's'})`);
+        const label = `Rank ${rankNum}: ${role}${deltaLabel}`.slice(0, 100);
+
+        let descText;
+        if (currIdx !== -1 && idx > currIdx) {
+            const { gained } = getPositionPermissionDiff(positions, currentRole, role);
+            descText = gained.length > 0
+                ? 'Unlocks: ' + gained.map(l => l.replace(/[^\x20-\x7E]/g, '').trim()).filter(Boolean).join(', ')
+                : 'Higher tier role (same permissions)';
+        } else {
+            const rawPerks = formatPositionPerks(positions[role], 4).replace(/[•*]/g, '').replace(/[^\x20-\x7E]/g, '').replace(/\s+/g, ' ').trim();
+            descText = rawPerks ? `Perks: ${rawPerks}` : 'Official faction role';
+        }
+        if (!descText) descText = 'Official faction role';
+        if (descText.length > 95) descText = descText.slice(0, 92) + '...';
+
+        options.push(
+            new StringSelectMenuOptionBuilder()
+                .setLabel(label)
+                .setValue(role)
+                .setDescription(descText)
+                .setEmoji(delta !== null && delta > 0 ? '⬆️' : '⭐')
+        );
+    }
 
     if (options.length === 0) return null;
 
     const selectMenu = new StringSelectMenuBuilder()
         .setCustomId('select_promotion_role')
-        .setPlaceholder('Select an official faction role to request...')
+        .setPlaceholder('Select the faction role you want to apply for...')
         .addOptions(options.slice(0, 25));
 
     return new ActionRowBuilder().addComponents(selectMenu);
 }
 
 /**
- * Build the modal for submitting the promotion pitch.
+ * Safely encode/resolve selected role in modal customId without hitting Discord's 100-char limit.
  */
 function buildPromotionModal(selectedRole) {
-    const cleanRole = String(selectedRole || '').slice(0, 40);
+    const fullRole = String(selectedRole || '').trim();
+    const encoded = encodeURIComponent(fullRole);
+    let customId = `modal_promo_${encoded}`;
+    if (customId.length > 95) {
+        modalTokenCounter = (modalTokenCounter + 1) % 1000000;
+        const tok = `tok_${Date.now().toString(36)}_${modalTokenCounter}`;
+        modalRoleTokens.set(tok, fullRole);
+        customId = `modal_promo_${tok}`;
+    }
+
     const modal = new ModalBuilder()
-        .setCustomId(`modal_promo_${encodeURIComponent(cleanRole)}`)
-        .setTitle(`Promotion: ${cleanRole}`.slice(0, 45));
+        .setCustomId(customId)
+        .setTitle(`Promotion: ${fullRole}`.slice(0, 45));
 
     const reasonInput = new TextInputBuilder()
         .setCustomId('promo_reason')
@@ -352,14 +655,50 @@ function buildPromotionModal(selectedRole) {
     return modal;
 }
 
+function resolveModalRole(customId) {
+    const raw = String(customId || '').replace('modal_promo_', '');
+    if (raw.startsWith('tok_') && modalRoleTokens.has(raw)) {
+        const resolved = modalRoleTokens.get(raw);
+        modalRoleTokens.delete(raw);
+        return resolved;
+    }
+    try {
+        return decodeURIComponent(raw);
+    } catch (_) {
+        return raw;
+    }
+}
+
+/**
+ * Build modal for leadership Deny-with-Reason feedback.
+ */
+function buildDenyReasonModal(reqId) {
+    const modal = new ModalBuilder()
+        .setCustomId(`modal_promo_deny_${reqId}`)
+        .setTitle('Deny Promotion Request');
+
+    const reasonInput = new TextInputBuilder()
+        .setCustomId('deny_reason')
+        .setLabel('Reason / feedback for the applicant')
+        .setStyle(TextInputStyle.Paragraph)
+        .setPlaceholder('e.g., Need more war hits, donator status required, spend a bit more time at current rank...')
+        .setRequired(true)
+        .setMaxLength(500);
+
+    modal.addComponents(new ActionRowBuilder().addComponents(reasonInput));
+    return modal;
+}
+
 /**
  * Build the notification embed posted in the leadership channel.
  */
 function buildLeadershipNotificationEmbed(promoReq, positions, facName) {
     const posObj = (positions && positions[promoReq.requestedRole]) || null;
-    const perks = formatPositionPerks(posObj);
+    const perks = formatPositionPerks(posObj, 8);
+    const unlockedPerks = formatNewPerksUnlocked(positions, promoReq.currentRole, promoReq.requestedRole, 6);
     const tenure = promoReq.daysInFaction ? `**${promoReq.daysInFaction}d** in faction` : 'New member';
     const levelStr = promoReq.level ? `**Level ${promoReq.level}**` : 'Level ?';
+    const lastActionStr = promoReq.lastAction ? ` · Active ${promoReq.lastAction}` : '';
 
     const fields = [
         {
@@ -369,7 +708,7 @@ function buildLeadershipNotificationEmbed(promoReq, positions, facName) {
         },
         {
             name: "🎖️ Level & Tenure",
-            value: `${levelStr} · ${tenure}`,
+            value: `${levelStr} · ${tenure}${lastActionStr}`,
             inline: true
         },
         {
@@ -388,12 +727,22 @@ function buildLeadershipNotificationEmbed(promoReq, positions, facName) {
             inline: true
         },
         {
+            name: "📜 Prior Promo History",
+            value: promoReq.pastHistorySummary || 'First request on record',
+            inline: true
+        },
+        {
             name: "💪 Battle Stats Progression",
             value: promoReq.statsProgression || '📊 _Unrecorded_',
             inline: false
         },
         {
-            name: "⚡ Role Permissions",
+            name: "🆕 New Perks Unlocked",
+            value: unlockedPerks,
+            inline: false
+        },
+        {
+            name: "⚡ Full Target Role Permissions",
             value: perks,
             inline: false
         },
@@ -416,7 +765,7 @@ function buildLeadershipNotificationEmbed(promoReq, positions, facName) {
 
     const embed = {
         title: `🎖️ New Promotion Request: ${promoReq.playerName} [${promoReq.playerId}]`,
-        description: `A faction member has requested a promotion to **${promoReq.requestedRole}** in **${facName || 'the faction'}**. Leadership can approve or deny below:`,
+        description: `A faction member has requested a promotion from **${promoReq.currentRole}** to **${promoReq.requestedRole}** in **${facName || 'the faction'}**. Leadership can review below:`,
         color: UI.COLORS.BRAND,
         fields,
         footer: UI.FOOTER,
@@ -435,6 +784,11 @@ function buildLeadershipNotificationEmbed(promoReq, positions, facName) {
             .setStyle(ButtonStyle.Danger)
             .setEmoji('❌'),
         new ButtonBuilder()
+            .setCustomId(`btn_promo_denynote_${promoReq.id}`)
+            .setLabel('Deny w/ Reason')
+            .setStyle(ButtonStyle.Secondary)
+            .setEmoji('📝'),
+        new ButtonBuilder()
             .setLabel('Torn Faction Controls')
             .setStyle(ButtonStyle.Link)
             .setURL('https://www.torn.com/factions.php?step=your#/tab=controls')
@@ -450,7 +804,7 @@ function buildLeadershipNotificationEmbed(promoReq, positions, facName) {
 function buildReviewedNotificationEmbed(promoReq, decision, reviewerName, reviewerId, positions, facName) {
     const isApproved = (decision === 'approved');
     const posObj = (positions && positions[promoReq.requestedRole]) || null;
-    const perks = formatPositionPerks(posObj);
+    const perks = formatPositionPerks(posObj, 8);
     const tenure = promoReq.daysInFaction ? `**${promoReq.daysInFaction}d** in faction` : 'New member';
     const levelStr = promoReq.level ? `**Level ${promoReq.level}**` : 'Level ?';
 
@@ -500,7 +854,8 @@ function buildReviewedNotificationEmbed(promoReq, decision, reviewerName, review
             value: isApproved 
                 ? `✅ **Approved** by <@${reviewerId}> (${reviewerName})\n` +
                   `🔗 **Action Required:** Update position in [Torn Faction Controls](https://www.torn.com/factions.php?step=your#/tab=controls)`
-                : `❌ **Denied** by <@${reviewerId}> (${reviewerName})`,
+                : `❌ **Denied** by <@${reviewerId}> (${reviewerName})` +
+                  (promoReq.reviewReason ? `\n💬 **Reason:** _${promoReq.reviewReason}_` : ''),
             inline: false
         }
     ];
@@ -539,11 +894,20 @@ async function verifyPromotionMessageExists(record, bot, discordConfig = null) {
     // Case 1: Specific messageId and channelId are tracked
     if (record.channelId && record.messageId) {
         try {
-            const chan = bot.channels.cache.get(record.channelId) || await bot.channels.fetch(record.channelId).catch(() => null);
+            let chan = bot.channels.cache.get(record.channelId);
+            if (!chan) {
+                chan = await bot.channels.fetch(record.channelId).catch(err => {
+                    if (err && (err.code === 10003 || err.code === 10008 || err.status === 404)) return null;
+                    return undefined;
+                });
+            }
+            if (chan === null) {
+                return false; // Channel itself confirmed deleted
+            }
             if (chan && chan.isTextBased()) {
                 const msg = await chan.messages.fetch(record.messageId).catch(err => {
                     // Discord 10008 = Unknown Message (deleted in Discord), 404 = Not Found
-                    if (err.code === 10008 || err.status === 404) return null;
+                    if (err && (err.code === 10008 || err.status === 404)) return null;
                     return undefined;
                 });
                 if (msg === null) {
@@ -571,11 +935,12 @@ async function verifyPromotionMessageExists(record, bot, discordConfig = null) {
                             row.components?.some(btn => btn.customId && btn.customId.includes(record.id))
                         );
                         if (hasButton) return true;
-                        const hasEmbed = m.embeds?.some(e => 
-                            (e.title && e.title.includes(String(record.playerId))) ||
-                            (e.description && e.description.includes(String(record.playerId)))
+                        const hasPendingEmbed = m.embeds?.some(e =>
+                            e.title &&
+                            e.title.includes('New Promotion Request:') &&
+                            e.title.includes(String(record.playerId))
                         );
-                        return hasEmbed;
+                        return hasPendingEmbed;
                     });
 
                     if (matchingMsg) {
@@ -727,8 +1092,23 @@ async function deletePendingRequestsForPlayer(playerId, reason = 'Manually clear
 /**
  * Create and persist a new promotion request.
  */
-async function createPromotionRequest({ discordUserId, playerId, playerName, currentRole, requestedRole, reason, daysInFaction, guildId, level, rankAdvancement, statsProgression }) {
+async function createPromotionRequest({
+    discordUserId,
+    playerId,
+    playerName,
+    currentRole,
+    requestedRole,
+    reason,
+    daysInFaction,
+    guildId,
+    level,
+    rankAdvancement,
+    statsProgression,
+    lastAction = '',
+    pastHistorySummary = ''
+}) {
     const id = `promo_${Date.now()}_${playerId}`;
+    const resolvedHistory = pastHistorySummary || formatPastHistorySummary(playerId);
     const record = {
         id,
         discordUserId: String(discordUserId),
@@ -738,6 +1118,8 @@ async function createPromotionRequest({ discordUserId, playerId, playerName, cur
         requestedRole: String(requestedRole),
         daysInFaction: Number(daysInFaction) || 0,
         level: Number(level) || 0,
+        lastAction: String(lastAction || ''),
+        pastHistorySummary: String(resolvedHistory || 'First request on record'),
         rankAdvancement: String(rankAdvancement || ''),
         statsProgression: String(statsProgression || ''),
         reason: String(reason || '').trim(),
@@ -786,7 +1168,9 @@ async function dispatchPromotionToLeadership(bot, guild, promoReq, discordConfig
     if (!targetChanId) return false;
 
     try {
-        const chan = guild ? (guild.channels.cache.get(targetChanId) || await guild.channels.fetch(targetChanId).catch(() => null)) : (await bot.channels.fetch(targetChanId).catch(() => null));
+        const chan = guild
+            ? (guild.channels.cache.get(targetChanId) || await guild.channels.fetch(targetChanId).catch(() => null))
+            : (await bot.channels.fetch(targetChanId).catch(() => null));
         if (chan && chan.isTextBased()) {
             const { embed, actionRow } = buildLeadershipNotificationEmbed(promoReq, facData.positions, facData.name);
             const ping = discordConfig.leaderRoleId ? `<@&${discordConfig.leaderRoleId}>` : '';
@@ -810,13 +1194,22 @@ module.exports = {
     initPromotionManager,
     getFactionData,
     isRestrictedPromotionRole,
+    isPhantomUnusedRole,
+    countEnabledPermissions,
     formatPositionPerks,
+    getPositionPermissionDiff,
+    formatNewPerksUnlocked,
     getRequestableFactionRoles,
     getRoleHierarchy,
+    getRoleRankInfo,
     calculateRankMovement,
+    getPlayerRequestHistory,
+    formatPastHistorySummary,
     buildPromotionMenuEmbed,
     buildPromotionSelectMenu,
     buildPromotionModal,
+    resolveModalRole,
+    buildDenyReasonModal,
     buildLeadershipNotificationEmbed,
     buildReviewedNotificationEmbed,
     getPendingRequestForPlayer,
