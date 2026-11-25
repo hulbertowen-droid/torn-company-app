@@ -41,6 +41,8 @@ const TRIGGER_LABELS = Object.freeze({
     inactive_oc_dm: 'OC Inactivity Reminder',
     missing_item_dm: 'Missing Role Item',
     ready_blocker_dm: 'Ready OC Blocker',
+    countdown_4h_dm: 'OC 4-Hour Countdown',
+    countdown_2h_dm: 'OC 2-Hour Countdown',
     manual_items_dm: 'Manual Manager DM (/oc-items)',
     manual_lowcpr_dm: 'Manual Manager DM (/oc-lowcpr)',
     manual_bench_dm: 'Manual Manager DM (/oc-bench)',
@@ -56,8 +58,15 @@ function getDefaultOcDmConfig(existingOcConfig = {}) {
         ? { ...existingOcConfig.lowCprLevels }
         : { 1: 0, 2: 0, 3: 50, 4: 50, 5: 40, 6: 40, 7: 80, 8: 85 };
 
+    const lowCprMode = existingOcConfig.alertLowCpr === false
+        ? 'off'
+        : (existingOcConfig.dmPlayerOnLowCpr === false ? 'channel_only' : 'both');
+    const inactiveMode = existingOcConfig.alertNoParticipation === false ? 'off' : 'both';
+    const missingItemMode = existingOcConfig.alertMissingItems === false ? 'off' : 'both';
+    const readyBlockerMode = existingOcConfig.alertDelayed === false ? 'off' : 'both';
+
     return {
-        enabled: false,
+        enabled: true,
         fallbackChannelPingOnClosedDms: true,
         receiptsEnabled: true,
         receiptChannelId: '',
@@ -73,7 +82,7 @@ function getDefaultOcDmConfig(existingOcConfig = {}) {
         },
         triggers: {
             low_cpr_dm: {
-                mode: 'off',
+                mode: lowCprMode,
                 globalMinCpr: defaultMin,
                 tierFloors: defaultLevels,
                 graceHours: 6,
@@ -82,7 +91,7 @@ function getDefaultOcDmConfig(existingOcConfig = {}) {
                 template: DEFAULT_TEMPLATES.low_cpr_dm
             },
             inactive_oc_dm: {
-                mode: 'off',
+                mode: inactiveMode,
                 idleHours: Math.max(1, Math.round((Number(existingOcConfig.noParticipationDays) || 1) * 24)),
                 cooldownHours: 48,
                 offlineExemptDays: 7,
@@ -93,13 +102,13 @@ function getDefaultOcDmConfig(existingOcConfig = {}) {
                 template: DEFAULT_TEMPLATES.inactive_oc_dm
             },
             missing_item_dm: {
-                mode: 'off',
+                mode: missingItemMode,
                 hoursBeforeExecution: 24,
                 cooldownHours: 24,
                 template: DEFAULT_TEMPLATES.missing_item_dm
             },
             ready_blocker_dm: {
-                mode: 'off',
+                mode: readyBlockerMode,
                 withinMinutesBeforeReady: 60,
                 cooldownHours: 4,
                 template: DEFAULT_TEMPLATES.ready_blocker_dm
@@ -204,6 +213,20 @@ function mergeOcDmConfig(rawOcConfig = {}, incoming = null) {
     const blk = merged.triggers.ready_blocker_dm;
     blk.withinMinutesBeforeReady = Math.max(0, Math.min(1440, blk.withinMinutesBeforeReady !== undefined ? Number(blk.withinMinutesBeforeReady) : 60));
     blk.cooldownHours = Math.max(0.5, Math.min(168, Number(blk.cooldownHours) || 4));
+
+    if (!incoming) {
+        if (rawOcConfig.alertMissingItems !== false && miss.mode === 'off') {
+            miss.mode = 'both';
+        }
+        if (rawOcConfig.alertDelayed !== false && blk.mode === 'off') {
+            blk.mode = 'both';
+        }
+    }
+
+    const anyTriggerEnabled = Object.values(merged.triggers).some(t => t && t.mode && t.mode !== 'off');
+    if (anyTriggerEnabled && !(incoming && incoming.enabled === false && incoming._explicitMasterOff === true)) {
+        merged.enabled = true;
+    }
 
     return merged;
 }
@@ -679,7 +702,8 @@ function createOcDmEngine(injectedDeps = {}) {
     async function postReceiptEmbed(receipt) {
         const ocDm = getConfig();
         const dCfg = deps.getDiscordConfig() || {};
-        if (!ocDm.receiptsEnabled || !ocDm.receiptChannelId || !dCfg.globalBotToken) return null;
+        const receiptChannelId = ocDm.receiptChannelId || dCfg.ocDmReceiptChannelId || '';
+        if (!ocDm.receiptsEnabled || !receiptChannelId || !dCfg.globalBotToken) return null;
 
         let borderColor = 0x10b981; // Emerald Delivered
         let titleText = '✅ DM Delivered';
@@ -739,7 +763,17 @@ function createOcDmEngine(injectedDeps = {}) {
             timestamp: new Date(receipt.timestamp || Date.now()).toISOString()
         };
 
-        return deps.sendChannelMessage(dCfg.globalBotToken, ocDm.receiptChannelId, receiptEmbed, '', true).catch(() => null);
+        return deps.sendChannelMessage(dCfg.globalBotToken, receiptChannelId, receiptEmbed, '', true)
+            .then(res => {
+                if (res && res.success === false) {
+                    console.warn('[OC-DM Engine] Failed to post receipt embed:', res.error || res);
+                }
+                return res;
+            })
+            .catch(err => {
+                console.warn('[OC-DM Engine] Receipt embed exception:', err?.message || err);
+                return null;
+            });
     }
 
     async function dispatchTrackedOcDm({
@@ -937,7 +971,9 @@ function createOcDmEngine(injectedDeps = {}) {
         activeOcMemberIds = new Set(),
         channelId = '',
         mention = '',
-        botToken = ''
+        botToken = '',
+        ocMemory = null,
+        notifyOcManagers = null
     }) {
         const ocDm = getConfig();
         const ocCfg = deps.getOcConfig() || {};
@@ -951,6 +987,7 @@ function createOcDmEngine(injectedDeps = {}) {
 
         // Reconcile active incidents so resolved issues auto-clear immediately
         let stateChanged = false;
+        let ocMemoryModified = false;
         const activeLowCprKeys = new Set();
         const activeMissingKeys = new Set();
         const activeBlockerKeys = new Set();
@@ -991,13 +1028,15 @@ function createOcDmEngine(injectedDeps = {}) {
             }
         }
 
-        if (!ocDm.enabled) {
+        const anyTriggerActive = Object.values(ocDm.triggers || {}).some(t => t && t.mode && t.mode !== 'off');
+        if (!ocDm.enabled && !anyTriggerActive) {
             if (stateChanged) saveState();
             return {
                 handledLowCpr: false,
                 handledMissingItems: false,
                 handledInactive: false,
-                handledReadyBlocker: false
+                handledReadyBlocker: false,
+                ocMemoryModified
             };
         }
 
@@ -1035,6 +1074,7 @@ function createOcDmEngine(injectedDeps = {}) {
                     const cpr = Number(slot.checkpoint_pass_rate);
                     if (cpr < minCpr) {
                         const incKey = `low_cpr_dm:${pId}:${v2Crime.id}`;
+                        const memKey = `lowcpr_${v2Crime.id}_${pId}`;
                         const existing = state.incidents[incKey];
                         const cooldownMs = lowCfg.cooldownHours * 3600000;
                         const graceMs = lowCfg.graceHours * 3600000;
@@ -1051,7 +1091,8 @@ function createOcDmEngine(injectedDeps = {}) {
                                 grace_hours: lowCfg.graceHours
                             });
 
-                            if ((lowCfg.mode === 'channel_only' || lowCfg.mode === 'both') && effectiveChannelId && botToken) {
+                            const alreadyChannelAlerted = Boolean(ocMemory && ocMemory[memKey]);
+                            if ((lowCfg.mode === 'channel_only' || lowCfg.mode === 'both') && effectiveChannelId && botToken && !alreadyChannelAlerted) {
                                 const resolved = await resolveMemberDiscord(pId, pName, { allowTornApiFallback: false });
                                 const pMention = resolved.discordId ? `<@${resolved.discordId}>` : '';
                                 const chMention = pMention ? (mention ? `${mention} ${pMention}` : pMention) : mention;
@@ -1061,6 +1102,24 @@ function createOcDmEngine(injectedDeps = {}) {
                                     color: 0xef4444,
                                     timestamp: new Date().toISOString()
                                 }, chMention).catch(() => {});
+                                if (ocMemory) {
+                                    ocMemory[memKey] = nowMs;
+                                    ocMemoryModified = true;
+                                }
+                                if (lowCfg.mode === 'channel_only') {
+                                    const chRec = recordReceipt({
+                                        tornId: pId,
+                                        playerName: pName,
+                                        discordId: resolved.discordId || null,
+                                        triggerType: 'low_cpr_dm',
+                                        triggerLabel: TRIGGER_LABELS.low_cpr_dm,
+                                        context: ctxStr,
+                                        status: 'CHANNEL_ONLY',
+                                        messagePreview: dmText,
+                                        nextEligibleAt: nowMs + cooldownMs
+                                    });
+                                    await postReceiptEmbed(chRec);
+                                }
                             }
 
                             if (lowCfg.mode === 'dm_only' || lowCfg.mode === 'both') {
@@ -1075,6 +1134,10 @@ function createOcDmEngine(injectedDeps = {}) {
                                     embedColor: 0xf59e0b,
                                     cooldownMs
                                 });
+                            }
+
+                            if (ocCfg.dmOcManagersOnLowCpr !== false && typeof notifyOcManagers === 'function' && !alreadyChannelAlerted) {
+                                await notifyOcManagers({ pId, pName, profileUrl, v2Crime, tier, roleLabel, cpr, minCpr }).catch(() => {});
                             }
 
                             state.incidents[incKey] = {
@@ -1141,15 +1204,13 @@ function createOcDmEngine(injectedDeps = {}) {
                 }
 
                 // ── Trigger C: Missing Required Role Item Reminder ──
-                if (handledMissingItems && slot.item_requirement && !slot.item_requirement.is_available) {
-                    const thresholdSec = missCfg.hoursBeforeExecution * 3600;
-                    const isWithinWindow = missCfg.hoursBeforeExecution <= 0
-                        || (timeLeftSec !== null && timeLeftSec <= thresholdSec)
-                        || (statusLower === 'recruiting' && (v2Crime.slots || []).filter(s => s.user).length >= Math.max(1, (v2Crime.slots || []).length - 1));
+                if (handledMissingItems && statusLower !== 'completed' && slot.item_requirement && !slot.item_requirement.is_available) {
+                    const isActiveStage = statusLower === 'planning' || statusLower === 'recruiting' || statusLower === 'ready' || (timeLeftSec !== null && timeLeftSec <= (missCfg.hoursBeforeExecution * 3600));
 
-                    if (isWithinWindow) {
+                    if (isActiveStage) {
                         const itemId = slot.item_requirement.id;
                         const incKey = `missing_item_dm:${pId}:${v2Crime.id}:${itemId}`;
+                        const memKey = `item_${v2Crime.id}_${pId}_${itemId}`;
                         const existing = state.incidents[incKey];
                         const cooldownMs = missCfg.cooldownHours * 3600000;
 
@@ -1169,7 +1230,8 @@ function createOcDmEngine(injectedDeps = {}) {
                             });
                             const ctxStr = `${v2Crime.name} (T${tier}) • Slot: ${roleLabel} • Needs: ${itemName}`;
 
-                            if ((missCfg.mode === 'channel_only' || missCfg.mode === 'both') && effectiveChannelId && botToken) {
+                            const alreadyChannelAlerted = Boolean(ocMemory && ocMemory[memKey] && (nowMs - ocMemory[memKey]) < cooldownMs);
+                            if ((missCfg.mode === 'channel_only' || missCfg.mode === 'both') && effectiveChannelId && botToken && !alreadyChannelAlerted) {
                                 const armoryUrl = `https://www.torn.com/factions.php?step=your&type=1&autoItem=${encodeURIComponent(itemName)}&autoUser=${encodeURIComponent(pName)}&autoUserId=${pId}&autoAction=loan#/tab=armoury&start=0&sub=utilities`;
                                 await deps.sendChannelMessage(botToken, effectiveChannelId, {
                                     title: `🛠️ Missing OC Item: ${itemName} (${v2Crime.name})`,
@@ -1177,6 +1239,23 @@ function createOcDmEngine(injectedDeps = {}) {
                                     color: 0xf59e0b,
                                     timestamp: new Date().toISOString()
                                 }, mention).catch(() => {});
+                                if (ocMemory) {
+                                    ocMemory[memKey] = nowMs;
+                                    ocMemoryModified = true;
+                                }
+                                if (missCfg.mode === 'channel_only') {
+                                    const chRec = recordReceipt({
+                                        tornId: pId,
+                                        playerName: pName,
+                                        triggerType: 'missing_item_dm',
+                                        triggerLabel: TRIGGER_LABELS.missing_item_dm,
+                                        context: ctxStr,
+                                        status: 'CHANNEL_ONLY',
+                                        messagePreview: dmText,
+                                        nextEligibleAt: nowMs + cooldownMs
+                                    });
+                                    await postReceiptEmbed(chRec);
+                                }
                             }
 
                             if (missCfg.mode === 'dm_only' || missCfg.mode === 'both') {
@@ -1237,6 +1316,19 @@ function createOcDmEngine(injectedDeps = {}) {
                                     color: 0xf59e0b,
                                     timestamp: new Date().toISOString()
                                 }, mention).catch(() => {});
+                                if (blkCfg.mode === 'channel_only') {
+                                    const chRec = recordReceipt({
+                                        tornId: pId,
+                                        playerName: pName,
+                                        triggerType: 'ready_blocker_dm',
+                                        triggerLabel: TRIGGER_LABELS.ready_blocker_dm,
+                                        context: ctxStr,
+                                        status: 'CHANNEL_ONLY',
+                                        messagePreview: dmText,
+                                        nextEligibleAt: nowMs + cooldownMs
+                                    });
+                                    await postReceiptEmbed(chRec);
+                                }
                             }
 
                             if (blkCfg.mode === 'dm_only' || blkCfg.mode === 'both') {
@@ -1308,6 +1400,7 @@ function createOcDmEngine(injectedDeps = {}) {
                 if (secSinceLastOc < idleThresholdSec) continue;
 
                 const incKey = `inactive_oc_dm:${tidStr}`;
+                const memKey = `no_oc_${tidStr}`;
                 const existing = state.incidents[incKey];
                 if (existing && (nowMs - existing.lastSentAt) < cooldownMs) continue;
 
@@ -1320,13 +1413,31 @@ function createOcDmEngine(injectedDeps = {}) {
                 });
                 const ctxStr = `Idle ${hoursIdle}h • Status: ${member.status?.state || 'Okay'}`;
 
-                if ((inactCfg.mode === 'channel_only' || inactCfg.mode === 'both') && effectiveChannelId && botToken) {
+                const alreadyChannelAlerted = Boolean(ocMemory && ocMemory[memKey] && (nowMs - ocMemory[memKey]) < cooldownMs);
+                if ((inactCfg.mode === 'channel_only' || inactCfg.mode === 'both') && effectiveChannelId && botToken && !alreadyChannelAlerted) {
                     await deps.sendChannelMessage(botToken, effectiveChannelId, {
                         title: `⏳ Member Missing from OC: ${pName}`,
                         description: `**[${pName}](https://www.torn.com/profiles.php?XID=${tidStr})** [${tidStr}] has not been in an OC for **${hoursIdle}h**.\nOpen OCs: ${openSummary}`,
                         color: 0xf59e0b,
                         timestamp: new Date().toISOString()
                     }, mention).catch(() => {});
+                    if (ocMemory) {
+                        ocMemory[memKey] = nowMs;
+                        ocMemoryModified = true;
+                    }
+                    if (inactCfg.mode === 'channel_only') {
+                        const chRec = recordReceipt({
+                            tornId: tidStr,
+                            playerName: pName,
+                            triggerType: 'inactive_oc_dm',
+                            triggerLabel: TRIGGER_LABELS.inactive_oc_dm,
+                            context: ctxStr,
+                            status: 'CHANNEL_ONLY',
+                            messagePreview: dmText,
+                            nextEligibleAt: nowMs + cooldownMs
+                        });
+                        await postReceiptEmbed(chRec);
+                    }
                 }
 
                 if (inactCfg.mode === 'dm_only' || inactCfg.mode === 'both') {
@@ -1361,7 +1472,8 @@ function createOcDmEngine(injectedDeps = {}) {
             handledLowCpr,
             handledMissingItems,
             handledInactive,
-            handledReadyBlocker
+            handledReadyBlocker,
+            ocMemoryModified
         };
     }
 
@@ -1809,6 +1921,8 @@ function createOcDmEngine(injectedDeps = {}) {
         let sent = 0;
         let failed = 0;
         let unlinked = 0;
+        const nowMs = Date.now();
+        let incidentUpdated = false;
         for (const item of items) {
             const { context, messageText, embedTitle } = builderFn(item);
             const res = await dispatchTrackedOcDm({
@@ -1828,8 +1942,59 @@ function createOcDmEngine(injectedDeps = {}) {
             if (res.status === 'DELIVERED') sent++;
             else if (res.status === 'UNLINKED') unlinked++;
             else failed++;
+
+            if (triggerType === 'manual_lowcpr_dm' && item.crimeId) {
+                const incKey = `low_cpr_dm:${item.tornId}:${item.crimeId}`;
+                const prev = state.incidents[incKey];
+                state.incidents[incKey] = {
+                    key: incKey,
+                    tornId: String(item.tornId),
+                    playerName: item.playerName,
+                    triggerType: 'low_cpr_dm',
+                    crimeId: String(item.crimeId),
+                    crimeName: item.crimeName || '',
+                    tier: item.tier || 1,
+                    role: item.role || '',
+                    cpr: item.cpr,
+                    minCpr: item.minCpr,
+                    firstDetectedAt: prev?.firstDetectedAt || nowMs,
+                    lastSentAt: nowMs,
+                    escalatedAt: prev?.escalatedAt || null,
+                    lastContext: context
+                };
+                incidentUpdated = true;
+            } else if (triggerType === 'manual_items_dm' && item.crimeId && item.itemId) {
+                const incKey = `missing_item_dm:${item.tornId}:${item.crimeId}:${item.itemId}`;
+                const prev = state.incidents[incKey];
+                state.incidents[incKey] = {
+                    key: incKey,
+                    tornId: String(item.tornId),
+                    playerName: item.playerName,
+                    triggerType: 'missing_item_dm',
+                    crimeId: String(item.crimeId),
+                    firstDetectedAt: prev?.firstDetectedAt || nowMs,
+                    lastSentAt: nowMs,
+                    lastContext: context
+                };
+                incidentUpdated = true;
+            } else if (triggerType === 'manual_bench_dm') {
+                const incKey = `inactive_oc_dm:${item.tornId}`;
+                const prev = state.incidents[incKey];
+                state.incidents[incKey] = {
+                    key: incKey,
+                    tornId: String(item.tornId),
+                    playerName: item.playerName,
+                    triggerType: 'inactive_oc_dm',
+                    firstDetectedAt: prev?.firstDetectedAt || nowMs,
+                    lastSentAt: nowMs,
+                    lastContext: context
+                };
+                incidentUpdated = true;
+            }
+
             await new Promise(r => setTimeout(r, 250));
         }
+        if (incidentUpdated) saveState();
         return { sent, failed, unlinked, total: items.length };
     }
 

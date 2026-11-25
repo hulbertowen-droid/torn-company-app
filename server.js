@@ -472,8 +472,13 @@ async function loadConfigFromMongo() {
             if (saved.ocConfig) {
                 const { ocDm: savedOcDm, ...savedOcBase } = saved.ocConfig;
                 ocConfig = { ...ocConfig, ...savedOcBase };
-                delete ocConfig.ocDm;
-                ocConfig.ocDm = ocDmEngineModule.mergeOcDmConfig(ocConfig, savedOcDm || null);
+                if (savedOcDm && typeof savedOcDm === 'object') {
+                    ocConfig.ocDm = savedOcDm;
+                } else {
+                    delete ocConfig.ocDm;
+                }
+                ocConfig.ocDm = ocDmEngineModule.mergeOcDmConfig(ocConfig, null);
+                saveOcConfig();
             }
             if (saved.ocDmState && typeof ocDmEngine !== 'undefined') {
                 ocDmEngine.importFromMongo(saved.ocDmState);
@@ -1199,7 +1204,8 @@ for (const chan of activeConversationChannels) {
 }
 try { if (fs.existsSync('market_config.json')) marketConfig = { ...marketConfig, ...JSON.parse(fs.readFileSync('market_config.json')) }; } catch(e) {}
 try { if (fs.existsSync('oc_config.json')) ocConfig = { ...ocConfig, ...JSON.parse(fs.readFileSync('oc_config.json')) }; } catch(e) {}
-ocConfig.ocDm = ocDmEngineModule.mergeOcDmConfig(ocConfig, ocConfig.ocDm || null);
+ocConfig.ocDm = ocDmEngineModule.mergeOcDmConfig(ocConfig, null);
+try { fs.writeFileSync('oc_config.json', JSON.stringify(ocConfig)); } catch(e) {}
 
 try {
     const bankFile = path.join(__dirname, 'data', 'bank_requests.json');
@@ -1856,10 +1862,17 @@ function getNextApiKey() {
 async function getDiscordId(tornId) {
     if (!tornId) return null;
     const keyStr = tornId.toString();
-    if (discordIdCache[keyStr]) {
-        return discordIdCache[keyStr] === "none" ? null : discordIdCache[keyStr];
+    // 1. Delegate to OC DM Engine's multi-tier resolver (manual links, verified map, userKeys, guild nickname scan, Torn API)
+    if (typeof ocDmEngine !== 'undefined' && ocDmEngine && typeof ocDmEngine.resolveMemberDiscord === 'function') {
+        try {
+            const resolved = await ocDmEngine.resolveMemberDiscord(keyStr, '', { allowTornApiFallback: true });
+            if (resolved && resolved.discordId && /^\d{15,22}$/.test(resolved.discordId)) {
+                discordIdCache[keyStr] = resolved.discordId;
+                return resolved.discordId;
+            }
+        } catch (_) {}
     }
-    // Check local verified Discord user mapping first
+    // 2. Always check local verified Discord user mapping before honoring a stale 'none' cache entry
     if (typeof verifiedDiscordToTorn === 'object' && verifiedDiscordToTorn) {
         for (const [dId, val] of Object.entries(verifiedDiscordToTorn)) {
             const vTornId = String(val?.tornId || val || '');
@@ -1868,6 +1881,9 @@ async function getDiscordId(tornId) {
                 return dId;
             }
         }
+    }
+    if (discordIdCache[keyStr]) {
+        return discordIdCache[keyStr] === "none" ? null : discordIdCache[keyStr];
     }
     let key = getNextApiKey();
     if (!key) return null;
@@ -23603,12 +23619,12 @@ async function checkFactionOrganizedCrimes() {
                 tracker.countdown4h = true;
                 trackerChanged = true;
 
-                // Resolve Discord Snowflakes for participants
+                // Resolve Discord Snowflakes for participants via OC DM Engine
                 const participantDiscordData = [];
                 for (const p of participantDetails) {
                     try {
-                        const dId = await getDiscordId(p.id);
-                        participantDiscordData.push({ ...p, discordId: dId });
+                        const resolved = await ocDmEngine.resolveMemberDiscord(p.id, p.name, { allowTornApiFallback: true });
+                        participantDiscordData.push({ ...p, discordId: resolved?.discordId || null });
                     } catch(e) {
                         participantDiscordData.push({ ...p, discordId: null });
                     }
@@ -23644,22 +23660,23 @@ async function checkFactionOrganizedCrimes() {
 
                 await sendChannelMessage(botToken, channelId, embed4h, pingText).catch(() => {});
 
-                // DM each participant individually
+                // DM each participant individually via OC DM Engine (logs receipt + handles closed DMs)
                 for (const p of participantDiscordData) {
-                    if (p.discordId) {
-                        const dmEmbed = {
-                            title: `⏰ 4-Hour OC Reminder: ${crime.crime_name}`,
-                            description: `Hello **${p.name}**,\n\n` +
-                                         `Your Organized Crime **${crime.crime_name}** is scheduled to become ready in **~4 hours**!\n\n` +
-                                         `🎯 **Scheduled Launch:** <t:${crime.time_ready}:F> (<t:${crime.time_ready}:R>)\n\n` +
-                                         `Please plan ahead: remain in Torn City, avoid traveling overseas, and stay out of hospital.\n\n` +
-                                         `👉 [Open Faction Crimes Tab](https://www.torn.com/factions.php?step=your#/tab=crimes)`,
-                            color: UI.COLORS.INFO,
-                            footer: UI.FOOTER,
-                            timestamp: new Date().toISOString()
-                        };
-                        sendDirectMessageToUser(p.discordId, dmEmbed).catch(() => {});
-                    }
+                    const readyText = crime.time_ready ? `<t:${crime.time_ready}:F> (<t:${crime.time_ready}:R>)` : 'in ~4 hours';
+                    await ocDmEngine.dispatchTrackedOcDm({
+                        tornId: p.id,
+                        playerName: p.name,
+                        explicitDiscordId: p.discordId,
+                        triggerType: 'countdown_4h_dm',
+                        triggerLabel: 'OC 4-Hour Countdown',
+                        context: `${crime.crime_name} • Ready ${crime.time_ready ? `<t:${crime.time_ready}:R>` : 'in ~4h'}`,
+                        messageText: `Hello **${p.name}**, your Organized Crime **${crime.crime_name}** is scheduled to become ready ${readyText}!\n\nPlease remain in Torn City, avoid traveling overseas, and stay out of hospital.\n👉 Manage OC: https://www.torn.com/factions.php?step=your#/tab=crimes`,
+                        embedTitle: `⏰ 4-Hour OC Reminder: ${crime.crime_name}`,
+                        embedColor: UI.COLORS.INFO,
+                        cooldownMs: 4 * 3600000,
+                        allowFallbackPing: false,
+                        source: 'oc_countdown'
+                    }).catch(() => {});
                 }
             } else if (crime.initiated === 0 && timeLeft <= 7200 && !tracker.countdown4h) {
                 tracker.countdown4h = true;
@@ -23672,12 +23689,12 @@ async function checkFactionOrganizedCrimes() {
                 tracker.countdown2h = true;
                 trackerChanged = true;
 
-                // Resolve Discord Snowflakes for participants
+                // Resolve Discord Snowflakes for participants via OC DM Engine
                 const participantDiscordData = [];
                 for (const p of participantDetails) {
                     try {
-                        const dId = await getDiscordId(p.id);
-                        participantDiscordData.push({ ...p, discordId: dId });
+                        const resolved = await ocDmEngine.resolveMemberDiscord(p.id, p.name, { allowTornApiFallback: true });
+                        participantDiscordData.push({ ...p, discordId: resolved?.discordId || null });
                     } catch(e) {
                         participantDiscordData.push({ ...p, discordId: null });
                     }
@@ -23713,22 +23730,23 @@ async function checkFactionOrganizedCrimes() {
 
                 await sendChannelMessage(botToken, channelId, embed2h, pingText).catch(() => {});
 
-                // DM each participant individually
+                // DM each participant individually via OC DM Engine (logs receipt + handles closed DMs)
                 for (const p of participantDiscordData) {
-                    if (p.discordId) {
-                        const dmEmbed = {
-                            title: `🚨 Final 2-Hour OC Alert: ${crime.crime_name}`,
-                            description: `Hello **${p.name}**,\n\n` +
-                                         `Your Organized Crime **${crime.crime_name}** is scheduled to launch in **~2 hours**!\n\n` +
-                                         `🎯 **Scheduled Launch:** <t:${crime.time_ready}:F> (<t:${crime.time_ready}:R>)\n\n` +
-                                         `🚨 **Do not leave Torn City or take flights**, and ensure you stay out of hospital. Your team needs you present at launch!\n\n` +
-                                         `👉 [Open Faction Crimes Tab](https://www.torn.com/factions.php?step=your#/tab=crimes)`,
-                            color: UI.COLORS.WARNING,
-                            footer: UI.FOOTER,
-                            timestamp: new Date().toISOString()
-                        };
-                        sendDirectMessageToUser(p.discordId, dmEmbed).catch(() => {});
-                    }
+                    const readyText = crime.time_ready ? `<t:${crime.time_ready}:F> (<t:${crime.time_ready}:R>)` : 'in ~2 hours';
+                    await ocDmEngine.dispatchTrackedOcDm({
+                        tornId: p.id,
+                        playerName: p.name,
+                        explicitDiscordId: p.discordId,
+                        triggerType: 'countdown_2h_dm',
+                        triggerLabel: 'OC 2-Hour Countdown',
+                        context: `${crime.crime_name} • Launch ${crime.time_ready ? `<t:${crime.time_ready}:R>` : 'in ~2h'}`,
+                        messageText: `Hello **${p.name}**, your Organized Crime **${crime.crime_name}** launches ${readyText}!\n\n🚨 **Do not leave Torn City or take flights**, and stay out of hospital. Your crew needs you at launch!\n👉 Manage OC: https://www.torn.com/factions.php?step=your#/tab=crimes`,
+                        embedTitle: `🚨 Final 2-Hour OC Alert: ${crime.crime_name}`,
+                        embedColor: UI.COLORS.WARNING,
+                        cooldownMs: 2 * 3600000,
+                        allowFallbackPing: false,
+                        source: 'oc_countdown'
+                    }).catch(() => {});
                 }
             } else if (crime.initiated === 0 && timeLeft <= upcomingSec && !tracker.countdown2h) {
                 tracker.countdown2h = true;
@@ -23867,11 +23885,34 @@ async function checkFactionOrganizedCrimes() {
             activeOcMemberIds,
             channelId,
             mention,
-            botToken
+            botToken,
+            ocMemory,
+            notifyOcManagers: async ({ pId, pName, profileUrl, v2Crime, tier, roleLabel, cpr, minCpr }) => {
+                const managerIds = await getOcManagerDiscordUserIds().catch(() => []);
+                if (!managerIds || managerIds.length === 0) return;
+                const mgrEmbed = {
+                    title: `🚨 [OC Manager Alert] Low CPR: ${v2Crime.name}`,
+                    description: `**[${pName}](${profileUrl})** [${pId}] joined role **${roleLabel}** in **${v2Crime.name}** (Tier **${tier}**) with **${cpr}% CPR** (Min: **${minCpr}%**).\n\n👉 [Review Organized Crimes](https://www.torn.com/factions.php?step=your#/tab=crimes)`,
+                    color: UI.COLORS.ERROR,
+                    fields: [
+                        { name: "Player", value: `**[${pName}](${profileUrl})** [${pId}]`, inline: true },
+                        { name: "Crime / Slot", value: `${v2Crime.name} (${roleLabel})`, inline: true },
+                        { name: "CPR vs Requirement", value: `⚠️ **${cpr}%** (Min: **${minCpr}%**)`, inline: true }
+                    ],
+                    footer: UI.FOOTER,
+                    timestamp: new Date().toISOString()
+                };
+                for (const mId of managerIds) {
+                    await sendDirectMessageToUser(mId, mgrEmbed).catch(() => {});
+                }
+            }
         }).catch(err => {
             console.warn('[OC-DM Engine] Tick error:', err?.message);
-            return { handledLowCpr: false, handledMissingItems: false, handledInactive: false, handledReadyBlocker: false };
+            return { handledLowCpr: false, handledMissingItems: false, handledInactive: false, handledReadyBlocker: false, ocMemoryModified: false };
         });
+        if (dmTickResult.ocMemoryModified) {
+            memoryChanged = true;
+        }
 
         if (v2Data && v2Data.crimes && Array.isArray(v2Data.crimes)) {
             for (const v2Crime of v2Data.crimes) {
@@ -24075,7 +24116,7 @@ async function checkFactionOrganizedCrimes() {
 }
 
 setInterval(checkFactionOrganizedCrimes, 180000); // 3 minutes (conserves bandwidth while preserving prompt alerts)
-setTimeout(checkFactionOrganizedCrimes, 90000); // First fire 90s after startup (staggered from other watchers)
+setTimeout(checkFactionOrganizedCrimes, 12000); // First fire 12s after startup so active OC DMs & receipts dispatch promptly
 
 async function executeFulfillRequest(reqId, interaction) {
     const isLockedByCaller = bankRequestFulfillLocks.has(reqId);
