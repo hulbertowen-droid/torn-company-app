@@ -3,9 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <!-- PWA & Mobile Web Capabilities -->
     <link rel="manifest" href="/manifest.json">
-    <meta name="theme-color" content="#0d1117">
+    <meta name="theme-color" content="#0b0f19">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="FactionOS">
@@ -13,22 +12,17 @@
     <meta name="application-name" content="FactionOS">
     <meta name="format-detection" content="telephone=no">
 
-    <!-- PWA Icons & Apple Touch Icons -->
     <link rel="icon" type="image/svg+xml" href="/icons/icon.svg">
     <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
     <link rel="apple-touch-icon" href="/icons/icon-180.png">
-    <link rel="apple-touch-icon" sizes="152x152" href="/icons/icon-152.png">
-    <link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-180.png">
     <title>Chain Sentinel | FactionOS</title>
-    <meta name="description" content="Automatic Torn City chain lineup manager — real-time attack detection, automatic queue advancement, and faction roster eligibility tracking.">
-    
-    <!-- Fonts & Core Design System -->
+    <meta name="description" content="FactionOS Chain Sentinel — live chain timer, bidirectional queue sync, instant enemy med-out/revive sniper, and bonus hit tracking.">
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/global.css?v=4.4.0">
-    
-    <!-- Scripts & Auth -->
+
     <script src="/auth-gate.js?v=4.4.0"></script>
     <script src="/global_settings.js?v=4.4.0"></script>
     <script src="/global-topbar.js?v=4.5.0"></script>
@@ -36,1049 +30,458 @@
     <script src="/pwa-helper.js?v=1.3.0" defer></script>
 
     <style>
-    /* ─── Chain Hero Card ─── */
-    .chain-hero-card {
-        background: linear-gradient(145deg, rgba(18, 24, 36, 0.95), rgba(12, 16, 23, 0.98));
+    .chain-container {
+        max-width: 1400px;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+    }
+
+    /* ─── Compact Tactical Hero Strip ─── */
+    .chain-hero-strip {
+        background: linear-gradient(135deg, rgba(15, 23, 42, 0.96), rgba(11, 15, 25, 0.98));
         border: 1px solid var(--border-default);
         border-radius: var(--radius-lg);
-        padding: 36px 28px;
-        text-align: center;
+        padding: 20px 26px;
+        display: grid;
+        grid-template-columns: 1.5fr auto;
+        gap: 24px;
+        align-items: center;
+        box-shadow: 0 10px 36px rgba(0, 0, 0, 0.42);
         position: relative;
         overflow: hidden;
-        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
     }
-    .chain-hero-card::before {
+    .chain-hero-strip::before {
         content: '';
         position: absolute;
-        top: -40%;
-        left: 50%;
-        transform: translateX(-50%);
-        width: 500px;
-        height: 300px;
-        background: radial-gradient(ellipse, rgba(6, 182, 212, 0.08) 0%, transparent 70%);
+        top: -60%;
+        left: 15%;
+        width: 420px;
+        height: 240px;
+        background: radial-gradient(ellipse, rgba(14, 165, 233, 0.09) 0%, transparent 70%);
         pointer-events: none;
     }
-    .chain-title {
-        color: var(--text-secondary);
-        font-size: 0.9em;
-        text-transform: uppercase;
-        letter-spacing: 2px;
-        font-weight: 800;
-        margin-bottom: 12px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 10px;
+    .chain-hero-strip.danger {
+        border-color: rgba(239, 68, 68, 0.7);
+        box-shadow: 0 0 32px rgba(239, 68, 68, 0.22);
+    }
+    .hero-left { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+    .hero-eyebrow {
+        display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+        font-size: 0.78em; font-weight: 800; text-transform: uppercase;
+        letter-spacing: 1.4px; color: var(--text-secondary);
     }
     .badge-modifier {
         background: var(--accent-cobalt-dim);
-        color: var(--accent-cobalt);
-        padding: 3px 10px;
+        color: var(--accent-cyan);
+        padding: 2px 9px;
         border-radius: var(--radius-sm);
-        font-size: 0.8em;
-        border: 1px solid var(--accent-cobalt-border);
-        font-weight: 900;
+        border: 1px solid var(--accent-cyan-border);
         font-family: var(--font-mono);
+        font-weight: 900;
+    }
+    .hero-count-row {
+        display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap;
     }
     .chain-count {
-        font-size: 4.8em;
+        font-size: 3.1em;
         font-weight: 900;
         color: var(--text-primary);
         line-height: 1;
         font-family: var(--font-mono);
-        font-feature-settings: "tnum" 1;
-        letter-spacing: -2px;
-        margin-bottom: 20px;
-        text-shadow: 0 0 30px rgba(59, 130, 246, 0.2);
+        font-variant-numeric: tabular-nums;
+        letter-spacing: -1.5px;
+    }
+    .hero-meta-chips {
+        display: flex; gap: 8px; flex-wrap: wrap;
+        font-size: 0.8em; color: var(--text-secondary); font-weight: 600;
+    }
+    .hero-chip {
+        background: rgba(30, 41, 59, 0.7);
+        border: 1px solid var(--border-subtle);
+        padding: 3px 10px;
+        border-radius: var(--radius-sm);
+        font-family: var(--font-mono);
     }
     .progress-bar-bg {
         background: var(--bg-elevated);
         border: 1px solid var(--border-subtle);
         border-radius: var(--radius-full);
-        height: 10px;
+        height: 8px;
         width: 100%;
-        max-width: 440px;
-        margin: 0 auto 28px auto;
+        max-width: 560px;
         overflow: hidden;
-        position: relative;
     }
     .progress-bar-fill {
-        background: linear-gradient(90deg, var(--accent-cobalt), var(--accent-cyan));
+        background: linear-gradient(90deg, var(--accent-cobalt), var(--accent-cyan), var(--accent-emerald));
         height: 100%;
         width: 0%;
-        transition: width 0.5s cubic-bezier(0.16, 1, 0.3, 1);
-        box-shadow: 0 0 12px rgba(6, 182, 212, 0.5);
+        transition: width 0.45s ease;
+    }
+
+    .hero-right {
+        display: flex; flex-direction: column; align-items: flex-end; gap: 8px;
     }
     .timer-box {
-        background: var(--bg-elevated);
-        border: 2px solid var(--border-default);
-        padding: 18px 24px;
+        background: rgba(15, 23, 42, 0.9);
+        border: 1.5px solid var(--border-default);
+        padding: 12px 22px;
         border-radius: var(--radius-md);
-        max-width: 340px;
-        margin: 0 auto;
-        transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        min-width: 200px;
+        text-align: center;
+    }
+    .chain-hero-strip.danger .timer-box {
+        border-color: var(--accent-crimson);
+        background: rgba(127, 29, 29, 0.25);
     }
     .timer-title {
         color: var(--text-tertiary);
         text-transform: uppercase;
         font-weight: 800;
         letter-spacing: 1px;
-        font-size: 0.74em;
-        margin-bottom: 6px;
+        font-size: 0.7em;
+        margin-bottom: 4px;
     }
     .timer-time {
-        font-size: 3.4em;
+        font-size: 2.6em;
         font-weight: 900;
         font-family: var(--font-mono);
-        font-feature-settings: "tnum" 1;
+        font-variant-numeric: tabular-nums;
         color: var(--text-primary);
         line-height: 1;
-        transition: color 0.3s;
     }
-    .waiting-text {
-        color: var(--text-tertiary);
-        font-style: italic;
-        margin-top: 18px;
-        font-size: 0.82em;
-        text-transform: uppercase;
-        letter-spacing: 1.5px;
-        font-weight: 700;
-    }
-    .danger .timer-box {
-        border-color: var(--accent-crimson);
-        box-shadow: 0 0 30px var(--accent-crimson-glow);
-        background: rgba(230, 57, 70, 0.08);
-    }
-    .danger .timer-time {
+    .chain-hero-strip.danger .timer-time {
         color: var(--accent-crimson);
         animation: pulseHeartbeat 1s infinite;
     }
+    .hero-sound-row { display: flex; gap: 6px; align-items: center; }
+
     @keyframes pulseHeartbeat {
         0%, 100% { transform: scale(1); opacity: 1; }
-        50% { transform: scale(1.03); opacity: 0.8; }
+        50% { transform: scale(1.03); opacity: 0.82; }
     }
 
-    /* ─── Auto Mode Bar ─── */
-    .auto-mode-bar {
+    /* ─── Main 2-Column Tactical Grid ─── */
+    .tactical-grid {
+        display: grid;
+        grid-template-columns: 1.15fr 1fr;
+        gap: 18px;
+        align-items: start;
+    }
+    .tactical-col {
         display: flex;
-        align-items: center;
-        justify-content: space-between;
-        flex-wrap: wrap;
-        gap: 10px;
-        margin-top: 24px;
-        padding: 14px 22px;
+        flex-direction: column;
+        gap: 18px;
+        min-width: 0;
+    }
+
+    /* ─── Cards ─── */
+    .panel-card {
         background: var(--bg-surface);
         border: 1px solid var(--border-subtle);
         border-radius: var(--radius-md);
-        box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-    }
-    .auto-mode-label {
-        font-size: 0.8em;
-        font-weight: 800;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-        color: var(--text-secondary);
-        display: flex;
-        align-items: center;
-        gap: 8px;
-    }
-    .auto-indicator {
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        background: var(--text-tertiary);
-        transition: background 0.3s;
-        box-shadow: none;
-    }
-    .auto-indicator.active {
-        background: var(--accent-emerald);
-        box-shadow: 0 0 8px var(--accent-emerald);
-        animation: pulseDot 1.5s infinite;
-    }
-    @keyframes pulseDot {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.5; }
-    }
-    .auto-mode-toggle {
-        background: var(--bg-elevated);
-        border: 1px solid var(--border-default);
-        color: var(--text-secondary);
-        padding: 7px 18px;
-        border-radius: var(--radius-sm);
-        cursor: pointer;
-        font-size: 0.82em;
-        font-weight: 800;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        transition: all var(--transition-fast);
-        font-family: inherit;
-    }
-    .auto-mode-toggle.auto-on {
-        background: rgba(16, 185, 129, 0.12);
-        border-color: rgba(16, 185, 129, 0.4);
-        color: var(--accent-emerald);
-    }
-    .auto-mode-controls {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        flex-wrap: wrap;
-    }
-
-    /* ─── Lineup Card (outer wrapper) ─── */
-    .lineup-card {
-        background: var(--bg-surface);
-        border: 1px solid var(--border-subtle);
-        border-radius: var(--radius-md);
-        overflow: visible;
-        margin-top: 24px;
         box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+        overflow: visible;
     }
-    .lineup-header {
-        padding: 16px 22px;
+    .panel-header {
+        padding: 14px 18px;
         border-bottom: 1px solid var(--border-subtle);
         display: flex;
         justify-content: space-between;
         align-items: center;
         flex-wrap: wrap;
-        gap: 12px;
-        background: rgba(255, 255, 255, 0.01);
+        gap: 10px;
+        background: rgba(255, 255, 255, 0.015);
     }
-    .lineup-title {
+    .panel-title {
         margin: 0;
-        color: var(--accent-cyan);
+        font-size: 0.96em;
+        font-weight: 800;
         text-transform: uppercase;
-        letter-spacing: 1px;
-        font-size: 1.05em;
+        letter-spacing: 0.9px;
         display: flex;
         align-items: center;
         gap: 8px;
-        font-weight: 800;
-    }
-    
-    .hit-time-control {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        background: var(--bg-elevated);
-        border: 1px solid var(--border-default);
-        padding: 3px 8px;
-        border-radius: var(--radius-sm);
-    }
-    .hit-time-select {
-        background: transparent;
-        border: none;
-        color: var(--accent-cyan);
-        font-weight: 800;
-        font-size: 0.82em;
-        font-family: var(--font-mono);
-        outline: none;
-        cursor: pointer;
-        padding: 2px;
-        width: auto !important;
-        min-width: 68px;
-    }
-    .hit-time-select option {
-        background: var(--bg-surface);
-        color: var(--text-primary);
-    }
-    .hit-time-badge {
-        background: rgba(6, 182, 212, 0.12);
-        border: 1px solid var(--accent-cyan-border);
-        color: var(--accent-cyan);
-        font-size: 0.72em;
-        font-weight: 800;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        padding: 4px 8px;
-        border-radius: var(--radius-sm);
-        white-space: nowrap;
-        font-family: var(--font-mono);
-    }
-    .hit-time-badge.in-window {
-        background: rgba(16, 185, 129, 0.18);
-        border-color: rgba(16, 185, 129, 0.5);
-        color: var(--accent-emerald);
-        animation: pulseHeartbeat 1.5s infinite;
     }
 
-    .lineup-controls {
+    /* ─── Enemy Med-Out Sniper Card ─── */
+    .sniper-card { border-color: rgba(239, 68, 68, 0.32); }
+    .sniper-banner {
+        margin: 12px 16px 0;
+        padding: 12px 14px;
+        border-radius: var(--radius-md);
+        background: linear-gradient(135deg, rgba(185, 28, 28, 0.28), rgba(194, 65, 12, 0.2));
+        border: 1px solid rgba(248, 113, 113, 0.65);
+        display: none;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+        animation: pulseBorder 1.1s infinite;
+    }
+    .sniper-banner.active { display: flex; }
+    @keyframes pulseBorder {
+        0%, 100% { box-shadow: 0 0 10px rgba(239, 68, 68, 0.2); }
+        50% { box-shadow: 0 0 22px rgba(239, 68, 68, 0.55); }
+    }
+    .sniper-target-bar {
+        display: flex; align-items: center; gap: 6px; padding: 10px 16px;
+        border-bottom: 1px solid var(--border-subtle);
+        background: rgba(15, 23, 42, 0.5);
+        flex-wrap: wrap;
+    }
+    .sniper-input {
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-default);
+        color: var(--text-primary);
+        padding: 5px 10px;
+        border-radius: var(--radius-sm);
+        font-size: 0.82em;
+        font-family: var(--font-mono);
+        width: 145px;
+        outline: none;
+    }
+    .sniper-feed-list {
+        display: flex;
+        flex-direction: column;
+        padding: 10px 16px 14px;
+        gap: 8px;
+    }
+    .medout-row {
         display: flex;
         align-items: center;
+        justify-content: space-between;
         gap: 10px;
-        flex-wrap: wrap;
+        padding: 10px 12px;
+        border-radius: var(--radius-sm);
+        background: rgba(30, 41, 59, 0.6);
+        border: 1px solid rgba(239, 68, 68, 0.35);
     }
-    .lineup-toolbar-group {
+    .medout-info { min-width: 0; flex: 1; }
+    .medout-name-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-weight: 800; font-size: 0.92em; color: var(--text-primary); }
+    .medout-badge { font-size: 0.72em; font-weight: 900; background: rgba(239, 68, 68, 0.22); color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.45); padding: 1px 6px; border-radius: 4px; }
+    .medout-sub { font-size: 0.78em; color: var(--text-secondary); margin-top: 3px; }
+    .medout-acts { display: flex; gap: 6px; flex-shrink: 0; }
+    .btn-attack {
+        background: linear-gradient(135deg, #ef4444, #dc2626);
+        color: #fff; border: none; padding: 6px 11px; border-radius: var(--radius-sm);
+        font-size: 0.78em; font-weight: 800; text-decoration: none; cursor: pointer;
+        display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;
+    }
+    .btn-attack:hover { filter: brightness(1.1); }
+    .hosp-exit-row {
+        display: flex; align-items: center; justify-content: space-between; gap: 8px;
+        padding: 7px 12px; border-radius: var(--radius-sm);
+        background: rgba(15, 23, 42, 0.6); border: 1px solid var(--border-subtle); font-size: 0.84em;
+    }
+
+    /* ─── Lineup Toolbar & Cards ─── */
+    .lineup-toolbar {
+        padding: 10px 18px;
+        border-bottom: 1px solid var(--border-subtle);
         display: flex;
         align-items: center;
-        gap: 6px;
+        justify-content: space-between;
         flex-wrap: wrap;
+        gap: 8px;
+        background: rgba(15, 23, 42, 0.45);
     }
-    .lineup-toolbar-divider {
-        width: 1px;
-        height: 24px;
-        background: var(--border-default);
-        margin: 0 2px;
-        flex-shrink: 0;
-    }
+    .lineup-toolbar-group { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
     .lineup-btn {
         background: var(--bg-elevated);
         border: 1px solid var(--border-default);
         color: var(--text-secondary);
-        padding: 6px 12px;
-        border-radius: var(--radius-sm);
-        cursor: pointer;
-        font-size: 0.78em;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.4px;
-        transition: all var(--transition-fast);
-        font-family: inherit;
-    }
-    .lineup-btn:hover {
-        border-color: var(--accent-cyan);
-        color: var(--accent-cyan);
-        background: var(--bg-hover);
-    }
-    .lineup-btn.danger:hover {
-        border-color: var(--accent-crimson);
-        color: var(--accent-crimson);
-    }
-    .lineup-btn.active {
-        background: var(--accent-cyan-dim);
-        border-color: var(--accent-cyan-border);
-        color: var(--accent-cyan);
-    }
-    .lineup-cycle-badge {
-        background: var(--accent-cyan-dim);
-        border: 1px solid var(--accent-cyan-border);
-        color: var(--accent-cyan);
-        padding: 4px 10px;
-        border-radius: var(--radius-sm);
-        font-size: 0.76em;
-        font-weight: 800;
-        font-family: var(--font-mono);
-    }
-    .lineup-meta {
-        padding: 8px 22px;
-        background: rgba(6, 182, 212, 0.05);
-        border-bottom: 1px solid var(--border-subtle);
-        display: none;
-        align-items: center;
-        justify-content: flex-end;
-        gap: 10px;
-        font-size: 0.82em;
-        color: var(--accent-cyan);
-        min-height: 28px;
-    }
-    .lineup-meta.visible {
-        display: flex;
-    }
-    .lineup-drag-handle {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        color: var(--text-tertiary);
-        cursor: grab;
-        padding: 2px;
-    }
-    .lineup-remove-btn {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-    }
-
-    /* ─── Tier 1: Currently Up Card ─── */
-    .tier-up-card {
-        margin: 16px 16px 8px 16px;
-        border-radius: var(--radius-md);
-        border: 2px solid var(--accent-cyan);
-        background: rgba(6, 182, 212, 0.06);
-        overflow: hidden;
-        transition: all 0.3s;
-    }
-    .tier-up-card.unavailable {
-        border-color: var(--accent-crimson);
-        background: rgba(230, 57, 70, 0.06);
-    }
-    .tier-label {
-        padding: 6px 16px;
-        font-size: 0.68em;
-        font-weight: 900;
-        text-transform: uppercase;
-        letter-spacing: 2px;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 8px;
-    }
-    .tier-up-card .tier-label {
-        background: rgba(6, 182, 212, 0.1);
-        color: var(--accent-cyan);
-        border-bottom: 1px solid rgba(6, 182, 212, 0.2);
-    }
-    .tier-up-card.unavailable .tier-label {
-        background: rgba(230, 57, 70, 0.1);
-        color: var(--accent-crimson);
-        border-bottom: 1px solid rgba(230, 57, 70, 0.2);
-    }
-    .tier-body {
-        padding: 14px 18px;
-        display: flex;
-        align-items: center;
-        gap: 14px;
-    }
-    .tier-position {
-        font-size: 2em;
-        font-weight: 900;
-        font-family: var(--font-mono);
-        color: var(--accent-cyan);
-        min-width: 36px;
-        text-align: center;
-    }
-    .tier-up-card.unavailable .tier-position {
-        color: var(--accent-crimson);
-    }
-    .tier-name {
-        font-size: 1.35em;
-        font-weight: 800;
-        color: var(--text-primary);
-        flex: 1;
-        min-width: 0;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-    .tier-status-pill {
-        font-size: 0.72em;
-        font-weight: 800;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        padding: 4px 10px;
-        border-radius: var(--radius-sm);
-        white-space: nowrap;
-        flex-shrink: 0;
-    }
-    .pill-ok       { background: rgba(16,185,129,0.12); color: var(--accent-emerald); border: 1px solid rgba(16,185,129,0.3); }
-    .pill-idle     { background: rgba(245,158,11,0.12); color: var(--accent-amber);   border: 1px solid rgba(245,158,11,0.3); }
-    .pill-offline  { background: rgba(107,114,128,0.12); color: var(--text-tertiary); border: 1px solid rgba(107,114,128,0.2); }
-    .pill-hospital { background: rgba(230,57,70,0.12);  color: var(--accent-crimson); border: 1px solid rgba(230,57,70,0.3); }
-    .pill-travel   { background: rgba(99,102,241,0.12); color: var(--accent-cobalt);  border: 1px solid rgba(99,102,241,0.3); }
-    .pill-federal  { background: rgba(245,158,11,0.12); color: var(--accent-amber);   border: 1px solid rgba(245,158,11,0.3); }
-    
-    .move-btn-group {
-        display: inline-flex;
-        align-items: center;
-        gap: 3px;
-        background: var(--bg-elevated);
-        border: 1px solid var(--border-subtle);
-        border-radius: var(--radius-sm);
-        padding: 2px 4px;
-        flex-shrink: 0;
-    }
-    .move-btn {
-        background: none;
-        border: none;
-        color: var(--text-tertiary);
-        font-size: 0.85em;
-        cursor: pointer;
-        padding: 4px 7px;
-        border-radius: 3px;
-        line-height: 1;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        transition: all var(--transition-fast);
-        font-weight: 800;
-        user-select: none;
-    }
-    .move-btn:hover:not(:disabled) {
-        color: var(--accent-cyan);
-        background: var(--accent-cyan-dim);
-    }
-    .move-btn:disabled {
-        opacity: 0.25;
-        cursor: not-allowed;
-    }
-    .promote-btn {
-        background: rgba(6, 182, 212, 0.08);
-        border: 1px solid var(--accent-cyan-border);
-        color: var(--accent-cyan);
-        font-size: 0.72em;
-        font-weight: 800;
-        text-transform: uppercase;
-        letter-spacing: 0.4px;
-        padding: 4px 8px;
-        border-radius: 3px;
-        cursor: pointer;
-        transition: all var(--transition-fast);
-        white-space: nowrap;
-        display: inline-flex;
-        align-items: center;
-        gap: 3px;
-        line-height: 1;
-        font-family: inherit;
-    }
-    .promote-btn:hover {
-        background: var(--accent-cyan);
-        color: #000;
-    }
-    .tier-action-btn {
-        background: var(--bg-elevated);
-        border: 1px solid var(--border-default);
-        color: var(--text-secondary);
-        font-size: 0.76em;
-        font-weight: 800;
-        text-transform: uppercase;
-        letter-spacing: 0.4px;
         padding: 5px 10px;
         border-radius: var(--radius-sm);
         cursor: pointer;
-        transition: all var(--transition-fast);
-        white-space: nowrap;
+        font-size: 0.76em;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+        font-family: inherit;
+        text-decoration: none;
         display: inline-flex;
         align-items: center;
         gap: 4px;
-        font-family: inherit;
-        line-height: 1;
     }
-    .tier-action-btn:hover {
-        color: var(--accent-cyan);
-        border-color: var(--accent-cyan);
-        background: var(--bg-hover);
-    }
-    .tier-up-card.drag-over, .tier-next-card.drag-over {
-        border-color: var(--accent-cyan) !important;
-        box-shadow: 0 0 15px var(--accent-cyan-glow);
-    }
-    .lineup-slot-clickable {
-        cursor: pointer;
-        border-radius: 3px;
-        transition: all var(--transition-fast);
-    }
-    .lineup-slot-clickable:hover {
-        background: var(--accent-cyan-dim);
-        color: var(--accent-cyan);
-    }
+    .lineup-btn:hover { border-color: var(--accent-cyan); color: var(--accent-cyan); background: var(--bg-hover); }
+    .lineup-btn.active { background: var(--accent-cyan-dim); border-color: var(--accent-cyan-border); color: var(--accent-cyan); }
+    .lineup-btn.danger:hover { border-color: var(--accent-crimson); color: var(--accent-crimson); }
 
-    .tier-actions {
-        display: flex;
-        gap: 6px;
-        flex-shrink: 0;
+    .auto-mode-toggle {
+        background: var(--bg-elevated); border: 1px solid var(--border-default); color: var(--text-secondary);
+        padding: 5px 11px; border-radius: var(--radius-sm); cursor: pointer;
+        font-size: 0.76em; font-weight: 800; text-transform: uppercase;
+        display: inline-flex; align-items: center; gap: 6px; font-family: inherit;
+    }
+    .auto-mode-toggle.auto-on { background: rgba(16, 185, 129, 0.14); border-color: rgba(16, 185, 129, 0.45); color: var(--accent-emerald); }
+    .auto-indicator { width: 7px; height: 7px; border-radius: 50%; background: var(--text-tertiary); }
+    .auto-indicator.active { background: var(--accent-emerald); box-shadow: 0 0 8px var(--accent-emerald); }
+
+    .hit-time-control {
+        display: inline-flex; align-items: center; gap: 5px;
+        background: var(--bg-elevated); border: 1px solid var(--border-default);
+        padding: 2px 8px; border-radius: var(--radius-sm);
+    }
+    .hit-time-select {
+        background: transparent; border: none; color: var(--accent-cyan);
+        font-weight: 800; font-size: 0.8em; font-family: var(--font-mono); outline: none; cursor: pointer;
+    }
+    .hit-time-select option { background: var(--bg-surface); color: var(--text-primary); }
+
+    .lineup-cycle-badge {
+        background: var(--accent-cyan-dim); border: 1px solid var(--accent-cyan-border);
+        color: var(--accent-cyan); padding: 3px 9px; border-radius: var(--radius-sm);
+        font-size: 0.74em; font-weight: 800; font-family: var(--font-mono);
+    }
+    .lineup-meta {
+        padding: 7px 18px; background: rgba(6, 182, 212, 0.06);
+        border-bottom: 1px solid var(--border-subtle);
+        display: none; font-size: 0.8em; color: var(--accent-cyan); font-weight: 600;
+    }
+    .lineup-meta.visible { display: block; }
+
+    .tier-up-card {
+        margin: 14px 16px 8px; border-radius: var(--radius-md);
+        border: 1.5px solid var(--accent-emerald);
+        background: linear-gradient(135deg, rgba(6, 78, 59, 0.25), rgba(15, 23, 42, 0.9));
+        overflow: hidden;
+    }
+    .tier-up-card.unavailable { border-color: var(--accent-crimson); background: rgba(127, 29, 29, 0.18); }
+    .tier-label {
+        padding: 5px 14px; font-size: 0.7em; font-weight: 900; text-transform: uppercase;
+        letter-spacing: 1.4px; display: flex; justify-content: space-between; align-items: center;
+        background: rgba(16, 185, 129, 0.1); color: var(--accent-emerald);
+        border-bottom: 1px solid rgba(16, 185, 129, 0.2);
+    }
+    .tier-up-card.unavailable .tier-label { background: rgba(239, 68, 68, 0.12); color: #fca5a5; border-bottom-color: rgba(239, 68, 68, 0.25); }
+    .tier-body { padding: 12px 14px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .tier-position { font-size: 1.5em; font-weight: 900; font-family: var(--font-mono); color: var(--accent-emerald); min-width: 28px; cursor: pointer; }
+    .tier-name { font-size: 1.15em; font-weight: 800; color: var(--text-primary); flex: 1; min-width: 120px; }
+    .tier-actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+    .btn-force-hit {
+        background: linear-gradient(135deg, #10b981, #059669); color: #fff; border: none;
+        padding: 6px 12px; border-radius: var(--radius-sm); font-size: 0.78em; font-weight: 800; cursor: pointer;
     }
     .tier-skip-btn {
-        background: rgba(245,158,11,0.12);
-        border: 1px solid rgba(245,158,11,0.35);
-        color: var(--accent-amber);
-        padding: 6px 14px;
-        border-radius: var(--radius-sm);
-        cursor: pointer;
-        font-size: 0.8em;
-        font-weight: 800;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        font-family: inherit;
-        transition: all var(--transition-fast);
+        background: rgba(245, 158, 11, 0.14); border: 1px solid rgba(245, 158, 11, 0.4);
+        color: var(--accent-amber); padding: 5px 10px; border-radius: var(--radius-sm);
+        font-size: 0.76em; font-weight: 800; cursor: pointer;
     }
-    .tier-skip-btn:hover { background: rgba(245,158,11,0.22); }
-    .auto-skip-countdown {
-        font-size: 0.74em;
-        color: var(--accent-crimson);
-        font-family: var(--font-mono);
-        font-weight: 800;
+    .tier-action-btn, .promote-btn {
+        background: var(--bg-elevated); border: 1px solid var(--border-default); color: var(--text-secondary);
+        padding: 5px 9px; border-radius: var(--radius-sm); font-size: 0.75em; font-weight: 700; cursor: pointer;
     }
+    .promote-btn { border-color: var(--accent-cyan-border); color: var(--accent-cyan); }
+    .promote-btn:hover { background: var(--accent-cyan); color: #000; }
 
-    /* ─── Tier 2: Next Card ─── */
     .tier-next-card {
-        margin: 0 16px 8px 16px;
-        border-radius: var(--radius-md);
-        border: 1px solid rgba(245, 158, 11, 0.35);
-        background: rgba(245, 158, 11, 0.04);
-        overflow: hidden;
+        margin: 0 16px 10px; border-radius: var(--radius-md);
+        border: 1px solid rgba(56, 189, 248, 0.35); background: rgba(14, 165, 233, 0.05);
     }
-    .tier-next-card .tier-label {
-        background: rgba(245, 158, 11, 0.08);
-        color: var(--accent-amber);
-        border-bottom: 1px solid rgba(245, 158, 11, 0.15);
-        padding: 5px 16px;
-        font-size: 0.65em;
-    }
-    .tier-next-card .tier-body {
-        padding: 10px 18px;
-    }
-    .tier-next-card .tier-position {
-        font-size: 1.4em;
-        color: var(--accent-amber);
-    }
-    .tier-next-card .tier-name {
-        font-size: 1.1em;
-    }
+    .tier-next-card .tier-label { background: rgba(56, 189, 248, 0.08); color: var(--accent-cyan); border-bottom-color: rgba(56, 189, 248, 0.16); }
+    .tier-next-card .tier-position { color: var(--accent-cyan); font-size: 1.25em; }
 
-    /* ─── Queue List (compact rows) ─── */
+    .tier-status-pill, .status-tag {
+        font-size: 0.7em; font-weight: 800; text-transform: uppercase;
+        padding: 3px 8px; border-radius: 999px; white-space: nowrap;
+    }
+    .pill-ok { background: rgba(16,185,129,0.14); color: var(--accent-emerald); border: 1px solid rgba(16,185,129,0.3); }
+    .pill-idle { background: rgba(245,158,11,0.14); color: var(--accent-amber); border: 1px solid rgba(245,158,11,0.3); }
+    .pill-offline { background: rgba(100,116,139,0.16); color: #94a3b8; border: 1px solid rgba(100,116,139,0.28); }
+    .pill-hospital { background: rgba(239,68,68,0.15); color: #fca5a5; border: 1px solid rgba(239,68,68,0.35); }
+    .pill-travel { background: rgba(56,189,248,0.14); color: #7dd3fc; border: 1px solid rgba(56,189,248,0.3); }
+    .pill-federal { background: rgba(245,158,11,0.14); color: var(--accent-amber); border: 1px solid rgba(245,158,11,0.3); }
+
     .queue-section-header {
-        padding: 8px 22px;
-        font-size: 0.68em;
-        font-weight: 900;
-        text-transform: uppercase;
-        letter-spacing: 1.5px;
-        color: var(--text-tertiary);
-        background: var(--bg-elevated);
-        border-top: 1px solid var(--border-subtle);
-        border-bottom: 1px solid var(--border-subtle);
+        padding: 7px 18px; font-size: 0.7em; font-weight: 900; text-transform: uppercase;
+        letter-spacing: 1.2px; color: var(--text-tertiary); background: var(--bg-elevated);
+        border-top: 1px solid var(--border-subtle); border-bottom: 1px solid var(--border-subtle);
     }
-    .lineup-list {
-        list-style: none;
-        margin: 0;
-        padding: 0;
-    }
+    .lineup-list { list-style: none; margin: 0; padding: 0; }
     .lineup-item {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        padding: 10px 22px;
-        border-bottom: 1px solid var(--border-subtle);
-        transition: background var(--transition-fast);
-        cursor: grab;
-        position: relative;
+        display: flex; align-items: center; gap: 10px; padding: 8px 18px;
+        border-bottom: 1px solid var(--border-subtle); cursor: grab;
     }
-    .lineup-item:last-child { border-bottom: none; }
     .lineup-item:hover { background: var(--bg-hover); }
-    .lineup-item.hit-done { opacity: 0.38; }
-    .lineup-item.dragging { opacity: 0.4; background: var(--bg-elevated); }
-    .lineup-item.drag-over { border-top: 2px solid var(--accent-cyan); }
-    .lineup-slot {
-        width: 26px;
-        text-align: center;
-        font-weight: 900;
-        font-size: 0.88em;
-        color: var(--text-tertiary);
-        font-family: var(--font-mono);
-        flex-shrink: 0;
-    }
-    .lineup-drag-handle {
-        color: var(--text-tertiary);
-        font-size: 1em;
-        cursor: grab;
-        flex-shrink: 0;
-        user-select: none;
-    }
-    .lineup-name {
-        font-weight: 700;
-        font-size: 0.9em;
-        color: var(--text-primary);
-        flex: 1;
-        min-width: 0;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-    .status-tag {
-        font-size: 0.68em;
-        font-weight: 800;
-        padding: 2px 7px;
-        border-radius: 3px;
-        text-transform: uppercase;
-        letter-spacing: 0.3px;
-        flex-shrink: 0;
-    }
-    .lineup-remove-btn {
-        background: none;
-        border: none;
-        color: var(--text-tertiary);
-        font-size: 0.95em;
-        cursor: pointer;
-        padding: 3px 5px;
-        border-radius: 4px;
-        transition: all var(--transition-fast);
-        flex-shrink: 0;
-        line-height: 1;
-    }
+    .lineup-slot { width: 24px; font-weight: 900; font-family: var(--font-mono); color: var(--text-tertiary); cursor: pointer; }
+    .online-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+    .online-dot.online { background: var(--accent-emerald); }
+    .online-dot.idle { background: var(--accent-amber); }
+    .online-dot.offline { background: #64748b; }
+    .lineup-name { font-weight: 700; color: var(--text-primary); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .move-btn-group { display: inline-flex; gap: 2px; }
+    .move-btn { background: var(--bg-elevated); border: 1px solid var(--border-subtle); color: var(--text-secondary); padding: 3px 6px; border-radius: 4px; cursor: pointer; font-size: 0.76em; }
+    .lineup-remove-btn { background: none; border: none; color: var(--text-tertiary); cursor: pointer; padding: 4px; border-radius: 4px; }
     .lineup-remove-btn:hover { color: var(--accent-crimson); background: var(--accent-crimson-dim); }
-    .hit-check { font-size: 0.8em; flex-shrink: 0; }
 
-    /* ─── Add Member Row ─── */
     .lineup-add-row {
-        padding: 12px 22px;
-        border-top: 1px solid var(--border-subtle);
-        display: flex;
-        gap: 8px;
-        background: rgba(255, 255, 255, 0.01);
-        position: relative;
+        padding: 12px 16px; border-top: 1px solid var(--border-subtle);
+        display: flex; gap: 8px; position: relative;
     }
     .lineup-add-input {
-        flex: 1;
-        background: var(--bg-elevated);
-        border: 1px solid var(--border-default);
-        color: var(--text-primary);
-        padding: 8px 14px;
-        border-radius: var(--radius-sm);
-        font-size: 0.88em;
-        outline: none;
-        font-family: inherit;
-    }
-    .lineup-add-input:focus {
-        border-color: var(--accent-cyan);
-        box-shadow: 0 0 0 3px var(--accent-cyan-dim);
+        flex: 1; background: var(--bg-elevated); border: 1px solid var(--border-default);
+        color: var(--text-primary); padding: 8px 12px; border-radius: var(--radius-sm); font-size: 0.86em; outline: none;
     }
     .lineup-add-btn {
-        background: var(--accent-cyan-dim);
-        border: 1px solid var(--accent-cyan-border);
-        color: var(--accent-cyan);
-        padding: 7px 16px;
-        border-radius: var(--radius-sm);
-        cursor: pointer;
-        font-weight: 800;
-        font-size: 0.85em;
-        transition: all var(--transition-fast);
-        white-space: nowrap;
-        font-family: inherit;
+        background: var(--accent-cyan-dim); border: 1px solid var(--accent-cyan-border);
+        color: var(--accent-cyan); padding: 7px 14px; border-radius: var(--radius-sm);
+        font-weight: 800; cursor: pointer;
     }
-    .lineup-add-btn:hover { background: var(--accent-cyan); color: #000; }
     .lineup-suggest {
-        position: absolute;
-        left: 22px;
-        right: 22px;
-        bottom: calc(100% + 6px);
-        background: var(--bg-overlay, #0f172a);
-        border: 1px solid var(--accent-cyan);
-        border-radius: var(--radius-md);
-        z-index: 99999;
-        max-height: 280px;
-        overflow-y: auto;
-        box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.75), 0 0 15px rgba(6, 182, 212, 0.15);
+        position: absolute; left: 16px; right: 16px; bottom: calc(100% + 4px);
+        background: #0f172a; border: 1px solid var(--accent-cyan);
+        border-radius: var(--radius-md); z-index: 99999; max-height: 240px; overflow-y: auto;
+        box-shadow: 0 -10px 28px rgba(0, 0, 0, 0.8);
     }
-    .lineup-suggest-header {
-        padding: 6px 14px;
-        font-size: 0.7em;
-        font-weight: 800;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-        color: var(--text-tertiary);
-        background: rgba(255, 255, 255, 0.02);
-        border-bottom: 1px solid var(--border-subtle);
-    }
-    .lineup-suggest-item {
-        padding: 10px 16px;
-        cursor: pointer;
-        font-size: 0.88em;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        transition: background var(--transition-fast);
-        border-bottom: 1px solid rgba(255, 255, 255, 0.03);
-    }
-    .lineup-suggest-item:last-child {
-        border-bottom: none;
-    }
-    .lineup-suggest-item:hover, .lineup-suggest-item.highlighted {
-        background: var(--bg-hover);
-        color: var(--accent-cyan);
-    }
-    .suggest-name {
-        font-weight: 700;
-        color: var(--text-primary);
-        flex: 1;
-        min-width: 0;
-    }
-    .suggest-match {
-        color: var(--accent-cyan);
-        font-weight: 900;
-        text-decoration: underline;
-        background: transparent;
-    }
-    .suggest-level {
-        font-size: 0.72em;
-        color: var(--text-tertiary);
-        font-family: var(--font-mono);
-        margin-right: 4px;
-    }
+    .lineup-suggest-header { padding: 6px 12px; font-size: 0.7em; font-weight: 800; color: var(--text-tertiary); border-bottom: 1px solid var(--border-subtle); }
+    .lineup-suggest-item { padding: 8px 14px; cursor: pointer; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid rgba(255,255,255,0.03); }
+    .lineup-suggest-item:hover, .lineup-suggest-item.highlighted { background: var(--bg-hover); }
+    .suggest-name { font-weight: 700; flex: 1; }
+    .suggest-match { color: var(--accent-cyan); font-weight: 900; background: transparent; }
 
-    /* ─── Online Status Dot ─── */
-    .online-dot {
-        width: 7px;
-        height: 7px;
-        border-radius: 50%;
-        flex-shrink: 0;
-        display: inline-block;
-    }
-    .online-dot.online  { background: var(--accent-emerald); box-shadow: 0 0 5px var(--accent-emerald); }
-    .online-dot.idle    { background: var(--accent-amber); }
-    .online-dot.offline { background: var(--text-tertiary); }
-
-    /* ─── Chain Hit Log ─── */
-    .hit-log-card {
-        background: var(--bg-surface);
-        border: 1px solid var(--border-subtle);
-        border-radius: var(--radius-md);
-        margin-top: 20px;
-        overflow: hidden;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
-    }
-    .hit-log-header {
-        padding: 12px 20px;
-        border-bottom: 1px solid var(--border-subtle);
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        background: rgba(255,255,255,0.01);
-    }
-    .hit-log-title {
-        font-size: 0.88em;
-        font-weight: 800;
-        text-transform: uppercase;
-        letter-spacing: 0.8px;
-        color: var(--text-secondary);
-    }
-    .hit-log-clear {
-        background: none;
-        border: none;
-        color: var(--text-tertiary);
-        font-size: 0.72em;
-        cursor: pointer;
-        font-family: inherit;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        padding: 2px 6px;
-        border-radius: 3px;
-        transition: all var(--transition-fast);
-    }
-    .hit-log-clear:hover { color: var(--accent-crimson); }
-    .hit-log-body {
-        font-family: var(--font-mono);
-        font-size: 0.82em;
-    }
+    /* ─── Hit Log, DIBS, Ledger, Script ─── */
     .hit-log-row {
-        display: grid;
-        grid-template-columns: 52px 1fr 70px;
-        gap: 10px;
-        padding: 7px 20px;
-        border-bottom: 1px solid var(--border-subtle);
-        align-items: center;
-        transition: background var(--transition-fast);
+        display: grid; grid-template-columns: 56px 1fr 78px; gap: 8px;
+        padding: 7px 16px; border-bottom: 1px solid var(--border-subtle);
+        font-family: var(--font-mono); font-size: 0.82em; align-items: center;
     }
-    .hit-log-row:last-child { border-bottom: none; }
-    .hit-log-row:hover { background: var(--bg-hover); }
-    .hit-log-chain {
-        color: var(--accent-cyan);
-        font-weight: 800;
-    }
-    .hit-log-name {
-        color: var(--text-primary);
-        font-weight: 600;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-    .hit-log-time {
-        color: var(--text-tertiary);
-        text-align: right;
-        font-size: 0.9em;
-    }
-    .hit-log-empty {
-        padding: 18px 20px;
-        color: var(--text-tertiary);
-        font-style: italic;
-        font-size: 0.84em;
-        text-align: center;
-    }
+    .hit-log-chain { color: var(--accent-cyan); font-weight: 800; }
+    .hit-log-name { color: var(--text-primary); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .hit-log-time { color: var(--text-tertiary); text-align: right; }
 
-    /* ─── Queue & Ledger Cards (unchanged) ─── */
-    .queue-card, .ledger-card {
-        background: var(--bg-surface);
-        border: 1px solid var(--border-subtle);
-        border-radius: var(--radius-md);
-        margin-top: 24px;
-        overflow: hidden;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+    .queue-row-header, .queue-row {
+        display: grid; grid-template-columns: 95px 1.4fr 1fr; gap: 10px;
+        padding: 10px 16px; border-bottom: 1px solid var(--border-subtle); align-items: center; font-size: 0.85em;
     }
-    .queue-header, .ledger-card h3 {
-        padding: 16px 22px;
-        border-bottom: 1px solid var(--border-subtle);
-        margin: 0;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        background: rgba(255, 255, 255, 0.01);
-    }
-    .queue-title, .ledger-card h3 {
-        color: var(--accent-amber);
-        text-transform: uppercase;
-        letter-spacing: 0.8px;
-        font-size: 1.05em;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        font-weight: 800;
-    }
-    .queue-row {
-        display: grid;
-        grid-template-columns: 110px 1.5fr 1fr;
-        gap: 14px;
-        padding: 12px 22px;
-        border-bottom: 1px solid var(--border-subtle);
-        align-items: center;
-        font-size: 0.88em;
-        transition: background var(--transition-fast);
-    }
-    .queue-row:hover { background: var(--bg-hover); }
-    .queue-row:last-child { border-bottom: none; }
-    .queue-row-header {
-        display: grid;
-        grid-template-columns: 110px 1.5fr 1fr;
-        gap: 14px;
-        padding: 10px 22px;
-        color: var(--text-secondary);
-        font-size: 0.72em;
-        font-weight: 800;
-        text-transform: uppercase;
-        background: var(--bg-elevated);
-        border-bottom: 1px solid var(--border-default);
-        letter-spacing: 0.8px;
-    }
-    .timer-badge {
-        background: var(--bg-elevated);
-        padding: 4px 10px;
-        border-radius: var(--radius-sm);
-        font-family: var(--font-mono);
-        font-size: 1.05em;
-        font-weight: 800;
-        border: 1px solid var(--border-subtle);
-        text-align: center;
-    }
-    .timer-badge.ready {
-        background: var(--accent-emerald-dim);
-        color: var(--accent-emerald);
-        border-color: var(--accent-emerald-border);
-        box-shadow: 0 0 10px var(--accent-emerald-glow);
-    }
-    .timer-badge.soon { color: var(--accent-amber); }
-    .queue-profile {
-        font-weight: 700;
-        color: var(--text-primary);
-        text-decoration: none;
-        font-size: 1em;
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-    }
-    .queue-profile:hover { color: var(--accent-cobalt); }
-    .dibs-badge {
-        background: var(--accent-crimson-dim);
-        color: var(--accent-crimson);
-        padding: 4px 10px;
-        border-radius: var(--radius-sm);
-        font-weight: 800;
-        border: 1px solid var(--accent-crimson-border);
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        font-size: 0.82em;
-    }
-    .ledger-grid {
-        display: grid;
-        grid-template-columns: 1fr 2fr 1.5fr 1.5fr;
-        gap: 12px;
-        color: var(--text-secondary);
-        font-weight: 800;
-        font-size: 0.72em;
-        text-transform: uppercase;
-        letter-spacing: 0.8px;
-        background: var(--bg-elevated);
-        padding: 10px 22px;
-        border-bottom: 1px solid var(--border-default);
-    }
-    .ledger-row {
-        display: grid;
-        grid-template-columns: 1fr 2fr 1.5fr 1.5fr;
-        gap: 12px;
-        padding: 12px 22px;
-        border-bottom: 1px solid var(--border-subtle);
-        font-size: 0.88em;
-        align-items: center;
-    }
-    .ledger-row:hover { background: var(--bg-hover); }
-    .ledger-row:last-child { border-bottom: none; }
-    .milestone-badge {
-        background: var(--accent-amber-dim);
-        color: var(--accent-amber);
-        padding: 4px 10px;
-        border-radius: var(--radius-sm);
-        font-weight: 800;
-        display: inline-block;
-        text-align: center;
-        border: 1px solid var(--accent-amber-border);
-        font-family: var(--font-mono);
-        font-size: 0.82em;
-    }
+    .queue-row-header { font-size: 0.7em; font-weight: 800; text-transform: uppercase; color: var(--text-secondary); background: var(--bg-elevated); }
+    .timer-badge { background: var(--bg-elevated); padding: 3px 8px; border-radius: var(--radius-sm); font-family: var(--font-mono); font-weight: 800; text-align: center; border: 1px solid var(--border-subtle); }
+    .timer-badge.ready { background: var(--accent-emerald-dim); color: var(--accent-emerald); border-color: var(--accent-emerald-border); }
+    .dibs-badge { background: var(--accent-crimson-dim); color: #fca5a5; padding: 3px 8px; border-radius: var(--radius-sm); font-weight: 800; font-size: 0.82em; display: inline-block; }
 
-    /* ─── DIBS Script Card ─── */
-    .script-card {
-        background: var(--bg-surface);
-        border: 1px solid var(--border-subtle);
-        border-radius: var(--radius-md);
-        padding: 24px 28px;
-        margin-top: 28px;
-    }
-    .script-card h3 {
-        color: var(--accent-cobalt);
-        margin: 0 0 10px 0;
-        text-transform: uppercase;
-        font-size: 1.05em;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        font-weight: 800;
-    }
-    .script-steps {
+    .bottom-grid {
         display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 20px;
-        margin-top: 20px;
+        grid-template-columns: 1.1fr 0.9fr;
+        gap: 18px;
+        align-items: start;
     }
-    .script-step {
-        background: var(--bg-elevated);
-        padding: 18px 20px;
-        border-radius: var(--radius-sm);
-        border: 1px solid var(--border-subtle);
+    .ledger-grid, .ledger-row {
+        display: grid; grid-template-columns: 0.8fr 1.6fr 1fr 1.1fr; gap: 10px;
+        padding: 10px 16px; border-bottom: 1px solid var(--border-subtle); align-items: center; font-size: 0.85em;
     }
-    .script-step h4 {
-        color: var(--text-primary);
-        margin: 0 0 10px 0;
-        border-bottom: 1px solid var(--border-subtle);
-        padding-bottom: 8px;
-        font-size: 0.92em;
-    }
-    .script-step ol {
-        margin: 0;
-        padding-left: 20px;
-        color: var(--text-secondary);
-        font-size: 0.86em;
-        line-height: 1.6;
-    }
+    .ledger-grid { font-size: 0.7em; font-weight: 800; text-transform: uppercase; color: var(--text-secondary); background: var(--bg-elevated); }
+    .milestone-badge { background: var(--accent-amber-dim); color: var(--accent-amber); padding: 2px 8px; border-radius: var(--radius-sm); font-family: var(--font-mono); font-weight: 800; }
+
     .btn-download {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        background: var(--accent-cobalt);
-        color: #ffffff;
-        font-weight: 800;
-        text-decoration: none;
-        padding: 10px 20px;
-        border-radius: var(--radius-sm);
-        margin-top: 14px;
-        text-transform: uppercase;
-        font-size: 0.84em;
-        transition: all var(--transition-fast);
-        box-shadow: 0 2px 10px var(--accent-cobalt-glow);
+        display: inline-flex; align-items: center; gap: 8px;
+        background: linear-gradient(135deg, #10b981, #059669); color: #fff; font-weight: 800;
+        text-decoration: none; padding: 9px 16px; border-radius: var(--radius-sm); font-size: 0.84em;
     }
-    .btn-download:hover { background: #4f94fc; transform: translateY(-1px); }
-    @media (max-width: 768px) {
-        .script-steps { grid-template-columns: 1fr; }
-        .chain-count { font-size: 3.5em; }
-        .timer-time { font-size: 2.8em; }
-        .tier-body { flex-wrap: wrap; }
+    @media (max-width: 1080px) {
+        .tactical-grid, .bottom-grid { grid-template-columns: 1fr; }
+        .chain-hero-strip { grid-template-columns: 1fr; }
+        .hero-right { align-items: flex-start; }
     }
     </style>
 </head>
@@ -1115,6 +518,7 @@
             <a href="/bugs.html" class="nav-link"><span class="nav-icon">🐛</span> <span class="nav-text">Bug Tracker</span></a>
         </div>
     </nav>
+
     <div class="main-wrapper">
         <header class="app-topbar">
             <div class="topbar-left">
@@ -1130,208 +534,204 @@
                 </div>
                 <div class="telemetry-chip live-ws" id="global-ws-badge" title="Data Feed Status">
                     <span class="pulse-indicator"></span>
-                    <span id="global-ws-status">LIVE WS</span>
+                    <span id="global-ws-status">LIVE SYNC</span>
                 </div>
                 <button class="btn btn-secondary btn-sm" onclick="openGlobalSettings ? openGlobalSettings() : openSettings()" title="Settings" style="padding:4px 8px;">⚙️</button>
             </div>
         </header>
 
-    <main class="main-content">
-        <h1>Chain Sentinel</h1>
+        <main class="main-content">
+            <div class="chain-container">
 
-        <div class="container">
-
-            <!-- ── Chain Status Hero ───────────────────────────────── -->
-            <div class="chain-hero-card" id="chain-card">
-                <div class="chain-title">
-                    Current Chain <span id="chain-modifier" class="badge-modifier">1.0x</span>
-                </div>
-                <div class="chain-count" id="chain-display">0 / 0</div>
-                <div class="progress-bar-bg">
-                    <div class="progress-bar-fill" id="chain-progress-fill"></div>
-                </div>
-                <div class="timer-box">
-                    <div class="timer-title" id="timer-title">Time Remaining</div>
-                    <div class="timer-time" id="timer-display">00:00</div>
-                </div>
-                <div class="waiting-text" id="waiting-msg">WAITING FOR CHAIN TO START...</div>
-            </div>
-
-            <!-- ── Chain Lineup ─────────────────────────────────────── -->
-            <div class="lineup-card">
-                <div class="lineup-header">
-                    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-                        <h3 class="lineup-title">Chain Lineup</h3>
-                        <span class="lineup-cycle-badge" id="lineup-cycle-badge">Cycle 1</span>
-                    </div>
-                    <div class="lineup-controls">
-                        <div class="lineup-toolbar-group" aria-label="Queue Actions">
-                            <button class="lineup-btn" onclick="lineupNext()" title="Manually advance to next person">Next</button>
-                            <button class="lineup-btn active" id="lineup-loop-btn" onclick="lineupToggleLoop()" title="Loop back to start when everyone has hit">Loop</button>
-                            <button class="lineup-btn" onclick="lineupAutoFill()" title="Populate lineup with currently eligible members">Auto-Fill Eligible</button>
-                            <button class="lineup-btn" onclick="lineupImportFromChain()" title="Import from current chain attack log">Import from Chain</button>
-                            <button class="lineup-btn" onclick="lineupReset()" title="Clear hit marks and restart from top">Reset</button>
-                            <button class="lineup-btn danger" onclick="lineupClear()" title="Remove all members">Clear</button>
+                <!-- ── 1. COMPACT TACTICAL HERO STRIP ── -->
+                <div class="chain-hero-strip" id="chain-card">
+                    <div class="hero-left">
+                        <div class="hero-eyebrow">
+                            <span>⚡ Active Chain Status</span>
+                            <span id="chain-modifier" class="badge-modifier">1.00x</span>
+                            <span id="waiting-msg" style="color:var(--accent-amber);">WAITING FOR CHAIN...</span>
                         </div>
-                        <span class="lineup-toolbar-divider" aria-hidden="true"></span>
-                        <div class="lineup-toolbar-group" aria-label="Automation and Export">
-                            <div class="hit-time-control" title="Target timer to hit during chain (e.g. 3:00)">
-                                <span style="font-size:0.75em; font-weight:800; text-transform:uppercase; color:var(--text-secondary); letter-spacing:0.5px;">Hit At:</span>
-                                <select id="lineup-hit-time" onchange="updateHitTime()" class="hit-time-select">
-                                    <option value="">None</option>
-                                    <option value="3:30">3:30</option>
-                                    <option value="3:00" selected>3:00</option>
-                                    <option value="2:30">2:30</option>
-                                    <option value="2:00">2:00</option>
-                                    <option value="1:30">1:30</option>
-                                    <option value="1:00">1:00</option>
-                                    <option value="custom">Custom...</option>
-                                </select>
-                                <input id="lineup-hit-time-custom" type="text" placeholder="e.g. 2:15" style="display:none; width:62px; background:var(--bg-elevated); border:1px solid var(--accent-cyan-border); color:var(--text-primary); padding:2px 6px; border-radius:var(--radius-sm); font-size:0.8em; font-family:var(--font-mono); outline:none;" onchange="updateCustomHitTime()" onblur="updateCustomHitTime()" />
+                        <div class="hero-count-row">
+                            <div class="chain-count" id="chain-display">0 / 10</div>
+                            <div class="hero-meta-chips">
+                                <span class="hero-chip" id="hero-bonus-rem">10 to next bonus</span>
+                                <span class="hero-chip" id="hero-sync-ver">Lineup v1</span>
                             </div>
-                            <button class="auto-mode-toggle" id="auto-mode-btn" onclick="toggleAutoMode()" title="Auto Mode: rotate lineup automatically when players hit" style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;">
-                                <span class="auto-indicator" id="auto-indicator"></span>
-                                <span id="auto-mode-label-text">Auto: OFF</span>
-                            </button>
-                            <button class="lineup-btn" onclick="copyFull()" title="Copy lineup as clean plain text">Copy</button>
-                            <button class="lineup-btn" onclick="copyCompact()" title="Copy compact one-line format">Copy Compact</button>
-                            <a href="/torn-chain-lineup.user.js" class="lineup-btn" style="background:var(--accent-emerald-bg, rgba(46,204,113,0.15)); color:var(--accent-emerald, #2ecc71); border-color:var(--accent-emerald, #2ecc71); text-decoration:none; display:inline-flex; align-items:center; gap:4px;" title="Install Tampermonkey Userscript to view floating HUD on Torn and 1-click post lineup into Faction Chat">⚡ Torn Chat Script</a>
+                        </div>
+                        <div class="progress-bar-bg">
+                            <div class="progress-bar-fill" id="chain-progress-fill"></div>
+                        </div>
+                    </div>
+
+                    <div class="hero-right">
+                        <div class="timer-box">
+                            <div class="timer-title" id="timer-title">Time Remaining</div>
+                            <div class="timer-time" id="timer-display">00:00</div>
+                        </div>
+                        <div class="hero-sound-row">
+                            <button class="lineup-btn" id="sound-toggle-btn" onclick="toggleChainSound()" title="Mute / Unmute chain & med-out alerts">🔊 Sound: ON</button>
+                            <button class="lineup-btn" onclick="testMedOutSiren()" title="Test sniper sound">Test Siren</button>
                         </div>
                     </div>
                 </div>
-                <div class="lineup-meta" id="lineup-meta">
-                    <span id="lineup-status-msg"></span>
-                </div>
 
-                <!-- CURRENTLY UP -->
-                <div id="currently-up-section"></div>
-                <!-- NEXT -->
-                <div id="next-section"></div>
+                <!-- ── 2. TWO-COLUMN COMMAND GRID ── -->
+                <div class="tactical-grid">
 
-                <!-- QUEUE header (only shown when there are queue members) -->
-                <div id="queue-section-header" class="queue-section-header" style="display:none;">Queue</div>
+                    <!-- LEFT: CHAIN LINEUP MANAGER -->
+                    <div class="tactical-col">
+                        <div class="panel-card">
+                            <div class="panel-header">
+                                <div style="display:flex;align-items:center;gap:10px;">
+                                    <h3 class="panel-title" style="color:var(--accent-cyan);">🎯 Chain Lineup</h3>
+                                    <span class="lineup-cycle-badge" id="lineup-cycle-badge">Cycle 1</span>
+                                </div>
+                                <div class="lineup-toolbar-group">
+                                    <div class="hit-time-control" title="Target timer threshold">
+                                        <span style="font-size:0.72em;font-weight:800;color:var(--text-secondary);">HIT AT</span>
+                                        <select id="lineup-hit-time" onchange="updateHitTime()" class="hit-time-select">
+                                            <option value="">None</option>
+                                            <option value="3:30">3:30</option>
+                                            <option value="3:00" selected>3:00</option>
+                                            <option value="2:30">2:30</option>
+                                            <option value="2:00">2:00</option>
+                                            <option value="1:30">1:30</option>
+                                            <option value="1:00">1:00</option>
+                                            <option value="custom">Custom</option>
+                                        </select>
+                                        <input id="lineup-hit-time-custom" type="text" placeholder="2:15" style="display:none;width:54px;background:var(--bg-elevated);border:1px solid var(--accent-cyan-border);color:var(--text-primary);padding:2px 5px;border-radius:4px;font-size:0.78em;font-family:var(--font-mono);" onchange="updateCustomHitTime()" onblur="updateCustomHitTime()" />
+                                    </div>
+                                    <button class="auto-mode-toggle" id="auto-mode-btn" onclick="toggleAutoMode()">
+                                        <span class="auto-indicator" id="auto-indicator"></span>
+                                        <span id="auto-mode-label-text">Auto: OFF</span>
+                                    </button>
+                                </div>
+                            </div>
 
-                <!-- Queue list -->
-                <ul class="lineup-list" id="lineup-list"></ul>
+                            <div class="lineup-toolbar">
+                                <div class="lineup-toolbar-group">
+                                    <button class="lineup-btn" onclick="lineupNext()">⏭ Next</button>
+                                    <button class="lineup-btn active" id="lineup-loop-btn" onclick="lineupToggleLoop()">🔄 Loop</button>
+                                    <button class="lineup-btn" onclick="lineupAutoFill()">⚡ Auto-Fill</button>
+                                    <button class="lineup-btn" onclick="lineupImportFromChain()">Import Chain</button>
+                                    <button class="lineup-btn" onclick="lineupReset()">Reset</button>
+                                    <button class="lineup-btn danger" onclick="lineupClear()">Clear</button>
+                                </div>
+                                <div class="lineup-toolbar-group">
+                                    <button class="lineup-btn" onclick="copyFull()">📋 Copy</button>
+                                    <button class="lineup-btn" onclick="copyCompact()">Compact</button>
+                                </div>
+                            </div>
 
-                <!-- Add Member -->
-                <div class="lineup-add-row" style="position:relative;">
-                    <input id="lineup-add-input" class="lineup-add-input" placeholder="Type to search faction members..." autocomplete="off"
-                        oninput="lineupFilterSuggest()" onkeydown="lineupAddKeydown(event)" onfocus="lineupFilterSuggest()" />
-                    <button class="lineup-add-btn" onclick="lineupAddFromInput()">+ Add</button>
-                    <div class="lineup-suggest" id="lineup-suggest" style="display:none;"></div>
-                </div>
-            </div>
+                            <div class="lineup-meta" id="lineup-meta"><span id="lineup-status-msg"></span></div>
 
-            <!-- ── Chain Activity Log ────────────────────────────────── -->
-            <div class="hit-log-card">
-                <div class="hit-log-header">
-                    <div class="hit-log-title">Chain Activity</div>
-                    <button class="hit-log-clear" onclick="clearHitLog()">Clear</button>
-                </div>
-                <div class="hit-log-body" id="hit-log-body">
-                    <div class="hit-log-empty">No chain hits detected yet.</div>
-                </div>
-            </div>
+                            <div id="currently-up-section"></div>
+                            <div id="next-section"></div>
+                            <div id="queue-section-header" class="queue-section-header" style="display:none;">Queue</div>
+                            <ul class="lineup-list" id="lineup-list"></ul>
 
-            <!-- ── Warboard DIBS Queue ──────────────────────────────── -->
-            <div class="queue-card">
-                <div class="queue-header">
-                    <h3 class="queue-title">Automatic Chain Order</h3>
-                    <div style="font-size: 0.75em; color: var(--text-dim);">Live DIBS Integration</div>
-                </div>
-                <div class="queue-row-header">
-                    <div>Status</div>
-                    <div>Target</div>
-                    <div>Claimed By</div>
-                </div>
-                <div id="queue-content">
-                    <div style="text-align: center; color: var(--text-dim); padding: 30px; font-style: italic;">Connecting to Warboard...</div>
-                </div>
-            </div>
+                            <div class="lineup-add-row">
+                                <input id="lineup-add-input" class="lineup-add-input" placeholder="Search faction member to add..." autocomplete="off"
+                                    oninput="lineupFilterSuggest()" onkeydown="lineupAddKeydown(event)" onfocus="lineupFilterSuggest()" />
+                                <button class="lineup-add-btn" onclick="lineupAddFromInput()">+ Add</button>
+                                <div class="lineup-suggest" id="lineup-suggest" style="display:none;"></div>
+                            </div>
+                        </div>
 
-            <!-- ── Bonus Hit Ledger ─────────────────────────────────── -->
-            <div class="ledger-card">
-                <h3>Bonus Hit Ledger</h3>
-                <div class="ledger-grid">
-                    <div>Milestone</div>
-                    <div>Player</div>
-                    <div>Time Secured</div>
-                    <div>Respect Generated</div>
-                </div>
-                <div id="ledger-content">
-                    <div style="text-align: center; color: var(--text-dim); padding: 20px; font-style: italic;">Waiting for chain data...</div>
-                </div>
-            </div>
-
-            <!-- ── DIBS Script Setup ───────────────────────────────── -->
-            <div class="script-card">
-                <h3>DIBS Script Setup</h3>
-                <p style="color: var(--text-dim); font-size: 0.9em; margin-bottom: 20px;">To call dibs and appear on the Automatic Chain Order above, install the Faction Dibs script into your browser or PDA.</p>
-                <a href="/torn-dibs.user.js" class="btn-download" target="_blank">Download / Install Script</a>
-                <div class="script-steps" style="margin-top: 20px;">
-                    <div class="script-step">
-                        <h4>PC / Desktop (Tampermonkey)</h4>
-                        <ol>
-                            <li>Install the <a href="https://www.tampermonkey.net/" target="_blank">Tampermonkey extension</a> for your browser.</li>
-                            <li>Click the Download button above. Tampermonkey will intercept it.</li>
-                            <li>Click <strong>Install</strong> on the Tampermonkey page.</li>
-                            <li>Go to Torn Faction page and click the floating <strong>DIBS SETTINGS</strong> button in the bottom left corner.</li>
-                        </ol>
+                        <!-- Live Chain Activity -->
+                        <div class="panel-card">
+                            <div class="panel-header">
+                                <h3 class="panel-title" style="color:var(--text-secondary);">⚡ Recent Chain Hits</h3>
+                                <button class="lineup-btn" onclick="clearHitLog()">Clear</button>
+                            </div>
+                            <div id="hit-log-body">
+                                <div style="padding:16px;color:var(--text-tertiary);font-style:italic;text-align:center;font-size:0.84em;">Listening for chain hits...</div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="script-step">
-                        <h4>Mobile (Torn PDA)</h4>
-                        <ol>
-                            <li>Open Torn PDA and go to <strong>Settings -> Advanced browser settings</strong>.</li>
-                            <li>Tap <strong>Manage scripts</strong>.</li>
-                            <li>Tap the <strong>+</strong> button and select <strong>Import from URL</strong>.</li>
-                            <li>Enter the exact URL of the script link above (long press the download button and copy link).</li>
-                            <li>Save the script and enable it. Refresh the faction page.</li>
-                        </ol>
-                    </div>
-                </div>
-            </div>
 
-            <!-- ── Chain Lineup & Faction Chat HUD Script ──────────── -->
-            <div class="script-card" style="border-color: rgba(46,204,113,0.3); background: linear-gradient(180deg, rgba(46,204,113,0.04) 0%, var(--bg-surface) 100%);">
-                <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
-                    <div>
-                        <h3 style="color:var(--accent-emerald, #2ecc71); margin-bottom:4px;">⚡ Torn Faction Chat & Floating HUD Userscript</h3>
-                        <p style="color: var(--text-dim); font-size: 0.9em; margin: 0;">Live draggable HUD on Torn.com that shows who is UP and NEXT in real-time, flashes when updated, and posts the lineup directly into Faction Chat with 1 click.</p>
-                    </div>
-                    <span style="background:var(--accent-emerald-bg, rgba(46,204,113,0.15)); color:var(--accent-emerald, #2ecc71); border:1px solid rgba(46,204,113,0.4); padding:4px 10px; border-radius:20px; font-size:0.78em; font-weight:800; text-transform:uppercase;">1-Click Faction Chat</span>
-                </div>
-                <div style="margin-top:16px; display:flex; gap:12px; flex-wrap:wrap; align-items:center;">
-                    <a href="/torn-chain-lineup.user.js" class="btn-download" style="background:#2ecc71; color:#0b1d12; box-shadow:0 2px 10px rgba(46,204,113,0.3);" target="_blank">📥 Install / Update Script</a>
-                    <button class="lineup-btn" onclick="navigator.clipboard.writeText(window.location.origin + '/torn-chain-lineup.user.js'); lineupSetStatus('Copied Userscript URL to clipboard!');" title="Copy script URL for Torn PDA">📋 Copy Script URL</button>
-                </div>
-                <div class="script-steps" style="margin-top: 20px;">
-                    <div class="script-step">
-                        <h4>PC / Desktop (Tampermonkey)</h4>
-                        <ol>
-                            <li>Ensure you have <a href="https://www.tampermonkey.net/" target="_blank">Tampermonkey</a> installed in your browser.</li>
-                            <li>Click the <strong>Install / Update Script</strong> button above.</li>
-                            <li>Tampermonkey will open and ask to install — click <strong>Install</strong>.</li>
-                            <li>Go to any <a href="https://www.torn.com" target="_blank">Torn.com</a> page. You'll see the floating <strong>CHAIN LINEUP</strong> HUD.</li>
-                            <li>Drag it to wherever you prefer on your screen (it remembers its position).</li>
-                            <li>Click <strong>📋 Post to Faction Chat</strong> to immediately insert the lineup into Faction Chat!</li>
-                        </ol>
-                    </div>
-                    <div class="script-step">
-                        <h4>Mobile (Torn PDA)</h4>
-                        <ol>
-                            <li>Click <strong>Copy Script URL</strong> above (or copy link address of the Install button).</li>
-                            <li>Open Torn PDA &rarr; <strong>Settings &rarr; Advanced browser settings</strong>.</li>
-                            <li>Tap <strong>Manage scripts</strong> &rarr; tap the <strong>+</strong> button.</li>
-                            <li>Select <strong>Import from URL</strong>, paste the link, and save.</li>
-                            <li>Enable the script and refresh Torn!</li>
-                        </ol>
+                    <!-- RIGHT: INSTANT ENEMY MED-OUT SNIPER + DIBS -->
+                    <div class="tactical-col">
+                        <div class="panel-card sniper-card">
+                            <div class="panel-header">
+                                <h3 class="panel-title" style="color:#f87171;">🚨 Enemy Med-Out &amp; Revive Sniper</h3>
+                                <span id="sniper-enemy-label" style="font-size:0.78em;font-weight:700;color:var(--text-secondary);">Auto War Detection</span>
+                            </div>
+
+                            <!-- Live Pop-down Alert Banner -->
+                            <div class="sniper-banner" id="live-medout-banner"></div>
+
+                            <!-- Enemy Faction Override Bar -->
+                            <div class="sniper-target-bar">
+                                <span style="font-size:0.74em;font-weight:800;color:var(--text-secondary);">ENEMY FACTION ID:</span>
+                                <input id="sniper-fac-input" class="sniper-input" type="text" placeholder="Auto (or Faction ID)" />
+                                <button class="lineup-btn" onclick="setManualEnemyFaction()">🎯 Track</button>
+                                <button class="lineup-btn" onclick="clearManualEnemyFaction()" title="Use automatic Ranked War detection">Auto</button>
+                            </div>
+
+                            <div class="sniper-feed-list" id="medout-feed-body">
+                                <div style="padding:14px;text-align:center;color:var(--text-tertiary);font-size:0.85em;">Scanning enemy hospital states every 2.5s for med-outs &amp; revives...</div>
+                            </div>
+
+                            <div class="queue-section-header">🏥 Exiting Hospital Soon (&lt; 5m)</div>
+                            <div class="sniper-feed-list" id="hosp-exits-body">
+                                <div style="padding:10px;text-align:center;color:var(--text-tertiary);font-size:0.82em;">No enemies leaving hospital within 5 minutes.</div>
+                            </div>
+                        </div>
+
+                        <!-- Warboard DIBS Target Board -->
+                        <div class="panel-card">
+                            <div class="panel-header">
+                                <h3 class="panel-title" style="color:var(--accent-amber);">🎯 Claimed War Targets (DIBS)</h3>
+                                <span style="font-size:0.75em;color:var(--text-tertiary);">Live Warboard Sync</span>
+                            </div>
+                            <div class="queue-row-header">
+                                <div>Status</div>
+                                <div>Target</div>
+                                <div>Claimed By</div>
+                            </div>
+                            <div id="queue-content">
+                                <div style="text-align:center;color:var(--text-dim);padding:20px;font-style:italic;">Connecting to Warboard...</div>
+                            </div>
+                        </div>
                     </div>
                 </div>
-            </div>
 
-        </div>
-    </main>
+                <!-- ── 3. BOTTOM ROW: BONUS LEDGER & USERSCRIPT v4.0 INSTALL ── -->
+                <div class="bottom-grid">
+                    <div class="panel-card">
+                        <div class="panel-header">
+                            <h3 class="panel-title" style="color:var(--accent-amber);">🏆 Bonus Hit Ledger</h3>
+                        </div>
+                        <div class="ledger-grid">
+                            <div>Milestone</div>
+                            <div>Player</div>
+                            <div>Time</div>
+                            <div>Respect</div>
+                        </div>
+                        <div id="ledger-content">
+                            <div style="text-align:center;color:var(--text-dim);padding:18px;font-style:italic;">Waiting for chain bonus hits...</div>
+                        </div>
+                    </div>
+
+                    <div class="panel-card" style="padding:18px 20px;border-color:rgba(16,185,129,0.35);background:linear-gradient(180deg, rgba(16,185,129,0.05) 0%, var(--bg-surface) 100%);">
+                        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;flex-wrap:wrap;">
+                            <h3 class="panel-title" style="color:var(--accent-emerald);">⚡ FactionOS Chain Command v4.0 Script</h3>
+                            <span style="font-size:0.72em;font-weight:800;color:var(--accent-emerald);background:rgba(16,185,129,0.14);padding:2px 8px;border-radius:999px;">TAMPERMONKEY / PDA</span>
+                        </div>
+                        <p style="font-size:0.85em;color:var(--text-secondary);margin:0 0 14px;line-height:1.5;">
+                            Floating glassmorphic Torn HUD with live chain timer, bidirectional queue sync, <strong>instant enemy med-out &amp; revive alerts</strong> with 1-click Attack &amp; Faction Chat callout, and works across all Torn pages.
+                        </p>
+                        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+                            <a href="/torn-chain-lineup.user.js" class="btn-download" target="_blank">📥 Install / Update v4.0</a>
+                            <button class="lineup-btn" onclick="navigator.clipboard.writeText(window.location.origin + '/torn-chain-lineup.user.js'); lineupSetStatus('Copied v4.0 Script URL!');">📋 Copy Script URL</button>
+                            <a href="/torn-dibs.user.js" class="lineup-btn" target="_blank">DIBS Script</a>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </main>
     </div>
 
 <script>
@@ -1342,11 +742,6 @@ function openSettings() {
 </script>
 
 <script>
-// ══════════════════════════════════════════════════════════════════
-//  CHAIN SENTINEL — High-Performance Direct & Proxy Engine
-// ══════════════════════════════════════════════════════════════════
-
-// ── API Key & Session resolution ──────────────────────────────────
 function getTornApiKey() {
     return (typeof getApiKey === 'function' ? getApiKey() : (localStorage.getItem('warboard_apikey') || '')).trim();
 }
@@ -1355,64 +750,95 @@ function hasChainAccess() {
 }
 let MY_KEY = getTornApiKey();
 
-// ── Milestone definitions ──────────────────────────────────────────
 const MILESTONES = [10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 25000, 50000, 100000];
-function getNextMilestone(c) { for (let m of MILESTONES) { if (c < m) return m; } return c + 1; }
-function getPrevMilestone(c) { let p = 0; for (let m of MILESTONES) { if (c < m) return p; p = m; } return p; }
+function getNextMilestone(c) { for (const m of MILESTONES) { if (c < m) return m; } return c + 1; }
+function getPrevMilestone(c) { let p = 0; for (const m of MILESTONES) { if (c < m) return p; p = m; } return p; }
 
-// ── Chain timer state ──────────────────────────────────────────────
 let currentSeconds = 0;
 let localTimer = null;
 let lastChainCount = -1;
 let warned90 = false;
 let isCooldown = false;
+let soundEnabled = localStorage.getItem('sv_chain_sound') !== 'false';
+let seenMedOutIds = new Set();
+let medOutEvents = [];
+let hospExitList = [];
+let liveServerLineupVersion = 0;
+let manualEnemyFacId = localStorage.getItem('sv_chain_enemy_fac') || '';
 
-// ── Audio ──────────────────────────────────────────────────────────
 let audioCtx;
 function initAudio() {
-    if (!audioCtx) { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
-    if (audioCtx.state === 'suspended') { audioCtx.resume(); }
+    if (!soundEnabled) return null;
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+    return audioCtx;
 }
 function playAlertSound() {
+    if (!soundEnabled) return;
     try {
-        if (!audioCtx) initAudio();
-        const now = audioCtx.currentTime;
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
+        const ctx = initAudio();
+        if (!ctx) return;
+        const now = ctx.currentTime;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
         osc.type = 'square';
         osc.frequency.setValueAtTime(440, now);
         gain.gain.setValueAtTime(0, now);
-        gain.gain.linearRampToValueAtTime(0.2, now + 0.1);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
-        osc.start(now); osc.stop(now + 0.5);
-    } catch(e) {}
+        gain.gain.linearRampToValueAtTime(0.16, now + 0.08);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.start(now); osc.stop(now + 0.46);
+    } catch (e) {}
+}
+function playMedOutSiren() {
+    if (!soundEnabled) return;
+    try {
+        const ctx = initAudio();
+        if (!ctx) return;
+        [[1046.5, 0, 0.11], [1318.5, 0.12, 0.11], [1567.98, 0.24, 0.25]].forEach(([f, off, dur]) => {
+            const now = ctx.currentTime + off;
+            const o = ctx.createOscillator();
+            const g = ctx.createGain();
+            o.type = 'triangle';
+            o.frequency.setValueAtTime(f, now);
+            g.gain.setValueAtTime(0.14, now);
+            g.gain.exponentialRampToValueAtTime(0.001, now + dur);
+            o.connect(g); g.connect(ctx.destination);
+            o.start(now); o.stop(now + dur + 0.02);
+        });
+    } catch (e) {}
+}
+function testMedOutSiren() { initAudio(); playMedOutSiren(); }
+function toggleChainSound() {
+    soundEnabled = !soundEnabled;
+    localStorage.setItem('sv_chain_sound', String(soundEnabled));
+    document.getElementById('sound-toggle-btn').textContent = soundEnabled ? '🔊 Sound: ON' : '🔇 Sound: OFF';
 }
 document.body.addEventListener('click', () => { initAudio(); }, { once: true });
+document.getElementById('sound-toggle-btn').textContent = soundEnabled ? '🔊 Sound: ON' : '🔇 Sound: OFF';
+if (manualEnemyFacId) document.getElementById('sniper-fac-input').value = manualEnemyFacId;
 
-// ── Chain timer display ────────────────────────────────────────────
 function updateTimerDisplay() {
+    const disp = document.getElementById('timer-display');
+    const card = document.getElementById('chain-card');
     if (currentSeconds <= 0) {
-        document.getElementById('timer-display').innerText = '00:00';
-        document.getElementById('chain-card').classList.remove('danger');
+        disp.innerText = '00:00';
+        card.classList.remove('danger');
         return;
     }
     const m = Math.floor(currentSeconds / 60);
     const s = currentSeconds % 60;
-    document.getElementById('timer-display').innerText = (m < 10 ? '0'+m : m) + ':' + (s < 10 ? '0'+s : s);
+    disp.innerText = (m < 10 ? '0' + m : m) + ':' + (s < 10 ? '0' + s : s);
     if (isCooldown) {
-        document.getElementById('chain-card').classList.remove('danger');
-    } else {
-        if (currentSeconds <= 90) {
-            document.getElementById('chain-card').classList.add('danger');
-            if (!warned90 && currentSeconds === 90 && lastChainCount >= 10) {
-                playAlertSound();
-                warned90 = true;
-            }
-        } else {
-            document.getElementById('chain-card').classList.remove('danger');
+        card.classList.remove('danger');
+    } else if (currentSeconds <= 90) {
+        card.classList.add('danger');
+        if (!warned90 && currentSeconds === 90 && lastChainCount >= 10) {
+            playAlertSound();
+            warned90 = true;
         }
+    } else {
+        card.classList.remove('danger');
     }
 }
 
@@ -1420,436 +846,456 @@ function startLocalTimer() {
     if (localTimer) clearInterval(localTimer);
     localTimer = setInterval(() => {
         if (currentSeconds > 0) { currentSeconds--; updateTimerDisplay(); }
+        if (hospExitList.length) {
+            const nowSec = Math.floor(Date.now() / 1000);
+            hospExitList = hospExitList.map(x => ({ ...x, secondsLeft: Math.max(0, x.until - nowSec) })).filter(x => x.secondsLeft > 0);
+            renderMedOutSniper();
+        }
     }, 1000);
 }
 
-// ── Chain status fetch (Direct Torn API with server proxy fallback) ─
+function _fmtAgo(ms) {
+    const s = Math.max(0, Math.floor((Date.now() - ms) / 1000));
+    if (s < 60) return `${s}s ago`;
+    const m = Math.floor(s / 60);
+    return m < 60 ? `${m}m ago` : `${Math.floor(m / 60)}h ago`;
+}
+function _fmtMMSS(s) {
+    const m = Math.floor(s / 60), sec = s % 60;
+    return `${m}:${sec < 10 ? '0' + sec : sec}`;
+}
+
+function renderMedOutSniper() {
+    const medBody = document.getElementById('medout-feed-body');
+    const hospBody = document.getElementById('hosp-exits-body');
+    const banner = document.getElementById('live-medout-banner');
+
+    const fresh = medOutEvents.length && (Date.now() - medOutEvents[0].detectedAt) < 45000 ? medOutEvents[0] : null;
+    if (fresh) {
+        banner.classList.add('active');
+        banner.innerHTML = `
+            <div>
+                <div style="font-weight:900;color:#fecaca;font-size:0.86em;">🚨 ${escHtml(fresh.escapeType)} — SAVED ${escHtml(fresh.timeSavedStr)}</div>
+                <div style="font-size:1.05em;font-weight:800;color:#fff;margin-top:2px;">${escHtml(fresh.playerName)} [${escHtml(fresh.playerId)}] <span style="font-weight:600;color:#cbd5e1;font-size:0.82em;">• ${escHtml(fresh.onlineStatus)}</span></div>
+            </div>
+            <div style="display:flex;gap:6px;">
+                <a class="btn-attack" href="${escAttrStr(fresh.attackUrl)}" target="_blank" rel="noopener">⚔️ Attack Now</a>
+                <button class="lineup-btn" onclick="copyMedOutCallout('${escAttrStr(fresh.id)}')">📋 Copy Call</button>
+            </div>
+        `;
+    } else {
+        banner.classList.remove('active');
+    }
+
+    if (!medOutEvents.length) {
+        medBody.innerHTML = `<div style="padding:14px;text-align:center;color:var(--text-tertiary);font-size:0.85em;">No early hospital escapes detected yet. Polling every 2.5s.</div>`;
+    } else {
+        medBody.innerHTML = medOutEvents.slice(0, 10).map(ev => `
+            <div class="medout-row">
+                <div class="medout-info">
+                    <div class="medout-name-row">
+                        <span>${escHtml(ev.playerName)} [${escHtml(ev.playerId)}]</span>
+                        <span class="medout-badge">${escHtml(ev.escapeType)}</span>
+                    </div>
+                    <div class="medout-sub">
+                        ${ev.onlineStatus === 'Online' ? '🟢 Online' : ev.onlineStatus === 'Idle' ? '🟡 Idle' : '⚫ Offline'} • Saved <strong>${escHtml(ev.timeSavedStr)}</strong> • ${_fmtAgo(ev.detectedAt)}
+                    </div>
+                </div>
+                <div class="medout-acts">
+                    <a class="btn-attack" href="${escAttrStr(ev.attackUrl)}" target="_blank" rel="noopener">⚔️ Attack</a>
+                    <button class="lineup-btn" onclick="copyMedOutCallout('${escAttrStr(ev.id)}')" title="Copy Faction Chat callout">📋</button>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    if (!hospExitList.length) {
+        hospBody.innerHTML = `<div style="padding:10px;text-align:center;color:var(--text-tertiary);font-size:0.82em;">No enemies exiting hospital within 5 minutes.</div>`;
+    } else {
+        hospBody.innerHTML = hospExitList.slice(0, 6).map(ex => `
+            <div class="hosp-exit-row">
+                <div>
+                    <strong>${escHtml(ex.playerName)}</strong> <span style="color:var(--text-tertiary);">[${escHtml(ex.playerId)}]</span>
+                    <span style="color:var(--text-secondary);font-size:0.86em;">• ${escHtml(ex.onlineStatus)}</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;">
+                    <span style="font-family:var(--font-mono);font-weight:800;color:var(--accent-amber);">${_fmtMMSS(ex.secondsLeft)}</span>
+                    <a class="lineup-btn" href="${escAttrStr(ex.attackUrl)}" target="_blank" rel="noopener">⚔️ Prep</a>
+                </div>
+            </div>
+        `).join('');
+    }
+}
+
+function copyMedOutCallout(id) {
+    const ev = medOutEvents.find(x => x.id === id);
+    if (!ev) return;
+    const msg = `🚨 ${ev.escapeType}: ${ev.playerName} [${ev.playerId}] (${ev.onlineStatus}) just left hospital ${ev.timeSavedStr} early! Attack: ${ev.attackUrl}`;
+    navigator.clipboard.writeText(msg).then(() => lineupSetStatus('Copied Med-Out Callout!')).catch(() => {});
+}
+
+async function setManualEnemyFaction() {
+    const val = document.getElementById('sniper-fac-input').value.trim();
+    if (val && !/^\d+$/.test(val)) { lineupSetStatus('Enemy Faction ID must be numeric.'); return; }
+    manualEnemyFacId = val;
+    localStorage.setItem('sv_chain_enemy_fac', val);
+    await fetch('/api/chain/target', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(MY_KEY ? { 'x-api-key': MY_KEY } : {}) },
+        body: JSON.stringify({ enemyFactionId: val || null })
+    }).catch(() => {});
+    fetchChainData();
+}
+function clearManualEnemyFaction() {
+    document.getElementById('sniper-fac-input').value = '';
+    setManualEnemyFaction();
+}
+
 async function fetchChainData() {
     MY_KEY = getTornApiKey();
     if (!hasChainAccess()) {
-        document.getElementById('waiting-msg').innerText = 'API KEY REQUIRED. OPEN SETTINGS (TOP RIGHT).';
+        document.getElementById('waiting-msg').innerText = 'API KEY REQUIRED (TOP RIGHT SETTINGS)';
         return;
     }
     try {
-        let chain = null;
-        if (MY_KEY) {
-            try {
-                const res = await fetch(`https://api.torn.com/faction/?selections=chain&key=${MY_KEY}`, {
-                    signal: AbortSignal.timeout(4000)
-                });
-                const data = await res.json();
-                if (data && data.chain) chain = data.chain;
-            } catch(e) {}
-        }
-        if (!chain) {
-            const headers = MY_KEY ? { 'x-api-key': MY_KEY } : {};
-            const res = await fetch('/api/chain/data', { headers });
-            const data = await res.json();
-            if (data && data.chain) chain = data.chain;
+        const headers = MY_KEY ? { 'x-api-key': MY_KEY } : {};
+        const qs = manualEnemyFacId ? `?enemyFactionId=${encodeURIComponent(manualEnemyFacId)}` : '';
+        const res = await fetch('/api/chain/data' + qs, { headers });
+        const data = await res.json();
+        if (!data) return;
+
+        if (data.enemyFaction && data.enemyFaction.id) {
+            document.getElementById('sniper-enemy-label').textContent = `Tracking: ${data.enemyFaction.name} [${data.enemyFaction.id}]`;
+        } else {
+            document.getElementById('sniper-enemy-label').textContent = 'No Active War / Target';
         }
 
+        if (Array.isArray(data.enemyMedOuts)) {
+            let hasBrandNew = false;
+            for (const ev of data.enemyMedOuts) {
+                if (!seenMedOutIds.has(ev.id)) {
+                    seenMedOutIds.add(ev.id);
+                    if ((Date.now() - ev.detectedAt) < 45000 && medOutEvents.length > 0) {
+                        hasBrandNew = true;
+                    }
+                }
+            }
+            medOutEvents = data.enemyMedOuts;
+            if (hasBrandNew) playMedOutSiren();
+        }
+        if (Array.isArray(data.upcomingHospExits)) {
+            hospExitList = data.upcomingHospExits;
+        }
+        renderMedOutSniper();
+
+        if (data.lineupVersion) {
+            document.getElementById('hero-sync-ver').textContent = `Lineup v${data.lineupVersion}`;
+            if (data.lineupVersion > liveServerLineupVersion) {
+                await pullServerLineup();
+            }
+        }
+
+        const chain = data.chain;
         if (!chain) return;
 
-        // COOLDOWN
         if (chain.cooldown > 0) {
             isCooldown = true;
             document.getElementById('chain-display').innerText = 'COOLDOWN';
             document.getElementById('chain-modifier').style.display = 'none';
-            document.getElementById('waiting-msg').innerText = 'CHAIN DROPPED / ON COOLDOWN...';
-            document.getElementById('waiting-msg').style.display = 'block';
+            document.getElementById('waiting-msg').innerText = 'CHAIN ON COOLDOWN';
+            document.getElementById('hero-bonus-rem').innerText = 'Cooldown active';
             document.getElementById('chain-progress-fill').style.width = '0%';
             document.getElementById('timer-title').innerText = 'COOLDOWN REMAINING';
-            document.getElementById('chain-card').classList.remove('danger');
-            if (Math.abs(chain.cooldown - currentSeconds) > 3) { currentSeconds = chain.cooldown; }
+            if (Math.abs(chain.cooldown - currentSeconds) > 3) currentSeconds = chain.cooldown;
             updateTimerDisplay();
-        }
-        // ACTIVE CHAIN
-        else if (chain.current > 0) {
+        } else if (chain.current > 0) {
             isCooldown = false;
             const current = chain.current;
             const max = getNextMilestone(current);
             const prev = getPrevMilestone(current);
-            document.getElementById('chain-display').innerText = `${current} / ${max}`;
+            document.getElementById('chain-display').innerText = `${current.toLocaleString()} / ${max.toLocaleString()}`;
             document.getElementById('chain-modifier').innerText = `${chain.modifier}x`;
             document.getElementById('chain-modifier').style.display = 'inline-block';
-            document.getElementById('waiting-msg').style.display = 'none';
+            document.getElementById('waiting-msg').innerText = 'LIVE CHAIN';
+            document.getElementById('hero-bonus-rem').innerText = `${(max - current).toLocaleString()} hits to ${max.toLocaleString()} bonus`;
             document.getElementById('timer-title').innerText = 'TIME REMAINING';
             const pct = ((current - prev) / (max - prev)) * 100;
             document.getElementById('chain-progress-fill').style.width = `${Math.min(100, Math.max(0, pct))}%`;
 
-            // ROCK-SOLID TIMER SYNCHRONIZATION:
-            // If chain count changed, a hit happened -> reset timer to API timeout immediately
             if (current !== lastChainCount) {
                 currentSeconds = chain.timeout;
                 lastChainCount = current;
                 warned90 = false;
-                // Zero-delay cross-trigger: immediately poll attacks to pull the hitter
                 if (typeof pollAttacks === 'function') pollAttacks();
-            } else {
-                // If local countdown drifted by more than 2 seconds from Torn API, resync
-                if (Math.abs(chain.timeout - currentSeconds) > 2) {
-                    currentSeconds = chain.timeout;
-                }
+            } else if (Math.abs(chain.timeout - currentSeconds) > 2) {
+                currentSeconds = chain.timeout;
             }
             updateTimerDisplay();
-        }
-        // NO CHAIN
-        else {
+        } else {
             isCooldown = false;
-            document.getElementById('chain-display').innerText = '0 / 0';
-            document.getElementById('chain-modifier').innerText = '1.0x';
-            document.getElementById('chain-modifier').style.display = 'inline-block';
+            document.getElementById('chain-display').innerText = '0 / 10';
+            document.getElementById('chain-modifier').innerText = '1.00x';
+            document.getElementById('waiting-msg').innerText = 'WAITING FOR CHAIN...';
+            document.getElementById('hero-bonus-rem').innerText = '10 hits to first bonus';
             document.getElementById('chain-progress-fill').style.width = '0%';
-            document.getElementById('timer-display').innerText = '00:00';
-            document.getElementById('timer-title').innerText = 'TIME REMAINING';
-            document.getElementById('waiting-msg').innerText = 'WAITING FOR CHAIN TO START...';
-            document.getElementById('waiting-msg').style.display = 'block';
-            document.getElementById('chain-card').classList.remove('danger');
             currentSeconds = 0;
             lastChainCount = -1;
+            updateTimerDisplay();
         }
-    } catch(e) { console.error('[ChainData] error:', e); }
+    } catch (e) {}
 }
 
-// ── Bonus Hit Ledger ───────────────────────────────────────────────
 async function fetchLedger() {
     MY_KEY = getTornApiKey();
     if (!hasChainAccess()) return;
     try {
-        let attacks = null;
-        if (MY_KEY) {
-            try {
-                const r = await fetch(`https://api.torn.com/faction/?selections=attacks&key=${MY_KEY}`);
-                const data = await r.json();
-                if (data && data.attacks) attacks = Object.values(data.attacks);
-            } catch(e) {}
-        }
-        if (!attacks) {
-            const headers = MY_KEY ? { 'x-api-key': MY_KEY } : {};
-            const r = await fetch('/api/chain/attacks', { headers });
-            const data = await r.json();
-            if (data && data.attacks) attacks = data.attacks;
-        }
-        if (!attacks) return;
-
+        const headers = MY_KEY ? { 'x-api-key': MY_KEY } : {};
+        const r = await fetch('/api/chain/attacks', { headers });
+        const data = await r.json();
+        const attacks = data && data.attacks ? data.attacks : [];
         const milestoneAtks = attacks.filter(a => MILESTONES.includes(a.chain)).sort((a, b) => b.chain - a.chain);
         if (!milestoneAtks.length) {
-            document.getElementById('ledger-content').innerHTML = `<div style="text-align:center;color:var(--text-dim);padding:20px;font-style:italic;">No bonus hits logged in the current chain yet.</div>`;
+            document.getElementById('ledger-content').innerHTML = `<div style="text-align:center;color:var(--text-dim);padding:18px;font-style:italic;">No bonus hits logged in the current chain yet.</div>`;
             return;
         }
         document.getElementById('ledger-content').innerHTML = milestoneAtks.map(atk => {
-            const timeStr = new Date(atk.timestamp_ended * 1000).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+            const timeStr = new Date(atk.timestamp_ended * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
             return `<div class="ledger-row">
                 <div><span class="milestone-badge">#${atk.chain}</span></div>
-                <div><a href="https://www.torn.com/profiles.php?XID=${atk.attacker_id}" target="_blank" style="color:var(--text-main);text-decoration:none;font-weight:bold;">${atk.attacker_name} [${atk.attacker_id}]</a></div>
+                <div><a href="https://www.torn.com/profiles.php?XID=${atk.attacker_id}" target="_blank" style="color:var(--text-primary);text-decoration:none;font-weight:700;">${escHtml(atk.attacker_name)} [${atk.attacker_id}]</a></div>
                 <div>${timeStr}</div>
-                <div style="color:var(--accent-emerald);">+${atk.respect_gain} Respect</div>
+                <div style="color:var(--accent-emerald);font-weight:700;">+${atk.respect_gain}</div>
             </div>`;
         }).join('');
-    } catch(e) { console.error('[Ledger] fetch failed:', e); }
+    } catch (e) {}
 }
 
-// ── Boot chain polling ─────────────────────────────────────────────
-if (hasChainAccess()) {
-    fetchChainData();
-    fetchLedger();
-    startLocalTimer();
-    const cpm = parseInt(localStorage.getItem('warboard_cpm')) || 15;
-    const refreshMs = Math.max(Math.floor(60000 / cpm), 2000);
-    setInterval(fetchChainData, refreshMs);
-    setInterval(fetchLedger, 30000);
-}
+function escHtml(str) { return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+function escAttrStr(str) { return String(str || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;'); }
 </script>
 
 <script>
-// ══════════════════════════════════════════════════════════════════
-//  CHAIN LINEUP — Automatic Lineup Manager
-// ══════════════════════════════════════════════════════════════════
+const LINEUP_LS = 'chain_lineup_v3';
+const AUTO_SKIP_DELAY = 45;
+const HIT_POLL_MS = 2000;
+const STATUS_POLL_MS = 45000;
 
-// ── Constants ──────────────────────────────────────────────────────
-const LINEUP_LS        = 'chain_lineup_v3';
-const AUTO_SKIP_DELAY  = 45;  // seconds before auto-skip if unavailable
-const HIT_POLL_MS      = 1500; // Rapid 1.5s hit polling // poll attacks every 3.5s for rapid hit detection
-const STATUS_POLL_MS   = 60000; // poll member status every 60s
-
-// ── State ──────────────────────────────────────────────────────────
-let lineupMembers    = [];  // [{ name, id, hit, skipped }]
-let lineupCurrent    = 0;
-let lineupLoop       = true;
-let lineupCycleNum   = 1;
-let autoMode         = false;
-let targetHitTime    = localStorage.getItem('chain_hit_time') || '3:00';
-
-let memberStatuses   = {};  // id -> { online, state, until, lastActionTs, lastActionRelative }
-// Initialize faction members from localStorage cache immediately
+let lineupMembers = [];
+let lineupLoop = true;
+let lineupCycleNum = 1;
+let autoMode = true;
+let targetHitTime = localStorage.getItem('chain_hit_time') || '3:00';
+let memberStatuses = {};
 let factionMemberList = [];
-try {
-    const cachedMembers = localStorage.getItem('sv_faction_members_cache');
-    if (cachedMembers) factionMemberList = JSON.parse(cachedMembers);
-} catch(e) {}
+try { factionMemberList = JSON.parse(localStorage.getItem('sv_faction_members_cache') || '[]'); } catch (e) {}
 let suggestSelectedIndex = -1;
-let processedAtkIds  = new Set();
-let chainHitLog      = [];  // [{ chain, name, id, ts }] — most recent first
-
-let autoSkipTimer    = null;
+let processedAtkIds = new Set();
+let isFirstAttackSnapshot = true;
+let chainHitLog = [];
+let autoSkipTimer = null;
 let autoSkipSecondsLeft = 0;
 
-// ── Persist ────────────────────────────────────────────────────────
+async function pullServerLineup() {
+    try {
+        const res = await fetch('/api/chain/lineup');
+        const json = await res.json();
+        if (json?.ok && json?.data && Array.isArray(json.data.lineup)) {
+            liveServerLineupVersion = json.data.version || liveServerLineupVersion;
+            lineupMembers = json.data.lineup;
+            if (json.data.targetHitTime !== undefined) targetHitTime = json.data.targetHitTime;
+            if (json.data.cycle) lineupCycleNum = json.data.cycle;
+            if (json.data.loopMode !== undefined) lineupLoop = json.data.loopMode;
+            if (json.data.autoMode !== undefined) autoMode = json.data.autoMode;
+            document.getElementById('lineup-loop-btn').classList.toggle('active', lineupLoop);
+            _syncHitTimeUI();
+            _syncAutoModeUI();
+            lineupRender();
+        }
+    } catch (e) {}
+}
+
 function lineupLoad() {
     try {
         const d = JSON.parse(localStorage.getItem(LINEUP_LS) || '{}');
-        lineupMembers  = d.members  || [];
-        lineupCurrent  = d.current  || 0;
-        lineupLoop     = d.loop     !== undefined ? d.loop : true;
-        lineupCycleNum = d.cycle    || 1;
-        autoMode       = d.autoMode || false;
-        targetHitTime  = d.hitTime  !== undefined ? d.hitTime : (localStorage.getItem('chain_hit_time') || '3:00');
+        lineupMembers = d.members || [];
+        lineupLoop = d.loop !== undefined ? d.loop : true;
+        lineupCycleNum = d.cycle || 1;
+        autoMode = d.autoMode !== undefined ? d.autoMode : true;
+        targetHitTime = d.hitTime !== undefined ? d.hitTime : (localStorage.getItem('chain_hit_time') || '3:00');
         _syncHitTimeUI();
-    } catch(e) {}
-    const btn = document.getElementById('lineup-loop-btn');
-    if (btn) btn.classList.toggle('active', lineupLoop);
+    } catch (e) {}
+    document.getElementById('lineup-loop-btn').classList.toggle('active', lineupLoop);
     _syncAutoModeUI();
-
-    // If local storage has no lineup, attempt to pull shared server lineup
-    if (!lineupMembers || !lineupMembers.length) {
-        fetch('/api/chain/lineup')
-            .then(r => r.json())
-            .then(res => {
-                if (res?.ok && res?.data?.lineup?.length && (!lineupMembers || !lineupMembers.length)) {
-                    lineupMembers = res.data.lineup;
-                    if (res.data.targetHitTime) targetHitTime = res.data.targetHitTime;
-                    if (res.data.cycle) lineupCycleNum = res.data.cycle;
-                    _syncHitTimeUI();
-                    lineupRender();
-                }
-            })
-            .catch(() => {});
-    }
+    pullServerLineup();
 }
 
-let _syncDebounceTimer = null;
+let _syncDebounce = null;
 function syncLineupToServer() {
-    if (_syncDebounceTimer) clearTimeout(_syncDebounceTimer);
-    _syncDebounceTimer = setTimeout(() => {
+    if (_syncDebounce) clearTimeout(_syncDebounce);
+    _syncDebounce = setTimeout(async () => {
         try {
-            fetch('/api/chain/lineup', {
+            const res = await fetch('/api/chain/lineup', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     lineup: lineupMembers,
                     targetHitTime,
                     cycle: lineupCycleNum,
-                    formattedCompact: typeof _generateCompactLineupText === 'function' ? _generateCompactLineupText() : '',
-                    formattedFull: typeof _generateFullLineupText === 'function' ? _generateFullLineupText() : ''
+                    loopMode,
+                    autoMode,
+                    formattedCompact: _generateCompactLineupText(),
+                    formattedFull: _generateFullLineupText()
                 })
-            }).catch(() => {});
-        } catch(e) {}
-    }, 250);
+            });
+            const d = await res.json();
+            if (d && d.version) {
+                liveServerLineupVersion = d.version;
+                document.getElementById('hero-sync-ver').textContent = `Lineup v${d.version}`;
+            }
+        } catch (e) {}
+    }, 200);
 }
 
 function lineupSave() {
     localStorage.setItem(LINEUP_LS, JSON.stringify({
-        members: lineupMembers,
-        current: lineupCurrent,
-        loop:    lineupLoop,
-        cycle:   lineupCycleNum,
-        autoMode,
-        hitTime: targetHitTime
+        members: lineupMembers, loop: lineupLoop, cycle: lineupCycleNum, autoMode, hitTime: targetHitTime
     }));
     localStorage.setItem('chain_hit_time', targetHitTime);
     syncLineupToServer();
 }
 
-// ── Member status helpers ──────────────────────────────────────────
-function _memberOnlineStatus(m) {
-    return ((m.last_action || {}).status || 'Offline');
-}
-function _memberState(m) {
-    return ((m.status || {}).state || 'Okay');
-}
 function isMemberEligible(memberId) {
     const st = memberStatuses[memberId];
-    if (!st) return true; // Default to true if loading to avoid false skips
+    if (!st) return true;
     return (st.online === 'Online' || st.online === 'Idle') && st.state === 'Okay';
 }
-
 function _statusPillClass(online, state) {
     if (state === 'Hospital') return 'pill-hospital';
-    if (state === 'Traveling') return 'pill-travel';
-    if (state === 'Federal') return 'pill-federal';
+    if (state === 'Traveling' || state === 'Abroad') return 'pill-travel';
+    if (state === 'Federal' || state === 'Jail') return 'pill-federal';
     if (online === 'Online') return 'pill-ok';
     if (online === 'Idle') return 'pill-idle';
     return 'pill-offline';
 }
 function _statusLabel(online, state) {
     if (state === 'Hospital') return 'Hospital';
-    if (state === 'Traveling') return 'Traveling';
-    if (state === 'Federal') return 'Federal';
-    if (online === 'Online') return 'Online';
-    if (online === 'Idle') return 'Idle';
-    return 'Offline';
+    if (state === 'Traveling' || state === 'Abroad') return 'Traveling';
+    if (state === 'Federal' || state === 'Jail') return 'Jail';
+    return online || 'Offline';
 }
-function _dotClass(online) {
-    if (online === 'Online') return 'online';
-    if (online === 'Idle') return 'idle';
-    return 'offline';
-}
+function _dotClass(online) { return online === 'Online' ? 'online' : (online === 'Idle' ? 'idle' : 'offline'); }
 
-// ── Update faction member pool ─────────────────────────────────────
 function _updateFactionMemberPool(membersObj) {
     if (!membersObj || typeof membersObj !== 'object') return;
-    const newList = [];
-    const newStatuses = {};
+    const newList = [], newStatuses = {};
     for (const [id, m] of Object.entries(membersObj)) {
         newList.push({ name: m.name, id: parseInt(id) });
         newStatuses[id] = {
-            online: _memberOnlineStatus(m),
-            state: _memberState(m),
-            until: (m.status || {}).until || 0,
-            lastActionTs: (m.last_action || {}).timestamp || 0,
-            lastActionRelative: (m.last_action || {}).relative || ''
+            online: m.last_action?.status || 'Offline',
+            state: m.status?.state || 'Okay',
+            until: m.status?.until || 0,
+            lastActionTs: m.last_action?.timestamp || 0
         };
     }
-    // Match ID for any lineup members that were added by name without ID
     for (const lm of lineupMembers) {
         if (!lm.id) {
-            const found = newList.find(m => m.name.toLowerCase() === lm.name.toLowerCase());
-            if (found) lm.id = found.id;
+            const f = newList.find(m => m.name.toLowerCase() === lm.name.toLowerCase());
+            if (f) lm.id = f.id;
         }
     }
-
     newList.sort((a, b) => {
         const ord = { Online: 0, Idle: 1, Offline: 2 };
-        const oa = ord[newStatuses[a.id]?.online] ?? 2;
-        const ob = ord[newStatuses[b.id]?.online] ?? 2;
-        return oa !== ob ? oa - ob : a.name.localeCompare(b.name);
+        const d = (ord[newStatuses[a.id]?.online] ?? 2) - (ord[newStatuses[b.id]?.online] ?? 2);
+        return d !== 0 ? d : a.name.localeCompare(b.name);
     });
     factionMemberList = newList;
     memberStatuses = newStatuses;
-    try {
-        localStorage.setItem('sv_faction_members_cache', JSON.stringify(newList));
-    } catch(e) {}
+    try { localStorage.setItem('sv_faction_members_cache', JSON.stringify(newList)); } catch (e) {}
     lineupRender();
 }
 
-// ── Member status polling (every 60s) ──────────────────────────────
 async function pollMemberStatus() {
     MY_KEY = getTornApiKey();
     if (!hasChainAccess()) return;
     try {
-        let members = null;
-        if (MY_KEY) {
-            try {
-                const res = await fetch(`https://api.torn.com/faction/?selections=basic&key=${MY_KEY}`, {
-                    signal: AbortSignal.timeout(6000)
-                });
-                const data = await res.json();
-                if (data && data.members) members = data.members;
-            } catch(e) {}
-        }
-        if (!members) {
-            const headers = MY_KEY ? { 'x-api-key': MY_KEY } : {};
-            const res = await fetch('/api/chain/members', { headers });
-            const data = await res.json();
-            if (data && data.members) members = data.members;
-        }
-        if (members) _updateFactionMemberPool(members);
-    } catch(e) { console.warn('[Status] poll failed:', e); }
+        const headers = MY_KEY ? { 'x-api-key': MY_KEY } : {};
+        const res = await fetch('/api/chain/members', { headers });
+        const data = await res.json();
+        if (data && data.members) _updateFactionMemberPool(data.members);
+    } catch (e) {}
 }
 
-// ── Attack & Hit Detection (every 3.5s) ────────────────────────────
 async function pollAttacks() {
     MY_KEY = getTornApiKey();
-    if (!hasChainAccess() || !lineupMembers.length) return;
+    if (!hasChainAccess()) return;
     try {
-        let attacks = null;
-        if (MY_KEY) {
-            try {
-                const res = await fetch(`https://api.torn.com/faction/?selections=attacks&key=${MY_KEY}`, {
-                    signal: AbortSignal.timeout(4000)
-                });
-                const data = await res.json();
-                if (data && data.attacks) attacks = Object.values(data.attacks);
-            } catch(e) {}
+        const headers = MY_KEY ? { 'x-api-key': MY_KEY } : {};
+        const res = await fetch('/api/chain/attacks', { headers });
+        const data = await res.json();
+        const attacks = data && data.attacks ? data.attacks : [];
+        if (!attacks.length) return;
+
+        const chainAtks = attacks.filter(a => a.chain && a.chain > 0).sort((a, b) => (a.timestamp_ended || 0) - (b.timestamp_ended || 0));
+        if (isFirstAttackSnapshot) {
+            for (const atk of chainAtks) processedAtkIds.add(atk.code || `${atk.attacker_id}_${atk.timestamp_ended}`);
+            chainHitLog = chainAtks.slice(-20).reverse().map(a => ({ chain: a.chain, name: a.attacker_name || 'Operative', id: a.attacker_id, ts: a.timestamp_ended }));
+            isFirstAttackSnapshot = false;
+            renderHitLog();
+            return;
         }
-        if (!attacks) {
-            const headers = MY_KEY ? { 'x-api-key': MY_KEY } : {};
-            const res = await fetch('/api/chain/attacks', { headers });
-            const data = await res.json();
-            if (data && data.attacks) attacks = data.attacks;
-        }
-
-        if (!attacks || !attacks.length) return;
-
-        const chainAtks = attacks.filter(a => a.chain && a.chain > 0);
-        if (!chainAtks.length) return;
-
-        chainAtks.sort((a, b) => (a.timestamp_ended || 0) - (b.timestamp_ended || 0));
 
         let stateChanged = false;
-
         for (const atk of chainAtks) {
             const uid = atk.code || `${atk.attacker_id}_${atk.timestamp_ended}`;
             if (processedAtkIds.has(uid)) continue;
             processedAtkIds.add(uid);
 
-            // Record into live Chain Activity log
-            chainHitLog.unshift({
-                chain: atk.chain,
-                name: atk.attacker_name || 'Operative',
-                id: atk.attacker_id,
-                ts: atk.timestamp_ended || Math.floor(Date.now() / 1000)
-            });
-            if (chainHitLog.length > 50) chainHitLog.pop();
+            chainHitLog.unshift({ chain: atk.chain, name: atk.attacker_name || 'Operative', id: atk.attacker_id, ts: atk.timestamp_ended || Math.floor(Date.now() / 1000) });
+            if (chainHitLog.length > 40) chainHitLog.pop();
             renderHitLog();
 
-            // Match attacker against lineup by ID or name
+            if (!lineupMembers.length) continue;
             const atkId = atk.attacker_id ? String(atk.attacker_id) : null;
             const atkName = (atk.attacker_name || '').toLowerCase().trim();
-            const idx = lineupMembers.findIndex(m =>
-                (m.id && atkId && String(m.id) === atkId) ||
-                (m.name && m.name.toLowerCase().trim() === atkName)
-            );
+            const idx = lineupMembers.findIndex(m => (m.id && atkId && String(m.id) === atkId) || (m.name && m.name.toLowerCase().trim() === atkName));
 
             if (idx !== -1) {
-                stateChanged = true;
-
-                // CONVEYOR ROTATION: Move the hitter to the bottom of the queue!
-                const [hitter] = lineupMembers.splice(idx, 1);
-                hitter.hit = true;
-                lineupMembers.push(hitter);
-
-                if (idx === 0) {
-                    lineupSetStatus(`✓ ${atk.attacker_name} landed hit #${atk.chain}! Moved to bottom.`);
-                } else {
-                    lineupSetStatus(`✓ ${atk.attacker_name} landed hit #${atk.chain} (out of order)! Moved to bottom.`);
-                }
-
                 if (autoMode) {
+                    const [hitter] = lineupMembers.splice(idx, 1);
+                    hitter.hit = true;
+                    // Bug Fix: honor lineupLoop instead of always pushing back
+                    if (lineupLoop) lineupMembers.push(hitter);
+                    lineupCycleNum++;
+                    stateChanged = true;
+                    lineupSetStatus(`✓ ${atk.attacker_name} landed hit #${atk.chain}!`);
                     clearAutoSkipTimer();
                     startAutoSkipTimer();
+                } else {
+                    lineupMembers[idx].hit = true;
+                    stateChanged = true;
                 }
             }
         }
-
-        if (processedAtkIds.size > 1000) {
-            processedAtkIds = new Set([...processedAtkIds].slice(-500));
-        }
-
-        if (stateChanged) {
-            lineupSave();
-            lineupRender();
-            // Zero-delay cross-trigger: immediately sync timer and chain count
-            if (typeof fetchChainData === 'function') fetchChainData();
-        }
-    } catch(e) { /* silent */ }
+        if (processedAtkIds.size > 1000) processedAtkIds = new Set([...processedAtkIds].slice(-500));
+        if (stateChanged) { lineupSave(); lineupRender(); }
+    } catch (e) {}
 }
 
-// ── Auto-skip timer logic ──────────────────────────────────────────
+function forceHitAndRotate() {
+    if (!lineupMembers.length) return;
+    const [hitter] = lineupMembers.splice(0, 1);
+    hitter.hit = true;
+    if (lineupLoop) lineupMembers.push(hitter);
+    lineupCycleNum++;
+    lineupSave();
+    lineupRender();
+    lineupSetStatus(`✅ ${hitter.name} hit confirmed! Next UP: ${lineupMembers[0] ? lineupMembers[0].name : 'None'}`);
+}
+
 function startAutoSkipTimer() {
     clearAutoSkipTimer();
     if (!autoMode || !lineupMembers.length) return;
-    const cur = lineupMembers[0]; // Slot 0 is always Currently Up
+    const cur = lineupMembers[0];
     if (!cur) return;
     const eligible = cur.id ? isMemberEligible(String(cur.id)) : true;
     if (eligible) return;
@@ -1861,154 +1307,90 @@ function startAutoSkipTimer() {
         if (cdEl) cdEl.textContent = `auto-skip in ${autoSkipSecondsLeft}s`;
         if (autoSkipSecondsLeft <= 0) {
             clearAutoSkipTimer();
-            lineupSetStatus(`Auto-skipped ${cur.name} (unavailable) — moved to bottom.`);
             lineupSkip(0);
         }
     }, 1000);
 }
+function clearAutoSkipTimer() { if (autoSkipTimer) { clearInterval(autoSkipTimer); autoSkipTimer = null; } autoSkipSecondsLeft = 0; }
 
-function clearAutoSkipTimer() {
-    if (autoSkipTimer) { clearInterval(autoSkipTimer); autoSkipTimer = null; }
-    autoSkipSecondsLeft = 0;
-}
-
-// ── Reorder Helpers ────────────────────────────────────────────────
 function lineupMove(from, to) {
-    if (from < 0 || from >= lineupMembers.length) return;
-    if (to < 0 || to >= lineupMembers.length) return;
-    if (from === to) return;
-
+    if (from < 0 || from >= lineupMembers.length || to < 0 || to >= lineupMembers.length || from === to) return;
     const [moved] = lineupMembers.splice(from, 1);
     lineupMembers.splice(to, 0, moved);
-
-    clearAutoSkipTimer();
-    if (autoMode) startAutoSkipTimer();
-
-    lineupSave();
-    lineupRender();
+    lineupSave(); lineupRender();
 }
-
 function lineupMakeCurrent(idx) {
     if (idx <= 0 || idx >= lineupMembers.length) return;
     const [moved] = lineupMembers.splice(idx, 1);
-    lineupMembers.unshift(moved); // Put right at position 0 (Currently Up)
-
-    clearAutoSkipTimer();
-    if (autoMode) startAutoSkipTimer();
-
-    lineupSave();
-    lineupRender();
+    lineupMembers.unshift(moved);
+    lineupSave(); lineupRender();
     lineupSetStatus(`Promoted ${moved.name} to Currently Up!`);
 }
-
 function lineupSwapUpNext() {
     if (lineupMembers.length < 2) return;
-    const temp = lineupMembers[0];
-    lineupMembers[0] = lineupMembers[1];
-    lineupMembers[1] = temp;
-
-    clearAutoSkipTimer();
-    if (autoMode) startAutoSkipTimer();
-
-    lineupSave();
-    lineupRender();
-    lineupSetStatus(`Swapped ${lineupMembers[0].name} and ${lineupMembers[1].name}.`);
+    [lineupMembers[0], lineupMembers[1]] = [lineupMembers[1], lineupMembers[0]];
+    lineupSave(); lineupRender();
 }
-
 function lineupPromptMove(idx) {
     const m = lineupMembers[idx];
     if (!m) return;
     const raw = prompt(`Move "${m.name}" to position (1 - ${lineupMembers.length}):`, String(idx + 1));
     if (!raw) return;
     const targetPos = parseInt(raw, 10);
-    if (isNaN(targetPos) || targetPos < 1 || targetPos > lineupMembers.length) {
-        alert(`Please enter a valid number between 1 and ${lineupMembers.length}.`);
-        return;
-    }
-    lineupMove(idx, targetPos - 1);
-    lineupSetStatus(`Moved ${m.name} to position #${targetPos}.`);
+    if (!isNaN(targetPos) && targetPos >= 1 && targetPos <= lineupMembers.length) lineupMove(idx, targetPos - 1);
 }
 
-// ── Render ──────────────────────────────────────────────────────────
 function lineupRender() {
-    const badge = document.getElementById('lineup-cycle-badge');
-    if (badge) badge.textContent = `Cycle ${lineupCycleNum}`;
-
-    const upSection   = document.getElementById('currently-up-section');
+    document.getElementById('lineup-cycle-badge').textContent = `Cycle ${lineupCycleNum}`;
+    const upSection = document.getElementById('currently-up-section');
     const nextSection = document.getElementById('next-section');
     const queueHeader = document.getElementById('queue-section-header');
-    const ul          = document.getElementById('lineup-list');
+    const ul = document.getElementById('lineup-list');
 
-    if (!ul || !upSection || !nextSection) return;
-
-    if (lineupMembers.length === 0) {
-        upSection.innerHTML = '';
-        nextSection.innerHTML = '';
-        queueHeader.style.display = 'none';
-        ul.innerHTML = `<li style="padding:24px 22px;color:var(--text-tertiary);font-style:italic;font-size:0.88em;">No members yet. Add faction members below to build the hit order.</li>`;
+    if (!lineupMembers.length) {
+        upSection.innerHTML = ''; nextSection.innerHTML = ''; queueHeader.style.display = 'none';
+        ul.innerHTML = `<li style="padding:22px;color:var(--text-tertiary);font-style:italic;font-size:0.86em;">No members yet. Click <b>⚡ Auto-Fill</b> or search below.</li>`;
         return;
     }
 
-    // ── Currently Up: ALWAYS slot 0 ──────────────────────────────
     const cur = lineupMembers[0];
-    const stKey0  = cur.id ? String(cur.id) : null;
-    const online0 = stKey0 ? (memberStatuses[stKey0]?.online || 'Offline') : 'Offline';
-    const state0  = stKey0 ? (memberStatuses[stKey0]?.state  || 'Okay')    : 'Okay';
-    const eligible0 = stKey0 ? isMemberEligible(stKey0) : true;
-    const pillCls0  = _statusPillClass(online0, state0);
-    const pillLbl0  = _statusLabel(online0, state0);
-    const isUnavail0 = !eligible0;
+    const st0 = cur.id ? memberStatuses[String(cur.id)] : null;
+    const online0 = st0?.online || 'Offline', state0 = st0?.state || 'Okay';
+    const isUnavail0 = cur.id ? !isMemberEligible(String(cur.id)) : false;
 
     upSection.innerHTML = `
-    <div class="tier-up-card ${isUnavail0 ? 'unavailable' : ''}" id="tier-up-dropzone"
-        ondragover="event.preventDefault(); this.classList.add('drag-over');"
-        ondragleave="this.classList.remove('drag-over');"
-        ondrop="event.preventDefault(); this.classList.remove('drag-over'); const f = parseInt(event.dataTransfer.getData('text/plain')); if (!isNaN(f) && f !== 0) lineupMakeCurrent(f);">
+    <div class="tier-up-card ${isUnavail0 ? 'unavailable' : ''}" ondragover="event.preventDefault()" ondrop="event.preventDefault(); const f=parseInt(event.dataTransfer.getData('text/plain')); if(!isNaN(f)&&f!==0) lineupMakeCurrent(f);">
         <div class="tier-label">
-            <span>Currently Up</span>
-            ${isUnavail0 && autoMode ? `<span class="auto-skip-countdown" id="auto-skip-cd">${autoSkipSecondsLeft > 0 ? 'auto-skip in '+autoSkipSecondsLeft+'s' : 'unavailable'}</span>` : ''}
+            <span>🎯 Currently Up</span>
+            ${isUnavail0 && autoMode ? `<span id="auto-skip-cd">${autoSkipSecondsLeft > 0 ? 'auto-skip in ' + autoSkipSecondsLeft + 's' : 'unavailable'}</span>` : ''}
         </div>
         <div class="tier-body">
-            <span class="tier-position lineup-slot-clickable" onclick="lineupPromptMove(0)" title="Click to jump to custom position">1</span>
-            <span class="tier-name">${_esc(cur.name)}</span>
-            ${cur.hit ? '<span style="font-size:0.85em;color:var(--accent-emerald);font-weight:900;">✓ HIT</span>' : ''}
-            <span class="tier-status-pill ${pillCls0}">${pillLbl0}</span>
-            ${targetHitTime ? `<span class="hit-time-badge ${(currentSeconds > 0 && currentSeconds <= parseTimeToSeconds(targetHitTime)) ? 'in-window' : ''}">${(currentSeconds > 0 && currentSeconds <= parseTimeToSeconds(targetHitTime)) ? '🎯 HIT NOW ('+targetHitTime+')' : 'Hit at '+targetHitTime}</span>` : ''}
+            <span class="tier-position" onclick="lineupPromptMove(0)">#1</span>
+            <span class="tier-name">${_esc(cur.name)} ${cur.hit ? '<span style="color:var(--accent-emerald);font-size:0.75em;">✓ HIT</span>' : ''}</span>
+            <span class="tier-status-pill ${_statusPillClass(online0, state0)}">${_statusLabel(online0, state0)}</span>
             <div class="tier-actions">
-                ${lineupMembers.length > 1 ? '<button class="tier-action-btn" onclick="lineupSwapUpNext()" title="Swap with Next (slot #2)">⇄ Swap Next</button>' : ''}
-                ${lineupMembers.length > 1 ? '<button class="tier-action-btn" onclick="lineupMove(0, 1)" title="Move down to Next position">▼ Down</button>' : ''}
-                ${lineupMembers.length > 2 ? '<button class="tier-action-btn" onclick="lineupMove(0, lineupMembers.length - 1)" title="Send to very bottom of queue">⏬ Bottom</button>' : ''}
-                <button class="tier-skip-btn" onclick="lineupSkip(0)" title="Skip this player (moves to bottom)">Skip</button>
-                <button class="lineup-remove-btn" onmousedown="event.stopPropagation()" onclick="lineupRemove(0)" title="Remove completely" aria-label="Remove"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+                <button class="btn-force-hit" onclick="forceHitAndRotate()">✅ Hit &amp; Rotate</button>
+                ${lineupMembers.length > 1 ? '<button class="tier-action-btn" onclick="lineupSwapUpNext()">⇄ Swap</button>' : ''}
+                <button class="tier-skip-btn" onclick="lineupSkip(0)">⏭ Skip</button>
+                <button class="lineup-remove-btn" onclick="lineupRemove(0)" title="Remove">✕</button>
             </div>
         </div>
     </div>`;
 
-    // ── Next: ALWAYS slot 1 (if available) ────────────────────────
     if (lineupMembers.length >= 2) {
         const nxt = lineupMembers[1];
-        const stKey1  = nxt.id ? String(nxt.id) : null;
-        const online1 = stKey1 ? (memberStatuses[stKey1]?.online || 'Offline') : 'Offline';
-        const state1  = stKey1 ? (memberStatuses[stKey1]?.state  || 'Okay')    : 'Okay';
-        const pillCls1 = _statusPillClass(online1, state1);
-        const pillLbl1 = _statusLabel(online1, state1);
-
+        const st1 = nxt.id ? memberStatuses[String(nxt.id)] : null;
+        const online1 = st1?.online || 'Offline', state1 = st1?.state || 'Okay';
         nextSection.innerHTML = `
-        <div class="tier-next-card" id="tier-next-dropzone"
-            ondragover="event.preventDefault(); this.classList.add('drag-over');"
-            ondragleave="this.classList.remove('drag-over');"
-            ondrop="event.preventDefault(); this.classList.remove('drag-over'); const f = parseInt(event.dataTransfer.getData('text/plain')); if (!isNaN(f) && f !== 1) lineupMove(f, 1);">
-            <div class="tier-label"><span>Next</span></div>
+        <div class="tier-next-card" ondragover="event.preventDefault()" ondrop="event.preventDefault(); const f=parseInt(event.dataTransfer.getData('text/plain')); if(!isNaN(f)&&f!==1) lineupMove(f, 1);">
+            <div class="tier-label"><span>On Deck (Next)</span></div>
             <div class="tier-body">
-                <span class="tier-position lineup-slot-clickable" onclick="lineupPromptMove(1)" title="Click to jump to custom position">2</span>
+                <span class="tier-position" onclick="lineupPromptMove(1)">#2</span>
                 <span class="tier-name">${_esc(nxt.name)}</span>
-                ${nxt.hit ? '<span style="font-size:0.85em;color:var(--accent-emerald);font-weight:900;">✓ HIT</span>' : ''}
-                <span class="tier-status-pill ${pillCls1}">${pillLbl1}</span>
+                <span class="tier-status-pill ${_statusPillClass(online1, state1)}">${_statusLabel(online1, state1)}</span>
                 <div class="tier-actions">
-                    <button class="promote-btn" onclick="lineupMakeCurrent(1)" title="Make Currently Up (#1)">▲ Make Up</button>
-                    ${lineupMembers.length > 2 ? '<button class="tier-action-btn" onclick="lineupMove(1, 2)" title="Move down into Queue">▼ Down</button>' : ''}
-                    ${lineupMembers.length > 2 ? '<button class="tier-action-btn" onclick="lineupMove(1, lineupMembers.length - 1)" title="Send to very bottom">⏬ Bottom</button>' : ''}
-                    <button class="lineup-remove-btn" onmousedown="event.stopPropagation()" onclick="lineupRemove(1)" title="Remove completely" aria-label="Remove"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+                    <button class="promote-btn" onclick="lineupMakeCurrent(1)">▲ Make Up</button>
+                    <button class="lineup-remove-btn" onclick="lineupRemove(1)">✕</button>
                 </div>
             </div>
         </div>`;
@@ -2016,709 +1398,242 @@ function lineupRender() {
         nextSection.innerHTML = '';
     }
 
-    // ── Queue: Slots 2, 3, 4... (all remaining members) ───────────
     const queueItems = lineupMembers.slice(2);
-
-    if (queueItems.length > 0) {
-        queueHeader.style.display = 'block';
-    } else {
-        queueHeader.style.display = 'none';
-    }
-
+    queueHeader.style.display = queueItems.length ? 'block' : 'none';
     ul.innerHTML = '';
     queueItems.forEach((m, qi) => {
         const realIdx = 2 + qi;
-        const stKey   = m.id ? String(m.id) : null;
-        const online  = stKey ? (memberStatuses[stKey]?.online || 'Offline') : 'Offline';
-        const state   = stKey ? (memberStatuses[stKey]?.state  || 'Okay')    : 'Okay';
-        const pillCls = _statusPillClass(online, state);
-        const pillLbl = _statusLabel(online, state);
-        const dotCls  = _dotClass(online);
-
+        const st = m.id ? memberStatuses[String(m.id)] : null;
+        const online = st?.online || 'Offline', state = st?.state || 'Okay';
         const li = document.createElement('li');
-        li.className = 'lineup-item' + (m.hit ? ' hit-done' : '');
-        li.dataset.idx = realIdx;
+        li.className = 'lineup-item';
         li.draggable = true;
-
         li.innerHTML = `
-            <span class="lineup-drag-handle" title="Drag to reorder"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><circle cx="5" cy="3.5" r="1.3"/><circle cx="11" cy="3.5" r="1.3"/><circle cx="5" cy="8" r="1.3"/><circle cx="11" cy="8" r="1.3"/><circle cx="5" cy="12.5" r="1.3"/><circle cx="11" cy="12.5" r="1.3"/></svg></span>
-            <span class="lineup-slot lineup-slot-clickable" onclick="lineupPromptMove(${realIdx})" title="Click to jump to custom position">${realIdx + 1}</span>
-            <span class="online-dot ${dotCls}"></span>
+            <span class="lineup-slot" onclick="lineupPromptMove(${realIdx})">${realIdx + 1}</span>
+            <span class="online-dot ${_dotClass(online)}"></span>
             <span class="lineup-name">${_esc(m.name)}</span>
-            ${m.hit ? '<span class="hit-check" title="Hit completed" style="color:var(--accent-emerald);font-weight:900;font-size:0.75em;">✓ HIT</span>' : ''}
-            <span class="status-tag ${pillCls}">${pillLbl}</span>
+            <span class="status-tag ${_statusPillClass(online, state)}">${_statusLabel(online, state)}</span>
             <div class="move-btn-group">
-                <button class="move-btn" onmousedown="event.stopPropagation()" onclick="lineupMove(${realIdx}, ${realIdx - 1})" title="Move Up 1 slot (moves into Next if at #3)">▲</button>
-                <button class="move-btn" onmousedown="event.stopPropagation()" onclick="lineupMove(${realIdx}, ${realIdx + 1})" title="Move Down 1 slot" ${realIdx >= lineupMembers.length - 1 ? 'disabled' : ''}>▼</button>
+                <button class="move-btn" onclick="lineupMove(${realIdx}, ${realIdx - 1})">▲</button>
+                <button class="move-btn" onclick="lineupMove(${realIdx}, ${realIdx + 1})" ${realIdx >= lineupMembers.length - 1 ? 'disabled' : ''}>▼</button>
             </div>
-            <button class="promote-btn" onmousedown="event.stopPropagation()" onclick="lineupMakeCurrent(${realIdx})" title="Promote straight to Currently Up (#1)">▲▲ Up</button>
-            <button class="lineup-remove-btn" onmousedown="event.stopPropagation()" onclick="lineupRemove(${realIdx})" title="Remove completely" aria-label="Remove"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+            <button class="promote-btn" onclick="lineupMakeCurrent(${realIdx})">Up</button>
+            <button class="lineup-remove-btn" onclick="lineupRemove(${realIdx})">✕</button>
         `;
-
-        li.addEventListener('dragstart', e => { e.dataTransfer.setData('text/plain', realIdx); li.classList.add('dragging'); });
-        li.addEventListener('dragend',   () => li.classList.remove('dragging'));
-        li.addEventListener('dragover',  e => { e.preventDefault(); li.classList.add('drag-over'); });
-        li.addEventListener('dragleave', () => li.classList.remove('drag-over'));
+        li.addEventListener('dragstart', e => e.dataTransfer.setData('text/plain', realIdx));
+        li.addEventListener('dragover', e => e.preventDefault());
         li.addEventListener('drop', e => {
             e.preventDefault();
-            li.classList.remove('drag-over');
-            const from = parseInt(e.dataTransfer.getData('text/plain'));
-            const to   = realIdx;
-            if (isNaN(from) || from === to) return;
-            lineupMove(from, to);
+            const f = parseInt(e.dataTransfer.getData('text/plain'), 10);
+            if (!isNaN(f) && f !== realIdx) lineupMove(f, realIdx);
         });
         ul.appendChild(li);
     });
 }
 
-// ── Hit Log Render ─────────────────────────────────────────────────
 function renderHitLog() {
     const body = document.getElementById('hit-log-body');
-    if (!body) return;
-    const display = chainHitLog.slice(0, 20);
+    const display = chainHitLog.slice(0, 15);
     if (!display.length) {
-        body.innerHTML = '<div class="hit-log-empty">No chain hits detected yet.</div>';
+        body.innerHTML = '<div style="padding:16px;color:var(--text-tertiary);font-style:italic;text-align:center;font-size:0.84em;">No chain hits detected yet.</div>';
         return;
     }
-    body.innerHTML = display.map(h => {
-        const d = new Date(h.ts * 1000);
-        const timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-        return `<div class="hit-log-row">
+    body.innerHTML = display.map(h => `
+        <div class="hit-log-row">
             <span class="hit-log-chain">#${h.chain}</span>
             <span class="hit-log-name">${_esc(h.name)}</span>
-            <span class="hit-log-time">${timeStr}</span>
-        </div>`;
-    }).join('');
+            <span class="hit-log-time">${new Date(h.ts * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+        </div>
+    `).join('');
 }
 function clearHitLog() { chainHitLog = []; renderHitLog(); }
 
-// ── Lineup Controls ────────────────────────────────────────────────
-function lineupToggleLoop() {
-    lineupLoop = !lineupLoop;
-    document.getElementById('lineup-loop-btn').classList.toggle('active', lineupLoop);
-    lineupSave();
-}
-
-function lineupNext() {
-    if (!lineupMembers.length) return;
-    // Move top guy to bottom
-    const [shifted] = lineupMembers.splice(0, 1);
-    lineupMembers.push(shifted);
-    clearAutoSkipTimer();
-    if (autoMode) startAutoSkipTimer();
-    lineupSave();
-    lineupRender();
-    lineupSetStatus(`Advanced: ${shifted.name} moved to bottom.`);
-}
-
-function lineupSkip(idx) {
-    if (!lineupMembers.length) return;
-    const targetIdx = (idx !== undefined && idx >= 0 && idx < lineupMembers.length) ? idx : 0;
-    const [skipped] = lineupMembers.splice(targetIdx, 1);
-    lineupMembers.push(skipped);
-    clearAutoSkipTimer();
-    if (autoMode) startAutoSkipTimer();
-    lineupSave();
-    lineupRender();
-    lineupSetStatus(`Skipped ${skipped.name} — moved to bottom.`);
-}
-
-function lineupRemove(idx) {
-    if (idx < 0 || idx >= lineupMembers.length) return;
-    const [removed] = lineupMembers.splice(idx, 1);
-    clearAutoSkipTimer();
-    if (autoMode) startAutoSkipTimer();
-    lineupSave();
-    lineupRender();
-    lineupSetStatus(`Removed ${removed.name} from lineup.`);
-}
-
-function lineupReset() {
-    clearAutoSkipTimer();
-    lineupCycleNum = 1;
-    lineupMembers.forEach(m => { m.hit = false; m.skipped = false; });
-    lineupSave();
-    lineupRender();
-    if (autoMode) startAutoSkipTimer();
-    lineupSetStatus('Reset all hit marks.');
-}
-
-function lineupClear() {
-    if (!confirm('Remove all members from the lineup?')) return;
-    clearAutoSkipTimer();
-    lineupMembers = [];
-    lineupCycleNum = 1;
-    lineupSave();
-    lineupRender();
-}
-
-// ── Add Member & Live Search Autocomplete ─────────────────────────
+function lineupToggleLoop() { lineupLoop = !lineupLoop; document.getElementById('lineup-loop-btn').classList.toggle('active', lineupLoop); lineupSave(); }
+function lineupNext() { if (!lineupMembers.length) return; const [s] = lineupMembers.splice(0, 1); lineupMembers.push(s); lineupSave(); lineupRender(); }
+function lineupSkip(idx = 0) { if (!lineupMembers.length) return; const [s] = lineupMembers.splice(idx, 1); lineupMembers.push(s); lineupSave(); lineupRender(); }
+function lineupRemove(idx) { if (idx < 0 || idx >= lineupMembers.length) return; lineupMembers.splice(idx, 1); lineupSave(); lineupRender(); }
+function lineupReset() { lineupCycleNum = 1; lineupMembers.forEach(m => { m.hit = false; m.skipped = false; }); lineupSave(); lineupRender(); }
+function lineupClear() { if (!confirm('Clear entire lineup?')) return; lineupMembers = []; lineupCycleNum = 1; lineupSave(); lineupRender(); }
 function lineupAdd(name, id) {
     name = (name || '').trim();
-    if (!name) return;
-    if (lineupMembers.some(m => m.name.toLowerCase() === name.toLowerCase())) {
-        lineupSetStatus(`${name} is already in the lineup.`); return;
-    }
+    if (!name || lineupMembers.some(m => m.name.toLowerCase() === name.toLowerCase())) return;
     lineupMembers.push({ name, id: id || null, hit: false, skipped: false });
-    lineupSave();
-    lineupRender();
-    lineupSetStatus(`Added ${name}.`);
+    lineupSave(); lineupRender();
 }
-
 function lineupAddFromInput() {
-    const input = document.getElementById('lineup-add-input');
-    const val = input.value.trim();
+    const inp = document.getElementById('lineup-add-input');
+    const val = inp.value.trim();
     if (!val) return;
-
-    // Check if an item in the suggestion box is highlighted
-    const box = document.getElementById('lineup-suggest');
-    const items = box ? box.querySelectorAll('.lineup-suggest-item') : [];
-    if (items.length && suggestSelectedIndex >= 0 && suggestSelectedIndex < items.length) {
-        items[suggestSelectedIndex].click();
-        return;
-    }
-
-    // Match exact or starts-with from faction members
-    const match = factionMemberList.find(m => m.name.toLowerCase() === val.toLowerCase()) ||
-                  factionMemberList.find(m => m.name.toLowerCase().startsWith(val.toLowerCase()));
-
+    const match = factionMemberList.find(m => m.name.toLowerCase() === val.toLowerCase()) || factionMemberList.find(m => m.name.toLowerCase().startsWith(val.toLowerCase()));
     lineupAdd(match ? match.name : val, match ? match.id : null);
-    input.value = '';
-    if (box) box.style.display = 'none';
-    suggestSelectedIndex = -1;
+    inp.value = '';
+    document.getElementById('lineup-suggest').style.display = 'none';
 }
-
 function lineupAddKeydown(e) {
     const box = document.getElementById('lineup-suggest');
-    const isVisible = box && box.style.display !== 'none';
-
-    if (e.key === 'ArrowDown' && isVisible) {
+    const items = box ? box.querySelectorAll('.lineup-suggest-item') : [];
+    if (e.key === 'ArrowDown' && items.length) { e.preventDefault(); suggestSelectedIndex = (suggestSelectedIndex + 1) % items.length; items.forEach((it, i) => it.classList.toggle('highlighted', i === suggestSelectedIndex)); }
+    else if (e.key === 'ArrowUp' && items.length) { e.preventDefault(); suggestSelectedIndex = (suggestSelectedIndex - 1 + items.length) % items.length; items.forEach((it, i) => it.classList.toggle('highlighted', i === suggestSelectedIndex)); }
+    else if (e.key === 'Enter') {
         e.preventDefault();
-        const items = box.querySelectorAll('.lineup-suggest-item');
-        if (!items.length) return;
-        suggestSelectedIndex = (suggestSelectedIndex + 1) % items.length;
-        _highlightSuggestItem(items);
-        return;
-    }
-
-    if (e.key === 'ArrowUp' && isVisible) {
-        e.preventDefault();
-        const items = box.querySelectorAll('.lineup-suggest-item');
-        if (!items.length) return;
-        suggestSelectedIndex = (suggestSelectedIndex - 1 + items.length) % items.length;
-        _highlightSuggestItem(items);
-        return;
-    }
-
-    if (e.key === 'Enter') {
-        e.preventDefault();
-        lineupAddFromInput();
-        return;
-    }
-
-    if (e.key === 'Escape') {
-        if (box) box.style.display = 'none';
-        suggestSelectedIndex = -1;
-    }
+        if (suggestSelectedIndex >= 0 && items[suggestSelectedIndex]) items[suggestSelectedIndex].click();
+        else lineupAddFromInput();
+    } else if (e.key === 'Escape') box.style.display = 'none';
 }
-
-function _highlightSuggestItem(items) {
-    items.forEach((it, idx) => {
-        if (idx === suggestSelectedIndex) {
-            it.classList.add('highlighted');
-            it.scrollIntoView({ block: 'nearest' });
-        } else {
-            it.classList.remove('highlighted');
-        }
-    });
-}
-
 function lineupFilterSuggest() {
-    const input = document.getElementById('lineup-add-input');
-    const box   = document.getElementById('lineup-suggest');
-    if (!input || !box) return;
-
-    const val = input.value.trim().toLowerCase();
+    const inp = document.getElementById('lineup-add-input');
+    const box = document.getElementById('lineup-suggest');
+    const val = inp.value.trim().toLowerCase();
     suggestSelectedIndex = -1;
-
-    if (!factionMemberList.length) {
-        box.innerHTML = `<div class="lineup-suggest-item" style="color:var(--text-dim);cursor:default;">Loading faction roster...</div>`;
-        box.style.display = 'block';
-        pollMemberStatus().then(() => lineupFilterSuggest());
-        return;
-    }
-
-    // Filter out members already in the lineup
-    const available = factionMemberList.filter(m =>
-        !lineupMembers.some(lm => lm.name.toLowerCase() === m.name.toLowerCase())
-    );
-
-    let matches = [];
-    if (!val) {
-        // Empty input: show top available members sorted by online status
-        matches = available.slice(0, 15);
-    } else {
-        // Typing: prioritize startsWith, then includes
-        const startsWith = [];
-        const contains = [];
-        for (const m of available) {
-            const lower = m.name.toLowerCase();
-            if (lower.startsWith(val)) {
-                startsWith.push(m);
-            } else if (lower.includes(val)) {
-                contains.push(m);
-            }
-        }
-        matches = [...startsWith, ...contains].slice(0, 20);
-    }
-
-    if (!matches.length) {
-        box.innerHTML = `<div class="lineup-suggest-item" style="color:var(--text-dim);cursor:default;">No matching members found</div>`;
-        box.style.display = 'block';
-        return;
-    }
-
-    box.innerHTML = `<div class="lineup-suggest-header">Faction Members (${matches.length})</div>` + matches.map(m => {
-        const stKey = String(m.id);
-        const online = memberStatuses[stKey]?.online || 'Offline';
-        const state  = memberStatuses[stKey]?.state  || 'Okay';
-        const pillCls = _statusPillClass(online, state);
-        const pillLbl = _statusLabel(online, state);
-        const dotCls  = _dotClass(online);
-
-        // Highlight matching query in player name
-        let nameHtml = _esc(m.name);
-        if (val) {
-            const regex = new RegExp(`(${val.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')})`, 'gi');
-            nameHtml = _esc(m.name).replace(regex, '<mark class="suggest-match">$1</mark>');
-        }
-
-        return `<div class="lineup-suggest-item" onclick="lineupAddFromSuggest('${_escAttr(m.name)}',${m.id})">
-            <span class="online-dot ${dotCls}"></span>
-            <span class="suggest-name">${nameHtml}</span>
-            <span class="status-tag ${pillCls}" style="margin-left:auto;">${pillLbl}</span>
+    const avail = factionMemberList.filter(m => !lineupMembers.some(lm => lm.name.toLowerCase() === m.name.toLowerCase()));
+    const matches = (!val ? avail : avail.filter(m => m.name.toLowerCase().includes(val))).slice(0, 15);
+    if (!matches.length) { box.innerHTML = `<div class="lineup-suggest-item" style="color:var(--text-dim);">No matches</div>`; box.style.display = 'block'; return; }
+    box.innerHTML = matches.map(m => {
+        const st = memberStatuses[String(m.id)] || {};
+        return `<div class="lineup-suggest-item" onclick="lineupAdd('${_escAttr(m.name)}', ${m.id}); document.getElementById('lineup-add-input').value=''; document.getElementById('lineup-suggest').style.display='none';">
+            <span class="online-dot ${_dotClass(st.online || 'Offline')}"></span>
+            <span class="suggest-name">${_esc(m.name)}</span>
+            <span class="status-tag ${_statusPillClass(st.online || 'Offline', st.state || 'Okay')}">${_statusLabel(st.online || 'Offline', st.state || 'Okay')}</span>
         </div>`;
     }).join('');
     box.style.display = 'block';
 }
+document.addEventListener('click', e => { if (!e.target.closest('.lineup-add-row')) document.getElementById('lineup-suggest').style.display = 'none'; });
 
-function lineupAddFromSuggest(name, id) {
-    lineupAdd(name, id);
-    const input = document.getElementById('lineup-add-input');
-    if (input) {
-        input.value = '';
-        input.focus();
-    }
-    const box = document.getElementById('lineup-suggest');
-    if (box) box.style.display = 'none';
-    suggestSelectedIndex = -1;
-}
-
-document.addEventListener('click', e => {
-    if (!e.target.closest('.lineup-add-row')) {
-        const b = document.getElementById('lineup-suggest');
-        if (b) b.style.display = 'none';
-        suggestSelectedIndex = -1;
-    }
-});
-
-// ── Status Message ─────────────────────────────────────────────────
 function lineupSetStatus(msg) {
     const el = document.getElementById('lineup-status-msg');
     const bar = document.getElementById('lineup-meta');
     if (!el) return;
     el.textContent = msg;
-    if (bar) bar.classList.toggle('visible', Boolean(msg));
-    setTimeout(() => {
-        if (el.textContent === msg) {
-            el.textContent = '';
-            if (bar) bar.classList.remove('visible');
-        }
-    }, 4000);
+    bar.classList.toggle('visible', Boolean(msg));
+    setTimeout(() => { if (el.textContent === msg) { el.textContent = ''; bar.classList.remove('visible'); } }, 4000);
 }
-
-// ── Auto Mode Toggle ───────────────────────────────────────────────
-function toggleAutoMode() {
-    autoMode = !autoMode;
-    _syncAutoModeUI();
-    if (autoMode) {
-        startAutoSkipTimer();
-        lineupSetStatus('Auto Mode ON — lineup rotates automatically when players hit.');
-    } else {
-        clearAutoSkipTimer();
-        lineupSetStatus('Auto Mode OFF — manual control.');
-    }
-    lineupSave();
-    lineupRender();
-}
-
+function toggleAutoMode() { autoMode = !autoMode; _syncAutoModeUI(); lineupSave(); lineupRender(); }
 function _syncAutoModeUI() {
-    const btn = document.getElementById('auto-mode-btn');
-    const ind = document.getElementById('auto-indicator');
-    const lbl = document.getElementById('auto-mode-label-text');
-    if (btn) btn.classList.toggle('auto-on', autoMode);
-    if (ind) ind.classList.toggle('active', autoMode);
-    if (lbl) lbl.textContent = `Auto: ${autoMode ? 'ON' : 'OFF'}`;
+    document.getElementById('auto-mode-btn').classList.toggle('auto-on', autoMode);
+    document.getElementById('auto-indicator').classList.toggle('active', autoMode);
+    document.getElementById('auto-mode-label-text').textContent = `Auto: ${autoMode ? 'ON' : 'OFF'}`;
 }
-
-// ── Auto-Fill Eligible ─────────────────────────────────────────────
 function lineupAutoFill() {
-    if (!factionMemberList.length) {
-        lineupSetStatus('Member list loading. Try again in a few seconds.');
-        pollMemberStatus();
-        return;
-    }
-
-    const _getMemStatus = (mem) => (mem && mem.id && memberStatuses[String(mem.id)]) || {};
-
-    // 1. Purge unavailable members from existing lineup (hospitalized, traveling, abroad, jail, offline)
-    const initialCount = lineupMembers.length;
+    if (!factionMemberList.length) { pollMemberStatus(); return; }
     lineupMembers = lineupMembers.filter(lm => {
-        const mem = factionMemberList.find(fm => (lm.id && fm.id === lm.id) || fm.name.toLowerCase() === lm.name.toLowerCase());
-        if (!mem) return false;
-        const stObj = _getMemStatus(mem);
-        const st = stObj.state || mem.state || 'Okay';
-        const on = stObj.online || mem.online || 'Offline';
-        return st === 'Okay' && (on === 'Online' || on === 'Idle');
+        const mem = factionMemberList.find(fm => fm.id === lm.id || fm.name.toLowerCase() === lm.name.toLowerCase());
+        const st = mem ? memberStatuses[String(mem.id)] : null;
+        return st && st.state === 'Okay' && (st.online === 'Online' || st.online === 'Idle');
     });
-    const purged = initialCount - lineupMembers.length;
-
-    // 2. Reset hit & skipped state on retained members for fresh chain
-    lineupMembers.forEach(lm => { lm.hit = false; lm.skipped = false; });
-
-    // 3. Find and append new eligible members (Online or Idle, and Okay)
     const eligible = factionMemberList.filter(m => {
-        const stObj = _getMemStatus(m);
-        const st = stObj.state || m.state || 'Okay';
-        const on = stObj.online || m.online || 'Offline';
-        return st === 'Okay' && (on === 'Online' || on === 'Idle');
+        const st = memberStatuses[String(m.id)];
+        return st && st.state === 'Okay' && (st.online === 'Online' || st.online === 'Idle');
     });
-
-    eligible.sort((a, b) => {
-        const stA = _getMemStatus(a);
-        const stB = _getMemStatus(b);
-        const aOn = (stA.online || a.online) === 'Online';
-        const bOn = (stB.online || b.online) === 'Online';
-        if (aOn && !bOn) return -1;
-        if (!aOn && bOn) return 1;
-        const aTs = stA.lastActionTs || a.lastActionTs || 0;
-        const bTs = stB.lastActionTs || b.lastActionTs || 0;
-        return bTs - aTs;
-    });
-
-    let added = 0;
     for (const m of eligible) {
-        if (!lineupMembers.some(lm => (lm.id && lm.id === m.id) || lm.name.toLowerCase() === m.name.toLowerCase())) {
+        if (!lineupMembers.some(lm => lm.name.toLowerCase() === m.name.toLowerCase())) {
             lineupMembers.push({ name: m.name, id: m.id, hit: false, skipped: false });
-            added++;
         }
     }
-
-    lineupSave();
-    lineupRender();
-
-    let msg = '';
-    if (purged > 0 && added > 0) {
-        msg = `Auto-fill: Purged ${purged} unavailable, retained ${lineupMembers.length - added}, added ${added} ready.`;
-    } else if (purged > 0) {
-        msg = `Auto-fill: Purged ${purged} unavailable members. Retained ${lineupMembers.length} ready.`;
-    } else if (added > 0) {
-        msg = `Auto-fill: Added ${added} eligible member${added > 1 ? 's' : ''}.`;
-    } else {
-        msg = `Auto-fill: Lineup verified (${lineupMembers.length} ready members).`;
-    }
-    lineupSetStatus(msg);
+    lineupSave(); lineupRender();
+    lineupSetStatus(`⚡ Filled ${lineupMembers.length} ready hitters.`);
 }
-
-// ── Import from chain attacks ──────────────────────────────────────
 async function lineupImportFromChain() {
-    MY_KEY = getTornApiKey();
-    if (!hasChainAccess()) { lineupSetStatus('API key required.'); return; }
-    lineupSetStatus('Scanning chain attacks...');
-    try {
-        let attacks = null;
-        if (MY_KEY) {
-            try {
-                const r = await fetch(`https://api.torn.com/faction/?selections=attacks&key=${MY_KEY}`);
-                const data = await r.json();
-                if (data && data.attacks) attacks = Object.values(data.attacks);
-            } catch(e) {}
-        }
-        if (!attacks) {
-            const headers = MY_KEY ? { 'x-api-key': MY_KEY } : {};
-            const r = await fetch('/api/chain/attacks', { headers });
-            const data = await r.json();
-            if (data && data.attacks) attacks = data.attacks;
-        }
-
-        if (!attacks || !attacks.length) { lineupSetStatus('No attacks found in current log.'); return; }
-
-        const chainAtks = attacks.filter(a => a.chain && a.chain > 0);
-        if (!chainAtks.length) { lineupSetStatus('No chain attacks found.'); return; }
-
-        const seen = new Set();
-        const chainMembers = [];
-        chainAtks.sort((a, b) => a.timestamp_ended - b.timestamp_ended);
-        for (const atk of chainAtks) {
-            if (!seen.has(atk.attacker_id)) {
-                seen.add(atk.attacker_id);
-                chainMembers.push({ name: atk.attacker_name, id: atk.attacker_id });
-            }
-        }
-
-        let added = 0;
-        for (const m of chainMembers) {
-            if (!lineupMembers.some(lm => lm.name.toLowerCase() === m.name.toLowerCase())) {
-                lineupMembers.push({ name: m.name, id: m.id, hit: false, skipped: false });
+    const headers = MY_KEY ? { 'x-api-key': MY_KEY } : {};
+    const r = await fetch('/api/chain/attacks', { headers });
+    const data = await r.json();
+    const atks = (data.attacks || []).filter(a => a.chain > 0);
+    const seen = new Set();
+    let added = 0;
+    for (const a of atks) {
+        if (!seen.has(a.attacker_id)) {
+            seen.add(a.attacker_id);
+            if (!lineupMembers.some(lm => lm.name.toLowerCase() === (a.attacker_name || '').toLowerCase())) {
+                lineupMembers.push({ name: a.attacker_name, id: a.attacker_id, hit: false, skipped: false });
                 added++;
             }
         }
-        lineupSave();
-        lineupRender();
-        lineupSetStatus(added > 0 ? `Imported ${added} member${added > 1 ? 's' : ''} from chain hits.` : 'All chain hitters already in lineup.');
-    } catch(e) { lineupSetStatus('Error fetching chain data.'); }
-}
-
-// ── Target Hit Time Functions ──────────────────────────────────────
-function parseTimeToSeconds(timeStr) {
-    if (!timeStr || typeof timeStr !== 'string') return 0;
-    const parts = timeStr.trim().split(':');
-    if (parts.length === 2) {
-        return (parseInt(parts[0], 10) || 0) * 60 + (parseInt(parts[1], 10) || 0);
     }
-    return parseInt(timeStr, 10) || 0;
+    lineupSave(); lineupRender();
+    lineupSetStatus(`Imported ${added} chain hitters.`);
 }
 
 function updateHitTime() {
-    const sel = document.getElementById('lineup-hit-time');
-    const custom = document.getElementById('lineup-hit-time-custom');
-    if (!sel) return;
-    if (sel.value === 'custom') {
-        if (custom) {
-            custom.style.display = 'inline-block';
-            custom.focus();
-            if (targetHitTime && !['3:30','3:00','2:30','2:00','1:30','1:00',''].includes(targetHitTime)) {
-                custom.value = targetHitTime;
-            }
-        }
-    } else {
-        if (custom) custom.style.display = 'none';
-        targetHitTime = sel.value;
-        lineupSave();
-        lineupRender();
-        lineupSetStatus(targetHitTime ? `Target hit time set to ${targetHitTime}.` : 'Hit time cleared.');
-    }
+    const sel = document.getElementById('lineup-hit-time'), cust = document.getElementById('lineup-hit-time-custom');
+    if (sel.value === 'custom') { cust.style.display = 'inline-block'; cust.focus(); }
+    else { cust.style.display = 'none'; targetHitTime = sel.value; lineupSave(); }
 }
-
 function updateCustomHitTime() {
-    const custom = document.getElementById('lineup-hit-time-custom');
-    if (!custom || !custom.value.trim()) return;
-    targetHitTime = custom.value.trim();
-    lineupSave();
-    lineupRender();
-    lineupSetStatus(`Custom hit time set to ${targetHitTime}.`);
+    const cust = document.getElementById('lineup-hit-time-custom');
+    if (cust.value.trim()) { targetHitTime = cust.value.trim(); lineupSave(); }
 }
-
 function _syncHitTimeUI() {
-    const sel = document.getElementById('lineup-hit-time');
-    const custom = document.getElementById('lineup-hit-time-custom');
-    if (!sel) return;
-    if (['', '3:30', '3:00', '2:30', '2:00', '1:30', '1:00'].includes(targetHitTime)) {
-        sel.value = targetHitTime;
-        if (custom) custom.style.display = 'none';
-    } else if (targetHitTime) {
-        sel.value = 'custom';
-        if (custom) {
-            custom.style.display = 'inline-block';
-            custom.value = targetHitTime;
-        }
-    } else {
-        sel.value = '';
-        if (custom) custom.style.display = 'none';
-    }
+    const sel = document.getElementById('lineup-hit-time'), cust = document.getElementById('lineup-hit-time-custom');
+    if (['', '3:30', '3:00', '2:30', '2:00', '1:30', '1:00'].includes(targetHitTime)) { sel.value = targetHitTime; cust.style.display = 'none'; }
+    else if (targetHitTime) { sel.value = 'custom'; cust.style.display = 'inline-block'; cust.value = targetHitTime; }
 }
 
-// ── Clean Copy Functions ───────────────────────────────────────────
 function _generateFullLineupText() {
-    if (!lineupMembers || !lineupMembers.length) return '';
+    if (!lineupMembers.length) return '';
     const lines = [];
-    if (targetHitTime) {
-        lines.push(`HIT AT: ${targetHitTime}`);
-    }
-    if (lineupMembers.length >= 1) lines.push(`UP: ${lineupMembers[0].name}`);
-    if (lineupMembers.length >= 2) lines.push(`NEXT: ${lineupMembers[1].name}`);
-    for (let i = 2; i < lineupMembers.length; i++) {
-        lines.push(`${i + 1}. ${lineupMembers[i].name}`);
-    }
+    if (targetHitTime) lines.push(`HIT AT: ${targetHitTime}`);
+    if (lineupMembers[0]) lines.push(`UP: ${lineupMembers[0].name}`);
+    if (lineupMembers[1]) lines.push(`NEXT: ${lineupMembers[1].name}`);
+    for (let i = 2; i < lineupMembers.length; i++) lines.push(`${i + 1}. ${lineupMembers[i].name}`);
     return lines.join('\n');
 }
-
 function _generateCompactLineupText() {
-    if (!lineupMembers || !lineupMembers.length) return '';
-    const parts = [];
-    if (targetHitTime) parts.push(`[HIT AT ${targetHitTime}]`);
-    if (lineupMembers.length >= 1) parts.push(`UP: ${lineupMembers[0].name}`);
-    if (lineupMembers.length >= 2) parts.push(`NEXT: ${lineupMembers[1].name}`);
-    for (let i = 2; i < lineupMembers.length; i++) {
-        parts.push(`${i + 1}. ${lineupMembers[i].name}`);
-    }
-    return parts.join(' | ');
+    if (!lineupMembers.length) return '';
+    const p = [];
+    if (targetHitTime) p.push(`[HIT AT ${targetHitTime}]`);
+    if (lineupMembers[0]) p.push(`UP: ${lineupMembers[0].name}`);
+    if (lineupMembers[1]) p.push(`NEXT: ${lineupMembers[1].name}`);
+    for (let i = 2; i < lineupMembers.length; i++) p.push(`${i + 1}. ${lineupMembers[i].name}`);
+    return p.join(' | ');
 }
+function copyFull() { navigator.clipboard.writeText(_generateFullLineupText()).then(() => lineupSetStatus('Copied lineup!')); }
+function copyCompact() { navigator.clipboard.writeText(_generateCompactLineupText()).then(() => lineupSetStatus('Copied compact lineup!')); }
+function _esc(s) { return escHtml(s); }
+function _escAttr(s) { return escAttrStr(s); }
 
-function copyFull() {
-    if (!lineupMembers.length) { lineupSetStatus('Lineup is empty.'); return; }
-    _copyText(_generateFullLineupText(), 'Lineup copied.');
-}
-
-function copyCompact() {
-    if (!lineupMembers.length) { lineupSetStatus('Lineup is empty.'); return; }
-    _copyText(_generateCompactLineupText(), 'Compact lineup copied.');
-}
-
-function _copyText(text, successMsg) {
-    navigator.clipboard.writeText(text)
-        .then(() => lineupSetStatus(successMsg))
-        .catch(() => {
-            const ta = document.createElement('textarea');
-            ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
-            document.body.appendChild(ta); ta.focus(); ta.select();
-            document.execCommand('copy');
-            document.body.removeChild(ta);
-            lineupSetStatus(successMsg);
-        });
-}
-
-// ── Utilities ──────────────────────────────────────────────────────
-function _esc(str) {
-    return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-function _escAttr(str) {
-    return String(str || '').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-}
-
-// ── Boot ───────────────────────────────────────────────────────────
-lineupLoad();
-lineupRender();
-
-if (hasChainAccess()) {
-    // Initial fetch of members
-    pollMemberStatus();
-    // Poll attacks every 3.5s for real-time hit detection
-    setInterval(pollAttacks, HIT_POLL_MS);
-    // Refresh member status every 60s
-    setInterval(pollMemberStatus, STATUS_POLL_MS);
-}
-
-// Update auto-skip countdown display
-setInterval(() => {
-    if (autoMode && autoSkipTimer) {
-        const cdEl = document.getElementById('auto-skip-cd');
-        if (cdEl && autoSkipSecondsLeft > 0) {
-            cdEl.textContent = `auto-skip in ${autoSkipSecondsLeft}s`;
-        }
-    }
-}, 1000);
-</script>
-
-<script>
-// ══════════════════════════════════════════════════════════════════
-//  WARBOARD DIBS QUEUE (unchanged)
-// ══════════════════════════════════════════════════════════════════
-let queueInterval = null;
 let queueData = [];
-let isFetchingQueue = false;
-let lastQueueEtag = '';
-
 async function fetchWarboardQueue() {
-    if (!hasChainAccess() || isFetchingQueue || document.hidden) return;
-    isFetchingQueue = true;
+    if (!hasChainAccess() || document.hidden) return;
     try {
-        MY_KEY = getTornApiKey();
-        const headers = {};
-        if (MY_KEY) headers['x-api-key'] = MY_KEY;
-        const storedFac = localStorage.getItem("warboard_myFactionId") || (window.currentUser && window.currentUser.factionId);
-        if (storedFac && String(storedFac) !== '0') {
-            headers['x-faction-id'] = String(storedFac);
-        }
-        if (lastQueueEtag) headers['If-None-Match'] = lastQueueEtag;
+        const headers = MY_KEY ? { 'x-api-key': MY_KEY } : {};
         const res = await fetch('/api/warboard', { headers });
-        if (res.status === 304) return;
-        const etagHeader = res.headers.get('ETag');
-        if (etagHeader) lastQueueEtag = etagHeader;
         const data = await res.json();
-        if (data.friendly && data.friendly.length > 0 && factionMemberList.length < 5) {
-            const friendlyMap = {};
-            data.friendly.forEach(f => {
-                friendlyMap[f.id] = {
-                    name: f.name,
-                    level: f.level,
-                    last_action: { status: f.onlineStatus, relative: f.lastActionRelative, timestamp: f.lastActionTimestamp },
-                    status: { state: f.state, until: f.until, description: f.statusDescription }
-                };
-            });
-            _updateFactionMemberPool(friendlyMap);
-        }
         if (data.enemy) {
             queueData = data.enemy.filter(e => e.claimedBy);
-            queueData.sort((a, b) => {
-                if (a.state === 'Okay' && b.state !== 'Okay') return -1;
-                if (b.state === 'Okay' && a.state !== 'Okay') return 1;
-                if (a.state === 'Hospital' && b.state === 'Hospital') return (a.until || 0) - (b.until || 0);
-                return 0;
-            });
             renderQueue();
-            try { sessionStorage.setItem('sv_cache_queue', JSON.stringify(queueData)); } catch(e) {}
         }
-    } catch(e) { console.error('Queue fetch error:', e); }
-    finally { isFetchingQueue = false; }
+    } catch (e) {}
 }
-
 function renderQueue() {
-    const container = document.getElementById('queue-content');
-    if (queueData.length === 0) {
-        container.innerHTML = `<div style="text-align:center;color:var(--text-dim);padding:30px;font-style:italic;">No targets are currently claimed. Claim someone on the Warboard!</div>`;
-        return;
-    }
+    const c = document.getElementById('queue-content');
+    if (!queueData.length) { c.innerHTML = `<div style="text-align:center;color:var(--text-dim);padding:20px;font-style:italic;">No DIBS claims active on Warboard.</div>`; return; }
     const now = Math.floor(Date.now() / 1000);
-    container.innerHTML = queueData.map(p => {
-        let statusHtml = '';
-        if (p.state === 'Okay') {
-            statusHtml = `<div class="timer-badge ready">READY</div>`;
-        } else if (p.state === 'Hospital' && p.until) {
-            const secsLeft = Math.max(0, p.until - now);
-            const m = Math.floor(secsLeft / 60);
-            const s = secsLeft % 60;
-            statusHtml = `<div class="timer-badge ${secsLeft < 60 ? 'soon' : ''}">${(m<10?'0'+m:m)}:${(s<10?'0'+s:s)}</div>`;
-        } else {
-            statusHtml = `<div class="timer-badge">${(p.state||'').toUpperCase()}</div>`;
-        }
+    c.innerHTML = queueData.map(p => {
+        let badge = p.state === 'Okay' ? `<div class="timer-badge ready">READY</div>` :
+            (p.state === 'Hospital' && p.until ? `<div class="timer-badge">${_fmtMMSS(Math.max(0, p.until - now))}</div>` : `<div class="timer-badge">${(p.state || '').toUpperCase()}</div>`);
         return `<div class="queue-row">
-            ${statusHtml}
-            <div>
-                <a class="queue-profile" href="https://www.torn.com/profiles.php?XID=${p.id}" target="_blank">${_esc(p.name)} [${p.id}]</a>
-                <div style="font-size:0.85em;color:var(--text-dim);">Est. Stats: ${p.estStats || 'Unknown'}</div>
-            </div>
-            <div><div class="dibs-badge">${_esc(p.claimedBy)}</div></div>
+            ${badge}
+            <div><a href="https://www.torn.com/profiles.php?XID=${p.id}" target="_blank" style="color:var(--text-primary);font-weight:700;text-decoration:none;">${_esc(p.name)} [${p.id}]</a></div>
+            <div><span class="dibs-badge">${_esc(p.claimedBy)}</span></div>
         </div>`;
     }).join('');
 }
 
-function startQueueLoop() {
-    if (queueInterval) clearInterval(queueInterval);
-    try { const cq = sessionStorage.getItem('sv_cache_queue'); if (cq) { queueData = JSON.parse(cq); renderQueue(); } } catch(e) {}
+lineupLoad();
+lineupRender();
+if (hasChainAccess()) {
+    fetchChainData();
+    fetchLedger();
+    pollMemberStatus();
     fetchWarboardQueue();
-    queueInterval = setInterval(fetchWarboardQueue, 12000);
+    startLocalTimer();
+    setInterval(fetchChainData, 2500);
+    setInterval(pollAttacks, HIT_POLL_MS);
+    setInterval(pollMemberStatus, STATUS_POLL_MS);
+    setInterval(fetchLedger, 30000);
+    setInterval(fetchWarboardQueue, 12000);
+    setInterval(renderQueue, 1000);
 }
-function stopQueueLoop() { if (queueInterval) { clearInterval(queueInterval); queueInterval = null; } }
-
-document.addEventListener('visibilitychange', () => {
-    if (document.hidden) { stopQueueLoop(); }
-    else { startQueueLoop(); }
-});
-
-startQueueLoop();
-setInterval(renderQueue, 1000);
 </script>
-
 </body>
 </html>

@@ -1064,6 +1064,176 @@ let lastEventTimestamp = Math.floor(Date.now() / 1000);
 
 let lastChainTimeoutAlertState = false;
 let backgroundEnemyTrackingState = {};
+let fastEnemyHospState = {};
+let recentEnemyMedOuts = [];
+let upcomingEnemyHospExits = [];
+const medOutDedupMap = new Map();
+let chainEnemyFactionOverride = { id: null, name: null, updatedAt: 0 };
+
+function formatMedOutSavedTime(secs) {
+    const s = Math.max(0, Math.round(Number(secs) || 0));
+    if (s >= 3600) {
+        const h = Math.floor(s / 3600);
+        const m = Math.floor((s % 3600) / 60);
+        return `${h}h ${m}m`;
+    }
+    if (s >= 60) {
+        const m = Math.floor(s / 60);
+        const rem = s % 60;
+        return rem > 0 ? `${m}m ${rem}s` : `${m}m`;
+    }
+    return `${s}s`;
+}
+
+async function recordAndAlertEnemyMedOut(eId, m, oldUntil, enemyFacId, enemyFacName, friendlyMembersObj = null) {
+    const nowSec = Math.floor(Date.now() / 1000);
+    const nowMs = Date.now();
+    const idStr = String(eId);
+    const lastAlert = medOutDedupMap.get(idStr) || 0;
+    if (nowMs - lastAlert < 25000) return null;
+    medOutDedupMap.set(idStr, nowMs);
+
+    // Prune old dedup entries
+    if (medOutDedupMap.size > 300) {
+        for (const [k, ts] of medOutDedupMap.entries()) {
+            if (nowMs - ts > 120000) medOutDedupMap.delete(k);
+        }
+    }
+
+    const onlineStatus = m?.last_action?.status || 'Offline';
+    const secondsSaved = oldUntil && oldUntil > nowSec ? (oldUntil - nowSec) : 0;
+    const timeSavedStr = formatMedOutSavedTime(secondsSaved);
+    const escapeType = onlineStatus === 'Online' ? 'MEDDED OUT' : 'REVIVED / MEDDED';
+    const playerName = m?.name || `Enemy [${idStr}]`;
+    const level = m?.level || 0;
+
+    let enemyEst = 0;
+    let bestMatchName = null;
+    let bestMatchId = null;
+    try {
+        if (friendlyMembersObj && typeof findBestTacticalFighter === 'function') {
+            const match = findBestTacticalFighter(friendlyMembersObj, m, idStr);
+            bestMatchName = match?.name || null;
+            bestMatchId = match?.id || null;
+            enemyEst = match?.enemyEst || 0;
+        } else if (typeof resolvePlayerBattleStats === 'function') {
+            const bs = resolvePlayerBattleStats(idStr, level || 1);
+            enemyEst = bs?.total || 0;
+        }
+    } catch (_) {}
+
+    const medEvent = {
+        id: `med_${idStr}_${nowSec}`,
+        playerId: idStr,
+        playerName,
+        level,
+        factionId: String(enemyFacId || ''),
+        factionName: enemyFacName || 'Enemy Faction',
+        onlineStatus,
+        escapeType,
+        secondsSaved,
+        timeSavedStr,
+        estStats: enemyEst > 0 ? enemyEst.toLocaleString() : 'Unknown',
+        suggestedFighter: bestMatchName || null,
+        detectedAt: nowMs,
+        attackUrl: `https://www.torn.com/page.php?sid=attack&user2ID=${idStr}`,
+        profileUrl: `https://www.torn.com/profiles.php?XID=${idStr}`
+    };
+
+    recentEnemyMedOuts.unshift(medEvent);
+    const cutoffMs = nowMs - (20 * 60 * 1000);
+    recentEnemyMedOuts = recentEnemyMedOuts.filter(ev => ev.detectedAt >= cutoffMs).slice(0, 35);
+
+    try {
+        if (typeof warboardBroadcaster !== 'undefined' && warboardBroadcaster) {
+            warboardBroadcaster.broadcast('enemy_medout', medEvent);
+        }
+    } catch (_) {}
+
+    // Dispatch Discord alert if enabled (fires for Online self-meds AND Idle/Offline revives)
+    try {
+        const botTokenOrChan = discordConfig.globalBotToken || discordConfig.globalChannelId;
+        if (botTokenOrChan && discordConfig.globalChannelId && discordConfig.medOutSniper !== false) {
+            let pingStr = '';
+            if (bestMatchId && typeof getDiscordId === 'function') {
+                const dId = await getDiscordId(bestMatchId);
+                if (dId && /^\d{17,20}$/.test(dId)) pingStr = `<@${dId}>`;
+            }
+            const statusIcon = onlineStatus === 'Online' ? '🟢 Online (Self-Med)' : onlineStatus === 'Idle' ? '🟡 Idle (Likely Revived)' : '⚫ Offline (Revived)';
+            const statStr = enemyEst > 0 ? `~${enemyEst.toLocaleString()}` : 'Unknown';
+            sendChannelMessage(discordConfig.globalBotToken, discordConfig.globalChannelId, {
+                title: onlineStatus === 'Online' ? '💊 Enemy Medded Out!' : '🚑 Enemy Revived / Left Hospital Early!',
+                description: `**${playerName}** [${idStr}] escaped hospital **${timeSavedStr} early** and is now **Attackable**!`,
+                color: UI.COLORS.WARNING,
+                footer: UI.FOOTER,
+                timestamp: new Date().toISOString(),
+                targetId: idStr,
+                fields: [
+                    { name: 'Activity', value: statusIcon, inline: true },
+                    { name: 'Time Saved', value: timeSavedStr, inline: true },
+                    { name: 'Est. Battle Stats', value: statStr, inline: true },
+                    { name: 'Suggested Fighter', value: bestMatchName ? `**${bestMatchName}** — matched by stats` : 'Any online hitter', inline: false }
+                ],
+                links: [
+                    { label: '⚔️ Attack Now', url: `https://www.torn.com/page.php?sid=attack&user2ID=${idStr}` },
+                    { label: '👤 Profile', url: `https://www.torn.com/profiles.php?XID=${idStr}` }
+                ]
+            }, pingStr);
+        }
+    } catch (_) {}
+
+    return medEvent;
+}
+
+async function processEnemyHospitalTransitions(enemyMembersObj, enemyFacId, enemyFacName, friendlyMembersObj = null) {
+    if (!enemyMembersObj || typeof enemyMembersObj !== 'object') return;
+    const nowSec = Math.floor(Date.now() / 1000);
+    const exitsSoon = [];
+
+    for (const [id, m] of Object.entries(enemyMembersObj)) {
+        if (!m) continue;
+        const newState = m.status?.state || 'Okay';
+        const newUntil = m.status?.until || 0;
+        const newOnline = m.last_action?.status || 'Offline';
+        const oldRec = fastEnemyHospState[id];
+
+        if (newState === 'Hospital' && newUntil > nowSec) {
+            const secsLeft = newUntil - nowSec;
+            if (secsLeft <= 300) {
+                exitsSoon.push({
+                    playerId: String(id),
+                    playerName: m.name || `Enemy [${id}]`,
+                    level: m.level || 0,
+                    onlineStatus: newOnline,
+                    until: newUntil,
+                    secondsLeft: secsLeft,
+                    factionId: String(enemyFacId || ''),
+                    factionName: enemyFacName || 'Enemy Faction',
+                    attackUrl: `https://www.torn.com/page.php?sid=attack&user2ID=${id}`,
+                    profileUrl: `https://www.torn.com/profiles.php?XID=${id}`
+                });
+            }
+        }
+
+        if (oldRec && oldRec.state === 'Hospital' && newState === 'Okay') {
+            const leftEarly = oldRec.until && (oldRec.until > nowSec + 15);
+            if (leftEarly) {
+                await recordAndAlertEnemyMedOut(id, m, oldRec.until, enemyFacId, enemyFacName, friendlyMembersObj);
+            }
+        }
+
+        fastEnemyHospState[id] = {
+            state: newState,
+            until: newUntil,
+            online: newOnline,
+            name: m.name || oldRec?.name,
+            level: m.level || oldRec?.level
+        };
+    }
+
+    exitsSoon.sort((a, b) => a.until - b.until);
+    upcomingEnemyHospExits = exitsSoon.slice(0, 10);
+}
 
 discordConfig = { 
     globalChannelId: "", 
@@ -4263,35 +4433,10 @@ setInterval(async () => {
                         // ── 3. HOSPITAL ALERTS (Natural Release + Med-Out Sniper) ──
                         if (oldRecord.state === "Hospital" && newRecord.state === "Okay") {
                             let now = Math.floor(Date.now() / 1000);
-                            let leftEarly = oldRecord.until && (oldRecord.until > now + 60);
+                            let leftEarly = oldRecord.until && (oldRecord.until > now + 15);
 
-                            if (leftEarly && newRecord.online === "Online" && discordConfig.medOutSniper !== false) {
-                                const { name: bestMatchName, id: bestMatchId, enemyEst } = findBestTacticalFighter(facData.members, m, id);
-
-                                let pingStr = "";
-                                if (bestMatchId) {
-                                    let dId = await getDiscordId(bestMatchId);
-                                    if (dId && /^\d{17,20}$/.test(dId)) pingStr = `<@${dId}>`;
-                                }
-
-                                let statStr = enemyEst > 0 ? `~${enemyEst.toLocaleString()}` : "Unknown";
-                                if (botTokenOrChan) sendChannelMessage(discordConfig.globalBotToken, discordConfig.globalChannelId, { 
-                                    title: "💊 Early Hospital Escape", 
-                                    description: `**${m.name}** [${id}] left hospital early using meds or a revive and is now online.`,
-                                    color: UI.COLORS.WARNING,
-                                    footer: UI.FOOTER,
-                                    timestamp: new Date().toISOString(),
-                                    targetId: id,
-                                    fields: [
-                                        { name: "Est. Battle Stats", value: statStr, inline: true },
-                                        { name: "Suggested Fighter", value: bestMatchName ? `**${bestMatchName}** — matched by stats` : "No match found", inline: false }
-                                    ],
-                                    links: [
-                                        { label: "⚔️ Attack", url: `https://www.torn.com/page.php?sid=attack&user2ID=${id}` },
-                                        { label: "👤 Profile", url: `https://www.torn.com/profiles.php?XID=${id}` }
-                                    ]
-                                }, pingStr);
-                                
+                            if (leftEarly) {
+                                await recordAndAlertEnemyMedOut(id, m, oldRecord.until, activeEnemyId, enemyData.name || enemyFactionNameCache, facData.members);
                             } else if (discordConfig.targetOutHosp === true && !leftEarly) {
                                 if (botTokenOrChan) sendChannelMessage(discordConfig.globalBotToken, discordConfig.globalChannelId, { 
                                     title: "🏥 Target Out of Hospital", 
@@ -32540,32 +32685,42 @@ app.post('/api/turbo/stop', (req, res) => {
 const chainDataCache = new Map();
 const chainAtksCache = new Map();
 const chainMembersCache = new Map();
+const chainEnemyCache = new Map();
 
-// GET /api/chain/data — lightweight: returns ONLY chain status
+// GET /api/chain/data — returns chain status + fast enemy med-out sniper feed + lineupVersion
 app.get('/api/chain/data', async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-api-key, Authorization');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-api-key, x-faction-id, Authorization');
     if (req.method === 'OPTIONS') return res.sendStatus(200);
 
     const serverKey = (discordConfig && discordConfig.apiKey) || TORN_API_KEY || (typeof getNextApiKey === 'function' ? getNextApiKey() : null);
     const userKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey;
-    const cleanKey = (userKey && userKey !== 'null' && userKey.trim()) ? userKey.trim() : serverKey;
+    const cleanKey = (userKey && userKey !== 'null' && userKey !== 'undefined' && String(userKey).trim()) ? String(userKey).trim() : serverKey;
     if (!cleanKey) {
         return res.status(401).json({ error: 'No API key provided and no server key configured.' });
     }
-    const cacheKey = cleanKey.slice(-8);
+
+    const reqEnemyId = req.query.enemyFactionId && /^\d+$/.test(String(req.query.enemyFactionId).trim())
+        ? String(req.query.enemyFactionId).trim()
+        : null;
+    if (reqEnemyId && reqEnemyId !== chainEnemyFactionOverride.id) {
+        chainEnemyFactionOverride = { id: reqEnemyId, name: null, updatedAt: Date.now() };
+    }
+
+    const cacheKey = `${cleanKey.slice(-8)}_${reqEnemyId || ''}`;
     const cached = chainDataCache.get(cacheKey);
     if (cached && (Date.now() - cached.ts) < 1200) {
         return res.json(cached.data);
     }
+
     try {
-        let r = await fetch(`https://api.torn.com/faction/?selections=chain&key=${cleanKey}`, {
+        let r = await fetch(`https://api.torn.com/faction/?selections=chain,rankedwars&key=${cleanKey}`, {
             signal: AbortSignal.timeout(5000)
         });
         let data = await r.json();
         if (data && data.error && (data.error.code === 2 || data.error.code === 7 || data.error.code === 16) && serverKey && serverKey !== cleanKey) {
-            r = await fetch(`https://api.torn.com/faction/?selections=chain&key=${serverKey}`, {
+            r = await fetch(`https://api.torn.com/faction/?selections=chain,rankedwars&key=${serverKey}`, {
                 signal: AbortSignal.timeout(5000)
             });
             data = await r.json();
@@ -32573,7 +32728,54 @@ app.get('/api/chain/data', async (req, res) => {
         if (data && data.error) {
             return res.status(400).json({ error: data.error.error || 'Torn API error', code: data.error.code });
         }
-        const payload = { chain: data.chain || null };
+
+        // Resolve enemy faction ID (explicit query > manual target > active/upcoming RW > background war cache)
+        let activeEnemyId = reqEnemyId || (chainEnemyFactionOverride && chainEnemyFactionOverride.id) || null;
+        if (!activeEnemyId && data && data.rankedwars) {
+            const detected = autoDetectEnemyFaction(data);
+            if (detected) activeEnemyId = String(detected);
+        }
+        if (!activeEnemyId && typeof currentEnemyFacId !== 'undefined' && currentEnemyFacId) {
+            activeEnemyId = String(currentEnemyFacId);
+        }
+
+        let resolvedEnemyName = (chainEnemyFactionOverride && String(chainEnemyFactionOverride.id) === String(activeEnemyId) && chainEnemyFactionOverride.name)
+            ? chainEnemyFactionOverride.name
+            : (typeof enemyFactionNameCache !== 'undefined' ? enemyFactionNameCache : 'Enemy Faction');
+
+        // Fast 3-second enemy hospital transition scan for near-instant med-out / revive detection
+        if (activeEnemyId) {
+            const eCache = chainEnemyCache.get(String(activeEnemyId));
+            if (!eCache || (Date.now() - eCache.ts) >= 2800) {
+                try {
+                    const eKey = (typeof getNextApiKey === 'function' ? getNextApiKey() : null) || cleanKey;
+                    const eRes = await fetch(`https://api.torn.com/faction/${activeEnemyId}?selections=basic&key=${eKey}`, {
+                        signal: AbortSignal.timeout(4500)
+                    });
+                    const eData = await eRes.json();
+                    if (eData && !eData.error && eData.members) {
+                        resolvedEnemyName = eData.name || resolvedEnemyName;
+                        if (chainEnemyFactionOverride && String(chainEnemyFactionOverride.id) === String(activeEnemyId)) {
+                            chainEnemyFactionOverride.name = resolvedEnemyName;
+                        }
+                        chainEnemyCache.set(String(activeEnemyId), { ts: Date.now(), name: resolvedEnemyName });
+                        await processEnemyHospitalTransitions(eData.members, activeEnemyId, resolvedEnemyName, null);
+                    }
+                } catch (_) {}
+            }
+        }
+
+        const cutoffMs = Date.now() - (20 * 60 * 1000);
+        recentEnemyMedOuts = recentEnemyMedOuts.filter(ev => ev.detectedAt >= cutoffMs);
+
+        const payload = {
+            chain: data.chain || null,
+            enemyFaction: activeEnemyId ? { id: String(activeEnemyId), name: resolvedEnemyName } : null,
+            enemyMedOuts: recentEnemyMedOuts.slice(0, 20),
+            upcomingHospExits: upcomingEnemyHospExits.slice(0, 10),
+            lineupVersion: globalChainLineup.version || 1,
+            lineupUpdatedAt: globalChainLineup.updatedAt || 0
+        };
         chainDataCache.set(cacheKey, { data: payload, ts: Date.now() });
         return res.json(payload);
     } catch (err) {
@@ -32589,18 +32791,16 @@ app.get('/api/chain/members', async (req, res) => {
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-api-key, x-session-token, x-faction-id, Authorization');
     if (req.method === 'OPTIONS') return res.sendStatus(200);
 
-    const hostFacId = String(discordConfig.factionId || dynamicFactionId || '');
     const serverKey = (discordConfig && discordConfig.apiKey) || TORN_API_KEY || (typeof getNextApiKey === 'function' ? getNextApiKey() : null);
-    const reqFac = String(req.userSession?.factionId || req.headers['x-faction-id'] || '');
-    const isHostMember = Boolean(req.userSession?.isSpiderVerse || (hostFacId && reqFac && reqFac === hostFacId));
-    const userKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey || (isHostMember ? serverKey : null);
-    if (!userKey || userKey === 'null' || userKey === 'undefined' || String(userKey).trim() === '') {
+    const rawUserKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey;
+    const userKey = (rawUserKey && rawUserKey !== 'null' && rawUserKey !== 'undefined' && String(rawUserKey).trim()) ? String(rawUserKey).trim() : serverKey;
+    if (!userKey) {
         return res.status(401).json({ error: 'Authentication required. Torn API key required.' });
     }
     const cleanKey = String(userKey).trim();
     const cacheKey = crypto.createHash('sha256').update(cleanKey).digest('hex').slice(0, 10);
     const cached = chainMembersCache.get(cacheKey);
-    if (cached && (Date.now() - cached.ts) < 30000) {
+    if (cached && (Date.now() - cached.ts) < 25000) {
         return res.json(cached.data);
     }
     try {
@@ -32608,6 +32808,12 @@ app.get('/api/chain/members', async (req, res) => {
             signal: AbortSignal.timeout(8000)
         });
         let data = await r.json();
+        if (data && data.error && (data.error.code === 2 || data.error.code === 7 || data.error.code === 16) && serverKey && serverKey !== cleanKey) {
+            r = await fetch(`https://api.torn.com/faction/?selections=basic&key=${serverKey}`, {
+                signal: AbortSignal.timeout(8000)
+            });
+            data = await r.json();
+        }
         if (data && data.error) {
             return res.status(400).json({ error: data.error.error || 'Torn API error', code: data.error.code });
         }
@@ -32635,8 +32841,9 @@ app.get('/api/chain/attacks', async (req, res) => {
     const serverKey = (discordConfig && discordConfig.apiKey) || TORN_API_KEY || (typeof getNextApiKey === 'function' ? getNextApiKey() : null);
     const reqFac = String(req.userSession?.factionId || req.headers['x-faction-id'] || '');
     const isHostMember = Boolean(req.userSession?.isSpiderVerse || (hostFacId && reqFac && reqFac === hostFacId));
-    const userKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey || (isHostMember ? serverKey : null);
-    if (!userKey || userKey === 'null' || userKey === 'undefined' || String(userKey).trim() === '') {
+    const rawUserKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey;
+    const userKey = (rawUserKey && rawUserKey !== 'null' && rawUserKey !== 'undefined' && String(rawUserKey).trim()) ? String(rawUserKey).trim() : serverKey;
+    if (!userKey) {
         return res.status(401).json({ error: 'Authentication required. Torn API key required.' });
     }
     const cleanKey = String(userKey).trim();
@@ -32651,8 +32858,8 @@ app.get('/api/chain/attacks', async (req, res) => {
         });
         let data = await r.json();
 
-        // If host member's key lacks Faction AA (code 7 or 16), automatically fall back to host faction serverKey!
-        const facCfgKey = (reqFac ? getFactionDiscordConfig(reqFac)?.apiKey : null) || (isHostMember ? serverKey : null);
+        // If member's key lacks Faction AA (code 7 or 16), automatically fall back to faction/serverKey!
+        const facCfgKey = (reqFac ? getFactionDiscordConfig(reqFac)?.apiKey : null) || serverKey;
         if (data && data.error && (data.error.code === 7 || data.error.code === 16 || data.error.code === 2) && facCfgKey && facCfgKey !== cleanKey) {
             const serverCacheKey = crypto.createHash('sha256').update(String(facCfgKey)).digest('hex').slice(0, 10);
             const serverCached = chainAtksCache.get(serverCacheKey);
@@ -32685,11 +32892,94 @@ app.get('/api/chain/attacks', async (req, res) => {
     }
 });
 
+// POST /api/chain/target — set or clear manual enemy faction ID for chaining / med-out sniper
+app.post('/api/chain/target', express.json(), async (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-api-key');
+    if (req.method === 'OPTIONS') return res.sendStatus(200);
+
+    const rawId = req.body && req.body.enemyFactionId ? String(req.body.enemyFactionId).trim() : '';
+    if (!rawId) {
+        chainEnemyFactionOverride = { id: null, name: null, updatedAt: Date.now() };
+        chainEnemyCache.clear();
+        chainDataCache.clear();
+        return res.json({ ok: true, enemyFaction: null });
+    }
+    if (!/^\d+$/.test(rawId)) {
+        return res.status(400).json({ error: 'Invalid faction ID' });
+    }
+
+    let facName = `Faction [${rawId}]`;
+    try {
+        const key = req.headers['x-api-key'] || (discordConfig && discordConfig.apiKey) || TORN_API_KEY || (typeof getNextApiKey === 'function' ? getNextApiKey() : null);
+        if (key) {
+            const eRes = await fetch(`https://api.torn.com/faction/${rawId}?selections=basic&key=${key}`, { signal: AbortSignal.timeout(4500) });
+            const eData = await eRes.json();
+            if (eData && !eData.error && eData.members) {
+                facName = eData.name || facName;
+                fastEnemyHospState = {};
+                await processEnemyHospitalTransitions(eData.members, rawId, facName, null);
+            }
+        }
+    } catch (_) {}
+
+    chainEnemyFactionOverride = { id: rawId, name: facName, updatedAt: Date.now() };
+    chainEnemyCache.set(rawId, { ts: Date.now(), name: facName });
+    chainDataCache.clear();
+    return res.json({ ok: true, enemyFaction: { id: rawId, name: facName } });
+});
+app.options('/api/chain/target', (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-api-key');
+    res.sendStatus(204);
+});
+
+// POST /api/chain/medout-report — client-observed early hospital escape (med-out/revive) reporter
+app.post('/api/chain/medout-report', express.json(), async (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-api-key');
+    if (req.method === 'OPTIONS') return res.sendStatus(200);
+
+    const b = req.body || {};
+    const playerId = b.playerId ? String(b.playerId).trim() : '';
+    if (!playerId || !/^\d+$/.test(playerId)) {
+        return res.status(400).json({ error: 'Valid playerId required' });
+    }
+    const nowSec = Math.floor(Date.now() / 1000);
+    const oldUntil = b.until ? Number(b.until) : (b.secondsSaved ? nowSec + Number(b.secondsSaved) : nowSec + 120);
+    const syntheticMember = {
+        name: b.playerName || `Enemy [${playerId}]`,
+        level: Number(b.level) || 0,
+        last_action: { status: b.onlineStatus || 'Online' },
+        status: { state: 'Okay', until: 0 }
+    };
+    const ev = await recordAndAlertEnemyMedOut(
+        playerId,
+        syntheticMember,
+        oldUntil,
+        b.factionId || chainEnemyFactionOverride.id || currentEnemyFacId || '',
+        b.factionName || chainEnemyFactionOverride.name || enemyFactionNameCache || 'Enemy Faction',
+        null
+    );
+    return res.json({ ok: true, recorded: Boolean(ev), event: ev });
+});
+app.options('/api/chain/medout-report', (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-api-key');
+    res.sendStatus(204);
+});
+
 // ── Global Chain Lineup Sync (Web App <-> Userscript <-> Faction Chat) ──
 let globalChainLineup = {
     lineup: [],
     targetHitTime: '3:00',
     cycle: 1,
+    loopMode: true,
+    autoMode: true,
     formattedCompact: '',
     formattedFull: '',
     updatedAt: Date.now(),
@@ -32713,17 +33003,19 @@ app.get('/api/chain/lineup', (req, res) => {
     });
 });
 
-// POST /api/chain/lineup — updates live lineup from chain.html
+// POST /api/chain/lineup — updates live lineup from chain.html or userscript
 app.post('/api/chain/lineup', express.json(), (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-api-key');
-    const { lineup, targetHitTime, cycle, formattedCompact, formattedFull } = req.body || {};
+    const { lineup, targetHitTime, cycle, loopMode, autoMode, formattedCompact, formattedFull } = req.body || {};
     if (Array.isArray(lineup)) {
         globalChainLineup = {
             lineup: lineup || [],
             targetHitTime: targetHitTime !== undefined ? targetHitTime : (globalChainLineup.targetHitTime || '3:00'),
             cycle: cycle || 1,
+            loopMode: loopMode !== undefined ? Boolean(loopMode) : (globalChainLineup.loopMode !== undefined ? globalChainLineup.loopMode : true),
+            autoMode: autoMode !== undefined ? Boolean(autoMode) : (globalChainLineup.autoMode !== undefined ? globalChainLineup.autoMode : true),
             formattedCompact: formattedCompact || '',
             formattedFull: formattedFull || '',
             updatedAt: Date.now(),

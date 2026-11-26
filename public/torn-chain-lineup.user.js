@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         FactionOS Chain Manager (Standalone)
+// @name         FactionOS Chain Command
 // @namespace    https://faction-os.duckdns.org/
-// @version      3.1.0
-// @description  Professional high-speed chain lineup manager for Torn. Multi-tier zero-latency hit detection (<500ms), native in-page attack & DOM observers, dynamic adaptive polling, smart savior attribution, clean 2-bar controls, streamlined queue rows, and live compact HUD timer. v3.1.0: 16 bug fixes.
+// @version      4.0.0
+// @description  FactionOS Tactical Chain HUD — multi-tier hit detection, true bidirectional server sync, instant Enemy Med-Out / Revive sniper alerts with 1-click Attack & Faction Chat callouts, smart readiness watchdog, and modern glassmorphic HUD across Torn.
 // @author       FactionOS
 // @match        https://www.torn.com/*
 // @grant        GM_xmlhttpRequest
@@ -21,127 +21,145 @@
 (function () {
     'use strict';
 
-    // ══════════════════════════════════════════════════════════════
-    //  CONSTANTS & LOCAL STORAGE KEYS
-    // ══════════════════════════════════════════════════════════════
-    const SERVER_BASE       = 'https://faction-os.duckdns.org';
-    const LS_KEY_POS        = 'sv_chain_mgr_pos';
-    const LS_KEY_APIKEY     = 'sv_chain_apikey';
-    const LS_KEY_MEMBERS    = 'sv_chain_members_cache';
-    const STATUS_POLL_MS    = 60000; // 60s for member online/offline status
+    // Never mount inside embedded iframes or raw JSON documents
+    if (window.top !== window.self) return;
+    if (document.contentType && !document.contentType.includes('html')) return;
 
-    // Chain Respect Bonuses thresholds in Torn
-    const CHAIN_BONUSES = [10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 25000, 50000, 100000];
+    // ══════════════════════════════════════════════════════════════
+    //  CONSTANTS & STORAGE KEYS
+    // ══════════════════════════════════════════════════════════════
+    const SERVER_BASE      = 'https://faction-os.duckdns.org';
+    const LS_KEY_POS       = 'sv_chain_mgr_pos_v4';
+    const LS_KEY_APIKEY    = 'sv_chain_apikey';
+    const LS_KEY_MEMBERS   = 'sv_chain_members_cache';
+    const STATUS_POLL_MS   = 45000;
+    const CHAIN_BONUSES    = [10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 25000, 50000, 100000];
 
     // ══════════════════════════════════════════════════════════════
     //  STATE
     // ══════════════════════════════════════════════════════════════
-    let apiKey          = GM_getValue('sv_apikey', '') || localStorage.getItem(LS_KEY_APIKEY) || '';
-    let lineup          = [];          // [{name, id, hit, skipped}]
-    let targetHitTime   = '2:30';
-    let cycleNum        = 1;
-    let loopMode        = true;
-    let autoMode        = true;        // Auto-advance on confirmed hit
-    let autoSendOnPost  = GM_getValue('sv_autosend', false);
-    let soundEnabled    = GM_getValue('sv_sound', true);
-    let chainTimeout    = 0;           // seconds left on timer
-    let chainCount      = 0;           // current chain count
-    let chainActive     = false;
-    let factionMembers  = [];          // [{id, name, online, state, until, lastActionTs}]
-    let memberStatuses  = {};          // id -> {online, state, until, lastActionTs}
-    let processedAtkIds = new Set();
-    let isFirstPoll      = true;       // snapshot initial attacks
-    let hasAttacksAccess = true;       // true if key has Limited+ / Faction AA; false for Public keys
+    let apiKey           = GM_getValue('sv_apikey', '') || localStorage.getItem(LS_KEY_APIKEY) || '';
+    let customEnemyFacId = GM_getValue('sv_enemy_fac_id', '') || '';
+    let autoEnemyFacId   = '';
+    let enemyFacName     = 'Enemy Faction';
+    let lineup           = []; // [{ name, id, hit, skipped, hitsSession }]
+    let targetHitTime    = '2:30';
+    let cycleNum         = 1;
+    let loopMode         = true;
+    let autoMode         = true;
+    let autoSendOnPost   = GM_getValue('sv_autosend', false);
+    let soundEnabled     = GM_getValue('sv_sound', true);
+    let autoCallMedOut   = GM_getValue('sv_autocall_medout', false);
+    let runOnAllPages    = GM_getValue('sv_all_pages', true);
     let isMinimized      = GM_getValue('sv_min', false);
-    // Bug fix #2/#16: Never persist isHidden across reloads — HUD always shows on page load.
-    // A floating re-open tab is injected when the user closes the HUD.
     let isHidden         = false;
+    let activeTab        = 'lineup'; // 'lineup' | 'radar' | 'hits'
+
+    let chainTimeout     = 0;
+    let chainCount       = 0;
+    let chainActive      = false;
+    let chainCooldown    = 0;
+
+    let factionMembers   = [];
+    let memberStatuses   = {}; // id -> { online, state, until, lastActionTs }
+    let processedAtkIds  = new Set();
+    let liveHits         = []; // [{ chain, attackerName, attackerId, timestamp }]
+    let isFirstPoll      = true;
+    let hasAttacksAccess = true;
+
     let searchQuery      = '';
     let suggestSelected  = -1;
-    let isUpdated        = false;      // green/grey status light
-    let warnedAt60       = false;      // audio warning at 1:00 threshold
-    let showHospBanner   = false;      // interactive filter state
+    let isDirtyLineup    = false;
+    let warnedAt60       = false;
+    let warnedEmergency  = 0;
+    let showHospBanner   = false;
+    let showSettings     = !apiKey;
 
-    // Dynamic Adaptive Polling State (Tier 3)
-    let lastHitUnix       = 0;
-    let adaptivePollTimer = null;
-    let pollMembersTimer  = null;
-    let timerInterval     = null;
+    // Server Sync Versioning
+    let serverLineupVersion = 0;
+    let isSavingToServer    = false;
+    let pendingUrgentPoll   = null;
+
+    // Adaptive Polling & Timers
+    let lastHitUnix         = 0;
+    let adaptivePollTimer   = null;
+    let enemyPollTimer      = null;
+    let pollMembersTimer    = null;
+    let timerInterval       = null;
     let lastProcessedHitSig = '';
     let lastProcessedHitTs  = 0;
 
+    // Enemy Med-Out / Revive Sniper State
+    let localEnemyHospMap   = {};   // id -> { state, until, online, name, level }
+    let enemyMedOuts        = [];   // [{ id, playerId, playerName, level, onlineStatus, escapeType, secondsSaved, timeSavedStr, detectedAt, attackUrl }]
+    let upcomingHospExits   = [];   // [{ playerId, playerName, level, onlineStatus, until, secondsLeft, attackUrl }]
+    let seenMedOutIds       = new Set();
+    let activeMedAlert      = null; // Most recent alert banner inside HUD
+    let activeMedBannerTimer = null;
+    let lastAutoCalledPlayer = new Map(); // playerId -> timestamp
+
     // ══════════════════════════════════════════════════════════════
-    //  WEB AUDIO SYNTHESIZER (ZERO EXTERNAL DEPENDENCY)
+    //  TACTICAL WEB AUDIO ENGINE
     // ══════════════════════════════════════════════════════════════
     let audioCtx = null;
     function getAudioContext() {
         if (!soundEnabled) return null;
         try {
             if (!audioCtx) {
-                const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-                if (AudioContextClass) audioCtx = new AudioContextClass();
+                const AC = window.AudioContext || window.webkitAudioContext;
+                if (AC) audioCtx = new AC();
             }
             if (audioCtx && audioCtx.state === 'suspended') {
                 audioCtx.resume().catch(() => {});
             }
             return audioCtx;
-        } catch(e) {
+        } catch (e) {
             return null;
         }
     }
 
+    function playTone(freq, startOffset, duration, type = 'sine', peakGain = 0.12) {
+        const ctx = getAudioContext();
+        if (!ctx) return;
+        const now = ctx.currentTime + startOffset;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, now);
+        gain.gain.setValueAtTime(0.001, now);
+        gain.gain.linearRampToValueAtTime(peakGain, now + 0.015);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + duration + 0.02);
+    }
+
     function playSuccessChime() {
         try {
-            const ctx = getAudioContext();
-            if (!ctx) return;
-            const now = ctx.currentTime;
-            
-            // Tone 1: 587.33 Hz (D5)
-            const osc1 = ctx.createOscillator();
-            const gain1 = ctx.createGain();
-            osc1.type = 'sine';
-            osc1.frequency.setValueAtTime(587.33, now);
-            gain1.gain.setValueAtTime(0.12, now);
-            gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
-            osc1.connect(gain1);
-            gain1.connect(ctx.destination);
-            osc1.start(now);
-            osc1.stop(now + 0.18);
-
-            // Tone 2: 880 Hz (A5)
-            const osc2 = ctx.createOscillator();
-            const gain2 = ctx.createGain();
-            osc2.type = 'sine';
-            osc2.frequency.setValueAtTime(880, now + 0.08);
-            gain2.gain.setValueAtTime(0.15, now + 0.08);
-            gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
-            osc2.connect(gain2);
-            gain2.connect(ctx.destination);
-            osc2.start(now + 0.08);
-            osc2.stop(now + 0.35);
-        } catch(e) {}
+            playTone(587.33, 0, 0.16, 'sine', 0.11);
+            playTone(880, 0.08, 0.28, 'sine', 0.13);
+        } catch (e) {}
     }
 
     function playPanicWarningBeep() {
         try {
-            const ctx = getAudioContext();
-            if (!ctx) return;
-            const now = ctx.currentTime;
-            const osc = ctx.createOscillator();
-            const gain = ctx.createGain();
-            osc.type = 'triangle';
-            osc.frequency.setValueAtTime(440, now);
-            gain.gain.setValueAtTime(0.12, now);
-            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
-            osc.connect(gain);
-            gain.connect(ctx.destination);
-            osc.start(now);
-            osc.stop(now + 0.25);
-        } catch(e) {}
+            playTone(440, 0, 0.18, 'triangle', 0.13);
+            playTone(440, 0.22, 0.18, 'triangle', 0.13);
+        } catch (e) {}
+    }
+
+    function playMedOutSniperAlert() {
+        try {
+            // Distinct sharp triple-chirp sniper alert (impossible to confuse with hit chime)
+            playTone(1046.5, 0, 0.11, 'sawtooth', 0.11);
+            playTone(1318.5, 0.12, 0.11, 'sawtooth', 0.13);
+            playTone(1567.98, 0.24, 0.24, 'triangle', 0.15);
+        } catch (e) {}
     }
 
     // ══════════════════════════════════════════════════════════════
-    //  CHAIN METRIC HELPERS: RESPECT & BONUS MILESTONES
+    //  CHAIN & TIME HELPERS
     // ══════════════════════════════════════════════════════════════
     function getRespectMultiplier(count) {
         if (!count || count < 10) return '1.00x';
@@ -160,159 +178,200 @@
     }
 
     function getNextBonus(count) {
-        if (!count || count <= 0) return { next: 10, remaining: 10, text: '—' };
+        if (!count || count <= 0) return { prev: 0, next: 10, remaining: 10, pct: 0, text: 'Start Chain' };
+        let prev = 0;
         for (const b of CHAIN_BONUSES) {
             if (count < b) {
                 const rem = b - count;
                 const bStr = b >= 1000 ? (b / 1000) + 'k' : String(b);
-                return { next: b, remaining: rem, text: `${rem} to ${bStr}` };
+                const pct = Math.min(100, Math.max(0, ((count - prev) / (b - prev)) * 100));
+                return { prev, next: b, remaining: rem, pct, text: `${rem} to ${bStr}` };
             }
+            prev = b;
         }
-        return { next: null, remaining: 0, text: 'MAX BONUS' };
+        return { prev: 100000, next: null, remaining: 0, pct: 100, text: 'MAX 100k' };
     }
 
+    function fmtSecs(s) {
+        if (!s || s <= 0) return '0:00';
+        const m = Math.floor(s / 60);
+        const sec = s % 60;
+        return `${m}:${String(sec).padStart(2, '0')}`;
+    }
+
+    function fmtSavedTime(secs) {
+        const s = Math.max(0, Math.round(Number(secs) || 0));
+        if (s >= 3600) return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`;
+        if (s >= 60) {
+            const m = Math.floor(s / 60);
+            const r = s % 60;
+            return r > 0 ? `${m}m ${r}s` : `${m}m`;
+        }
+        return `${s}s`;
+    }
+
+    function fmtAgo(tsMs) {
+        const secs = Math.max(0, Math.floor((Date.now() - tsMs) / 1000));
+        if (secs < 60) return `${secs}s ago`;
+        const m = Math.floor(secs / 60);
+        if (m < 60) return `${m}m ago`;
+        return `${Math.floor(m / 60)}h ago`;
+    }
+
+    function parseTimeToSecs(str) {
+        if (!str) return 0;
+        const p = str.split(':');
+        return (parseInt(p[0], 10) || 0) * 60 + (parseInt(p[1], 10) || 0);
+    }
+
+    function getActiveEnemyFactionId() {
+        return (customEnemyFacId || autoEnemyFacId || '').trim();
+    }
+
+    function esc(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+    function escAttr(s) { return String(s || '').replace(/\\/g, '\\\\').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+    function escRe(s) { return s.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'); }
+
     // ══════════════════════════════════════════════════════════════
-    //  CROSS-TAB SYNCHRONIZATION (BROADCASTCHANNEL ONLY)
+    //  CROSS-TAB SYNCHRONIZATION
     // ══════════════════════════════════════════════════════════════
     const _TAB_ID = Math.random().toString(36).slice(2);
     let broadcastChan = null;
     try {
         if (typeof BroadcastChannel !== 'undefined') {
-            broadcastChan = new BroadcastChannel('factionos_chain_sync');
+            broadcastChan = new BroadcastChannel('factionos_chain_sync_v4');
             broadcastChan.onmessage = (e) => {
-                // Bug fix #10: ignore messages originating from THIS tab
                 if (e && e.data && e.data._tabId !== _TAB_ID) handleIncomingBroadcast(e.data);
             };
         }
-    } catch(e) {}
-
-    // Bug fix #10: removed window 'storage' listener — it caused double-processing
-    // when broadcastHitEvent wrote to localStorage and other tabs received BOTH the
-    // BroadcastChannel message AND the storage event.
+    } catch (e) {}
 
     function broadcastHitEvent(payload) {
-        // 1. Process locally in current tab immediately
         handleIncomingHit(payload);
-
-        // 2. Broadcast to other open tabs only via BroadcastChannel (<10ms)
         if (broadcastChan) {
-            try { broadcastChan.postMessage({ ...payload, _tabId: _TAB_ID }); } catch(e) {}
+            try { broadcastChan.postMessage({ ...payload, _tabId: _TAB_ID }); } catch (e) {}
         }
-        // Bug fix #10: removed localStorage.setItem here — it caused duplicate events in other tabs
+    }
+
+    function broadcastMedOutEvent(ev) {
+        handleDetectedMedOut(ev, true);
+        if (broadcastChan) {
+            try { broadcastChan.postMessage({ type: 'MEDOUT_DETECTED', event: ev, _tabId: _TAB_ID }); } catch (e) {}
+        }
     }
 
     function handleIncomingBroadcast(payload) {
         if (!payload || !payload.type) return;
         if (payload.type === 'HIT_DETECTED' || payload.type === 'DOM_CHAIN_UPDATE') {
             handleIncomingHit(payload);
+        } else if (payload.type === 'MEDOUT_DETECTED' && payload.event) {
+            handleDetectedMedOut(payload.event, false);
         } else if (payload.type === 'LINEUP_UPDATED' && payload.lineup) {
             lineup = payload.lineup;
             if (payload.cycleNum) cycleNum = payload.cycleNum;
+            if (payload.loopMode !== undefined) loopMode = payload.loopMode;
+            if (payload.autoMode !== undefined) autoMode = payload.autoMode;
+            if (payload.targetHitTime !== undefined) {
+                targetHitTime = payload.targetHitTime;
+                _syncHitTimeUI();
+            }
+            syncTogglePillsUI();
             renderLineup();
             renderChainBar();
         }
     }
 
     // ══════════════════════════════════════════════════════════════
-    //  TIER 1: IN-PAGE DOM & NATIVE ATTACK OBSERVERS (< 50ms)
+    //  TIER 1: NATIVE ATTACK & DOM CHAIN OBSERVERS
     // ══════════════════════════════════════════════════════════════
     function initTier1AttackObserver() {
         if (typeof unsafeWindow === 'undefined') return;
 
-        // Hook window.fetch on attack pages & Torn loader
         const origFetch = unsafeWindow.fetch;
         if (origFetch) {
-            unsafeWindow.fetch = async function(...args) {
+            unsafeWindow.fetch = async function (...args) {
                 const response = await origFetch.apply(this, args);
                 try {
-                    const clone = response.clone();
                     const url = (typeof args[0] === 'string' ? args[0] : args[0]?.url) || '';
-                    if (url.includes('sid=attack') || url.includes('loader.php')) {
-                        clone.json().then(data => handleNativeAttackResponse(data, url)).catch(() => {});
+                    if (url.includes('sid=attack') || (url.includes('loader.php') && url.includes('attack'))) {
+                        const clone = response.clone();
+                        clone.json().then(data => handleNativeAttackResponse(data)).catch(() => {});
                     }
-                } catch(e) {}
+                } catch (e) {}
                 return response;
             };
         }
 
-        // Hook XMLHttpRequest
         if (unsafeWindow.XMLHttpRequest) {
             const origOpen = unsafeWindow.XMLHttpRequest.prototype.open;
             const origSend = unsafeWindow.XMLHttpRequest.prototype.send;
-            unsafeWindow.XMLHttpRequest.prototype.open = function(method, url, ...rest) {
+            unsafeWindow.XMLHttpRequest.prototype.open = function (method, url, ...rest) {
                 this._sv_url = url;
                 return origOpen.apply(this, [method, url, ...rest]);
             };
-            unsafeWindow.XMLHttpRequest.prototype.send = function(...args) {
-                this.addEventListener('load', function() {
+            unsafeWindow.XMLHttpRequest.prototype.send = function (...args) {
+                this.addEventListener('load', function () {
                     try {
-                        if (this._sv_url && (this._sv_url.includes('sid=attack') || this._sv_url.includes('loader.php'))) {
+                        if (this._sv_url && (this._sv_url.includes('sid=attack') || (this._sv_url.includes('loader.php') && this._sv_url.includes('attack')))) {
                             const data = JSON.parse(this.responseText);
-                            handleNativeAttackResponse(data, this._sv_url);
+                            handleNativeAttackResponse(data);
                         }
-                    } catch(e) {}
+                    } catch (e) {}
                 });
                 return origSend.apply(this, args);
             };
         }
     }
 
-    function handleNativeAttackResponse(data, url) {
-        if (!data) return;
-        const isSuccess = data.success === true || data.status === 'success' || data.result === 'success';
-        const hasChain = (data.chain !== undefined && data.chain > 0) || (data.data && data.data.chain > 0);
+    function handleNativeAttackResponse(data) {
+        if (!data || typeof data !== 'object') return;
         const textLog = JSON.stringify(data);
-        // Bug fix #6: corrected regex — was literal 's+' instead of '\s+'
-        const isAttackFinish = /hospitalized|mugged|left\s+them|lost\s+to|stalemate|finished/i.test(textLog) ||
-                               /respect/i.test(textLog) || (hasChain && isSuccess);
+        // Bug Fix #3: Never trigger on losses, stalemates, or generic 'respect' mentions
+        if (/\b(lost\s+to|stalemate|escaped|defeated\s+you)\b/i.test(textLog)) return;
 
-        if (isAttackFinish || hasChain) {
-            const attackerName = data.attacker_name || (data.data && data.data.attacker_name) || '';
-            const attackerId   = data.attacker_id || (data.data && data.data.attacker_id) || null;
-            const chainVal     = data.chain || (data.data && data.data.chain) || null;
-            const timeoutVal   = data.chainTimeout || (data.data && data.data.chainTimeout) || null;
+        const respectVal = Number(data.respect_gain || data.data?.respect_gain || data.respect || data.data?.respect || 0);
+        const chainVal = Number(data.chain || data.data?.chain || 0);
+        const hasWinAction = /\b(hospitalized|mugged|left\s+them|you\s+hospitalized|you\s+mugged|you\s+left)\b/i.test(textLog);
+        const isConfirmedWin = (respectVal > 0) || (chainVal > chainCount && chainVal > 0) || (hasWinAction && (data.success === true || data.status === 'success'));
 
-            broadcastHitEvent({
-                type: 'HIT_DETECTED',
-                source: 'tier1_fetch',
-                attackerId,
-                attackerName,
-                chain: chainVal,
-                timeout: timeoutVal,
-                timestamp: Date.now()
-            });
-        }
+        if (!isConfirmedWin) return;
+
+        const attackerName = data.attacker_name || data.data?.attacker_name || '';
+        const attackerId = data.attacker_id || data.data?.attacker_id || null;
+        const timeoutVal = data.chainTimeout || data.data?.chainTimeout || null;
+
+        broadcastHitEvent({
+            type: 'HIT_DETECTED',
+            source: 'tier1_fetch',
+            attackerId,
+            attackerName,
+            chain: chainVal > 0 ? chainVal : (chainCount ? chainCount + 1 : null),
+            timeout: timeoutVal,
+            timestamp: Date.now()
+        });
     }
 
     function initTier1HeaderDOMObserver() {
-        let lastObservedChain = 0;
-        // Bug fix #7: debounce observer to 100ms to avoid firing thousands of times/min
         let debounceTimer = null;
 
         function scanDOMChainCounter() {
             try {
-                // Bug fix #7: use specific chain-bar selectors first; avoid observing #sidebarroot directly
                 const chainEl = document.querySelector('[class*="chain-bar"], [class*="chainBar"], [class*="bar-chain"], a[href*="factions.php?step=your#/war"]');
                 if (!chainEl) return;
 
                 const text = chainEl.innerText || '';
                 if (!text) return;
 
-                // Match chain count e.g. "34 / 50" or "Chain: 34" or "35"
                 const chainMatch = text.match(/(\d{1,6})\s*\/\s*(?:10|25|50|100|250|500|1k|2\.5k|5k|10k|25k|50k|100k|\d{2,6})/i) ||
-                                   text.match(/chain\s*:?\s*(\d{1,6})/i);
-                
+                    text.match(/chain\s*:?\s*(\d{1,6})/i);
                 const timerMatch = text.match(/(\d{1,2}:\d{2})/);
 
-                let parsedChain = null;
-                let parsedTimer = null;
-
-                if (chainMatch) parsedChain = parseInt(chainMatch[1], 10);
-                if (timerMatch) parsedTimer = parseTimeToSecs(timerMatch[1]);
+                const parsedChain = chainMatch ? parseInt(chainMatch[1], 10) : null;
+                const parsedTimer = timerMatch ? parseTimeToSecs(timerMatch[1]) : null;
 
                 if (parsedChain !== null && parsedChain > 0) {
                     if (parsedChain > chainCount) {
-                        // Bug fix #3: only pass timeout if it was actually parsed from DOM
+                        // Bug Fix #1: tier1_dom notifies chain increment & triggers API check WITHOUT blindly rotating lineup[0]
                         broadcastHitEvent({
                             type: 'HIT_DETECTED',
                             source: 'tier1_dom',
@@ -320,72 +379,57 @@
                             timeout: parsedTimer || null,
                             timestamp: Date.now()
                         });
-                    } else if (parsedChain === chainCount && parsedTimer !== null && parsedTimer !== chainTimeout) {
+                    } else if (parsedChain === chainCount && parsedTimer !== null && Math.abs(parsedTimer - chainTimeout) > 2) {
                         chainTimeout = parsedTimer;
                         renderChainBar();
+                        updateMinDisplay();
                     }
                 }
-            } catch(e) {}
+            } catch (e) {}
         }
 
-        // Bug fix #7: wrap scan in a debounce so the observer fires at most once per 100ms
         function debouncedScan() {
             if (debounceTimer) return;
             debounceTimer = setTimeout(() => {
                 debounceTimer = null;
                 scanDOMChainCounter();
-            }, 100);
+            }, 120);
         }
 
         const observer = new MutationObserver(() => debouncedScan());
-
         function startObserving() {
-            // Bug fix #7: prefer specific chain-bar selector; fall back to #top-page-links-list,
-            // then body — but never observe #sidebarroot with subtree:true (too expensive)
             const root = document.querySelector('[class*="chain-bar"], [class*="chainBar"]') ||
-                         document.querySelector('#top-page-links-list') ||
-                         document.body;
+                document.querySelector('#top-page-links-list') ||
+                document.body;
             if (root) {
                 observer.observe(root, { childList: true, subtree: true, characterData: true });
                 scanDOMChainCounter();
             }
         }
-
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', startObserving);
-        } else {
-            startObserving();
-        }
+        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', startObserving);
+        else startObserving();
     }
 
     // ══════════════════════════════════════════════════════════════
-    //  TIER 2: FACTION CHAT & WEBSOCKET SNIFFING (< 250ms)
+    //  TIER 2: WEBSOCKET FACTION LOG SNIFFER
     // ══════════════════════════════════════════════════════════════
     function initTier2WebSocketSniffer() {
         if (typeof unsafeWindow === 'undefined' || !unsafeWindow.WebSocket) return;
-        // Bug fix #11: wrap entire proxy in try/catch so Torn's React app is never broken
         try {
             const OriginalWS = unsafeWindow.WebSocket;
             unsafeWindow.WebSocket = new Proxy(OriginalWS, {
                 construct(target, args) {
                     let ws;
+                    try { ws = new target(...args); } catch (e) { return new target(...args); }
                     try {
-                        ws = new target(...args);
-                    } catch(constructErr) {
-                        // Fall back gracefully — do not intercept if construction fails
-                        return new target(...args);
-                    }
-                    try {
-                        ws.addEventListener('message', function(event) {
-                            try { handleWebSocketRawMessage(event.data); } catch(e) {}
+                        ws.addEventListener('message', function (event) {
+                            try { handleWebSocketRawMessage(event.data); } catch (e) {}
                         });
-                    } catch(e) {}
+                    } catch (e) {}
                     return ws;
                 }
             });
-        } catch(e) {
-            // If Proxy itself fails (e.g., restricted environment), silently do nothing
-        }
+        } catch (e) {}
     }
 
     function handleWebSocketRawMessage(raw) {
@@ -402,9 +446,8 @@
             text = typeof msgObj === 'string' ? msgObj : (msgObj.text || msgObj.message || msgObj.content || JSON.stringify(msgObj));
             attackerId = msgObj.senderId || msgObj.userId || msgObj.attacker_id || null;
             attackerName = msgObj.senderName || msgObj.userName || msgObj.attacker_name || '';
-        } catch(e) {}
+        } catch (e) {}
 
-        // Match Torn log: "[Attacker] hospitalized [Target] for 1.25x respect"
         const logMatch = text.match(/(?:^|[>\s"'])(\b[a-zA-Z0-9_\-]{3,16}\b)\s+(?:hospitalized|attacked|mugged|left|finished)\s+.*?(?:for\s+([\d\.]+)x\s+respect|\+?([\d\.]+)\s+respect)/i);
         if (logMatch) {
             if (!attackerName) attackerName = logMatch[1];
@@ -420,35 +463,48 @@
     }
 
     // ══════════════════════════════════════════════════════════════
-    //  SMART QUEUE ROTATION & SAVIOR HIT LOGIC
+    //  SMART QUEUE ROTATION & HIT ATTRIBUTION
     // ══════════════════════════════════════════════════════════════
+    function triggerUrgentAttackPoll() {
+        if (pendingUrgentPoll) return;
+        pendingUrgentPoll = setTimeout(() => {
+            pendingUrgentPoll = null;
+            pollChainAndAttacks();
+        }, 250);
+    }
+
+    function recordLiveHit(chainVal, name, id, tsSec) {
+        if (!chainVal) return;
+        if (liveHits.some(h => h.chain === chainVal && h.attackerName === name)) return;
+        liveHits.unshift({
+            chain: chainVal,
+            attackerName: name || 'Faction Member',
+            attackerId: id || null,
+            timestamp: (tsSec || Math.floor(Date.now() / 1000)) * 1000
+        });
+        if (liveHits.length > 40) liveHits.pop();
+        renderTabBadges();
+        if (activeTab === 'hits') renderHitsTab();
+    }
+
     function handleIncomingHit(evt) {
         if (!evt) return;
 
         const now = Date.now();
-        // Bug fix #4: use evt.chain as primary dedup key; fall back to a 2-second timestamp window
-        // (avoids chain+1 mismatch when chainCount has already been updated by a prior tier)
         const incomingChain = evt.chain || (chainCount + 1);
-        const hitSig = evt.chain
-            ? `chain_${evt.chain}`
-            : `ts_${Math.floor(now / 2000)}`; // 2-second bucket when no chain value
+        const hitSig = evt.chain ? `chain_${evt.chain}_${evt.attackerId || evt.attackerName || 'dom'}` : `ts_${Math.floor(now / 1800)}`;
 
-        // Deduplication: prevent processing the same hit within 1.2 seconds
-        if (hitSig === lastProcessedHitSig && (now - lastProcessedHitTs) < 1200) {
-            return;
-        }
+        if (hitSig === lastProcessedHitSig && (now - lastProcessedHitTs) < 1200) return;
         lastProcessedHitSig = hitSig;
-        lastProcessedHitTs  = now;
+        lastProcessedHitTs = now;
 
-        // 1. Update Chain Counts & Live Timers
-        if (incomingChain > chainCount) {
-            chainCount = incomingChain;
-        } else if (!chainCount) {
+        if (incomingChain > chainCount || !chainCount) {
             chainCount = incomingChain;
         }
-        // Bug fix #3: only update chainTimeout if evt.timeout is explicitly provided and > 0
         if (evt.timeout && evt.timeout > 0) {
             chainTimeout = evt.timeout;
+        } else if (evt.source === 'tier1_dom' || evt.source === 'tier2_ws') {
+            chainTimeout = 300;
         }
         chainActive = true;
         warnedAt60 = false;
@@ -456,11 +512,25 @@
         const attackerId = evt.attackerId ? String(evt.attackerId) : null;
         const attackerName = (evt.attackerName || '').trim().toLowerCase();
 
-        // 2. Identify Attacker vs Lineup
+        // Bug Fix #1: Unattributed DOM counter increments MUST NOT rotate lineup[0]!
+        // Only update timer/chain & immediately poll API to attribute the hit to the true attacker.
+        if (evt.source === 'tier1_dom' && !attackerId && !attackerName) {
+            playSuccessChime();
+            renderChainBar();
+            updateMinDisplay();
+            flashStatus(`⚡ Chain #${chainCount} detected — verifying hitter...`, false);
+            triggerUrgentAttackPoll();
+            return;
+        }
+
+        if (evt.attackerName) {
+            recordLiveHit(chainCount, evt.attackerName, evt.attackerId, Math.floor(evt.timestamp / 1000));
+        }
+
         if (!lineup.length) {
             playSuccessChime();
-            flashStatus(`✓ Hit #${chainCount} registered! (Lineup is empty)`, false);
-            setUpdated(true);
+            flashStatus(`✓ Hit #${chainCount} by ${evt.attackerName || 'Member'}`, false);
+            setDirty(true);
             renderChainBar();
             return;
         }
@@ -471,80 +541,199 @@
 
         const isAssignedHitter = Boolean(
             (attackerId && upId && attackerId === upId) ||
-            (attackerName && upName && attackerName === upName) ||
-            (!attackerName && !attackerId && evt.source === 'tier1_dom') // Native DOM increment during active window
+            (attackerName && upName && attackerName === upName)
         );
 
         if (isAssignedHitter) {
-            // ── SCENARIO A: ASSIGNED PLAYER MADE THE HIT ──
             playSuccessChime();
-            const [hitter] = lineup.splice(0, 1);
-            hitter.hit = true;
-            if (loopMode) {
-                lineup.push(hitter);
+            // Bug Fix #2: Honor autoMode toggle! Only splice/rotate when autoMode === true
+            if (autoMode) {
+                const [hitter] = lineup.splice(0, 1);
+                hitter.hit = true;
+                hitter.hitsSession = (hitter.hitsSession || 0) + 1;
+                if (loopMode) lineup.push(hitter);
+                cycleNum++;
+                const nextUpName = lineup[0] ? lineup[0].name : 'Lineup Empty';
+                flashStatus(`✅ ${hitter.name} landed #${chainCount}! Next UP: ${nextUpName}`, false);
+                save();
+                if (autoSendOnPost) setTimeout(() => postToChat(), 200);
+            } else {
+                up.hit = true;
+                up.hitsSession = (up.hitsSession || 0) + 1;
+                flashStatus(`✅ ${up.name} landed #${chainCount} (Auto-Rotate OFF — click Hit & Next to rotate)`, false);
+                save();
             }
-            cycleNum++;
-
-            const nextUpName = lineup[0] ? lineup[0].name : 'Lineup Empty';
-            flashStatus(`✅ Hit Confirmed! ${hitter.name} landed hit #${chainCount}! Next UP: ${nextUpName}`, false);
-            setUpdated(true);
-            save();
+            setDirty(true);
             renderLineup();
             renderChainBar();
-
-            // Auto-Send callout to faction chat if enabled
-            if (autoSendOnPost) {
-                setTimeout(() => postToChat(), 200);
-            }
         } else if (attackerName || attackerId) {
-            // ── SCENARIO B: CHAIN SAVIOR / JUMP-IN HIT ──
             const saviorIdx = lineup.findIndex(m =>
                 (m.id && attackerId && String(m.id) === attackerId) ||
                 (m.name && m.name.trim().toLowerCase() === attackerName)
             );
-
             playSuccessChime();
 
             if (saviorIdx !== -1) {
-                // Move Savior to the bottom of the queue for their contribution
-                const [savior] = lineup.splice(saviorIdx, 1);
-                savior.hit = true;
-                if (loopMode) {
-                    lineup.push(savior);
+                const targetM = lineup[saviorIdx];
+                targetM.hit = true;
+                targetM.hitsSession = (targetM.hitsSession || 0) + 1;
+                if (autoMode) {
+                    const [savior] = lineup.splice(saviorIdx, 1);
+                    if (loopMode) lineup.push(savior);
+                    flashStatus(`⚡ Jump-in hit #${chainCount} by ${savior.name}! ${lineup[0] ? lineup[0].name : ''} stays UP.`, false);
+                } else {
+                    flashStatus(`⚡ Jump-in hit #${chainCount} by ${targetM.name}!`, false);
                 }
-                const displayName = savior.name;
-                flashStatus(`⚡ Savior Hit! ${displayName} saved the chain (#${chainCount})! ${lineup[0].name} is still UP.`, false);
+                save();
+                renderLineup();
             } else {
                 const displayName = evt.attackerName || 'Faction Savior';
-                flashStatus(`⚡ Savior Hit! ${displayName} saved the chain (#${chainCount})! ${lineup[0].name} is still UP.`, false);
+                flashStatus(`⚡ Savior hit #${chainCount} by ${displayName}! ${lineup[0].name} stays UP.`, false);
             }
-
-            setUpdated(true);
-            save();
-            renderLineup();
-            renderChainBar();
-        } else {
-            // Unattributed hit increment
-            playSuccessChime();
-            flashStatus(`✓ Chain incremented to #${chainCount}! Next UP: ${lineup[0].name}`, false);
-            setUpdated(true);
+            setDirty(true);
             renderChainBar();
         }
     }
 
     // ══════════════════════════════════════════════════════════════
-    //  TIER 3: DYNAMIC ADAPTIVE API POLLING
+    //  INSTANT ENEMY MED-OUT & REVIVE SNIPER
+    // ══════════════════════════════════════════════════════════════
+    function handleDetectedMedOut(ev, reportToServer = false) {
+        if (!ev || !ev.playerId) return;
+        const dedupKey = ev.id || `${ev.playerId}_${Math.floor((ev.detectedAt || Date.now()) / 20000)}`;
+        if (seenMedOutIds.has(dedupKey)) return;
+        seenMedOutIds.add(dedupKey);
+        if (seenMedOutIds.size > 200) {
+            seenMedOutIds = new Set([...seenMedOutIds].slice(-100));
+        }
+
+        // Only treat recent escapes (< 3 minutes old) as fresh live alerts
+        const ageMs = Date.now() - (ev.detectedAt || Date.now());
+        enemyMedOuts = [ev, ...enemyMedOuts.filter(x => x.id !== ev.id && x.playerId !== ev.playerId)].slice(0, 25);
+        renderTabBadges();
+        if (activeTab === 'radar') renderRadarTab();
+
+        if (ageMs < 90000) {
+            activeMedAlert = ev;
+            playMedOutSniperAlert();
+            renderMedOutBanner();
+            updateMinDisplay();
+
+            // Auto-call into Faction Chat if enabled (with 15s cooldown per enemy)
+            if (autoCallMedOut) {
+                const lastCall = lastAutoCalledPlayer.get(String(ev.playerId)) || 0;
+                if (Date.now() - lastCall > 15000) {
+                    lastAutoCalledPlayer.set(String(ev.playerId), Date.now());
+                    callOutMedOutToChat(ev);
+                }
+            }
+
+            if (activeMedBannerTimer) clearTimeout(activeMedBannerTimer);
+            activeMedBannerTimer = setTimeout(() => {
+                if (activeMedAlert && activeMedAlert.id === ev.id) {
+                    activeMedAlert = null;
+                    renderMedOutBanner();
+                    updateMinDisplay();
+                }
+            }, 45000);
+        }
+
+        if (reportToServer) {
+            try {
+                GM_xmlhttpRequest({
+                    method: 'POST',
+                    url: `${SERVER_BASE}/api/chain/medout-report`,
+                    headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey || '' },
+                    data: JSON.stringify({
+                        playerId: ev.playerId,
+                        playerName: ev.playerName,
+                        level: ev.level,
+                        factionId: ev.factionId || getActiveEnemyFactionId(),
+                        factionName: ev.factionName || enemyFacName,
+                        onlineStatus: ev.onlineStatus,
+                        secondsSaved: ev.secondsSaved,
+                        until: ev.oldUntil
+                    }),
+                    timeout: 4000,
+                    onerror() {}
+                });
+            } catch (e) {}
+        }
+    }
+
+    function processDirectEnemyMembers(membersObj, facId, facName) {
+        if (!membersObj || typeof membersObj !== 'object') return;
+        const nowSec = Math.floor(Date.now() / 1000);
+        const soon = [];
+
+        for (const [id, m] of Object.entries(membersObj)) {
+            if (!m) continue;
+            const st = m.status?.state || 'Okay';
+            const until = m.status?.until || 0;
+            const online = m.last_action?.status || 'Offline';
+            const oldRec = localEnemyHospMap[id];
+
+            if (st === 'Hospital' && until > nowSec && (until - nowSec) <= 300) {
+                soon.push({
+                    playerId: String(id),
+                    playerName: m.name || `Enemy [${id}]`,
+                    level: m.level || 0,
+                    onlineStatus: online,
+                    until,
+                    secondsLeft: until - nowSec,
+                    attackUrl: `https://www.torn.com/page.php?sid=attack&user2ID=${id}`
+                });
+            }
+
+            if (oldRec && oldRec.state === 'Hospital' && st === 'Okay') {
+                const leftEarly = oldRec.until && (oldRec.until > nowSec + 15);
+                if (leftEarly) {
+                    const saved = oldRec.until - nowSec;
+                    const ev = {
+                        id: `med_${id}_${nowSec}`,
+                        playerId: String(id),
+                        playerName: m.name || oldRec.name || `Enemy [${id}]`,
+                        level: m.level || oldRec.level || 0,
+                        factionId: String(facId || ''),
+                        factionName: facName || enemyFacName,
+                        onlineStatus: online,
+                        escapeType: online === 'Online' ? 'MEDDED OUT' : 'REVIVED / MEDDED',
+                        secondsSaved: saved,
+                        oldUntil: oldRec.until,
+                        timeSavedStr: fmtSavedTime(saved),
+                        detectedAt: Date.now(),
+                        attackUrl: `https://www.torn.com/page.php?sid=attack&user2ID=${id}`,
+                        profileUrl: `https://www.torn.com/profiles.php?XID=${id}`
+                    };
+                    broadcastMedOutEvent(ev);
+                }
+            }
+
+            localEnemyHospMap[id] = { state: st, until, online, name: m.name, level: m.level };
+        }
+
+        soon.sort((a, b) => a.until - b.until);
+        if (soon.length || !upcomingHospExits.length) {
+            upcomingHospExits = soon.slice(0, 10);
+            if (activeTab === 'radar') renderRadarTab();
+        }
+    }
+
+    function callOutMedOutToChat(ev) {
+        if (!ev) return;
+        const msg = `🚨 ${ev.escapeType}: ${ev.playerName} [${ev.playerId}] (Lv.${ev.level || '?'}, ${ev.onlineStatus}) just left hospital ${ev.timeSavedStr} early! Attack: ${ev.attackUrl}`;
+        postToChat(msg, true);
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    //  TIER 3: ADAPTIVE POLLING + BACKEND MED-OUT & VERSION SYNC
     // ══════════════════════════════════════════════════════════════
     function scheduleAdaptivePoll() {
         if (adaptivePollTimer) clearTimeout(adaptivePollTimer);
-
-        // Safe zone (> 3:00 / > 180s) -> poll every 10s
-        // Critical zone (<= 2:30 / <= 150s) or within 30s of Hit at target -> accelerate to 2s
         const targetSecs = parseTimeToSecs(targetHitTime) || 150;
         const isCritical = chainTimeout > 0 && chainTimeout <= 150;
         const nearTarget = chainTimeout > 0 && Math.abs(chainTimeout - targetSecs) <= 30;
-
-        const nextDelayMs = (isCritical || nearTarget) ? 2000 : 10000;
+        const nextDelayMs = (isCritical || nearTarget) ? 2000 : 3500;
 
         adaptivePollTimer = setTimeout(() => {
             pollChainAndAttacks();
@@ -563,7 +752,7 @@
                     const d = JSON.parse(res.responseText);
                     if (d && d.error) return cb(d.error, null);
                     cb(null, d);
-                } catch(e) { cb(e, null); }
+                } catch (e) { cb(e, null); }
             },
             onerror(e) { cb(e, null); }
         });
@@ -583,7 +772,15 @@
                     lastHitUnix = atk.timestamp_ended;
                 }
             }
+            // Seed recent 10 hits into Live Hits tab
+            liveHits = chainAtks.slice(-15).reverse().map(a => ({
+                chain: a.chain,
+                attackerName: a.attacker_name || 'Operative',
+                attackerId: a.attacker_id || null,
+                timestamp: (a.timestamp_ended || 0) * 1000
+            }));
             isFirstPoll = false;
+            renderTabBadges();
             renderChainBar();
             return;
         }
@@ -596,15 +793,10 @@
             if (atk.timestamp_ended && atk.timestamp_ended > lastHitUnix) {
                 lastHitUnix = atk.timestamp_ended;
             }
-
-            if (processedAtkIds.size > 500) {
-                const arr = [...processedAtkIds];
-                processedAtkIds = new Set(arr.slice(arr.length - 250));
+            if (processedAtkIds.size > 600) {
+                processedAtkIds = new Set([...processedAtkIds].slice(-300));
             }
 
-            // Bug fix #5: call handleIncomingHit directly (not broadcastHitEvent) so we
-            // don't double-process: handleChainResponse already updates chainCount/chainTimeout
-            // from the authoritative API response before processAttacks runs.
             handleIncomingHit({
                 type: 'HIT_DETECTED',
                 source: 'tier3_api',
@@ -614,6 +806,79 @@
                 timestamp: (atk.timestamp_ended || 0) * 1000
             });
         }
+    }
+
+    function fetchServerLineupSnapshot() {
+        if (isSavingToServer) return;
+        GM_xmlhttpRequest({
+            method: 'GET',
+            url: `${SERVER_BASE}/api/chain/lineup`,
+            timeout: 4000,
+            onload(res) {
+                try {
+                    const d = JSON.parse(res.responseText);
+                    if (d?.ok && d?.data && Array.isArray(d.data.lineup)) {
+                        const incomingVer = d.data.version || 0;
+                        if (incomingVer > serverLineupVersion || (!lineup.length && d.data.lineup.length)) {
+                            serverLineupVersion = incomingVer;
+                            lineup = d.data.lineup;
+                            if (d.data.targetHitTime !== undefined) targetHitTime = d.data.targetHitTime;
+                            if (d.data.cycle) cycleNum = d.data.cycle;
+                            if (d.data.loopMode !== undefined) loopMode = d.data.loopMode;
+                            if (d.data.autoMode !== undefined) autoMode = d.data.autoMode;
+                            GM_setValue('sv_state', JSON.stringify({ lineup, targetHitTime, cycleNum, loopMode, autoMode, autoSendOnPost, soundEnabled, autoCallMedOut, customEnemyFacId, runOnAllPages }));
+                            _syncHitTimeUI();
+                            syncTogglePillsUI();
+                            renderLineup();
+                            renderChainBar();
+                        }
+                    }
+                } catch (e) {}
+            },
+            onerror() {}
+        });
+    }
+
+    function syncBackendTelemetry(updateChainFields = false) {
+        const enemyParam = customEnemyFacId ? `?enemyFactionId=${encodeURIComponent(customEnemyFacId)}` : '';
+        GM_xmlhttpRequest({
+            method: 'GET',
+            url: `${SERVER_BASE}/api/chain/data${enemyParam}`,
+            headers: { 'x-api-key': apiKey || '' },
+            timeout: 4000,
+            onload(res) {
+                try {
+                    const d = JSON.parse(res.responseText);
+                    if (!d) return;
+                    if (updateChainFields && d.chain) {
+                        chainCount    = d.chain.current || 0;
+                        chainTimeout  = d.chain.timeout || 0;
+                        chainCooldown = d.chain.cooldown || 0;
+                        chainActive   = chainCount > 0 && chainCooldown === 0;
+                        renderChainBar();
+                        updateMinDisplay();
+                    }
+                    if (d.enemyFaction && d.enemyFaction.id) {
+                        autoEnemyFacId = String(d.enemyFaction.id);
+                        enemyFacName = d.enemyFaction.name || enemyFacName;
+                        updateEnemyBadgeUI();
+                    }
+                    if (Array.isArray(d.enemyMedOuts)) {
+                        for (const ev of [...d.enemyMedOuts].reverse()) {
+                            handleDetectedMedOut(ev, false);
+                        }
+                    }
+                    if (Array.isArray(d.upcomingHospExits) && d.upcomingHospExits.length) {
+                        upcomingHospExits = d.upcomingHospExits;
+                        if (activeTab === 'radar') renderRadarTab();
+                    }
+                    if (d.lineupVersion && d.lineupVersion > serverLineupVersion && !isSavingToServer) {
+                        fetchServerLineupSnapshot();
+                    }
+                } catch (e) {}
+            },
+            onerror() {}
+        });
     }
 
     function pollBackendAttacks() {
@@ -626,40 +891,33 @@
                 try {
                     const d = JSON.parse(res.responseText);
                     if (d && d.attacks) processAttacks(d.attacks);
-                } catch(e) {}
+                } catch (e) {}
             },
             onerror() {}
         });
     }
 
-    function pollBackendChainAndAttacks() {
-        GM_xmlhttpRequest({
-            method: 'GET',
-            url: `${SERVER_BASE}/api/chain/data`,
-            timeout: 4000,
-            onload(res) {
-                try {
-                    const d = JSON.parse(res.responseText);
-                    if (d && d.chain) {
-                        chainCount   = d.chain.current || 0;
-                        chainTimeout = d.chain.timeout || 0;
-                        chainActive  = chainCount > 0;
-                    }
-                } catch(e) {}
-                renderChainBar();
-            },
-            onerror() {}
+    function pollDirectEnemyFaction() {
+        const targetFac = getActiveEnemyFactionId();
+        if (!apiKey || !targetFac) return;
+        tornGet(`/faction/${targetFac}?selections=basic`, (err, d) => {
+            if (!err && d && d.members) {
+                enemyFacName = d.name || enemyFacName;
+                updateEnemyBadgeUI();
+                processDirectEnemyMembers(d.members, targetFac, enemyFacName);
+            }
         });
-        pollBackendAttacks();
     }
 
     function pollChainAndAttacks() {
         if (!apiKey) {
-            pollBackendChainAndAttacks();
+            syncBackendTelemetry(true);
+            pollBackendAttacks();
             return;
         }
 
-        const cursorParam = lastHitUnix > 0 ? `&from=${lastHitUnix}` : '';
+        // Bug Fix #4: overlap window (-2s) prevents missing same-second Torn attack timestamps
+        const cursorParam = lastHitUnix > 0 ? `&from=${Math.max(0, lastHitUnix - 2)}` : '';
 
         if (hasAttacksAccess) {
             tornGet(`/faction/?selections=attacks,chain${cursorParam}`, (err, d) => {
@@ -673,8 +931,7 @@
                     }
                     return;
                 }
-                if (!d) return;
-                handleChainResponse(d);
+                if (d) handleChainResponse(d);
             });
         } else {
             tornGet('/faction/?selections=chain', (err, d) => {
@@ -682,23 +939,43 @@
             });
             pollBackendAttacks();
         }
+
+        // Always keep server med-outs + lineupVersion synced
+        syncBackendTelemetry(false);
     }
 
     function handleChainResponse(d) {
         const chain = d.chain || {};
-        chainCount   = chain.current || 0;
-        chainTimeout = chain.timeout || 0;
-        chainActive  = chainCount > 0;
+        chainCount    = chain.current || 0;
+        chainTimeout  = chain.timeout || 0;
+        chainCooldown = chain.cooldown || 0;
+        chainActive   = chainCount > 0 && chainCooldown === 0;
 
-        if (d.attacks) {
-            processAttacks(Object.values(d.attacks));
-        } else {
+        if (d.attacks) processAttacks(Object.values(d.attacks));
+        else {
             renderChainBar();
+            updateMinDisplay();
         }
     }
 
     function handleMembersResponse(d) {
         if (!d || !d.members) return;
+
+        // Auto-detect active ranked war enemy if present
+        if (d.rankedwars && !customEnemyFacId) {
+            const myId = d.ID ? String(d.ID) : null;
+            const wars = Object.values(d.rankedwars);
+            const active = wars.find(w => w?.war && (!w.war.winner || w.war.winner === 0) && (!w.war.end || w.war.end === 0));
+            if (active && active.factions && myId) {
+                const opp = Object.keys(active.factions).find(id => String(id) !== myId);
+                if (opp) {
+                    autoEnemyFacId = opp;
+                    enemyFacName = active.factions[opp]?.name || enemyFacName;
+                    updateEnemyBadgeUI();
+                }
+            }
+        }
+
         factionMembers = Object.entries(d.members).map(([id, m]) => ({
             id: parseInt(id, 10),
             name: m.name,
@@ -711,7 +988,7 @@
         try {
             localStorage.setItem(LS_KEY_MEMBERS, JSON.stringify(factionMembers));
             GM_setValue(LS_KEY_MEMBERS, JSON.stringify(factionMembers));
-        } catch(e) {}
+        } catch (e) {}
 
         for (const m of factionMembers) {
             memberStatuses[String(m.id)] = {
@@ -727,7 +1004,7 @@
 
     function fetchFactionMembers() {
         if (apiKey) {
-            tornGet('/faction/?selections=basic', (err, d) => {
+            tornGet('/faction/?selections=basic,rankedwars', (err, d) => {
                 if (err || !d || !d.members) {
                     fetchBackendMembers();
                     return;
@@ -749,26 +1026,40 @@
                 try {
                     const d = JSON.parse(res.responseText);
                     if (d && d.members) handleMembersResponse(d);
-                } catch(e) {}
+                } catch (e) {}
             },
             onerror() {}
         });
     }
 
     // ══════════════════════════════════════════════════════════════
-    //  PERSISTENCE & STATE SYNC
+    //  PERSISTENCE & SERVER SYNC
     // ══════════════════════════════════════════════════════════════
     function save() {
-        GM_setValue('sv_state', JSON.stringify({ lineup, targetHitTime, cycleNum, loopMode, autoMode, autoSendOnPost, soundEnabled }));
+        GM_setValue('sv_state', JSON.stringify({
+            lineup, targetHitTime, cycleNum, loopMode, autoMode,
+            autoSendOnPost, soundEnabled, autoCallMedOut, customEnemyFacId, runOnAllPages
+        }));
         GM_setValue('sv_autosend', autoSendOnPost);
         GM_setValue('sv_sound', soundEnabled);
-        if (apiKey) syncToServer();
+        GM_setValue('sv_autocall_medout', autoCallMedOut);
+        GM_setValue('sv_enemy_fac_id', customEnemyFacId);
+        GM_setValue('sv_all_pages', runOnAllPages);
 
-        // Broadcast updated lineup to other tabs
+        syncToServer();
+
         if (broadcastChan) {
             try {
-                broadcastChan.postMessage({ type: 'LINEUP_UPDATED', lineup, cycleNum });
-            } catch(e) {}
+                broadcastChan.postMessage({
+                    type: 'LINEUP_UPDATED',
+                    lineup,
+                    cycleNum,
+                    loopMode,
+                    autoMode,
+                    targetHitTime,
+                    _tabId: _TAB_ID
+                });
+            } catch (e) {}
         }
     }
 
@@ -776,47 +1067,59 @@
         try {
             const raw = GM_getValue('sv_state', '{}');
             const d = JSON.parse(raw);
-            if (d.lineup)                 lineup         = d.lineup;
+            if (d.lineup) lineup = d.lineup;
             if (d.targetHitTime !== undefined) targetHitTime = d.targetHitTime;
-            if (d.cycleNum)               cycleNum       = d.cycleNum;
-            if (d.loopMode !== undefined) loopMode       = d.loopMode;
-            if (d.autoMode !== undefined) autoMode       = d.autoMode;
+            if (d.cycleNum) cycleNum = d.cycleNum;
+            if (d.loopMode !== undefined) loopMode = d.loopMode;
+            if (d.autoMode !== undefined) autoMode = d.autoMode;
             if (d.autoSendOnPost !== undefined) autoSendOnPost = d.autoSendOnPost;
             if (d.soundEnabled !== undefined) soundEnabled = d.soundEnabled;
-        } catch(e) {}
-
-        if (GM_getValue('sv_autosend', null) !== null) {
-            autoSendOnPost = GM_getValue('sv_autosend', false);
-        }
+            if (d.autoCallMedOut !== undefined) autoCallMedOut = d.autoCallMedOut;
+            if (d.customEnemyFacId !== undefined) customEnemyFacId = d.customEnemyFacId;
+            if (d.runOnAllPages !== undefined) runOnAllPages = d.runOnAllPages;
+        } catch (e) {}
 
         try {
             const cm = localStorage.getItem(LS_KEY_MEMBERS) || GM_getValue(LS_KEY_MEMBERS, '[]');
             factionMembers = JSON.parse(cm) || [];
             for (const m of factionMembers) {
                 memberStatuses[String(m.id)] = {
-                    online: m.online,
-                    state: m.state,
-                    until: m.until || 0,
-                    lastActionTs: m.lastActionTs || 0
+                    online: m.online, state: m.state, until: m.until || 0, lastActionTs: m.lastActionTs || 0
                 };
             }
-        } catch(e) {}
+        } catch (e) {}
     }
 
     function syncToServer() {
         const full = _buildFullText();
         const compact = _buildCompactText();
+        isSavingToServer = true;
         try {
-            const body = JSON.stringify({ lineup, targetHitTime, cycle: cycleNum, formattedFull: full, formattedCompact: compact });
+            const body = JSON.stringify({
+                lineup,
+                targetHitTime,
+                cycle: cycleNum,
+                loopMode,
+                autoMode,
+                formattedFull: full,
+                formattedCompact: compact
+            });
             GM_xmlhttpRequest({
                 method: 'POST',
                 url: `${SERVER_BASE}/api/chain/lineup`,
                 headers: { 'Content-Type': 'application/json' },
                 data: body,
-                timeout: 3000,
-                onerror: () => {}
+                timeout: 3500,
+                onload(res) {
+                    isSavingToServer = false;
+                    try {
+                        const d = JSON.parse(res.responseText);
+                        if (d && d.version) serverLineupVersion = d.version;
+                    } catch (e) {}
+                },
+                onerror() { isSavingToServer = false; }
             });
-        } catch(e) {}
+        } catch (e) { isSavingToServer = false; }
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -826,18 +1129,10 @@
         let st = id ? memberStatuses[String(id)] : null;
         if (!st && name && factionMembers.length) {
             const fm = factionMembers.find(m => m.name.toLowerCase() === name.toLowerCase());
-            if (fm) {
-                st = { online: fm.online, state: fm.state, until: fm.until || 0, lastActionTs: fm.lastActionTs || 0 };
-            }
+            if (fm) st = { online: fm.online, state: fm.state, until: fm.until || 0, lastActionTs: fm.lastActionTs || 0 };
         }
         if (!st) {
-            return {
-                online: 'Online', state: 'Okay', isReady: true,
-                statusText: 'ONLINE • READY',
-                shortText: 'READY',
-                dotColor: '#2ecc71',
-                cls: 'st-ready'
-            };
+            return { online: 'Online', state: 'Okay', isReady: true, statusText: 'READY', shortText: 'READY', dotColor: '#10b981', cls: 'st-ready' };
         }
 
         const online = st.online || 'Offline';
@@ -846,85 +1141,41 @@
         const now    = Math.floor(Date.now() / 1000);
 
         let hospMins = 0;
-        if (state === 'Hospital' && until > now) {
-            hospMins = Math.ceil((until - now) / 60);
-        }
+        if (state === 'Hospital' && until > now) hospMins = Math.ceil((until - now) / 60);
 
         if (state === 'Hospital') {
-            const timeStr = hospMins > 0 ? ` (${hospMins}m)` : '';
-            return {
-                online, state, isReady: false,
-                statusText: `HOSPITAL${timeStr} • UNAVAILABLE`,
-                shortText: `HOSP${timeStr}`,
-                dotColor: '#f85149',
-                cls: 'st-hosp',
-                hospMins
-            };
+            const timeStr = hospMins > 0 ? ` ${hospMins}m` : '';
+            return { online, state, isReady: false, statusText: `HOSP${timeStr}`, shortText: `HOSP${timeStr}`, dotColor: '#ef4444', cls: 'st-hosp', hospMins };
         }
-
         if (state === 'Traveling' || state === 'Abroad') {
-            return {
-                online, state, isReady: false,
-                statusText: 'TRAVELING • UNAVAILABLE',
-                shortText: 'TRAVELING',
-                dotColor: '#58a6ff',
-                cls: 'st-travel'
-            };
+            return { online, state, isReady: false, statusText: 'TRAVELING', shortText: 'TRAVEL', dotColor: '#38bdf8', cls: 'st-travel' };
         }
-
         if (state === 'Jail' || state === 'Federal') {
-            return {
-                online, state, isReady: false,
-                statusText: 'JAIL • UNAVAILABLE',
-                shortText: 'JAIL',
-                dotColor: '#f85149',
-                cls: 'st-jail'
-            };
+            return { online, state, isReady: false, statusText: 'JAIL', shortText: 'JAIL', dotColor: '#ef4444', cls: 'st-jail' };
         }
-
-        if (online === 'Online' && state === 'Okay') {
-            return {
-                online, state, isReady: true,
-                statusText: 'ONLINE • READY',
-                shortText: 'READY',
-                dotColor: '#2ecc71',
-                cls: 'st-ready'
-            };
+        if (online === 'Online') {
+            return { online, state, isReady: true, statusText: 'ONLINE', shortText: 'ONLINE', dotColor: '#10b981', cls: 'st-ready' };
         }
-
-        if (online === 'Idle' && state === 'Okay') {
-            return {
-                online, state, isReady: true,
-                statusText: 'IDLE • READY',
-                shortText: 'IDLE',
-                dotColor: '#e3b341',
-                cls: 'st-idle'
-            };
+        if (online === 'Idle') {
+            return { online, state, isReady: true, statusText: 'IDLE', shortText: 'IDLE', dotColor: '#f59e0b', cls: 'st-idle' };
         }
-
-        return {
-            online: 'Offline', state: 'Okay', isReady: false,
-            statusText: 'OFFLINE • UNAVAILABLE',
-            shortText: 'OFFLINE',
-            dotColor: '#718096',
-            cls: 'st-offline'
-        };
+        return { online: 'Offline', state, isReady: false, statusText: 'OFFLINE', shortText: 'OFFLINE', dotColor: '#64748b', cls: 'st-offline' };
     }
 
     // ══════════════════════════════════════════════════════════════
-    //  LINEUP OPERATIONS
+    //  LINEUP MUTATIONS
     // ══════════════════════════════════════════════════════════════
     function addMember(name, id) {
         name = (name || '').trim();
         if (!name) return;
         if (lineup.some(m => m.name.toLowerCase() === name.toLowerCase())) {
-            flashStatus(`${name} is already in the lineup.`, true);
+            flashStatus(`${name} is already in queue.`, true);
             return;
         }
-        lineup.push({ name, id: id || null, hit: false, skipped: false });
+        lineup.push({ name, id: id || null, hit: false, skipped: false, hitsSession: 0 });
         save();
         renderLineup();
-        flashStatus(`Added ${name}.`, false);
+        flashStatus(`Added ${name} to queue.`, false);
     }
 
     function removeMember(idx) {
@@ -960,7 +1211,7 @@
         lineup.push(s);
         save();
         renderLineup();
-        flashStatus(`Skipped ${s.name} (moved to bottom). Next UP: ${lineup[0] ? lineup[0].name : 'none'}`, false);
+        flashStatus(`Skipped ${s.name}. UP: ${lineup[0] ? lineup[0].name : 'none'}`, false);
     }
 
     function makeCurrent(idx) {
@@ -969,7 +1220,7 @@
         lineup.unshift(item);
         save();
         renderLineup();
-        flashStatus(`${item.name} moved to Currently Up.`, false);
+        flashStatus(`${item.name} promoted to UP NOW.`, false);
     }
 
     function swapTopTwo() {
@@ -977,7 +1228,7 @@
         [lineup[0], lineup[1]] = [lineup[1], lineup[0]];
         save();
         renderLineup();
-        flashStatus(`Swapped ${lineup[0].name} and ${lineup[1].name}.`, false);
+        flashStatus(`Swapped ${lineup[0].name} & ${lineup[1].name}.`, false);
     }
 
     function nextTurn() {
@@ -986,40 +1237,36 @@
         lineup.push(s);
         save();
         renderLineup();
-        flashStatus(`Advanced: ${s.name} moved to bottom.`, false);
+        flashStatus(`Rotated: ${s.name} -> bottom.`, false);
     }
 
     function forceMarkHitAndRotate() {
         if (!lineup.length) return;
-        const up = lineup[0];
-        const prevName = up.name;
         const [hitter] = lineup.splice(0, 1);
         hitter.hit = true;
-        // Bug fix #9: respect loopMode — only push to bottom if loop is ON
+        hitter.hitsSession = (hitter.hitsSession || 0) + 1;
         if (loopMode) lineup.push(hitter);
         cycleNum++;
         playSuccessChime();
-        setUpdated(true);
+        setDirty(true);
         save();
         renderLineup();
         renderChainBar();
-        const nextUp = lineup[0] ? lineup[0].name : 'Lineup Empty';
-        flashStatus(`✅ Force Hit Confirmed! ${prevName} moved to bottom. Next UP: ${nextUp}`, false);
-        if (autoSendOnPost) {
-            setTimeout(() => postToChat(), 150);
-        }
+        const nextUp = lineup[0] ? lineup[0].name : 'Queue Empty';
+        flashStatus(`✅ ${hitter.name} hit! Next UP: ${nextUp}`, false);
+        if (autoSendOnPost) setTimeout(() => postToChat(), 150);
     }
 
     function resetHits() {
-        lineup.forEach(m => { m.hit = false; m.skipped = false; });
+        lineup.forEach(m => { m.hit = false; m.skipped = false; m.hitsSession = 0; });
         cycleNum = 1;
         save();
         renderLineup();
-        flashStatus('Hit marks reset for new cycle.', false);
+        flashStatus('Session hit marks reset.', false);
     }
 
     function clearAll() {
-        if (!confirm('Remove all members from the queue?')) return;
+        if (!confirm('Clear all hitters from the chain lineup?')) return;
         lineup = [];
         cycleNum = 1;
         save();
@@ -1029,113 +1276,75 @@
 
     function autoFill() {
         if (!factionMembers.length) {
-            flashStatus('No faction members loaded. Click ↻ Refresh.', true);
+            flashStatus('Loading faction roster...', false);
+            fetchFactionMembers();
             return;
         }
-
-        const initialCount = lineup.length;
         lineup = lineup.filter(lm => {
             const mem = factionMembers.find(fm => (lm.id && fm.id === lm.id) || fm.name.toLowerCase() === lm.name.toLowerCase());
-            if (!mem) {
-                const st = lm.id ? memberStatuses[String(lm.id)] : null;
-                if (!st) return false;
-                return (st.state || 'Okay') === 'Okay' && ((st.online || 'Offline') === 'Online' || (st.online || 'Offline') === 'Idle');
-            }
+            if (!mem) return false;
             return (mem.state || 'Okay') === 'Okay' && (mem.online === 'Online' || mem.online === 'Idle');
         });
-        const purged = initialCount - lineup.length;
+        for (const lm of lineup) { lm.hit = false; lm.skipped = false; }
 
-        for (const lm of lineup) {
-            lm.hit = false;
-            lm.skipped = false;
-        }
-
-        const capable = factionMembers.filter(m => {
-            const state = m.state || 'Okay';
-            const online = m.online || 'Offline';
-            return state === 'Okay' && (online === 'Online' || online === 'Idle');
-        });
-
-        capable.sort((a, b) => {
-            if (a.online === 'Online' && b.online !== 'Online') return -1;
-            if (a.online !== 'Online' && b.online === 'Online') return 1;
-            return (b.lastActionTs || 0) - (a.lastActionTs || 0);
-        });
+        const capable = factionMembers
+            .filter(m => (m.state || 'Okay') === 'Okay' && (m.online === 'Online' || m.online === 'Idle'))
+            .sort((a, b) => {
+                if (a.online === 'Online' && b.online !== 'Online') return -1;
+                if (a.online !== 'Online' && b.online === 'Online') return 1;
+                return (b.lastActionTs || 0) - (a.lastActionTs || 0);
+            });
 
         let added = 0;
         for (const m of capable) {
-            const exists = lineup.some(lm =>
-                (lm.id && lm.id === m.id) ||
-                lm.name.toLowerCase() === m.name.toLowerCase()
-            );
-            if (!exists) {
-                lineup.push({ name: m.name, id: m.id, hit: false, skipped: false });
+            if (!lineup.some(lm => (lm.id && lm.id === m.id) || lm.name.toLowerCase() === m.name.toLowerCase())) {
+                lineup.push({ name: m.name, id: m.id, hit: false, skipped: false, hitsSession: 0 });
                 added++;
             }
         }
-
         cycleNum = 1;
         save();
         renderLineup();
-        flashStatus(`Auto-fill: Retained ${lineup.length - added}, added ${added} ready members.`, false);
+        flashStatus(`⚡ Filled ${lineup.length} ready hitters (+${added} new).`, false);
     }
 
-    // Interactive Action: Sort Ready members to top
     function sortReadyToTop() {
         if (lineup.length <= 1) return;
-        const readyArr = [];
-        const nonReadyArr = [];
-        for (const m of lineup) {
-            const r = getMemberReadiness(m.id, m.name);
-            if (r.isReady) readyArr.push(m);
-            else nonReadyArr.push(m);
-        }
-        lineup = [...readyArr, ...nonReadyArr];
+        const ready = [], other = [];
+        for (const m of lineup) (getMemberReadiness(m.id, m.name).isReady ? ready : other).push(m);
+        lineup = [...ready, ...other];
         save();
         renderLineup();
-        flashStatus(`✓ Sorted: ${readyArr.length} ready members moved to top of queue.`, false);
+        flashStatus(`Sorted ${ready.length} ready hitter(s) to top.`, false);
     }
 
-    // Interactive Action: Auto-skip hospitalized members
     function autoSkipHospedMembers() {
         if (!lineup.length) return;
         let skippedCount = 0;
-        const healthy = [];
-        const hospitalized = [];
-
+        const healthy = [], hosps = [];
         for (const m of lineup) {
-            const r = getMemberReadiness(m.id, m.name);
-            if (r.state === 'Hospital') {
+            if (getMemberReadiness(m.id, m.name).state === 'Hospital') {
                 m.skipped = true;
-                hospitalized.push(m);
+                hosps.push(m);
                 skippedCount++;
-            } else {
-                healthy.push(m);
-            }
+            } else healthy.push(m);
         }
-
-        if (!skippedCount) {
-            flashStatus('✓ No queued members in hospital.', false);
-            return;
-        }
-
-        lineup = [...healthy, ...hospitalized];
+        if (!skippedCount) return;
+        lineup = [...healthy, ...hosps];
         showHospBanner = false;
         save();
         renderLineup();
-        flashStatus(`✓ Auto-skipped ${skippedCount} hospitalized member(s) to bottom of queue.`, false);
+        flashStatus(`Moved ${skippedCount} hospitalized hitter(s) to bottom.`, false);
     }
 
     // ══════════════════════════════════════════════════════════════
-    //  TIMER & WATCHDOG
+    //  TIMER & SMART WATCHDOG (BUG FIX #6)
     // ══════════════════════════════════════════════════════════════
     function startLocalTimer() {
         if (timerInterval) clearInterval(timerInterval);
         timerInterval = setInterval(() => {
             if (chainActive && chainTimeout > 0) {
                 chainTimeout--;
-
-                // Audio warning at 1:00 threshold
                 if (chainTimeout === 60 && !warnedAt60) {
                     warnedAt60 = true;
                     playPanicWarningBeep();
@@ -1143,8 +1352,16 @@
                     warnedAt60 = false;
                 }
             }
+            // Live countdown for upcoming hospital exits on radar tab
+            if (upcomingHospExits.length) {
+                const nowSec = Math.floor(Date.now() / 1000);
+                upcomingHospExits = upcomingHospExits
+                    .map(x => ({ ...x, secondsLeft: Math.max(0, x.until - nowSec) }))
+                    .filter(x => x.secondsLeft > 0);
+            }
             renderChainBar();
             updateMinDisplay();
+            if (activeTab === 'radar') renderRadarTab();
             checkAutoSkipWatchdog();
         }, 1000);
     }
@@ -1152,58 +1369,43 @@
     let lastAutoSkipTs = 0;
     function checkAutoSkipWatchdog() {
         if (!autoMode || !chainActive || !lineup.length) return;
-        if (Date.now() - lastAutoSkipTs < 6000) return;
-
         const up = lineup[0];
         const readiness = getMemberReadiness(up.id, up.name);
         const targetSecs = parseTimeToSecs(targetHitTime) || 150;
 
-        // Bug fix #12: If the current player IS ready, only issue a panic skip when timer
-        // is critically low (<=35s). Guard: after the skip, do NOT immediately allow another
-        // skip for the new player — the 6s throttle handles that.
+        // If the UP hitter IS ready and chain timer is critical (< 45s), sound alarm instead of scrambling queue!
         if (readiness.isReady) {
-            if (chainTimeout > 0 && chainTimeout <= 35) {
-                lastAutoSkipTs = Date.now();
-                const [s] = lineup.splice(0, 1);
-                s.skipped = true;
-                lineup.push(s);
-                save();
-                renderLineup();
-                flashStatus(`⚠️ Panic skip: ${s.name} missed hit window (timer at ${fmtSecs(chainTimeout)})!`, true);
+            if (chainTimeout > 0 && chainTimeout <= 45 && (Date.now() - warnedEmergency > 8000)) {
+                warnedEmergency = Date.now();
+                playPanicWarningBeep();
+                flashStatus(`🚨 EMERGENCY: ${up.name} — HIT NOW (${fmtSecs(chainTimeout)} left)!`, true);
             }
             return;
         }
 
-        // Auto skip hospitalized/offline/unavailable player if in hit window
+        // Only auto-skip UNAVAILABLE player if someone ready exists further down!
+        if (Date.now() - lastAutoSkipTs < 6000) return;
+        const firstReadyIdx = lineup.findIndex((m, i) => i > 0 && getMemberReadiness(m.id, m.name).isReady);
+        if (firstReadyIdx === -1) return;
+
         if (chainTimeout > 0 && (chainTimeout <= targetSecs || chainTimeout <= 60)) {
             lastAutoSkipTs = Date.now();
-            const [s] = lineup.splice(0, 1);
-            s.skipped = true;
-            lineup.push(s);
+            const [unavail] = lineup.splice(0, 1);
+            unavail.skipped = true;
+            lineup.push(unavail);
+            if (firstReadyIdx > 1) {
+                const newReadyIdx = firstReadyIdx - 1;
+                const [readyNext] = lineup.splice(newReadyIdx, 1);
+                lineup.unshift(readyNext);
+            }
             save();
             renderLineup();
-            flashStatus(`Auto-skipped ${s.name} (${readiness.shortText}) — hit window reached.`, false);
-
-            // Bug fix #12: immediately check the NEW top player so we don't silently leave
-            // another unavailable player up — but we DON'T recurse; the 1s interval will catch it.
+            flashStatus(`⏭ Skipped ${unavail.name} (${readiness.shortText}) -> UP: ${lineup[0].name}`, false);
         }
     }
 
-    function fmtSecs(s) {
-        if (!s || s <= 0) return '0:00';
-        const m = Math.floor(s / 60);
-        const sec = s % 60;
-        return `${m}:${String(sec).padStart(2, '0')}`;
-    }
-
-    function parseTimeToSecs(str) {
-        if (!str) return 0;
-        const p = str.split(':');
-        return (parseInt(p[0], 10) || 0) * 60 + (parseInt(p[1], 10) || 0);
-    }
-
     // ══════════════════════════════════════════════════════════════
-    //  FACTION CHAT POSTING
+    //  FACTION CHAT POSTING (BUG FIX #7 — REACT SAFE + FACTION-ONLY)
     // ══════════════════════════════════════════════════════════════
     function _buildFullText() {
         if (!lineup.length) return '';
@@ -1225,408 +1427,430 @@
         return parts.join(' | ');
     }
 
-    function postToChat() {
-        const text = _buildFullText();
+    function findFactionChatInput() {
+        const chatRoot = document.querySelector('#chatRoot');
+        if (!chatRoot) return null;
+
+        // Look inside chat boxes whose header/title/aria indicates Faction Chat
+        const boxes = chatRoot.querySelectorAll('[class*="chat-box"], [class*="chatBox"], [class*="chat-window"], [class*="box___"]');
+        for (const box of boxes) {
+            const header = box.querySelector('[class*="header"], [class*="title"], [class*="name"]');
+            const headerTxt = (header?.textContent || box.getAttribute('aria-label') || '').trim();
+            if (/^faction(\s+chat)?$/i.test(headerTxt) || /\bfaction\b/i.test(headerTxt)) {
+                const inp = box.querySelector('textarea, input[type="text"], [contenteditable="true"]');
+                if (inp) return { target: inp, box };
+            }
+        }
+        return null;
+    }
+
+    function postToChat(customText = null, forceAutoSend = false) {
+        const text = customText || _buildFullText();
         if (!text) { flashStatus('Lineup is empty.', true); return; }
 
-        const chatRoot = document.querySelector('#chatRoot') || document.body;
+        const chatRoot = document.querySelector('#chatRoot');
+        if (!chatRoot) {
+            navigator.clipboard.writeText(text).catch(() => {});
+            flashStatus('📋 Faction Chat unavailable here — copied to clipboard!', false);
+            return;
+        }
 
-        const tabs = chatRoot.querySelectorAll('button, div[role="button"], [class*="tab"], [class*="chat-tab"]');
-        for (const tab of tabs) {
-            if (/faction/i.test(tab.textContent || '') || /faction/i.test(tab.getAttribute('aria-label') || '')) {
-                tab.click();
-                break;
+        // Open Faction Chat tab if minimized / inactive
+        if (!findFactionChatInput()) {
+            const tabs = chatRoot.querySelectorAll('button, div[role="button"], [class*="tab"], [class*="chat-tab"]');
+            for (const tab of tabs) {
+                const lbl = `${tab.textContent || ''} ${tab.getAttribute('aria-label') || ''} ${tab.getAttribute('title') || ''}`;
+                if (/\bfaction\b/i.test(lbl)) {
+                    tab.click();
+                    break;
+                }
             }
         }
 
         setTimeout(() => {
-            const inputs = chatRoot.querySelectorAll('textarea, input[type="text"]');
-            let target = null;
-            if (inputs.length === 1) {
-                target = inputs[0];
-            } else if (inputs.length > 1) {
-                for (const inp of inputs) {
-                    const box = inp.closest('div[class*="chat-box"], [class*="chatBox"]');
-                    if (box && /faction/i.test(box.textContent || '')) { target = inp; break; }
-                }
-                if (!target) target = inputs[inputs.length - 1];
-            }
-
-            if (!target) {
+            const found = findFactionChatInput();
+            if (!found || !found.target) {
                 navigator.clipboard.writeText(text).catch(() => {});
-                flashStatus('Chat not open — copied to clipboard!', false);
+                flashStatus('📋 Open Faction Chat tab to auto-send — copied to clipboard!', false);
                 return;
             }
 
-            const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set ||
-                           Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
-            if (setter) setter.call(target, text);
-            else target.value = text;
-
-            target.dispatchEvent(new Event('input', { bubbles: true }));
-            target.dispatchEvent(new Event('change', { bubbles: true }));
+            const { target, box } = found;
             target.focus();
-            target.setSelectionRange(text.length, text.length);
 
-            setUpdated(false);
-
-            if (autoSendOnPost) {
-                setTimeout(() => {
-                    const parentBox = target.closest('div[class*="chat-box"], [class*="chatBox"], [class*="dialogue"], [class*="chat"], form');
-                    const sendBtn = parentBox ? parentBox.querySelector('button[type="submit"], [class*="send"], [class*="submit"], button[aria-label*="send" i], [class*="chat-box-button"]') : null;
-
-                    if (sendBtn) {
-                        sendBtn.click();
-                    }
-
-                    target.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true }));
-                    target.dispatchEvent(new KeyboardEvent('keypress', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true }));
-                    target.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true }));
-
-                    flashStatus('✓ Lineup posted & sent to Faction Chat!', false);
-                }, 100);
+            if (target.isContentEditable) {
+                target.textContent = text;
+                target.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: text }));
             } else {
-                flashStatus('✓ Lineup inserted — press Enter to send!', false);
+                const tracker = target._valueTracker;
+                if (tracker) tracker.setValue('');
+                const proto = target.tagName === 'TEXTAREA' ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype;
+                const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
+                if (setter) setter.call(target, text);
+                else target.value = text;
+                target.dispatchEvent(new Event('input', { bubbles: true }));
+                target.dispatchEvent(new Event('change', { bubbles: true }));
+                try { target.setSelectionRange(text.length, text.length); } catch (e) {}
             }
-        }, 150);
+
+            if (!customText) setDirty(false);
+
+            if (autoSendOnPost || forceAutoSend) {
+                setTimeout(() => {
+                    const sendBtn = box.querySelector('button[type="submit"], button[aria-label*="send" i], [class*="send"]');
+                    if (sendBtn && !sendBtn.disabled) {
+                        sendBtn.click();
+                    } else {
+                        target.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true }));
+                        target.dispatchEvent(new KeyboardEvent('keypress', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true }));
+                        target.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true }));
+                    }
+                    flashStatus(customText ? '🚨 Sent med-out callout to Faction Chat!' : '✓ Lineup sent to Faction Chat!', false);
+                }, 90);
+            } else {
+                flashStatus('✓ Inserted in Faction Chat — press Enter to send!', false);
+            }
+        }, 120);
     }
 
     function copyToClipboard(type) {
         const text = type === 'compact' ? _buildCompactText() : _buildFullText();
         if (!text) { flashStatus('Lineup is empty.', true); return; }
-        navigator.clipboard.writeText(text).then(() => flashStatus('Copied to clipboard!', false)).catch(() => {
-            const ta = document.createElement('textarea');
-            ta.value = text;
-            ta.style.cssText = 'position:fixed;opacity:0';
-            document.body.appendChild(ta);
-            ta.focus();
-            ta.select();
-            document.execCommand('copy');
-            document.body.removeChild(ta);
-            flashStatus('Copied!', false);
-        });
+        navigator.clipboard.writeText(text).then(() => flashStatus('Copied lineup to clipboard!', false)).catch(() => {});
     }
 
     // ══════════════════════════════════════════════════════════════
-    //  RENDER: TOP 4 KPI METRICS TILES
+    //  UI RENDERING
     // ══════════════════════════════════════════════════════════════
     function renderChainBar() {
         const bar = document.getElementById('sv-chain-bar');
         if (!bar) return;
 
-        const timerSecs = chainTimeout;
+        const timerSecs = chainCooldown > 0 ? chainCooldown : chainTimeout;
         const targetSecs = parseTimeToSecs(targetHitTime);
-        const inWindow = targetHitTime && timerSecs > 0 && timerSecs <= targetSecs;
+        const inWindow = chainCooldown === 0 && targetHitTime && timerSecs > 0 && timerSecs <= targetSecs;
 
-        // Color shifts:
-        // > 2:30 (150s): Green
-        // 1:30 - 2:30 (90s - 150s): Amber
-        // < 1:30 (90s): Pulsing Red
-        let timerColor = '#2ecc71';
-        let timerClass = 'sv-timer-green';
-        if (timerSecs > 0 && timerSecs <= 90) {
-            timerColor = '#f85149';
-            timerClass = 'sv-timer-pulse-red';
+        let timerColor = '#10b981';
+        let timerStateCls = 'sv-timer-safe';
+        if (chainCooldown > 0) {
+            timerColor = '#94a3b8';
+            timerStateCls = 'sv-timer-cooldown';
+        } else if (timerSecs > 0 && timerSecs <= 90) {
+            timerColor = '#ef4444';
+            timerStateCls = 'sv-timer-critical';
         } else if (timerSecs > 90 && timerSecs <= 150) {
-            timerColor = '#e3b341';
-            timerClass = 'sv-timer-amber';
+            timerColor = '#f59e0b';
+            timerStateCls = 'sv-timer-warn';
         }
 
-        const multiplier = getRespectMultiplier(chainCount);
-        const nextBonus  = getNextBonus(chainCount);
+        const mult = getRespectMultiplier(chainCount);
+        const bonus = getNextBonus(chainCount);
 
         bar.innerHTML = `
-            <div class="sv-stat-grid">
-                <!-- 1. TIMER TILE -->
-                <div class="sv-stat-box sv-stat-timer ${timerClass}" title="Live chain countdown timer">
-                    <div class="sv-stat-num sv-timer-num" style="color:${timerColor};">${chainActive ? fmtSecs(timerSecs) : '0:00'}</div>
-                    <div class="sv-stat-lbl">TIMER</div>
+            <div class="sv-hero-card ${timerStateCls}">
+                <div class="sv-hero-top">
+                    <div class="sv-hero-chain">
+                        <div class="sv-hero-chain-row">
+                            <span class="sv-chain-num">${chainCooldown > 0 ? 'COOLDOWN' : (chainActive ? chainCount.toLocaleString() : '0')}</span>
+                            ${chainCooldown === 0 ? `<span class="sv-mult-badge">${mult}</span>` : ''}
+                        </div>
+                        <div class="sv-hero-sub">${chainCooldown > 0 ? 'Chain recovery' : `${bonus.text} milestone`}</div>
+                    </div>
+                    <div class="sv-hero-timer-wrap">
+                        <div class="sv-hero-timer" style="color:${timerColor};">${chainActive || chainCooldown > 0 ? fmtSecs(timerSecs) : '0:00'}</div>
+                        <div class="sv-hero-timer-sub">
+                            ${inWindow ? '<span class="sv-hit-now-pill">🎯 HIT NOW</span>' : (targetHitTime ? `Hit at ${targetHitTime}` : 'No target')}
+                        </div>
+                    </div>
                 </div>
-
-                <!-- 2. CHAIN TILE -->
-                <div class="sv-stat-box sv-stat-chain" title="Current chain length & respect multiplier">
-                    <div class="sv-stat-num">${chainActive ? chainCount.toLocaleString() : '0'}</div>
-                    <div class="sv-stat-lbl sv-chain-mult">${multiplier}</div>
-                </div>
-
-                <!-- 3. NEXT BONUS TILE -->
-                <div class="sv-stat-box sv-stat-bonus" title="Hits remaining until next respect bonus milestone">
-                    <div class="sv-stat-num sv-bonus-num">${nextBonus.text}</div>
-                    <div class="sv-stat-lbl">NEXT BONUS</div>
-                </div>
-
-                <!-- 4. DISPATCH TARGET TILE -->
-                <div class="sv-stat-box sv-stat-target ${inWindow ? 'sv-box-hit-now' : ''}" title="${inWindow ? 'Inside hit window — HIT NOW!' : 'Target hit timing threshold'}">
-                    <div class="sv-stat-num ${inWindow ? 'sv-hit-now-txt' : ''}">${inWindow ? '🎯 HIT NOW' : (targetHitTime ? 'Hit at ' + targetHitTime : 'None')}</div>
-                    <div class="sv-stat-lbl">DISPATCH TARGET</div>
+                <div class="sv-progress-track" title="${bonus.pct.toFixed(0)}% to next milestone">
+                    <div class="sv-progress-fill" style="width:${bonus.pct.toFixed(1)}%;"></div>
                 </div>
             </div>
         `;
     }
 
-    // ══════════════════════════════════════════════════════════════
-    //  RENDER: INTERACTIVE MEMBER STATUS FILTER CHIPS
-    // ══════════════════════════════════════════════════════════════
+    function renderMedOutBanner() {
+        const slot = document.getElementById('sv-medout-alert-slot');
+        if (!slot) return;
+        if (!activeMedAlert) {
+            slot.innerHTML = '';
+            slot.style.display = 'none';
+            return;
+        }
+        const ev = activeMedAlert;
+        const statusDot = ev.onlineStatus === 'Online' ? '🟢' : (ev.onlineStatus === 'Idle' ? '🟡' : '⚫');
+        slot.style.display = 'block';
+        slot.innerHTML = `
+            <div class="sv-medout-banner">
+                <div class="sv-medout-top">
+                    <span class="sv-medout-pill">🚨 ${esc(ev.escapeType || 'MEDDED OUT')}</span>
+                    <span class="sv-medout-saved">-${esc(ev.timeSavedStr || 'Early')}</span>
+                    <button class="sv-medout-dismiss" data-action="dismiss-medalert" title="Dismiss">✕</button>
+                </div>
+                <div class="sv-medout-body">
+                    <div class="sv-medout-target">
+                        <strong>${esc(ev.playerName)}</strong> <span class="sv-id-muted">[${esc(ev.playerId)}]</span>
+                        <div class="sv-medout-meta">${statusDot} ${esc(ev.onlineStatus || 'Online')}${ev.level ? ` • Lv.${ev.level}` : ''}</div>
+                    </div>
+                    <div class="sv-medout-btns">
+                        <a class="sv-btn sv-btn-attack" href="${escAttr(ev.attackUrl)}" target="_blank" rel="noopener">⚔️ Attack</a>
+                        <button class="sv-btn sv-btn-call" data-action="call-medout" data-medid="${escAttr(ev.id)}" title="Post to Faction Chat">💬 Call</button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    function renderTabBadges() {
+        const lTab = document.getElementById('sv-tab-lineup');
+        const rTab = document.getElementById('sv-tab-radar');
+        const hTab = document.getElementById('sv-tab-hits');
+        if (lTab) lTab.textContent = `🎯 Lineup (${lineup.length})`;
+        if (rTab) {
+            const recentFresh = enemyMedOuts.filter(m => (Date.now() - m.detectedAt) < 120000).length;
+            rTab.innerHTML = `💊 Med Radar${recentFresh ? ` <span class="sv-tab-hot">${recentFresh}</span>` : ` (${enemyMedOuts.length})`}`;
+        }
+        if (hTab) hTab.textContent = `⚡ Hits (${liveHits.length})`;
+    }
+
     function renderLineupSummaryHtml() {
         if (!lineup.length) return '';
-
-        let readyCount = 0;
-        let onlineCount = 0;
-        let idleCount = 0;
-        let hospCount = 0;
-        let offlineCount = 0;
-
+        let ready = 0, hosp = 0, offline = 0;
         for (const m of lineup) {
             const r = getMemberReadiness(m.id, m.name);
-            if (r.isReady) readyCount++;
-            if (r.online === 'Online') onlineCount++;
-            else if (r.online === 'Idle') idleCount++;
-            else if (r.online === 'Offline') offlineCount++;
-            if (r.state === 'Hospital') hospCount++;
+            if (r.isReady) ready++;
+            if (r.state === 'Hospital') hosp++;
+            if (r.online === 'Offline') offline++;
         }
-
-        let hospActionHtml = '';
-        if (showHospBanner && hospCount > 0) {
-            hospActionHtml = `
-                <div class="sv-hosp-banner">
-                    <span>🏥 <b>${hospCount}</b> member(s) currently in Hospital!</span>
-                    <button class="sv-btn sv-btn-xs sv-btn-skip" data-action="auto-skip-hosp">⚡ Auto-Skip Hosped Members</button>
-                </div>
-            `;
-        }
-
         return `
-            <div class="sv-lineup-summary" title="Click chips to sort or manage readiness">
-                <span class="sv-summary-chip sv-chip-ready" data-action="filter-ready" title="Click to sort ready members to top of queue">
-                    <span class="sv-mini-dot sv-dot-green"></span>READY <b>${readyCount}</b>
-                </span>
-                <span class="sv-summary-chip sv-chip-online" title="Online members in lineup">
-                    <span class="sv-mini-dot sv-dot-blue"></span>ONLINE <b>${onlineCount}</b>
-                </span>
-                <span class="sv-summary-chip sv-chip-idle" title="Idle members in lineup">
-                    <span class="sv-mini-dot sv-dot-amber"></span>IDLE <b>${idleCount}</b>
-                </span>
-                <span class="sv-summary-chip sv-chip-hosp ${hospCount > 0 ? 'sv-chip-alert' : ''}" data-action="toggle-hosp-banner" title="Click to review & auto-skip hospitalized members">
-                    <span class="sv-mini-dot sv-dot-red"></span>HOSP <b>${hospCount}</b>
-                </span>
-                <span class="sv-summary-chip sv-chip-off" title="Offline members in lineup">
-                    <span class="sv-mini-dot sv-dot-gray"></span>OFFLINE <b>${offlineCount}</b>
-                </span>
+            <div class="sv-summary-row">
+                <button class="sv-chip sv-chip-ok" data-action="filter-ready" title="Sort ready hitters to top">🟢 Ready <b>${ready}</b></button>
+                ${hosp > 0 ? `<button class="sv-chip sv-chip-danger" data-action="auto-skip-hosp" title="Move hospitalized hitters to bottom">🏥 Skip Hosp (${hosp})</button>` : '<span class="sv-chip">🏥 Hosp <b>0</b></span>'}
+                <span class="sv-chip">⚫ Off <b>${offline}</b></span>
             </div>
-            ${hospActionHtml}
         `;
     }
 
-    // ══════════════════════════════════════════════════════════════
-    //  RENDER: LINEUP QUEUE CARDS & STREAMLINED ROWS
-    // ══════════════════════════════════════════════════════════════
     function renderLineup() {
         updateMinDisplay();
-
+        renderTabBadges();
         const container = document.getElementById('sv-lineup-container');
-        if (!container) return;
+        if (!container || activeTab !== 'lineup') return;
 
         if (!lineup.length) {
-            container.innerHTML = `<div style="padding:16px 12px;text-align:center;color:#6e7681;font-size:11px;">Lineup is empty — click <b>⚡ Auto-Fill Ready</b> or search members below.</div>`;
+            container.innerHTML = `
+                <div class="sv-empty-state">
+                    <div style="font-size:20px;margin-bottom:4px;">⚡</div>
+                    <div>No hitters in queue</div>
+                    <div class="sv-empty-sub">Click <b>⚡ Auto-Fill Ready</b> or search below to start.</div>
+                </div>
+            `;
             renderChainBar();
             return;
         }
 
-        const targetSecs = parseTimeToSecs(targetHitTime);
-        const inWindow   = targetHitTime && chainTimeout > 0 && chainTimeout <= targetSecs;
-
-        let html = renderLineupSummaryHtml();
-
-        // ── 1. CURRENTLY UP CARD (Position 0) ──
         const up = lineup[0];
         const rUp = getMemberReadiness(up.id, up.name);
+        let html = renderLineupSummaryHtml();
 
         html += `
-        <div class="sv-tier-card sv-up-card" draggable="true" data-idx="0">
-            <div class="sv-tier-header">
-                <div class="sv-badge-up-now">🎯 UP NOW</div>
-                ${autoMode ? `<div class="sv-autoskip-txt" id="sv-autoskip-cd"></div>` : ''}
+        <div class="sv-up-card ${!rUp.isReady ? 'sv-up-warn' : ''}" draggable="true" data-idx="0">
+            <div class="sv-up-top">
+                <span class="sv-up-tag">🎯 UP NOW</span>
+                <div class="sv-readiness-pill ${rUp.cls}">
+                    <span class="sv-dot-mini" style="background:${rUp.dotColor};"></span>${rUp.statusText}
+                </div>
             </div>
-            <div class="sv-tier-body">
-                <div class="sv-player-row">
-                    <span class="sv-drag-handle" title="Drag to reorder">⋮⋮</span>
-                    <span class="sv-pos-num sv-pos-up" data-action="prompt-move" data-idx="0" title="Click to jump position">1</span>
-                    <div class="sv-player-meta">
-                        <div class="sv-player-name-row">
-                            <span class="sv-player-name">${esc(up.name)}</span>
-                            ${up.hit ? '<span class="sv-hit-tag">✓ HIT</span>' : ''}
-                        </div>
-                        <div class="sv-readiness-row ${rUp.cls}">
-                            <span class="sv-mini-dot" style="background:${rUp.dotColor};"></span>
-                            <span class="sv-readiness-txt">${rUp.statusText}</span>
-                        </div>
-                    </div>
-                    ${inWindow ? `<span class="sv-hit-now-badge">🎯 HIT NOW</span>` : ''}
-                </div>
-
-                <!-- 1-Click Manual Override Button -->
-                <div class="sv-up-primary-action">
-                    <button class="sv-btn sv-btn-force-hit" data-action="force-hit" title="Manually confirm hit and rotate to next player">
-                        ✅ Force Mark Hit & Rotate
-                    </button>
-                </div>
-
-                <!-- Streamlined Sub-actions -->
-                <div class="sv-tier-actions">
-                    <div class="sv-actions-primary">
-                        ${lineup.length > 1 ? `<button class="sv-btn sv-btn-xs" data-action="swap-top" title="Swap with Next player">⇄ Swap</button>` : ''}
-                        ${lineup.length > 1 ? `<button class="sv-btn sv-btn-xs" data-action="move" data-from="0" data-to="1" title="Move down 1">▼ Down</button>` : ''}
-                    </div>
-                    <div class="sv-actions-secondary">
-                        <button class="sv-btn sv-btn-xs sv-btn-skip" data-action="skip" data-idx="0" title="Skip this player (moves to bottom)">⏭ Skip</button>
-                        <button class="sv-btn sv-btn-xs sv-btn-rm" data-action="remove" data-idx="0" title="Remove from queue">✕</button>
-                    </div>
-                </div>
+            <div class="sv-up-main">
+                <span class="sv-pos-pill sv-pos-1" data-action="prompt-move" data-idx="0" title="Click to move">#1</span>
+                <span class="sv-up-name">${esc(up.name)}</span>
+                ${up.hitsSession ? `<span class="sv-hit-badge">${up.hitsSession} hit${up.hitsSession > 1 ? 's' : ''}</span>` : ''}
+            </div>
+            <div class="sv-up-actions">
+                <button class="sv-btn sv-btn-hit" data-action="force-hit" title="Confirm hit & rotate to next">✅ Hit & Next</button>
+                <button class="sv-btn sv-btn-warn" data-action="skip" data-idx="0" title="Skip to bottom">⏭ Skip</button>
+                ${lineup.length > 1 ? `<button class="sv-btn" data-action="swap-top" title="Swap with #2">⇄</button>` : ''}
+                <button class="sv-btn sv-btn-del" data-action="remove" data-idx="0" title="Remove">✕</button>
             </div>
         </div>`;
 
-        // ── 2. NEXT PLAYER CARD (Position 1) ──
-        if (lineup.length >= 2) {
-            const nx = lineup[1];
-            const rNx = getMemberReadiness(nx.id, nx.name);
-
-            html += `
-            <div class="sv-tier-card sv-next-card" draggable="true" data-idx="1">
-                <div class="sv-tier-header">
-                    <div class="sv-tier-tag next-tag">NEXT</div>
-                </div>
-                <div class="sv-tier-body">
-                    <div class="sv-player-row">
-                        <span class="sv-drag-handle" title="Drag to reorder">⋮⋮</span>
-                        <span class="sv-pos-num sv-pos-next" data-action="prompt-move" data-idx="1" title="Click to jump position">2</span>
-                        <div class="sv-player-meta">
-                            <div class="sv-player-name-row">
-                                <span class="sv-player-name">${esc(nx.name)}</span>
-                                ${nx.hit ? '<span class="sv-hit-tag">✓ HIT</span>' : ''}
-                            </div>
-                            <div class="sv-readiness-row ${rNx.cls}">
-                                <span class="sv-mini-dot" style="background:${rNx.dotColor};"></span>
-                                <span class="sv-readiness-txt">${rNx.statusText}</span>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="sv-tier-actions">
-                        <div class="sv-actions-primary">
-                            <button class="sv-btn sv-btn-xs sv-btn-promote" data-action="make-current" data-idx="1" title="Promote to Currently Up">▲ Make Up</button>
-                            <button class="sv-btn sv-btn-xs" data-action="swap-top" title="Swap with UP">⇄ Swap</button>
-                            ${lineup.length > 2 ? `<button class="sv-btn sv-btn-xs" data-action="move" data-from="1" data-to="2" title="Move down 1">▼</button>` : ''}
-                        </div>
-                        <div class="sv-actions-secondary">
-                            <button class="sv-btn sv-btn-xs sv-btn-skip" data-action="skip" data-idx="1" title="Skip this player">⏭ Skip</button>
-                            <button class="sv-btn sv-btn-xs sv-btn-rm" data-action="remove" data-idx="1" title="Remove from queue">✕</button>
-                        </div>
-                    </div>
-                </div>
-            </div>`;
-        }
-
-        // ── 3. QUEUE ROWS (Position 2+) ──
-        if (lineup.length > 2) {
-            html += `<div class="sv-queue-header">Queue (${lineup.length - 2})</div>`;
-            for (let i = 2; i < lineup.length; i++) {
+        if (lineup.length > 1) {
+            html += `<div class="sv-queue-list">`;
+            for (let i = 1; i < lineup.length; i++) {
                 const m = lineup[i];
                 const rM = getMemberReadiness(m.id, m.name);
-
                 html += `
-                <div class="sv-queue-row" draggable="true" data-idx="${i}">
-                    <span class="sv-drag-handle" title="Drag to reorder">⋮⋮</span>
-                    <span class="sv-q-pos" data-action="prompt-move" data-idx="${i}" title="Click to jump position">${i + 1}</span>
-                    <div class="sv-q-meta">
-                        <div class="sv-q-name-row">
-                            <span class="sv-q-name">${esc(m.name)}</span>
-                            ${m.hit ? '<span class="sv-hit-tag-sm">✓</span>' : ''}
-                        </div>
-                        <div class="sv-q-readiness ${rM.cls}">
-                            <span class="sv-mini-dot" style="background:${rM.dotColor};"></span>
-                            <span class="sv-q-readiness-txt">${rM.shortText}</span>
-                        </div>
+                <div class="sv-q-row ${i === 1 ? 'sv-q-next' : ''}" draggable="true" data-idx="${i}">
+                    <span class="sv-q-idx ${i === 1 ? 'sv-q-idx-next' : ''}" data-action="prompt-move" data-idx="${i}" title="Move position">${i === 1 ? 'NEXT' : '#' + (i + 1)}</span>
+                    <div class="sv-q-info">
+                        <span class="sv-q-name">${esc(m.name)}</span>
+                        <span class="sv-q-state ${rM.cls}"><span class="sv-dot-mini" style="background:${rM.dotColor};"></span>${rM.shortText}</span>
                     </div>
-                    <div class="sv-q-actions">
-                        <button class="sv-btn sv-btn-xs" data-action="move" data-from="${i}" data-to="${i-1}" title="Move up 1 slot">▲</button>
-                        <button class="sv-btn sv-btn-xs" data-action="move" data-from="${i}" data-to="${Math.min(lineup.length-1, i+1)}" title="Move down 1 slot">▼</button>
-                        <button class="sv-btn sv-btn-xs sv-btn-skip" data-action="skip" data-idx="${i}" title="Skip to bottom of line">⏭ Skip</button>
-                        <button class="sv-btn sv-btn-xs sv-btn-rm" data-action="remove" data-idx="${i}" title="Remove from queue">✕</button>
+                    ${m.hitsSession ? `<span class="sv-hit-mini">${m.hitsSession}✓</span>` : ''}
+                    <div class="sv-q-btns">
+                        <button class="sv-btn-ico" data-action="make-current" data-idx="${i}" title="Promote to UP NOW">▲</button>
+                        <button class="sv-btn-ico sv-btn-del" data-action="remove" data-idx="${i}" title="Remove">✕</button>
                     </div>
                 </div>`;
             }
+            html += `</div>`;
         }
 
         container.innerHTML = html;
         renderChainBar();
     }
 
-    // ══════════════════════════════════════════════════════════════
-    //  RENDER: COMPACT / MINIMIZED HUD BAR
-    // ══════════════════════════════════════════════════════════════
-    function updateMinDisplay() {
-        const hud = document.getElementById('sv-chain-hud');
-        if (!hud) return;
+    function renderRadarTab() {
+        const container = document.getElementById('sv-lineup-container');
+        if (!container || activeTab !== 'radar') return;
+        const enemyId = getActiveEnemyFactionId();
 
-        const timerSecs = chainTimeout;
-        let timerColor = '#2ecc71';
-        let isPulsing = false;
+        let html = `
+            <div class="sv-radar-hdr">
+                <span>🎯 Tracking: <b>${enemyId ? esc(enemyFacName) + ' [' + esc(enemyId) + ']' : 'Auto-Detect (No Active War)'}</b></span>
+                <button class="sv-btn sv-btn-xs" data-action="open-enemy-set">${enemyId ? 'Change' : 'Set Target'}</button>
+            </div>
+        `;
 
-        if (timerSecs > 0 && timerSecs <= 90) {
-            timerColor = '#f85149';
-            isPulsing = true;
-        } else if (timerSecs > 90 && timerSecs <= 150) {
-            timerColor = '#e3b341';
+        if (enemyMedOuts.length) {
+            html += `<div class="sv-sec-lbl">🚨 Recent Med-Outs & Revives (${enemyMedOuts.length})</div>`;
+            html += enemyMedOuts.slice(0, 12).map(ev => `
+                <div class="sv-radar-row sv-radar-medout">
+                    <div class="sv-radar-info">
+                        <div class="sv-radar-name">
+                            <strong>${esc(ev.playerName)}</strong> <span class="sv-id-muted">[${esc(ev.playerId)}]</span>
+                            <span class="sv-medout-tag">${esc(ev.escapeType)}</span>
+                        </div>
+                        <div class="sv-radar-meta">
+                            ${ev.onlineStatus === 'Online' ? '🟢' : ev.onlineStatus === 'Idle' ? '🟡' : '⚫'} ${esc(ev.onlineStatus)} • Saved <b>${esc(ev.timeSavedStr)}</b> • ${fmtAgo(ev.detectedAt)}
+                        </div>
+                    </div>
+                    <div class="sv-radar-acts">
+                        <a class="sv-btn sv-btn-attack sv-btn-xs" href="${escAttr(ev.attackUrl)}" target="_blank" rel="noopener">⚔️ Attack</a>
+                        <button class="sv-btn sv-btn-xs" data-action="call-medout" data-medid="${escAttr(ev.id)}" title="Post to Faction Chat">💬</button>
+                    </div>
+                </div>
+            `).join('');
+        } else {
+            html += `<div class="sv-empty-mini">No early hospital escapes detected yet. Polling every 3s for med-outs & revives.</div>`;
         }
 
-        // Minimized Elements
+        if (upcomingHospExits.length) {
+            html += `<div class="sv-sec-lbl" style="margin-top:6px;">🏥 Exiting Hospital &lt; 5m (${upcomingHospExits.length})</div>`;
+            html += upcomingHospExits.slice(0, 6).map(ex => `
+                <div class="sv-radar-row">
+                    <div class="sv-radar-info">
+                        <div class="sv-radar-name"><strong>${esc(ex.playerName)}</strong> <span class="sv-id-muted">[${esc(ex.playerId)}]</span></div>
+                        <div class="sv-radar-meta">${ex.onlineStatus === 'Online' ? '🟢 Online' : '⚫ ' + esc(ex.onlineStatus)} • Free in <b style="color:#f59e0b;">${fmtSecs(ex.secondsLeft)}</b></div>
+                    </div>
+                    <a class="sv-btn sv-btn-xs" href="${escAttr(ex.attackUrl)}" target="_blank" rel="noopener">⚔️ Prep</a>
+                </div>
+            `).join('');
+        }
+
+        container.innerHTML = html;
+    }
+
+    function renderHitsTab() {
+        const container = document.getElementById('sv-lineup-container');
+        if (!container || activeTab !== 'hits') return;
+        if (!liveHits.length) {
+            container.innerHTML = `<div class="sv-empty-mini" style="padding:18px;">No recent chain hits recorded yet.</div>`;
+            return;
+        }
+        container.innerHTML = `
+            <div class="sv-hits-list">
+                ${liveHits.slice(0, 20).map(h => `
+                    <div class="sv-hit-row">
+                        <span class="sv-hit-num">#${h.chain}</span>
+                        <span class="sv-hit-player">${esc(h.attackerName)}</span>
+                        <span class="sv-hit-age">${fmtAgo(h.timestamp)}</span>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    }
+
+    function renderActiveTabView() {
+        if (activeTab === 'lineup') renderLineup();
+        else if (activeTab === 'radar') renderRadarTab();
+        else renderHitsTab();
+    }
+
+    function updateEnemyBadgeUI() {
+        const badge = document.getElementById('sv-enemy-badge');
+        if (!badge) return;
+        const eid = getActiveEnemyFactionId();
+        if (eid) {
+            badge.style.display = 'inline-flex';
+            badge.textContent = `🎯 vs ${eid}`;
+            badge.title = `Tracking Med-Outs: ${enemyFacName} [${eid}]`;
+        } else {
+            badge.style.display = 'none';
+        }
+    }
+
+    function updateMinDisplay() {
+        const timerSecs = chainCooldown > 0 ? chainCooldown : chainTimeout;
+        let timerColor = '#10b981';
+        let isPulsing = false;
+        if (chainCooldown > 0) timerColor = '#94a3b8';
+        else if (timerSecs > 0 && timerSecs <= 90) { timerColor = '#ef4444'; isPulsing = true; }
+        else if (timerSecs > 90 && timerSecs <= 150) { timerColor = '#f59e0b'; }
+
         const minChain = document.getElementById('sv-min-chain');
         const minTimer = document.getElementById('sv-min-timer');
         const minUp    = document.getElementById('sv-min-up');
+        const minMed   = document.getElementById('sv-min-med');
 
-        if (minChain) {
-            minChain.textContent = `⛓ ${chainActive ? chainCount : 0}`;
-        }
+        if (minChain) minChain.textContent = `⚡ ${chainActive ? chainCount : 0}`;
         if (minTimer) {
-            minTimer.textContent = `⏱ ${chainActive ? fmtSecs(timerSecs) : '0:00'}`;
+            minTimer.textContent = `⏱ ${chainActive || chainCooldown > 0 ? fmtSecs(timerSecs) : '0:00'}`;
             minTimer.style.color = timerColor;
-            if (isPulsing) minTimer.classList.add('sv-min-pulse');
-            else minTimer.classList.remove('sv-min-pulse');
+            minTimer.classList.toggle('sv-min-pulse', isPulsing);
         }
         if (minUp) {
-            if (lineup.length > 0) {
-                minUp.textContent = `🎯 UP: ${lineup[0].name}`;
-                minUp.title = `Currently Up: ${lineup[0].name}${lineup.length > 1 ? ' | Next: ' + lineup[1].name : ''} (Click to copy)`;
-                minUp.dataset.uid = lineup[0].id || '';
+            minUp.textContent = lineup.length ? `UP: ${lineup[0].name}` : 'UP: —';
+        }
+        if (minMed) {
+            if (activeMedAlert) {
+                minMed.style.display = 'inline-flex';
+                minMed.textContent = `🚨 ${activeMedAlert.playerName}`;
+                minMed.href = activeMedAlert.attackUrl;
             } else {
-                minUp.textContent = '🎯 UP: None';
-                minUp.title = 'No lineup';
-                minUp.dataset.uid = '';
+                minMed.style.display = 'none';
             }
         }
     }
 
-    function setUpdated(val) {
-        isUpdated = val;
-        const pill   = document.getElementById('sv-status-pill');
-        const dot    = document.getElementById('sv-status-dot');
-        const txt    = document.getElementById('sv-status-txt');
-        const mainBtn= document.getElementById('sv-post-btn');
-        const minBtn = document.getElementById('sv-min-post-btn');
+    function setDirty(val) {
+        isDirtyLineup = val;
+        const dot = document.getElementById('sv-sync-dot');
+        if (dot) {
+            dot.className = val ? 'sv-sync-dot sv-dot-live' : 'sv-sync-dot sv-dot-synced';
+            dot.title = val ? 'Lineup updated — ready to post to Faction Chat' : 'Synced';
+        }
+    }
 
-        updateMinDisplay();
-
-        if (val) {
-            if (pill) { pill.className = 'sv-status-pill sv-updated'; pill.title = 'Lineup updated! New hit detected.'; }
-            if (dot)  dot.className = 'sv-dot sv-dot-green';
-            if (txt)  txt.textContent = 'UPDATED';
-            if (mainBtn) mainBtn.style.boxShadow = '0 0 14px rgba(46,204,113,0.65)';
-            if (minBtn)  minBtn.style.boxShadow  = '0 0 10px rgba(46,204,113,0.65)';
-        } else {
-            if (pill) { pill.className = 'sv-status-pill sv-same'; pill.title = 'Lineup unchanged since last post.'; }
-            if (dot)  dot.className = 'sv-dot sv-dot-grey';
-            if (txt)  txt.textContent = 'SAME';
-            if (mainBtn) mainBtn.style.boxShadow = '';
-            if (minBtn)  minBtn.style.boxShadow  = '';
+    function syncTogglePillsUI() {
+        const map = [
+            ['sv-pill-loop', loopMode, 'Loop'],
+            ['sv-pill-auto', autoMode, 'Auto'],
+            ['sv-pill-autosend', autoSendOnPost, 'Send'],
+            ['sv-pill-autocall', autoCallMedOut, 'Auto-Call 💊']
+        ];
+        for (const [id, val, lbl] of map) {
+            const el = document.getElementById(id);
+            if (!el) continue;
+            el.classList.toggle('sv-pill-on', Boolean(val));
+            const st = el.querySelector('.sv-pill-st');
+            if (st) st.textContent = val ? 'ON' : 'OFF';
+        }
+        const muteBtn = document.getElementById('sv-mute-btn');
+        if (muteBtn) {
+            muteBtn.textContent = soundEnabled ? '🔊' : '🔇';
+            muteBtn.title = soundEnabled ? 'Mute tactical alerts' : 'Unmute tactical alerts';
         }
     }
 
@@ -1635,62 +1859,35 @@
         const el = document.getElementById('sv-status-msg');
         if (!el) return;
         el.textContent = msg;
-        el.style.color = isError ? '#f85149' : '#2ecc71';
+        el.style.color = isError ? '#f87171' : '#34d399';
         if (_statusTimer) clearTimeout(_statusTimer);
         _statusTimer = setTimeout(() => { if (el.textContent === msg) el.textContent = ''; }, 5000);
     }
 
     // ══════════════════════════════════════════════════════════════
-    //  RENDER: SEARCH SUGGESTIONS
+    //  SUGGESTION DROPDOWN & SETTINGS
     // ══════════════════════════════════════════════════════════════
     function renderSuggest() {
         const box = document.getElementById('sv-suggest');
         if (!box || box.style.display === 'none') return;
-
         const val = searchQuery.toLowerCase().trim();
-        const available = factionMembers.filter(m =>
-            !lineup.some(lm => (lm.id && lm.id === m.id) || lm.name.toLowerCase() === m.name.toLowerCase())
-        );
-
-        let matches = [];
-        if (!val) {
-            matches = available.slice(0, 15);
-        } else {
-            const sw = [], has = [];
-            for (const m of available) {
-                const l = m.name.toLowerCase();
-                if (l.startsWith(val)) sw.push(m);
-                else if (l.includes(val)) has.push(m);
-            }
-            matches = [...sw, ...has].slice(0, 20);
-        }
+        const available = factionMembers.filter(m => !lineup.some(lm => (lm.id && lm.id === m.id) || lm.name.toLowerCase() === m.name.toLowerCase()));
+        let matches = !val ? available.slice(0, 12) : available.filter(m => m.name.toLowerCase().includes(val)).slice(0, 16);
 
         if (!matches.length) {
-            box.innerHTML = `<div style="padding:8px 12px;color:#6e7681;font-size:11px;font-style:italic;">No matching members found</div>`;
+            box.innerHTML = `<div class="sv-suggest-empty">No matching faction members</div>`;
             return;
         }
-
-        box.innerHTML = `<div class="sv-suggest-hdr">Faction Members (${matches.length})</div>` +
-            matches.map((m, idx) => {
-                const r = getMemberReadiness(m.id, m.name);
-                let nameHtml = esc(m.name);
-                if (val) {
-                    nameHtml = nameHtml.replace(new RegExp(`(${escRe(val)})`, 'gi'), '<mark class="sv-mark">$1</mark>');
-                }
-
-                return `
-                <div class="sv-suggest-item ${idx === suggestSelected ? 'sv-suggest-sel' : ''}"
-                    data-action="add-suggest" data-name="${escAttr(m.name)}" data-id="${m.id}">
-                    <div class="sv-suggest-info">
-                        <span class="sv-suggest-name">${nameHtml}</span>
-                        <span class="sv-suggest-status ${r.cls}">
-                            <span class="sv-mini-dot" style="background:${r.dotColor};"></span>
-                            ${r.statusText}
-                        </span>
-                    </div>
-                    <span class="sv-suggest-add-badge">+ Add</span>
-                </div>`;
-            }).join('');
+        box.innerHTML = matches.map((m, idx) => {
+            const r = getMemberReadiness(m.id, m.name);
+            let nameHtml = esc(m.name);
+            if (val) nameHtml = nameHtml.replace(new RegExp(`(${escRe(val)})`, 'gi'), '<mark class="sv-mark">$1</mark>');
+            return `
+            <div class="sv-suggest-item ${idx === suggestSelected ? 'sv-suggest-sel' : ''}" data-action="add-suggest" data-name="${escAttr(m.name)}" data-id="${m.id}">
+                <span class="sv-suggest-name">${nameHtml}</span>
+                <span class="sv-q-state ${r.cls}"><span class="sv-dot-mini" style="background:${r.dotColor};"></span>${r.shortText}</span>
+            </div>`;
+        }).join('');
     }
 
     function addFromInput() {
@@ -1698,117 +1895,78 @@
         if (!inp) return;
         const val = inp.value.trim();
         if (!val) return;
-
-        const box = document.getElementById('sv-suggest');
-        const items = box ? box.querySelectorAll('.sv-suggest-item') : [];
-        if (items.length && suggestSelected >= 0 && items[suggestSelected]) {
-            const name = items[suggestSelected].dataset.name;
-            const id = parseInt(items[suggestSelected].dataset.id, 10) || null;
-            addMember(name, id);
-        } else {
-            const match = factionMembers.find(m => m.name.toLowerCase() === val.toLowerCase()) ||
-                          factionMembers.find(m => m.name.toLowerCase().startsWith(val.toLowerCase()));
-            addMember(match ? match.name : val, match ? match.id : null);
-        }
-
+        const match = factionMembers.find(m => m.name.toLowerCase() === val.toLowerCase()) ||
+            factionMembers.find(m => m.name.toLowerCase().startsWith(val.toLowerCase()));
+        addMember(match ? match.name : val, match ? match.id : null);
         inp.value = '';
-        if (box) box.style.display = 'none';
-        suggestSelected = -1;
-        searchQuery = '';
-    }
-
-    function addFromSuggest(name, id) {
-        addMember(name, id);
-        const inp = document.getElementById('sv-add-input');
-        if (inp) { inp.value = ''; inp.focus(); }
         const box = document.getElementById('sv-suggest');
         if (box) box.style.display = 'none';
-        suggestSelected = -1;
         searchQuery = '';
+        suggestSelected = -1;
     }
 
-    function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-    function escAttr(s) { return String(s||'').replace(/\\/g,'\\\\').replace(/"/g,'&quot;').replace(/'/g,"&#39;"); }
-    function escRe(s) { return s.replace(/[-\/\\^$*+?.()|[\]{}]/g,'\\$&'); }
-
-    // ══════════════════════════════════════════════════════════════
-    //  API KEY SETUP
-    // ══════════════════════════════════════════════════════════════
     function saveApiKey() {
         const inp = document.getElementById('sv-apikey-input');
         const val = (inp?.value || '').trim();
-        if (!val) {
-            flashStatus('Please enter an API key.', true);
-            return;
-        }
-
-        flashStatus('Validating API key with Torn...', false);
-        const saveBtn = document.getElementById('sv-apikey-save-btn');
-        if (saveBtn) {
-            saveBtn.disabled = true;
-            saveBtn.textContent = 'Saving...';
-        }
-
+        if (!val) { flashStatus('Enter your Torn API key first.', true); return; }
+        flashStatus('Verifying API key...', false);
         GM_xmlhttpRequest({
             method: 'GET',
-            url: `https://api.torn.com/faction/?selections=basic&key=${val}`,
-            timeout: 9000,
+            url: `https://api.torn.com/faction/?selections=basic,rankedwars&key=${val}`,
+            timeout: 8000,
             onload(res) {
-                if (saveBtn) {
-                    saveBtn.disabled = false;
-                    saveBtn.textContent = 'Save Key';
-                }
                 try {
                     const d = JSON.parse(res.responseText);
-                    if (d && d.error) {
-                        flashStatus(`Error (${d.error.code}): ${d.error.error}`, true);
-                        return;
-                    }
-
+                    if (d && d.error) { flashStatus(`API Error: ${d.error.error}`, true); return; }
                     apiKey = val;
                     GM_setValue('sv_apikey', apiKey);
-                    try { localStorage.setItem(LS_KEY_APIKEY, apiKey); } catch(e) {}
-
-                    const row = document.getElementById('sv-apikey-row');
-                    if (row) row.style.display = 'none';
-
-                    flashStatus(`✓ Connected to ${d.name || 'Faction'}!`, false);
+                    try { localStorage.setItem(LS_KEY_APIKEY, apiKey); } catch (e) {}
                     if (d.members) handleMembersResponse(d);
-                    scheduleAdaptivePoll();
-                } catch(err) {
-                    flashStatus('Invalid response from Torn API.', true);
-                }
+                    flashStatus(`✓ Connected to ${d.name || 'Faction'}!`, false);
+                    pollChainAndAttacks();
+                    pollDirectEnemyFaction();
+                } catch (e) { flashStatus('Invalid Torn API response.', true); }
             },
-            onerror() {
-                if (saveBtn) {
-                    saveBtn.disabled = false;
-                    saveBtn.textContent = 'Save Key';
-                }
-                flashStatus('Network error verifying key.', true);
-            }
+            onerror() { flashStatus('Network error.', true); }
+        });
+    }
+
+    function saveEnemyTargetFromHUD() {
+        const inp = document.getElementById('sv-enemy-fac-input');
+        const raw = (inp?.value || '').trim();
+        if (raw && !/^\d+$/.test(raw)) {
+            flashStatus('Enemy Faction ID must be numeric.', true);
+            return;
+        }
+        customEnemyFacId = raw;
+        localEnemyHospMap = {};
+        save();
+        updateEnemyBadgeUI();
+        GM_xmlhttpRequest({
+            method: 'POST',
+            url: `${SERVER_BASE}/api/chain/target`,
+            headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey || '' },
+            data: JSON.stringify({ enemyFactionId: raw || null }),
+            timeout: 5000,
+            onload() {
+                if (raw) pollDirectEnemyFaction();
+                syncBackendTelemetry(false);
+                flashStatus(raw ? `🎯 Tracking Enemy Faction [${raw}]` : 'Returned to auto-war detection.', false);
+                if (activeTab === 'radar') renderRadarTab();
+            },
+            onerror() {}
         });
     }
 
     // ══════════════════════════════════════════════════════════════
-    //  RE-OPEN TAB (Bug fix #2/#16: shown when HUD is closed)
+    //  HUD BUILD & EVENTS
     // ══════════════════════════════════════════════════════════════
     function _injectReopenTab(hud) {
         if (document.getElementById('sv-reopen-tab')) return;
         const tab = document.createElement('div');
         tab.id = 'sv-reopen-tab';
-        tab.title = 'Re-open FactionOS Chain Manager';
-        tab.textContent = '⛓';
-        tab.style.cssText = [
-            'position:fixed', 'z-index:99999998', 'bottom:80px', 'right:0',
-            'background:rgba(13,17,23,0.95)', 'color:#2ecc71',
-            'border:1px solid rgba(46,204,113,0.5)', 'border-right:none',
-            'border-radius:6px 0 0 6px', 'padding:7px 9px 7px 10px',
-            'font-size:16px', 'cursor:pointer', 'user-select:none',
-            'box-shadow:-4px 0 12px rgba(0,0,0,0.5)',
-            'transition:background 0.15s'
-        ].join(';');
-        tab.addEventListener('mouseenter', () => { tab.style.background = 'rgba(35,134,54,0.4)'; });
-        tab.addEventListener('mouseleave', () => { tab.style.background = 'rgba(13,17,23,0.95)'; });
+        tab.title = 'Re-open FactionOS Chain Command';
+        tab.textContent = '⚡ Chain';
         tab.addEventListener('click', () => {
             hud.style.display = '';
             isHidden = false;
@@ -1816,148 +1974,6 @@
             updateMinDisplay();
         });
         document.body.appendChild(tab);
-    }
-
-    // ══════════════════════════════════════════════════════════════
-    //  BUILD HUD DOM (EXPANDED & COMPACT HUD)
-    // ══════════════════════════════════════════════════════════════
-    function buildHUD() {
-        const isMobile = window.innerWidth <= 600;
-        let savedPos = GM_getValue(LS_KEY_POS, null);
-
-        if (!savedPos) {
-            savedPos = isMobile ? { top: 48, right: 6 } : { top: 80, right: 20 };
-        } else {
-            const hudEstWidth = isMobile ? 295 : 360;
-            const maxRight = Math.max(4, window.innerWidth - hudEstWidth - 4);
-            const maxTop = Math.max(4, window.innerHeight - 80);
-            savedPos.right = Math.min(Math.max(4, savedPos.right || 0), maxRight);
-            savedPos.top = Math.min(Math.max(4, savedPos.top || 0), maxTop);
-        }
-
-        const hud = document.createElement('div');
-        hud.id = 'sv-chain-hud';
-        if (isMinimized) hud.classList.add('sv-minimized');
-        if (isHidden) hud.style.display = 'none';
-        hud.style.top   = `${savedPos.top}px`;
-        hud.style.right = `${savedPos.right}px`;
-
-        hud.innerHTML = `
-        <!-- HEADER / COMPACT BAR (IMAGE_2B460F.PNG UPGRADE) -->
-        <div class="sv-header" id="sv-handle">
-            <!-- Full Mode Title -->
-            <div class="sv-title sv-full-only">
-                <span class="sv-status-pill sv-same" id="sv-status-pill" title="Grey: Lineup unchanged | Green: Lineup updated">
-                    <span class="sv-dot sv-dot-grey" id="sv-status-dot"></span>
-                    <span id="sv-status-txt">SAME</span>
-                </span>
-                <span class="sv-title-text">⛓ FactionOS Chain Manager</span>
-            </div>
-
-            <!-- Redesigned Compact Bar Elements [ ⛓ 34 ] [ ⏱ 04:57 ] [ 🎯 UP: Djappe ] [ 📋 Post ] [ ⏭ Next ] [ 🗖 ] [ ✕ ] -->
-            <div class="sv-min-bar-content sv-min-only">
-                <span class="sv-min-badge sv-min-chain-badge" id="sv-min-chain" title="Current Chain Count">⛓ 0</span>
-                <span class="sv-min-badge sv-min-timer-badge" id="sv-min-timer" title="Time Remaining on Chain">⏱ 0:00</span>
-                <span class="sv-min-up-pill" id="sv-min-up" title="Currently Up (Click to copy)">🎯 UP: None</span>
-                <button class="sv-min-action-btn sv-min-post-btn" id="sv-min-post-btn" title="Post Lineup to Faction Chat">📋 Post</button>
-                <button class="sv-min-action-btn sv-min-next-btn" id="sv-min-next-btn" title="Advance to Next Player">⏭ Next</button>
-            </div>
-
-            <!-- Window Controls -->
-            <div class="sv-hdr-controls">
-                <button class="sv-ctrl-btn" id="sv-min-btn" title="Minimize / Expand overlay">${isMinimized ? '🗖' : '─'}</button>
-                <button class="sv-ctrl-btn" id="sv-close-btn" title="Close overlay">✕</button>
-            </div>
-        </div>
-
-        <!-- FULL BODY -->
-        <div class="sv-body" id="sv-body">
-
-            <!-- 1. TOP 4 KPI METRICS TILES -->
-            <div id="sv-chain-bar" class="sv-chain-bar"></div>
-
-            <!-- 2. RESTRUCTURED CONTROL BAR 1: TIMING & DISPATCH -->
-            <div class="sv-ctrl-bar sv-ctrl-bar-1">
-                <div class="sv-timing-wrap" title="Target chain timer threshold to hit">
-                    <span class="sv-ctrl-icon">⏱️</span>
-                    <span class="sv-ctrl-label">Hit at:</span>
-                    <select id="sv-hit-time-sel" class="sv-select-timing">
-                        <option value="">None</option>
-                        <option value="3:30">3:30</option>
-                        <option value="3:00">3:00</option>
-                        <option value="2:30">2:30</option>
-                        <option value="2:00">2:00</option>
-                        <option value="1:30">1:30</option>
-                        <option value="1:00">1:00</option>
-                        <option value="custom">Custom…</option>
-                    </select>
-                    <input id="sv-hit-time-custom" class="sv-input-sm" type="text" placeholder="2:15" style="display:none;width:42px;" />
-                </div>
-                <div class="sv-dispatch-wrap">
-                    <button class="sv-btn sv-btn-dispatch" id="sv-post-btn" title="Insert formatted lineup into Faction Chat">📋 Post Chat</button>
-                    <button class="sv-btn sv-btn-icon-copy" id="sv-copy-btn" title="Copy full lineup (Shift-click for compact)">📋 Copy</button>
-                </div>
-            </div>
-
-            <!-- 3. RESTRUCTURED CONTROL BAR 2: AUTOMATION & QUEUE ACTIONS -->
-            <div class="sv-ctrl-bar sv-ctrl-bar-2">
-                <div class="sv-pill-group">
-                    <button class="sv-toggle-pill ${loopMode ? 'sv-pill-on' : ''}" id="sv-pill-loop" title="Toggle Loop (rotate hitters to bottom)">
-                        🔄 Loop: <span class="sv-pill-status">${loopMode ? 'ON' : 'OFF'}</span>
-                    </button>
-                    <button class="sv-toggle-pill ${autoMode ? 'sv-pill-on' : ''}" id="sv-pill-auto" title="Toggle Auto-Advance (instant rotation on confirmed hit)">
-                        ⚡ Auto: <span class="sv-pill-status">${autoMode ? 'ON' : 'OFF'}</span>
-                    </button>
-                    <button class="sv-toggle-pill ${autoSendOnPost ? 'sv-pill-on' : ''}" id="sv-pill-autosend" title="Toggle Auto-Send (immediately send message when Post Chat is clicked)">
-                        💬 Auto-Send: <span class="sv-pill-status">${autoSendOnPost ? 'ON' : 'OFF'}</span>
-                    </button>
-                </div>
-                <div class="sv-queue-actions-group">
-                    <button class="sv-btn sv-btn-xs" id="sv-next-btn" title="Advance to next chainer">⏭ Next</button>
-                    <span class="sv-action-dot">•</span>
-                    <button class="sv-btn sv-btn-xs" id="sv-reset-btn" title="Clear all hit marks for new cycle">🔄 Reset Hits</button>
-                    <span class="sv-action-dot">•</span>
-                    <button class="sv-btn sv-btn-xs sv-btn-danger" id="sv-clear-btn" title="Clear entire queue">🗑️ Clear</button>
-                </div>
-            </div>
-
-            <!-- 4. STATUS FEEDBACK BAR -->
-            <div class="sv-status-bar"><span id="sv-status-msg"></span></div>
-
-            <!-- 5. LINEUP CARDS CONTAINER -->
-            <div id="sv-lineup-container"></div>
-
-            <!-- 6. ADD MEMBER SEARCH ROW -->
-            <div class="sv-add-row" style="position:relative;">
-                <input id="sv-add-input" class="sv-add-input" placeholder="Type to search faction members…" autocomplete="off" />
-                <button class="sv-add-btn" id="sv-add-btn" title="Add member to lineup">+ Add</button>
-                <div id="sv-suggest" class="sv-suggest" style="display:none;"></div>
-            </div>
-
-            <!-- 7. BOTTOM ACTION CONTROLS -->
-            <div class="sv-quick-row">
-                <button class="sv-btn sv-btn-primary" id="sv-autofill-btn" title="Intelligently prioritize active, ready faction members into the lineup">⚡ Auto-Fill Ready</button>
-                <button class="sv-btn" id="sv-refresh-btn" title="Refresh member readiness from Torn API">↻ Refresh</button>
-                <div style="flex:1;"></div>
-                <button class="sv-btn sv-btn-muted" id="sv-key-toggle-btn" title="Configure or update Torn API Key">⚙ Settings / Key</button>
-            </div>
-
-            <!-- 8. API KEY SETUP ROW (COLLAPSIBLE) -->
-            <div id="sv-apikey-row" class="sv-apikey-row" style="${apiKey ? 'display:none;' : ''}">
-                <div style="width:100%;font-size:10px;color:#e3b341;font-weight:700;">🔑 Torn API Key (Faction / Limited / Minimal)</div>
-                <input id="sv-apikey-input" class="sv-input-sm" type="password" placeholder="Paste your Torn API key here…" value="${escAttr(apiKey)}" style="flex:1;min-width:0;" />
-                <button class="sv-btn sv-btn-green" id="sv-apikey-save-btn">Save Key</button>
-            </div>
-
-        </div>
-        `;
-
-        document.body.appendChild(hud);
-        _syncHitTimeUI();
-        renderLineup();
-        renderChainBar();
-        updateMinDisplay();
-        return hud;
     }
 
     function _syncHitTimeUI() {
@@ -1974,37 +1990,161 @@
         }
     }
 
-    // ══════════════════════════════════════════════════════════════
-    //  EVENT LISTENERS & DELEGATION
-    // ══════════════════════════════════════════════════════════════
+    function buildHUD() {
+        const isMobile = window.innerWidth <= 600;
+        let savedPos = GM_getValue(LS_KEY_POS, null);
+        if (!savedPos) savedPos = isMobile ? { top: 48, right: 6 } : { top: 76, right: 18 };
+        else {
+            const hudW = isMobile ? 305 : 352;
+            savedPos.right = Math.min(Math.max(4, savedPos.right || 0), Math.max(4, window.innerWidth - hudW - 4));
+            savedPos.top = Math.min(Math.max(4, savedPos.top || 0), Math.max(4, window.innerHeight - 64));
+        }
+
+        const hud = document.createElement('div');
+        hud.id = 'sv-chain-hud';
+        if (isMinimized) hud.classList.add('sv-minimized');
+        hud.style.top = `${savedPos.top}px`;
+        hud.style.right = `${savedPos.right}px`;
+
+        hud.innerHTML = `
+        <div class="sv-header" id="sv-handle">
+            <div class="sv-title sv-full-only">
+                <span class="sv-sync-dot sv-dot-synced" id="sv-sync-dot"></span>
+                <span class="sv-title-text">CHAIN COMMAND</span>
+                <span class="sv-enemy-badge" id="sv-enemy-badge" style="display:none;"></span>
+            </div>
+
+            <div class="sv-min-bar sv-min-only">
+                <span class="sv-min-chip sv-min-chain" id="sv-min-chain">⚡ 0</span>
+                <span class="sv-min-chip sv-min-timer" id="sv-min-timer">⏱ 0:00</span>
+                <span class="sv-min-up" id="sv-min-up" title="Click to copy lineup">UP: —</span>
+                <a class="sv-min-med" id="sv-min-med" href="#" target="_blank" rel="noopener" style="display:none;">🚨 MED</a>
+                <button class="sv-min-btn sv-min-post" id="sv-min-post-btn" title="Post to Faction Chat">📢</button>
+                <button class="sv-min-btn" id="sv-min-next-btn" title="Rotate Next">⏭</button>
+            </div>
+
+            <div class="sv-hdr-controls">
+                <button class="sv-ctrl-btn sv-full-only" id="sv-mute-btn" title="Mute / Unmute">${soundEnabled ? '🔊' : '🔇'}</button>
+                <button class="sv-ctrl-btn sv-full-only" id="sv-settings-btn" title="Settings & API Key">⚙</button>
+                <button class="sv-ctrl-btn" id="sv-min-btn" title="Minimize / Expand">${isMinimized ? '▢' : '─'}</button>
+                <button class="sv-ctrl-btn" id="sv-close-btn" title="Hide">${'✕'}</button>
+            </div>
+        </div>
+
+        <div class="sv-body" id="sv-body">
+            <div id="sv-chain-bar"></div>
+            <div id="sv-medout-alert-slot" style="display:none;"></div>
+
+            <!-- Action & Timing Strip -->
+            <div class="sv-toolbar">
+                <div class="sv-timing-grp">
+                    <span class="sv-lbl">Hit at</span>
+                    <select id="sv-hit-time-sel" class="sv-select">
+                        <option value="">None</option>
+                        <option value="3:30">3:30</option>
+                        <option value="3:00">3:00</option>
+                        <option value="2:30">2:30</option>
+                        <option value="2:00">2:00</option>
+                        <option value="1:30">1:30</option>
+                        <option value="1:00">1:00</option>
+                        <option value="custom">Custom</option>
+                    </select>
+                    <input id="sv-hit-time-custom" class="sv-input-xs" type="text" placeholder="2:15" style="display:none;width:42px;" />
+                </div>
+                <div class="sv-dispatch-grp">
+                    <button class="sv-btn sv-btn-chat" id="sv-post-btn" title="Post lineup to Faction Chat">📢 Post Chat</button>
+                    <button class="sv-btn" id="sv-copy-btn" title="Copy (Shift+Click for 1-liner)">📋</button>
+                </div>
+            </div>
+
+            <!-- Mode Pills -->
+            <div class="sv-pill-bar">
+                <button class="sv-pill ${loopMode ? 'sv-pill-on' : ''}" id="sv-pill-loop" title="Rotate hitter back to bottom">Loop <span class="sv-pill-st">${loopMode ? 'ON' : 'OFF'}</span></button>
+                <button class="sv-pill ${autoMode ? 'sv-pill-on' : ''}" id="sv-pill-auto" title="Auto-rotate when confirmed hit arrives">Auto <span class="sv-pill-st">${autoMode ? 'ON' : 'OFF'}</span></button>
+                <button class="sv-pill ${autoSendOnPost ? 'sv-pill-on' : ''}" id="sv-pill-autosend" title="Press Enter immediately after filling Faction Chat">Send <span class="sv-pill-st">${autoSendOnPost ? 'ON' : 'OFF'}</span></button>
+                <button class="sv-pill ${autoCallMedOut ? 'sv-pill-on' : ''}" id="sv-pill-autocall" title="Auto-post enemy med-outs to Faction Chat">Auto-Call 💊 <span class="sv-pill-st">${autoCallMedOut ? 'ON' : 'OFF'}</span></button>
+            </div>
+
+            <!-- Navigation Tabs -->
+            <div class="sv-tabs">
+                <button class="sv-tab sv-tab-active" id="sv-tab-lineup" data-tab="lineup">🎯 Lineup (0)</button>
+                <button class="sv-tab" id="sv-tab-radar" data-tab="radar">💊 Med Radar (0)</button>
+                <button class="sv-tab" id="sv-tab-hits" data-tab="hits">⚡ Hits (0)</button>
+            </div>
+
+            <div id="sv-status-msg" class="sv-status-msg"></div>
+            <div id="sv-lineup-container" class="sv-tab-content"></div>
+
+            <!-- Add Member + Quick Actions -->
+            <div class="sv-footer">
+                <div class="sv-add-row" style="position:relative;">
+                    <input id="sv-add-input" class="sv-input" placeholder="Search faction member to add..." autocomplete="off" />
+                    <button class="sv-btn sv-btn-add" id="sv-add-btn">+ Add</button>
+                    <div id="sv-suggest" class="sv-suggest" style="display:none;"></div>
+                </div>
+                <div class="sv-quick-bar">
+                    <button class="sv-btn sv-btn-primary" id="sv-autofill-btn">⚡ Auto-Fill Ready</button>
+                    <button class="sv-btn" id="sv-refresh-btn" title="Refresh faction roster">↻</button>
+                    <button class="sv-btn" id="sv-reset-btn" title="Reset hit marks">Reset</button>
+                    <button class="sv-btn sv-btn-del" id="sv-clear-btn" title="Clear lineup">Clear</button>
+                </div>
+            </div>
+
+            <!-- Collapsible Settings Drawer -->
+            <div id="sv-settings-drawer" class="sv-settings-drawer" style="${showSettings ? 'display:flex;' : 'display:none;'}">
+                <div class="sv-set-row">
+                    <label>🔑 Torn API Key (Faction / Limited)</label>
+                    <div class="sv-set-flex">
+                        <input id="sv-apikey-input" class="sv-input" type="password" placeholder="Paste Torn API key..." value="${escAttr(apiKey)}" />
+                        <button class="sv-btn sv-btn-hit" id="sv-apikey-save-btn">Save</button>
+                    </div>
+                </div>
+                <div class="sv-set-row">
+                    <label>🎯 Enemy Faction ID (optional outside Ranked War)</label>
+                    <div class="sv-set-flex">
+                        <input id="sv-enemy-fac-input" class="sv-input" type="text" placeholder="e.g. 12345 (blank = auto war)" value="${escAttr(customEnemyFacId)}" />
+                        <button class="sv-btn sv-btn-primary" id="sv-enemy-save-btn">Track</button>
+                    </div>
+                </div>
+                <div class="sv-set-row sv-set-inline">
+                    <label style="margin:0;">🌐 Show HUD across all Torn pages</label>
+                    <input id="sv-allpages-chk" type="checkbox" ${runOnAllPages ? 'checked' : ''} />
+                </div>
+            </div>
+        </div>`;
+
+        document.body.appendChild(hud);
+        _syncHitTimeUI();
+        syncTogglePillsUI();
+        updateEnemyBadgeUI();
+        renderChainBar();
+        renderMedOutBanner();
+        renderActiveTabView();
+        updateMinDisplay();
+        return hud;
+    }
+
     function wireEvents(hud) {
-        // Dragging HUD handle
         const handle = document.getElementById('sv-handle');
         let dragging = false, sx = 0, sy = 0, il = 0, it = 0;
 
-        function startDrag(clientX, clientY, target) {
-            if (target.closest('.sv-hdr-controls') || target.closest('.sv-min-action-btn') || target.closest('.sv-min-up-pill')) return;
-            dragging = true;
-            sx = clientX; sy = clientY;
+        function startDrag(cx, cy, target) {
+            if (target.closest('.sv-hdr-controls') || target.closest('.sv-min-btn') || target.closest('.sv-min-up') || target.closest('.sv-min-med')) return;
+            dragging = true; sx = cx; sy = cy;
             const r = hud.getBoundingClientRect();
             il = r.left; it = r.top;
             hud.style.right = 'auto';
-            hud.style.left  = `${il}px`;
-            hud.style.top   = `${it}px`;
+            hud.style.left = `${il}px`;
+            hud.style.top = `${it}px`;
             document.body.style.userSelect = 'none';
         }
-
-        function moveDrag(clientX, clientY) {
+        function moveDrag(cx, cy) {
             if (!dragging) return;
-            const pad = 4;
-            const maxL = Math.max(pad, window.innerWidth - hud.offsetWidth - pad);
-            const maxT = Math.max(pad, window.innerHeight - hud.offsetHeight - pad);
-            const nl = Math.max(pad, Math.min(maxL, il + (clientX - sx)));
-            const nt = Math.max(pad, Math.min(maxT, it + (clientY - sy)));
-            hud.style.left = `${nl}px`;
-            hud.style.top  = `${nt}px`;
+            const maxL = Math.max(4, window.innerWidth - hud.offsetWidth - 4);
+            const maxT = Math.max(4, window.innerHeight - hud.offsetHeight - 4);
+            hud.style.left = `${Math.max(4, Math.min(maxL, il + (cx - sx)))}px`;
+            hud.style.top = `${Math.max(4, Math.min(maxT, it + (cy - sy)))}px`;
         }
-
         function endDrag() {
             if (!dragging) return;
             dragging = false;
@@ -2016,796 +2156,376 @@
         handle.addEventListener('mousedown', e => startDrag(e.clientX, e.clientY, e.target));
         window.addEventListener('mousemove', e => moveDrag(e.clientX, e.clientY));
         window.addEventListener('mouseup', endDrag);
-
-        handle.addEventListener('touchstart', e => {
-            if (e.touches && e.touches.length === 1) {
-                startDrag(e.touches[0].clientX, e.touches[0].clientY, e.target);
-            }
-        }, { passive: true });
-
-        window.addEventListener('touchmove', e => {
-            if (dragging && e.touches && e.touches.length === 1) {
-                if (e.cancelable) e.preventDefault();
-                moveDrag(e.touches[0].clientX, e.touches[0].clientY);
-            }
-        }, { passive: false });
-
+        handle.addEventListener('touchstart', e => { if (e.touches?.[0]) startDrag(e.touches[0].clientX, e.touches[0].clientY, e.target); }, { passive: true });
+        window.addEventListener('touchmove', e => { if (dragging && e.touches?.[0]) { if (e.cancelable) e.preventDefault(); moveDrag(e.touches[0].clientX, e.touches[0].clientY); } }, { passive: false });
         window.addEventListener('touchend', endDrag);
-        window.addEventListener('touchcancel', endDrag);
 
-        // Header minimize & close buttons
         document.getElementById('sv-min-btn').addEventListener('click', () => {
             isMinimized = !isMinimized;
             hud.classList.toggle('sv-minimized', isMinimized);
-            document.getElementById('sv-min-btn').textContent = isMinimized ? '🗖' : '─';
+            document.getElementById('sv-min-btn').textContent = isMinimized ? '▢' : '─';
             updateMinDisplay();
             GM_setValue('sv_min', isMinimized);
         });
-
         document.getElementById('sv-close-btn').addEventListener('click', () => {
             hud.style.display = 'none';
             isHidden = true;
-            // Bug fix #2/#16: do NOT persist sv_hidden. Instead, show a small floating re-open tab.
-            // GM_setValue('sv_hidden', true) deliberately removed.
             _injectReopenTab(hud);
         });
+        document.getElementById('sv-mute-btn').addEventListener('click', () => {
+            soundEnabled = !soundEnabled;
+            save();
+            syncTogglePillsUI();
+            flashStatus(soundEnabled ? '🔊 Sound alerts ON' : '🔇 Sound muted', false);
+        });
+        document.getElementById('sv-settings-btn').addEventListener('click', () => {
+            showSettings = !showSettings;
+            const d = document.getElementById('sv-settings-drawer');
+            if (d) d.style.display = showSettings ? 'flex' : 'none';
+        });
 
-        // Minimized HUD quick actions
-        document.getElementById('sv-min-post-btn').addEventListener('click', postToChat);
+        document.getElementById('sv-min-post-btn').addEventListener('click', () => postToChat());
         document.getElementById('sv-min-next-btn').addEventListener('click', nextTurn);
+        document.getElementById('sv-min-up').addEventListener('click', () => copyToClipboard('full'));
 
-        // Click on UP name in minimized bar (copies callout or opens profile)
-        const minUpEl = document.getElementById('sv-min-up');
-        if (minUpEl) {
-            minUpEl.addEventListener('click', (e) => {
-                if (e.ctrlKey || e.metaKey || e.altKey) {
-                    const uid = minUpEl.dataset.uid;
-                    if (uid) window.open(`https://www.torn.com/profiles.php?XID=${uid}`, '_blank');
-                } else {
-                    copyToClipboard('full');
-                }
+        document.getElementById('sv-post-btn').addEventListener('click', () => postToChat());
+        document.getElementById('sv-copy-btn').addEventListener('click', e => copyToClipboard(e.shiftKey ? 'compact' : 'full'));
+
+        document.getElementById('sv-pill-loop').addEventListener('click', () => { loopMode = !loopMode; save(); syncTogglePillsUI(); });
+        document.getElementById('sv-pill-auto').addEventListener('click', () => { autoMode = !autoMode; save(); syncTogglePillsUI(); renderLineup(); });
+        document.getElementById('sv-pill-autosend').addEventListener('click', () => { autoSendOnPost = !autoSendOnPost; save(); syncTogglePillsUI(); });
+        document.getElementById('sv-pill-autocall').addEventListener('click', () => {
+            autoCallMedOut = !autoCallMedOut;
+            save();
+            syncTogglePillsUI();
+            flashStatus(autoCallMedOut ? '💊 Auto-Call Med-Outs ON' : 'Auto-Call Med-Outs OFF', false);
+        });
+
+        // Tabs
+        hud.querySelectorAll('.sv-tab').forEach(btn => {
+            btn.addEventListener('click', () => {
+                activeTab = btn.dataset.tab;
+                hud.querySelectorAll('.sv-tab').forEach(b => b.classList.toggle('sv-tab-active', b === btn));
+                renderActiveTabView();
             });
-        }
-
-        // Control Bar 1: Post & Copy
-        document.getElementById('sv-post-btn').addEventListener('click', postToChat);
-        document.getElementById('sv-copy-btn').addEventListener('click', (e) => {
-            if (e.shiftKey || e.altKey) copyToClipboard('compact');
-            else copyToClipboard('full');
         });
 
-        // Control Bar 2: Segmented Toggle Pills
-        const pillLoop = document.getElementById('sv-pill-loop');
-        pillLoop.addEventListener('click', () => {
-            loopMode = !loopMode;
-            pillLoop.classList.toggle('sv-pill-on', loopMode);
-            pillLoop.querySelector('.sv-pill-status').textContent = loopMode ? 'ON' : 'OFF';
-            save();
-            flashStatus(`Loop Mode: ${loopMode ? 'ON (Hitter rotates to bottom)' : 'OFF'}`, false);
-        });
-
-        const pillAuto = document.getElementById('sv-pill-auto');
-        pillAuto.addEventListener('click', () => {
-            autoMode = !autoMode;
-            pillAuto.classList.toggle('sv-pill-on', autoMode);
-            pillAuto.querySelector('.sv-pill-status').textContent = autoMode ? 'ON' : 'OFF';
-            save();
-            renderLineup();
-            flashStatus(`Auto-Advance: ${autoMode ? 'ON' : 'OFF'}`, false);
-        });
-
-        const pillAutoSend = document.getElementById('sv-pill-autosend');
-        pillAutoSend.addEventListener('click', () => {
-            autoSendOnPost = !autoSendOnPost;
-            pillAutoSend.classList.toggle('sv-pill-on', autoSendOnPost);
-            pillAutoSend.querySelector('.sv-pill-status').textContent = autoSendOnPost ? 'ON' : 'OFF';
-            save();
-            flashStatus(`Auto-Send: ${autoSendOnPost ? 'ON (Callouts dispatch immediately)' : 'OFF'}`, false);
-        });
-
-        // Control Bar 2: Queue Actions
-        document.getElementById('sv-next-btn').addEventListener('click', nextTurn);
-        document.getElementById('sv-reset-btn').addEventListener('click', resetHits);
-        document.getElementById('sv-clear-btn').addEventListener('click', clearAll);
-
-        // Hit time selector
         const hitSel = document.getElementById('sv-hit-time-sel');
         const customInp = document.getElementById('sv-hit-time-custom');
         hitSel.addEventListener('change', () => {
-            if (hitSel.value === 'custom') {
-                customInp.style.display = 'inline-block';
-                customInp.focus();
-            } else {
-                customInp.style.display = 'none';
-                targetHitTime = hitSel.value;
-                save();
-                renderLineup();
-                renderChainBar();
-            }
+            if (hitSel.value === 'custom') { customInp.style.display = 'inline-block'; customInp.focus(); }
+            else { customInp.style.display = 'none'; targetHitTime = hitSel.value; save(); renderChainBar(); }
         });
-        customInp.addEventListener('change', () => {
-            targetHitTime = customInp.value.trim();
-            save();
-            renderLineup();
-            renderChainBar();
-        });
+        customInp.addEventListener('change', () => { targetHitTime = customInp.value.trim(); save(); renderChainBar(); });
 
-        // Quick bottom buttons
         document.getElementById('sv-autofill-btn').addEventListener('click', autoFill);
-        document.getElementById('sv-refresh-btn').addEventListener('click', () => {
-            if (!apiKey) { flashStatus('Enter an API key first.', true); return; }
-            flashStatus('Refreshing member list from Torn…', false);
-            fetchFactionMembers();
+        document.getElementById('sv-refresh-btn').addEventListener('click', () => { fetchFactionMembers(); syncBackendTelemetry(false); flashStatus('Refreshing roster...', false); });
+        document.getElementById('sv-reset-btn').addEventListener('click', resetHits);
+        document.getElementById('sv-clear-btn').addEventListener('click', clearAll);
+
+        document.getElementById('sv-apikey-save-btn').addEventListener('click', saveApiKey);
+        document.getElementById('sv-enemy-save-btn').addEventListener('click', saveEnemyTargetFromHUD);
+        document.getElementById('sv-allpages-chk').addEventListener('change', e => {
+            runOnAllPages = Boolean(e.target.checked);
+            save();
+            flashStatus(runOnAllPages ? 'HUD enabled across all Torn pages' : 'HUD restricted to Faction page after reload', false);
         });
 
-        document.getElementById('sv-key-toggle-btn').addEventListener('click', () => {
-            const row = document.getElementById('sv-apikey-row');
-            if (!row) return;
-            const isHidden = row.style.display === 'none';
-            row.style.display = isHidden ? 'flex' : 'none';
-            if (isHidden) {
-                const inp = document.getElementById('sv-apikey-input');
-                if (inp) inp.focus();
-            }
-        });
-
-        const saveKeyBtn = document.getElementById('sv-apikey-save-btn');
-        if (saveKeyBtn) saveKeyBtn.addEventListener('click', saveApiKey);
-
-        const apiKeyInput = document.getElementById('sv-apikey-input');
-        if (apiKeyInput) {
-            apiKeyInput.addEventListener('keydown', e => {
-                if (e.key === 'Enter') saveApiKey();
-            });
-        }
-
-        // Add member input
         const addInp = document.getElementById('sv-add-input');
-        const addBtn = document.getElementById('sv-add-btn');
         const suggestBox = document.getElementById('sv-suggest');
-
-        addBtn.addEventListener('click', addFromInput);
-
-        addInp.addEventListener('focus', () => {
-            suggestBox.style.display = 'block';
-            if (!factionMembers.length && apiKey) fetchFactionMembers();
-            renderSuggest();
-        });
-
-        addInp.addEventListener('input', e => {
-            searchQuery = e.target.value;
-            suggestSelected = -1;
-            suggestBox.style.display = 'block';
-            if (!factionMembers.length && apiKey) fetchFactionMembers();
-            renderSuggest();
-        });
-
+        document.getElementById('sv-add-btn').addEventListener('click', addFromInput);
+        addInp.addEventListener('focus', () => { suggestBox.style.display = 'block'; if (!factionMembers.length) fetchFactionMembers(); renderSuggest(); });
+        addInp.addEventListener('input', e => { searchQuery = e.target.value; suggestSelected = -1; suggestBox.style.display = 'block'; renderSuggest(); });
         addInp.addEventListener('keydown', e => {
-            const items = suggestBox ? suggestBox.querySelectorAll('.sv-suggest-item') : [];
-            if (e.key === 'ArrowDown') {
-                e.preventDefault();
-                suggestSelected = Math.min(suggestSelected + 1, items.length - 1);
-                renderSuggest();
-            } else if (e.key === 'ArrowUp') {
-                e.preventDefault();
-                suggestSelected = Math.max(suggestSelected - 1, -1);
-                renderSuggest();
-            } else if (e.key === 'Enter') {
+            const items = suggestBox.querySelectorAll('.sv-suggest-item');
+            if (e.key === 'ArrowDown') { e.preventDefault(); suggestSelected = Math.min(suggestSelected + 1, items.length - 1); renderSuggest(); }
+            else if (e.key === 'ArrowUp') { e.preventDefault(); suggestSelected = Math.max(suggestSelected - 1, -1); renderSuggest(); }
+            else if (e.key === 'Enter') {
                 e.preventDefault();
                 if (suggestSelected >= 0 && items[suggestSelected]) {
-                    const name = items[suggestSelected].dataset.name;
-                    const id = parseInt(items[suggestSelected].dataset.id, 10) || null;
-                    addFromSuggest(name, id);
-                } else {
-                    addFromInput();
-                }
-            } else if (e.key === 'Escape') {
-                suggestBox.style.display = 'none';
-            }
+                    addMember(items[suggestSelected].dataset.name, parseInt(items[suggestSelected].dataset.id, 10) || null);
+                    addInp.value = ''; suggestBox.style.display = 'none'; suggestSelected = -1; searchQuery = '';
+                } else addFromInput();
+            } else if (e.key === 'Escape') suggestBox.style.display = 'none';
         });
+        document.addEventListener('click', e => { if (!e.target.closest('.sv-add-row')) suggestBox.style.display = 'none'; });
 
-        document.addEventListener('click', e => {
-            if (!e.target.closest('.sv-add-row')) {
-                if (suggestBox) suggestBox.style.display = 'none';
-            }
-        });
-
-        // Event delegation for cards, queue rows, interactive chips & force hit
         hud.addEventListener('click', e => {
-            // Suggestion click
-            const suggestItem = e.target.closest('[data-action="add-suggest"]');
-            if (suggestItem) {
-                const name = suggestItem.dataset.name;
-                const id = parseInt(suggestItem.dataset.id, 10) || null;
-                addFromSuggest(name, id);
+            const sug = e.target.closest('[data-action="add-suggest"]');
+            if (sug) {
+                addMember(sug.dataset.name, parseInt(sug.dataset.id, 10) || null);
+                addInp.value = ''; suggestBox.style.display = 'none'; searchQuery = ''; suggestSelected = -1;
                 return;
             }
+            const act = e.target.closest('[data-action]');
+            if (!act) return;
+            const action = act.dataset.action;
+            const idx = parseInt(act.dataset.idx, 10);
 
-            // Interactive Summary Chip Clicks
-            if (e.target.closest('[data-action="filter-ready"]')) {
-                sortReadyToTop();
-                return;
-            }
-            if (e.target.closest('[data-action="toggle-hosp-banner"]')) {
-                showHospBanner = !showHospBanner;
-                renderLineup();
-                return;
-            }
-            if (e.target.closest('[data-action="auto-skip-hosp"]')) {
-                autoSkipHospedMembers();
-                return;
-            }
-
-            // Force Hit button
-            if (e.target.closest('[data-action="force-hit"]')) {
-                forceMarkHitAndRotate();
-                return;
-            }
-
-            // Card / Queue action buttons
-            const actBtn = e.target.closest('[data-action]');
-            if (!actBtn) return;
-
-            const action = actBtn.dataset.action;
-            const idx    = parseInt(actBtn.dataset.idx, 10);
-            const from   = parseInt(actBtn.dataset.from, 10);
-            const to     = parseInt(actBtn.dataset.to, 10);
-
-            if (action === 'skip' && !isNaN(idx)) {
-                skipMember(idx);
-            } else if (action === 'remove' && !isNaN(idx)) {
-                removeMember(idx);
-            } else if (action === 'swap-top') {
-                swapTopTwo();
-            } else if (action === 'make-current' && !isNaN(idx)) {
-                makeCurrent(idx);
-            } else if (action === 'move' && !isNaN(from) && !isNaN(to)) {
-                moveMember(from, to);
-            } else if (action === 'prompt-move' && !isNaN(idx)) {
-                promptMove(idx);
+            if (action === 'force-hit') forceMarkHitAndRotate();
+            else if (action === 'skip' && !isNaN(idx)) skipMember(idx);
+            else if (action === 'remove' && !isNaN(idx)) removeMember(idx);
+            else if (action === 'swap-top') swapTopTwo();
+            else if (action === 'make-current' && !isNaN(idx)) makeCurrent(idx);
+            else if (action === 'prompt-move' && !isNaN(idx)) promptMove(idx);
+            else if (action === 'filter-ready') sortReadyToTop();
+            else if (action === 'auto-skip-hosp') autoSkipHospedMembers();
+            else if (action === 'dismiss-medalert') { activeMedAlert = null; renderMedOutBanner(); updateMinDisplay(); }
+            else if (action === 'call-medout') {
+                const ev = enemyMedOuts.find(x => x.id === act.dataset.medid) || activeMedAlert;
+                if (ev) callOutMedOutToChat(ev);
+            } else if (action === 'open-enemy-set') {
+                showSettings = true;
+                const d = document.getElementById('sv-settings-drawer');
+                if (d) { d.style.display = 'flex'; document.getElementById('sv-enemy-fac-input')?.focus(); }
             }
         });
 
-        // Drag and drop reordering
         hud.addEventListener('dragstart', e => {
             const card = e.target.closest('[data-idx]');
-            if (card) {
-                e.dataTransfer.setData('text/plain', card.dataset.idx);
-                card.classList.add('sv-dragging');
-            }
+            if (card) { e.dataTransfer.setData('text/plain', card.dataset.idx); card.classList.add('sv-dragging'); }
         });
-
-        hud.addEventListener('dragend', e => {
-            const card = e.target.closest('[data-idx]');
-            if (card) card.classList.remove('sv-dragging');
-        });
-
-        hud.addEventListener('dragover', e => {
-            const card = e.target.closest('[data-idx]');
-            if (card) {
-                e.preventDefault();
-                card.classList.add('sv-drag-over');
-            }
-        });
-
-        hud.addEventListener('dragleave', e => {
-            const card = e.target.closest('[data-idx]');
-            if (card) card.classList.remove('sv-drag-over');
-        });
-
+        hud.addEventListener('dragend', e => { e.target.closest('[data-idx]')?.classList.remove('sv-dragging'); });
+        hud.addEventListener('dragover', e => { const c = e.target.closest('[data-idx]'); if (c) { e.preventDefault(); c.classList.add('sv-drag-over'); } });
+        hud.addEventListener('dragleave', e => { e.target.closest('[data-idx]')?.classList.remove('sv-drag-over'); });
         hud.addEventListener('drop', e => {
-            const card = e.target.closest('[data-idx]');
-            if (card) {
-                e.preventDefault();
-                card.classList.remove('sv-drag-over');
-                const fromIdx = parseInt(e.dataTransfer.getData('text/plain'), 10);
-                const toIdx   = parseInt(card.dataset.idx, 10);
-                if (!isNaN(fromIdx) && !isNaN(toIdx) && fromIdx !== toIdx) {
-                    moveMember(fromIdx, toIdx);
-                }
+            const c = e.target.closest('[data-idx]');
+            if (c) {
+                e.preventDefault(); c.classList.remove('sv-drag-over');
+                const from = parseInt(e.dataTransfer.getData('text/plain'), 10);
+                const to = parseInt(c.dataset.idx, 10);
+                if (!isNaN(from) && !isNaN(to) && from !== to) moveMember(from, to);
             }
         });
     }
 
     // ══════════════════════════════════════════════════════════════
-    //  PROFESSIONAL DARK CSS STYLES
+    //  MODERN GLASSMORPHIC HUD STYLES
     // ══════════════════════════════════════════════════════════════
     const css = `
     #sv-chain-hud {
-        position: fixed;
-        z-index: 99999999;
-        width: 360px;
-        max-height: 90vh;
-        display: flex;
-        flex-direction: column;
-        background: rgba(13, 17, 23, 0.98);
-        backdrop-filter: blur(12px);
-        border: 1px solid rgba(48, 54, 61, 0.85);
-        border-radius: 10px;
-        box-shadow: 0 12px 36px rgba(0, 0, 0, 0.75), 0 0 1px rgba(255, 255, 255, 0.1);
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-        font-size: 11px;
-        color: #c9d1d9;
-        user-select: none;
-        overflow: hidden;
-        transition: border-color 0.25s, box-shadow 0.25s, width 0.2s;
+        position: fixed; z-index: 99999999; width: 352px; max-height: 88vh;
+        display: flex; flex-direction: column;
+        background: rgba(11, 15, 25, 0.96);
+        backdrop-filter: blur(14px);
+        border: 1px solid rgba(56, 189, 248, 0.24);
+        border-radius: 12px;
+        box-shadow: 0 18px 48px rgba(0, 0, 0, 0.78), 0 0 24px rgba(14, 165, 233, 0.08);
+        font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        font-size: 11px; color: #e2e8f0; user-select: none; overflow: hidden;
     }
-
-    /* Minimized Compact Bar Mode */
     #sv-chain-hud.sv-minimized {
-        width: auto;
-        max-width: 540px;
-        border-radius: 24px;
-        max-height: none;
-        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(46, 204, 113, 0.3);
+        width: auto; max-width: 620px; border-radius: 999px; max-height: none;
+        border-color: rgba(56, 189, 248, 0.35);
     }
-    #sv-chain-hud.sv-minimized .sv-body { display: none; }
-    #sv-chain-hud.sv-minimized .sv-full-only { display: none !important; }
+    #sv-chain-hud.sv-minimized .sv-body, #sv-chain-hud.sv-minimized .sv-full-only { display: none !important; }
     #sv-chain-hud.sv-minimized .sv-min-only { display: flex !important; }
-    #sv-chain-hud.sv-minimized .sv-header {
-        border-radius: 24px;
-        border-bottom: none;
-        padding: 5px 10px;
-        gap: 6px;
-    }
+    #sv-chain-hud.sv-minimized .sv-header { border-bottom: none; padding: 5px 10px; }
 
-    /* Header */
     .sv-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 7px 10px;
-        background: rgba(22, 27, 34, 0.95);
-        border-bottom: 1px solid rgba(48, 54, 61, 0.8);
-        cursor: move;
-        flex-shrink: 0;
-        gap: 8px;
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 8px 12px; cursor: move; flex-shrink: 0; gap: 6px;
+        background: linear-gradient(180deg, rgba(30, 41, 59, 0.85), rgba(15, 23, 42, 0.85));
+        border-bottom: 1px solid rgba(148, 163, 184, 0.14);
     }
-    .sv-title { display: flex; align-items: center; gap: 6px; overflow: hidden; }
-    .sv-title-text { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; color: #f0f6fc; white-space: nowrap; }
-    .sv-hdr-controls { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+    .sv-title { display: flex; align-items: center; gap: 6px; min-width: 0; }
+    .sv-title-text { font-size: 10.5px; font-weight: 800; letter-spacing: 0.9px; color: #f8fafc; }
+    .sv-sync-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+    .sv-dot-synced { background: #38bdf8; box-shadow: 0 0 6px #38bdf8; }
+    .sv-dot-live { background: #10b981; box-shadow: 0 0 8px #10b981; animation: svPulse 1.2s infinite; }
+    .sv-enemy-badge { font-size: 9px; font-weight: 700; color: #fca5a5; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); padding: 1px 6px; border-radius: 999px; white-space: nowrap; }
+    .sv-hdr-controls { display: flex; align-items: center; gap: 2px; }
+    .sv-ctrl-btn { background: transparent; border: none; color: #94a3b8; cursor: pointer; padding: 2px 5px; font-size: 11px; border-radius: 5px; }
+    .sv-ctrl-btn:hover { color: #f8fafc; background: rgba(255,255,255,0.08); }
 
-    /* Redesigned Minimized Bar Items */
+    /* Minimized Pill */
     .sv-min-only { display: none; }
-    .sv-min-bar-content {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        flex: 1;
-        overflow: hidden;
-    }
-    .sv-min-badge {
-        font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
-        font-size: 11px;
-        font-weight: 800;
-        padding: 2px 7px;
-        border-radius: 12px;
-        white-space: nowrap;
-    }
-    .sv-min-chain-badge {
-        background: rgba(56, 139, 253, 0.15);
-        color: #58a6ff;
-        border: 1px solid rgba(56, 139, 253, 0.35);
-    }
-    .sv-min-timer-badge {
-        background: rgba(13, 17, 23, 0.9);
-        border: 1px solid rgba(48, 54, 61, 0.8);
-    }
-    .sv-min-pulse {
-        animation: svTimerPulse 0.9s infinite !important;
-        background: rgba(248, 81, 73, 0.16) !important;
-        border-color: rgba(248, 81, 73, 0.6) !important;
-    }
-    .sv-min-up-pill {
-        font-size: 11px;
-        font-weight: 800;
-        color: #f0f6fc;
-        background: rgba(35, 134, 54, 0.18);
-        border: 1px solid rgba(46, 204, 113, 0.4);
-        padding: 2px 8px;
-        border-radius: 12px;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        max-width: 140px;
-        cursor: pointer;
-    }
-    .sv-min-up-pill:hover { background: rgba(35, 134, 54, 0.3); }
-    .sv-min-action-btn {
-        background: rgba(33, 38, 45, 0.9);
-        border: 1px solid rgba(48, 54, 61, 0.85);
-        color: #c9d1d9;
-        padding: 2px 8px;
-        border-radius: 12px;
-        font-size: 10px;
-        font-weight: 700;
-        cursor: pointer;
-        white-space: nowrap;
-        transition: all 0.15s;
-    }
-    .sv-min-post-btn {
-        background: linear-gradient(135deg, #238636, #2ea043);
-        color: #fff;
-        border: none;
-    }
-    .sv-min-post-btn:hover { background: #2ea043; }
-    .sv-min-next-btn:hover { background: rgba(56, 139, 253, 0.2); color: #58a6ff; }
+    .sv-min-bar { display: flex; align-items: center; gap: 6px; }
+    .sv-min-chip { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 999px; background: rgba(15, 23, 42, 0.9); border: 1px solid rgba(148, 163, 184, 0.22); }
+    .sv-min-chain { color: #38bdf8; }
+    .sv-min-pulse { animation: svCrit 0.9s infinite; border-color: rgba(239, 68, 68, 0.7) !important; }
+    .sv-min-up { font-weight: 700; color: #a7f3d0; background: rgba(16, 185, 129, 0.14); border: 1px solid rgba(16, 185, 129, 0.35); padding: 2px 8px; border-radius: 999px; max-width: 120px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+    .sv-min-med { font-weight: 800; font-size: 10px; color: #fff; background: linear-gradient(135deg, #dc2626, #ea580c); padding: 2px 8px; border-radius: 999px; text-decoration: none; animation: svPulse 0.9s infinite; }
+    .sv-min-btn { background: rgba(30, 41, 59, 0.9); border: 1px solid rgba(148, 163, 184, 0.22); color: #e2e8f0; padding: 2px 7px; border-radius: 999px; cursor: pointer; font-size: 10px; font-weight: 700; }
+    .sv-min-post { background: #10b981; color: #052e16; border: none; }
 
-    /* Status Pill */
-    .sv-status-pill { display: inline-flex; align-items: center; gap: 4px; padding: 2px 6px; border-radius: 10px; font-size: 9px; font-weight: 800; letter-spacing: 0.5px; cursor: default; }
-    .sv-updated { background: rgba(46, 204, 113, 0.16); color: #2ecc71; border: 1px solid rgba(46, 204, 113, 0.4); }
-    .sv-same    { background: rgba(110, 118, 129, 0.15); color: #8b949e; border: 1px solid rgba(110, 118, 129, 0.3); }
-    .sv-dot { width: 5px; height: 5px; border-radius: 50%; display: inline-block; }
-    .sv-dot-green { background: #2ecc71; box-shadow: 0 0 6px #2ecc71; animation: svDotPulse 1.3s infinite; }
-    .sv-dot-grey  { background: #8b949e; box-shadow: none; }
-    @keyframes svDotPulse { 0%,100%{transform:scale(1);opacity:1} 50%{transform:scale(1.25);opacity:.7} }
+    .sv-body { overflow-y: auto; flex: 1; display: flex; flex-direction: column; scrollbar-width: thin; }
 
-    .sv-ctrl-btn { background: transparent; border: none; color: #8b949e; cursor: pointer; padding: 2px 4px; font-size: 11px; border-radius: 4px; }
-    .sv-ctrl-btn:hover { color: #f0f6fc; background: rgba(255, 255, 255, 0.08); }
-
-    .sv-body { overflow-y: auto; flex: 1; scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.1) transparent; }
-    .sv-body::-webkit-scrollbar { width: 4px; }
-    .sv-body::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.12); border-radius: 2px; }
-
-    /* ══════════════════════════════════════════════════════════════
-       1. TOP 4 KPI METRICS TILES
-       ══════════════════════════════════════════════════════════════ */
-    .sv-chain-bar { padding: 8px 10px; background: rgba(18, 22, 29, 0.8); border-bottom: 1px solid rgba(48, 54, 61, 0.6); }
-    .sv-stat-grid { display: grid; grid-template-columns: 1.25fr 1fr 1.15fr 1.15fr; gap: 6px; align-items: stretch; }
-    .sv-stat-box {
-        background: rgba(22, 27, 34, 0.7); border: 1px solid rgba(48, 54, 61, 0.6);
-        border-radius: 6px; padding: 4px 6px; display: flex; flex-direction: column;
-        justify-content: center; align-items: center; text-align: center;
-        transition: all 0.2s ease;
+    /* Hero Card */
+    .sv-hero-card {
+        margin: 8px 10px 6px; padding: 9px 11px; border-radius: 10px;
+        background: linear-gradient(145deg, rgba(15, 23, 42, 0.95), rgba(30, 41, 59, 0.65));
+        border: 1px solid rgba(148, 163, 184, 0.16);
     }
-    .sv-stat-num { font-size: 14px; font-weight: 800; color: #f0f6fc; line-height: 1.1; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
-    .sv-stat-lbl { font-size: 8px; font-weight: 700; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px; line-height: 1; }
+    .sv-hero-card.sv-timer-critical { border-color: rgba(239, 68, 68, 0.65); background: linear-gradient(145deg, rgba(69, 10, 10, 0.55), rgba(15, 23, 42, 0.95)); animation: svCrit 1s infinite; }
+    .sv-hero-card.sv-timer-warn { border-color: rgba(245, 158, 11, 0.45); }
+    .sv-hero-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .sv-hero-chain-row { display: flex; align-items: center; gap: 6px; }
+    .sv-chain-num { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 20px; font-weight: 900; font-variant-numeric: tabular-nums; color: #f8fafc; line-height: 1.1; }
+    .sv-mult-badge { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 10px; font-weight: 800; color: #38bdf8; background: rgba(56, 189, 248, 0.14); border: 1px solid rgba(56, 189, 248, 0.35); padding: 1px 6px; border-radius: 6px; }
+    .sv-hero-sub { font-size: 10px; color: #94a3b8; margin-top: 2px; font-weight: 600; }
+    .sv-hero-timer-wrap { text-align: right; }
+    .sv-hero-timer { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 22px; font-weight: 900; font-variant-numeric: tabular-nums; line-height: 1.05; }
+    .sv-hero-timer-sub { font-size: 9.5px; color: #94a3b8; font-weight: 700; margin-top: 2px; }
+    .sv-hit-now-pill { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.45); padding: 1px 6px; border-radius: 6px; font-weight: 800; }
+    .sv-progress-track { height: 4px; background: rgba(15, 23, 42, 0.9); border-radius: 999px; overflow: hidden; margin-top: 8px; }
+    .sv-progress-fill { height: 100%; background: linear-gradient(90deg, #0ea5e9, #10b981); transition: width 0.4s ease; }
 
-    /* Timer Tile Visual Priority */
-    .sv-stat-timer { background: rgba(13, 17, 23, 0.9); border-color: rgba(56, 139, 253, 0.3); }
-    .sv-timer-num { font-size: 20px; font-weight: 900; font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace; letter-spacing: 0.5px; }
-    .sv-timer-pulse-red {
-        border-color: rgba(248, 81, 73, 0.65) !important;
-        background: rgba(248, 81, 73, 0.12) !important;
-        animation: svTimerPulse 0.9s infinite;
+    /* Instant Med-Out Banner */
+    .sv-medout-banner {
+        margin: 0 10px 6px; padding: 8px 10px; border-radius: 9px;
+        background: linear-gradient(135deg, rgba(185, 28, 28, 0.28), rgba(194, 65, 12, 0.24));
+        border: 1px solid rgba(248, 113, 113, 0.7);
+        box-shadow: 0 0 18px rgba(239, 68, 68, 0.28);
+        animation: svCrit 1.1s infinite;
     }
-    @keyframes svTimerPulse { 0%,100%{box-shadow:inset 0 0 8px rgba(248, 81, 73, 0.2)} 50%{box-shadow:inset 0 0 16px rgba(248, 81, 73, 0.5)} }
+    .sv-medout-top { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; }
+    .sv-medout-pill { font-size: 9.5px; font-weight: 900; color: #fef2f2; background: #dc2626; padding: 1px 6px; border-radius: 4px; letter-spacing: 0.4px; }
+    .sv-medout-saved { font-size: 10px; font-weight: 800; color: #fcd34d; }
+    .sv-medout-dismiss { margin-left: auto; background: none; border: none; color: #cbd5e1; cursor: pointer; font-size: 11px; }
+    .sv-medout-body { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .sv-medout-target { font-size: 11.5px; color: #fff; min-width: 0; }
+    .sv-medout-meta { font-size: 9.5px; color: #cbd5e1; margin-top: 1px; }
+    .sv-medout-btns { display: flex; gap: 4px; flex-shrink: 0; }
+    .sv-btn-attack { background: linear-gradient(135deg, #ef4444, #dc2626) !important; border: none !important; color: #fff !important; font-weight: 800 !important; text-decoration: none; display: inline-flex; align-items: center; }
+    .sv-btn-call { background: rgba(245, 158, 11, 0.2) !important; border-color: rgba(245, 158, 11, 0.5) !important; color: #fcd34d !important; }
+    .sv-id-muted { color: #94a3b8; font-size: 9.5px; font-family: ui-monospace, monospace; }
 
-    .sv-chain-mult { color: #58a6ff; font-weight: 800; }
-    .sv-bonus-num { color: #f0f6fc; font-size: 12.5px; font-weight: 800; }
+    /* Toolbars & Pills */
+    .sv-toolbar { display: flex; align-items: center; justify-content: space-between; padding: 4px 10px; gap: 6px; }
+    .sv-timing-grp, .sv-dispatch-grp { display: flex; align-items: center; gap: 4px; }
+    .sv-lbl { font-size: 10px; color: #94a3b8; font-weight: 700; }
+    .sv-select, .sv-input-xs { background: #0f172a; border: 1px solid rgba(148, 163, 184, 0.24); color: #e2e8f0; padding: 3px 6px; border-radius: 6px; font-size: 10.5px; font-weight: 700; outline: none; }
+    .sv-pill-bar { display: flex; gap: 4px; padding: 3px 10px 6px; flex-wrap: wrap; }
+    .sv-pill { background: rgba(30, 41, 59, 0.8); border: 1px solid rgba(148, 163, 184, 0.2); color: #94a3b8; padding: 2px 7px; border-radius: 999px; font-size: 9.5px; font-weight: 700; cursor: pointer; }
+    .sv-pill-on { background: rgba(16, 185, 129, 0.14); border-color: rgba(16, 185, 129, 0.45); color: #34d399; }
 
-    .sv-stat-target { border-color: rgba(48, 54, 61, 0.7); }
-    .sv-box-hit-now { background: rgba(46, 204, 113, 0.12); border-color: rgba(46, 204, 113, 0.5); }
-    .sv-hit-now-txt { color: #2ecc71 !important; font-weight: 900; animation: svGlowText 1s infinite; }
-    @keyframes svGlowText { 0%,100%{text-shadow:0 0 4px #2ecc71} 50%{text-shadow:0 0 10px #2ecc71} }
+    /* Tabs */
+    .sv-tabs { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; padding: 4px 10px; border-top: 1px solid rgba(148, 163, 184, 0.12); border-bottom: 1px solid rgba(148, 163, 184, 0.12); background: rgba(15, 23, 42, 0.7); }
+    .sv-tab { background: transparent; border: 1px solid transparent; color: #94a3b8; padding: 4px 6px; border-radius: 6px; font-size: 10px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px; }
+    .sv-tab:hover { color: #f8fafc; background: rgba(255,255,255,0.04); }
+    .sv-tab-active { background: rgba(56, 189, 248, 0.15); border-color: rgba(56, 189, 248, 0.35); color: #38bdf8; }
+    .sv-tab-hot { background: #ef4444; color: #fff; padding: 0 5px; border-radius: 999px; font-size: 9px; font-weight: 800; }
 
-    /* ══════════════════════════════════════════════════════════════
-       2. RESTRUCTURED 2-BAR CONTROL BAR
-       ══════════════════════════════════════════════════════════════ */
-    .sv-ctrl-bar { padding: 6px 10px; display: flex; align-items: center; justify-content: space-between; gap: 6px; }
-    .sv-ctrl-bar-1 { border-bottom: 1px solid rgba(48, 54, 61, 0.35); background: rgba(22, 27, 34, 0.5); }
-    .sv-ctrl-bar-2 { border-bottom: 1px solid rgba(48, 54, 61, 0.5); background: rgba(18, 22, 29, 0.7); flex-wrap: wrap; }
+    .sv-status-msg { padding: 3px 10px 0; min-height: 14px; font-size: 10px; font-weight: 600; }
+    .sv-tab-content { padding: 4px 10px 6px; max-height: 290px; overflow-y: auto; }
 
-    .sv-timing-wrap { display: flex; align-items: center; gap: 4px; }
-    .sv-ctrl-icon { font-size: 12px; }
-    .sv-ctrl-label { font-size: 10px; color: #8b949e; font-weight: 700; white-space: nowrap; }
-    .sv-select-timing {
-        background: #161b22; border: 1px solid rgba(48, 54, 61, 0.9); color: #c9d1d9;
-        padding: 3px 6px; border-radius: 4px; font-size: 10.5px; font-weight: 700; outline: none;
-    }
-    .sv-dispatch-wrap { display: flex; align-items: center; gap: 4px; }
-    .sv-btn-dispatch {
-        background: linear-gradient(135deg, #238636, #2ea043) !important; color: #fff !important;
-        font-weight: 800 !important; padding: 4px 10px !important; border: none !important;
-        box-shadow: 0 0 10px rgba(46, 204, 113, 0.3);
-    }
-    .sv-btn-dispatch:hover { background: #2ea043 !important; }
-    .sv-btn-icon-copy { padding: 4px 8px !important; }
+    /* Summary & UP Card */
+    .sv-summary-row { display: flex; gap: 5px; margin-bottom: 6px; flex-wrap: wrap; }
+    .sv-chip { background: rgba(30, 41, 59, 0.75); border: 1px solid rgba(148, 163, 184, 0.18); color: #cbd5e1; padding: 2px 7px; border-radius: 6px; font-size: 9.5px; font-weight: 700; cursor: default; }
+    .sv-chip-ok, .sv-chip-danger { cursor: pointer; }
+    .sv-chip-danger { background: rgba(239, 68, 68, 0.14); border-color: rgba(239, 68, 68, 0.4); color: #fca5a5; }
 
-    /* Control Bar 2: Segmented Pills */
-    .sv-pill-group { display: flex; align-items: center; gap: 4px; }
-    .sv-toggle-pill {
-        background: rgba(33, 38, 45, 0.9);
-        border: 1px solid rgba(48, 54, 61, 0.8);
-        color: #8b949e;
-        padding: 2px 6px;
-        border-radius: 12px;
-        font-size: 9.5px;
-        font-weight: 700;
-        cursor: pointer;
-        transition: all 0.15s;
-    }
-    .sv-toggle-pill:hover { color: #f0f6fc; border-color: rgba(110, 118, 129, 0.6); }
-    .sv-pill-on {
-        background: rgba(46, 204, 113, 0.15);
-        border-color: rgba(46, 204, 113, 0.45);
-        color: #2ecc71;
-    }
-    .sv-pill-status { font-weight: 900; }
-    .sv-pill-on .sv-pill-status { color: #3ee083; }
-
-    .sv-queue-actions-group { display: flex; align-items: center; gap: 3px; }
-    .sv-action-dot { color: #484f58; font-size: 9px; }
-
-    /* Button System */
-    .sv-btn {
-        background: rgba(33, 38, 45, 0.85); border: 1px solid rgba(48, 54, 61, 0.85); color: #c9d1d9;
-        padding: 3px 7px; border-radius: 4px; font-size: 10.5px; font-weight: 700; cursor: pointer;
-        transition: all 0.12s; white-space: nowrap; line-height: 1.2;
-    }
-    .sv-btn:hover { background: rgba(48, 54, 61, 0.9); color: #f0f6fc; }
-    .sv-btn-xs { font-size: 9.5px; padding: 2px 6px; border-radius: 4px; }
-    .sv-btn-green { background: rgba(35, 134, 54, 0.25); border-color: rgba(46, 204, 113, 0.45); color: #2ecc71; }
-    .sv-btn-danger { background: rgba(218, 54, 51, 0.15); border-color: rgba(248, 81, 73, 0.35); color: #f85149; }
-    .sv-btn-danger:hover { background: rgba(218, 54, 51, 0.28); }
-    .sv-btn-skip { background: rgba(227, 179, 65, 0.12); border-color: rgba(227, 179, 65, 0.35); color: #e3b341; }
-    .sv-btn-skip:hover { background: rgba(227, 179, 65, 0.22); }
-    .sv-btn-rm { background: rgba(218, 54, 51, 0.1); border-color: rgba(248, 81, 73, 0.25); color: #f85149; }
-    .sv-btn-rm:hover { background: rgba(218, 54, 51, 0.25); }
-    .sv-btn-primary { background: rgba(56, 139, 253, 0.18); border-color: rgba(56, 139, 253, 0.4); color: #58a6ff; }
-    .sv-btn-primary:hover { background: rgba(56, 139, 253, 0.3); color: #79c0ff; }
-    .sv-btn-promote { background: rgba(56, 139, 253, 0.16); border-color: rgba(56, 139, 253, 0.4); color: #58a6ff; }
-    /* Bug fix #13: add hover state for muted button (was invisible) */
-    .sv-btn-muted { color: #8b949e; font-weight: 600; }
-    .sv-btn-muted:hover { background: rgba(48, 54, 61, 0.8); color: #c9d1d9; }
-    /* Bug fix #14: define sv-input-sm used by API key input */
-    .sv-input-sm {
-        background: #161b22; border: 1px solid rgba(48, 54, 61, 0.9); color: #c9d1d9;
-        padding: 3px 6px; border-radius: 4px; font-size: 10.5px; outline: none;
-    }
-    .sv-input-sm:focus { border-color: rgba(56, 139, 253, 0.6); }
-
-    .sv-status-bar { padding: 2px 10px; min-height: 16px; font-size: 10px; }
-
-    /* ══════════════════════════════════════════════════════════════
-       3. INTERACTIVE SUMMARY CHIPS & HOSP BANNER
-       ══════════════════════════════════════════════════════════════ */
-    .sv-lineup-summary {
-        display: flex; gap: 4px; padding: 4px 10px 6px; overflow-x: auto;
-        border-bottom: 1px solid rgba(48, 54, 61, 0.3); margin-bottom: 4px;
-    }
-    .sv-summary-chip {
-        display: inline-flex; align-items: center; gap: 4px; padding: 2px 6px;
-        background: rgba(22, 27, 34, 0.7); border: 1px solid rgba(48, 54, 61, 0.5);
-        border-radius: 4px; font-size: 9px; font-weight: 700; color: #8b949e; white-space: nowrap;
-        cursor: pointer; transition: all 0.15s;
-    }
-    .sv-summary-chip:hover { border-color: rgba(110, 118, 129, 0.8); color: #f0f6fc; }
-    .sv-summary-chip b { color: #f0f6fc; }
-    .sv-chip-alert { border-color: rgba(248, 81, 73, 0.4); color: #f85149; }
-    .sv-mini-dot { width: 5px; height: 5px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
-    .sv-dot-green { background: #2ecc71; }
-    .sv-dot-blue  { background: #58a6ff; }
-    .sv-dot-amber { background: #e3b341; }
-    .sv-dot-red   { background: #f85149; }
-    .sv-dot-gray  { background: #718096; }
-
-    .sv-hosp-banner {
-        display: flex; align-items: center; justify-content: space-between;
-        margin: 2px 10px 6px; padding: 4px 8px; border-radius: 5px;
-        background: rgba(218, 54, 51, 0.12); border: 1px solid rgba(248, 81, 73, 0.35);
-        color: #f85149; font-size: 9.5px; font-weight: 700;
-    }
-
-    /* ══════════════════════════════════════════════════════════════
-       4. CURRENTLY UP CARD & QUEUE ROWS
-       ══════════════════════════════════════════════════════════════ */
-    .sv-tier-card {
-        margin: 4px 10px; border-radius: 6px; border: 1px solid rgba(48, 54, 61, 0.8);
-        background: rgba(22, 27, 34, 0.85); overflow: hidden;
-        transition: border-color 0.2s; cursor: grab;
-    }
     .sv-up-card {
-        background: rgba(35, 134, 54, 0.12);
-        border: 1.5px solid #2ecc71;
-        box-shadow: 0 0 14px rgba(46, 204, 113, 0.4), inset 0 0 8px rgba(46, 204, 113, 0.08);
+        padding: 9px 10px; border-radius: 9px; margin-bottom: 6px; cursor: grab;
+        background: linear-gradient(135deg, rgba(6, 78, 59, 0.36), rgba(15, 23, 42, 0.9));
+        border: 1.5px solid rgba(16, 185, 129, 0.65);
     }
-    .sv-next-card { background: rgba(56, 139, 253, 0.06); border-color: rgba(56, 139, 253, 0.35); }
-    .sv-tier-card.sv-drag-over { border-color: #2ecc71; box-shadow: 0 0 0 1px rgba(46, 204, 113, 0.4); }
-    .sv-tier-card.sv-dragging { opacity: 0.5; }
+    .sv-up-card.sv-up-warn { border-color: rgba(245, 158, 11, 0.7); background: linear-gradient(135deg, rgba(120, 53, 15, 0.3), rgba(15, 23, 42, 0.9)); }
+    .sv-up-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px; }
+    .sv-up-tag { font-size: 9.5px; font-weight: 900; color: #34d399; letter-spacing: 0.6px; }
+    .sv-readiness-pill { display: inline-flex; align-items: center; gap: 4px; font-size: 9.5px; font-weight: 800; padding: 1px 6px; border-radius: 999px; background: rgba(15, 23, 42, 0.8); }
+    .sv-up-main { display: flex; align-items: center; gap: 7px; margin-bottom: 7px; }
+    .sv-pos-pill { font-family: ui-monospace, monospace; font-size: 10px; font-weight: 900; padding: 2px 6px; border-radius: 5px; background: rgba(16, 185, 129, 0.22); color: #34d399; cursor: pointer; }
+    .sv-up-name { font-size: 13.5px; font-weight: 800; color: #f8fafc; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .sv-hit-badge { font-size: 9.5px; font-weight: 800; color: #38bdf8; background: rgba(56, 189, 248, 0.15); padding: 1px 6px; border-radius: 5px; }
+    .sv-up-actions { display: flex; gap: 4px; }
+    .sv-btn-hit { flex: 1; background: linear-gradient(135deg, #10b981, #059669) !important; border: none !important; color: #fff !important; font-weight: 800 !important; }
 
-    .sv-tier-header { display: flex; justify-content: space-between; align-items: center; padding: 4px 8px 2px; }
-    .sv-badge-up-now {
-        font-size: 9.5px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px;
-        color: #2ecc71; background: rgba(46, 204, 113, 0.18); padding: 1px 6px; border-radius: 4px;
-        animation: svGlowBadge 1.2s infinite;
-    }
-    @keyframes svGlowBadge { 0%,100%{box-shadow:0 0 4px rgba(46, 204, 113, 0.4)} 50%{box-shadow:0 0 10px rgba(46, 204, 113, 0.8)} }
-    .next-tag { font-size: 9px; font-weight: 800; color: #58a6ff; text-transform: uppercase; }
+    /* Compact Queue Rows */
+    .sv-queue-list { display: flex; flex-direction: column; gap: 3px; }
+    .sv-q-row { display: flex; align-items: center; gap: 6px; padding: 5px 8px; border-radius: 7px; background: rgba(30, 41, 59, 0.52); border: 1px solid rgba(148, 163, 184, 0.1); cursor: grab; }
+    .sv-q-row.sv-q-next { border-color: rgba(56, 189, 248, 0.35); background: rgba(14, 165, 233, 0.08); }
+    .sv-q-row:hover { border-color: rgba(148, 163, 184, 0.28); }
+    .sv-q-idx { font-family: ui-monospace, monospace; font-size: 9.5px; font-weight: 800; color: #94a3b8; min-width: 28px; cursor: pointer; }
+    .sv-q-idx-next { color: #38bdf8; }
+    .sv-q-info { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+    .sv-q-name { font-size: 11.5px; font-weight: 700; color: #e2e8f0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .sv-q-state { display: inline-flex; align-items: center; gap: 4px; font-size: 9.5px; font-weight: 700; flex-shrink: 0; }
+    .sv-dot-mini { width: 5px; height: 5px; border-radius: 50%; display: inline-block; }
+    .sv-hit-mini { font-size: 9.5px; color: #34d399; font-weight: 800; }
+    .sv-q-btns { display: flex; gap: 2px; }
+    .sv-btn-ico { background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(148, 163, 184, 0.2); color: #cbd5e1; border-radius: 4px; padding: 2px 5px; font-size: 9.5px; cursor: pointer; }
+    .sv-btn-ico:hover { background: rgba(56, 189, 248, 0.2); color: #38bdf8; }
 
-    .sv-tier-body { padding: 4px 8px 6px; }
-    .sv-player-row { display: flex; align-items: center; gap: 6px; }
-    .sv-drag-handle {
-        color: #6e7681; font-size: 13px; cursor: grab; padding: 0 2px; line-height: 1; opacity: 0.6; transition: opacity 0.15s;
-    }
-    .sv-drag-handle:hover { opacity: 1; color: #c9d1d9; }
-    .sv-pos-num {
-        display: inline-flex; align-items: center; justify-content: center;
-        width: 18px; height: 18px; border-radius: 50%; font-size: 9.5px;
-        font-weight: 800; color: #8b949e; background: rgba(255, 255, 255, 0.06);
-        flex-shrink: 0; cursor: pointer;
-    }
-    .sv-pos-up { background: rgba(46, 204, 113, 0.22); color: #2ecc71; }
-    .sv-pos-next { background: rgba(56, 139, 253, 0.15); color: #58a6ff; }
-    .sv-player-meta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
-    .sv-player-name-row { display: flex; align-items: center; gap: 5px; }
-    .sv-player-name { font-size: 13px; font-weight: 800; color: #f0f6fc; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .sv-hit-tag { font-size: 9px; font-weight: 800; color: #2ecc71; background: rgba(46, 204, 113, 0.15); padding: 1px 4px; border-radius: 3px; }
-    .sv-hit-tag-sm { font-size: 9px; font-weight: 800; color: #2ecc71; }
+    /* Radar & Hits */
+    .sv-radar-hdr { display: flex; align-items: center; justify-content: space-between; font-size: 10px; color: #cbd5e1; padding: 4px 6px; background: rgba(30, 41, 59, 0.6); border-radius: 6px; margin-bottom: 6px; }
+    .sv-sec-lbl { font-size: 9.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; color: #94a3b8; margin: 4px 0; }
+    .sv-radar-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 6px 8px; border-radius: 7px; background: rgba(30, 41, 59, 0.55); border: 1px solid rgba(148, 163, 184, 0.14); margin-bottom: 4px; }
+    .sv-radar-medout { border-color: rgba(248, 113, 113, 0.45); background: rgba(127, 29, 29, 0.22); }
+    .sv-radar-info { min-width: 0; flex: 1; }
+    .sv-radar-name { font-size: 11px; color: #f8fafc; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+    .sv-medout-tag { font-size: 8.5px; font-weight: 900; color: #fca5a5; background: rgba(239, 68, 68, 0.2); padding: 1px 4px; border-radius: 4px; }
+    .sv-radar-meta { font-size: 9.5px; color: #cbd5e1; margin-top: 2px; }
+    .sv-radar-acts { display: flex; gap: 3px; flex-shrink: 0; }
+    .sv-hits-list { display: flex; flex-direction: column; gap: 3px; }
+    .sv-hit-row { display: flex; align-items: center; gap: 8px; padding: 5px 8px; background: rgba(30, 41, 59, 0.5); border-radius: 6px; font-size: 10.5px; }
+    .sv-hit-num { font-family: ui-monospace, monospace; font-weight: 800; color: #38bdf8; min-width: 40px; }
+    .sv-hit-player { flex: 1; font-weight: 700; color: #f8fafc; }
+    .sv-hit-age { color: #94a3b8; font-size: 9.5px; }
 
-    .sv-readiness-row { display: flex; align-items: center; gap: 4px; font-size: 9.5px; font-weight: 700; }
-    .st-ready   { color: #2ecc71; }
-    .st-idle    { color: #e3b341; }
-    .st-offline { color: #8b949e; }
-    .st-hosp    { color: #f85149; }
-    .st-travel  { color: #58a6ff; }
-    .st-jail    { color: #f85149; }
-    .sv-readiness-txt { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    /* Shared Buttons & Footer */
+    .sv-btn { background: rgba(30, 41, 59, 0.9); border: 1px solid rgba(148, 163, 184, 0.22); color: #e2e8f0; padding: 4px 8px; border-radius: 6px; font-size: 10.5px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+    .sv-btn:hover { background: rgba(51, 65, 85, 0.95); }
+    .sv-btn-xs { padding: 2px 6px; font-size: 9.5px; }
+    .sv-btn-chat { background: linear-gradient(135deg, #0ea5e9, #0284c7); border: none; color: #fff; font-weight: 800; }
+    .sv-btn-primary { background: rgba(56, 189, 248, 0.16); border-color: rgba(56, 189, 248, 0.4); color: #38bdf8; }
+    .sv-btn-warn { background: rgba(245, 158, 11, 0.16); border-color: rgba(245, 158, 11, 0.4); color: #fbbf24; }
+    .sv-btn-del { color: #fca5a5; border-color: rgba(239, 68, 68, 0.3); }
+    .sv-btn-del:hover { background: rgba(239, 68, 68, 0.22); color: #fff; }
+    .sv-btn-add { background: rgba(16, 185, 129, 0.18); border-color: rgba(16, 185, 129, 0.4); color: #34d399; }
 
-    .sv-hit-now-badge {
-        font-size: 9px; font-weight: 800; padding: 2px 6px; border-radius: 4px;
-        background: rgba(46, 204, 113, 0.22); color: #2ecc71; border: 1px solid rgba(46, 204, 113, 0.5);
-        animation: svGlowText 1s infinite; white-space: nowrap;
-    }
+    .sv-footer { padding: 6px 10px 8px; border-top: 1px solid rgba(148, 163, 184, 0.12); background: rgba(15, 23, 42, 0.7); }
+    .sv-add-row { display: flex; gap: 5px; margin-bottom: 5px; }
+    .sv-input { flex: 1; min-width: 0; background: #0f172a; border: 1px solid rgba(148, 163, 184, 0.24); color: #f8fafc; padding: 5px 8px; border-radius: 6px; font-size: 11px; outline: none; }
+    .sv-input:focus { border-color: #38bdf8; }
+    .sv-quick-bar { display: flex; gap: 4px; align-items: center; }
+    .sv-quick-bar .sv-btn-primary { flex: 1; }
+    .sv-suggest { position: absolute; bottom: calc(100% + 4px); left: 0; right: 0; background: #0f172a; border: 1px solid rgba(56, 189, 248, 0.4); border-radius: 8px; max-height: 200px; overflow-y: auto; z-index: 100000001; box-shadow: 0 -10px 28px rgba(0,0,0,0.85); }
+    .sv-suggest-item { display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; cursor: pointer; border-bottom: 1px solid rgba(148, 163, 184, 0.1); }
+    .sv-suggest-item:hover, .sv-suggest-sel { background: rgba(56, 189, 248, 0.15); }
+    .sv-suggest-empty { padding: 10px; color: #94a3b8; font-size: 10.5px; text-align: center; }
+    .sv-mark { background: rgba(56, 189, 248, 0.28); color: #7dd3fc; border-radius: 2px; }
 
-    .sv-up-primary-action { margin-top: 5px; }
-    .sv-btn-force-hit {
-        width: 100%;
-        background: linear-gradient(135deg, rgba(35, 134, 54, 0.8), rgba(46, 204, 113, 0.85));
-        border: 1px solid #2ecc71;
-        color: #fff;
-        font-weight: 800;
-        font-size: 10.5px;
-        padding: 4px 8px;
-        border-radius: 4px;
-        cursor: pointer;
-        transition: all 0.15s;
-    }
-    .sv-btn-force-hit:hover {
-        background: #2ea043;
-        box-shadow: 0 0 10px rgba(46, 204, 113, 0.5);
-    }
+    .sv-settings-drawer { flex-direction: column; gap: 8px; padding: 9px 10px; border-top: 1px solid rgba(245, 158, 11, 0.25); background: rgba(15, 23, 42, 0.96); }
+    .sv-set-row label { display: block; font-size: 9.5px; font-weight: 700; color: #cbd5e1; margin-bottom: 3px; }
+    .sv-set-flex { display: flex; gap: 5px; }
+    .sv-set-inline { display: flex; align-items: center; justify-content: space-between; }
 
-    .sv-tier-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 4px; gap: 4px; }
-    .sv-actions-primary { display: flex; gap: 3px; }
-    .sv-actions-secondary { display: flex; gap: 3px; }
+    .st-ready { color: #34d399; } .st-idle { color: #fbbf24; } .st-offline { color: #94a3b8; } .st-hosp { color: #f87171; } .st-travel { color: #38bdf8; } .st-jail { color: #f87171; }
+    .sv-empty-state, .sv-empty-mini { text-align: center; color: #94a3b8; padding: 14px 8px; font-size: 11px; }
+    .sv-empty-sub { font-size: 10px; color: #64748b; margin-top: 2px; }
+    .sv-drag-over { outline: 1.5px solid #38bdf8; }
+    .sv-dragging { opacity: 0.45; }
 
-    /* Queue Rows */
-    .sv-queue-header { font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; color: #8b949e; padding: 6px 10px 2px; }
-    .sv-queue-row {
-        display: flex; align-items: center; gap: 5px; padding: 4px 10px;
-        border-bottom: 1px solid rgba(48, 54, 61, 0.35); cursor: grab;
-        transition: background 0.1s;
-    }
-    .sv-queue-row:hover { background: rgba(255, 255, 255, 0.025); }
-    .sv-queue-row.sv-drag-over { background: rgba(46, 204, 113, 0.08); border-color: rgba(46, 204, 113, 0.4); }
-    .sv-queue-row.sv-dragging { opacity: 0.4; }
-    .sv-q-pos {
-        display: inline-flex; align-items: center; justify-content: center;
-        width: 16px; height: 16px; border-radius: 50%; background: rgba(255, 255, 255, 0.05);
-        font-size: 9px; font-weight: 800; color: #8b949e; flex-shrink: 0; cursor: pointer;
-    }
-    .sv-q-pos:hover { background: rgba(46, 204, 113, 0.2); color: #2ecc71; }
-    .sv-q-meta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
-    .sv-q-name-row { display: flex; align-items: center; gap: 4px; }
-    .sv-q-name { font-size: 11.5px; font-weight: 700; color: #c9d1d9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .sv-q-readiness { display: flex; align-items: center; gap: 3px; font-size: 8.5px; font-weight: 700; }
-    .sv-q-readiness-txt { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .sv-q-actions { display: flex; gap: 2px; flex-shrink: 0; margin-left: auto; }
-
-    /* Add Member Row */
-    .sv-add-row { display: flex; gap: 4px; padding: 6px 10px 4px; align-items: center; }
-    .sv-add-input {
-        flex: 1; background: #161b22; border: 1px solid rgba(48, 54, 61, 0.9);
-        color: #f0f6fc; padding: 4px 8px; border-radius: 4px; font-size: 11px;
-        outline: none; min-width: 0;
-    }
-    .sv-add-input:focus { border-color: rgba(56, 139, 253, 0.6); }
-    .sv-add-input::placeholder { color: #6e7681; }
-    .sv-add-btn {
-        background: rgba(35, 134, 54, 0.2); border: 1px solid rgba(46, 204, 113, 0.4);
-        color: #2ecc71; padding: 4px 9px; border-radius: 4px; font-size: 11px;
-        font-weight: 800; cursor: pointer; white-space: nowrap;
-    }
-    .sv-add-btn:hover { background: rgba(35, 134, 54, 0.35); color: #3ee083; }
-
-    .sv-suggest {
-        position: absolute; bottom: calc(100% + 4px); left: 10px; right: 10px;
-        background: #0d1117; border: 1px solid rgba(48, 54, 61, 0.9);
-        border-radius: 6px; max-height: 220px; overflow-y: auto; z-index: 100000000;
-        box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.85);
-    }
-    .sv-suggest-hdr { padding: 4px 8px; font-size: 8.5px; font-weight: 800; text-transform: uppercase; color: #8b949e; letter-spacing: 0.5px; border-bottom: 1px solid rgba(48, 54, 61, 0.4); }
-    .sv-suggest-item {
-        display: flex; align-items: center; justify-content: space-between;
-        padding: 5px 8px; cursor: pointer; border-bottom: 1px solid rgba(48, 54, 61, 0.2);
-    }
-    .sv-suggest-item:hover, .sv-suggest-sel { background: rgba(56, 139, 253, 0.15); }
-    .sv-suggest-info { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
-    .sv-suggest-name { font-size: 11.5px; font-weight: 700; color: #f0f6fc; }
-    .sv-suggest-status { display: flex; align-items: center; gap: 3px; font-size: 9px; font-weight: 700; }
-    .sv-suggest-add-badge { font-size: 9px; font-weight: 700; color: #2ecc71; padding: 1px 4px; border: 1px solid rgba(46, 204, 113, 0.3); border-radius: 3px; margin-left: 6px; }
-    .sv-mark { background: rgba(46, 204, 113, 0.25); color: #2ecc71; border-radius: 2px; padding: 0 1px; }
-
-    .sv-quick-row { display: flex; gap: 4px; padding: 4px 10px 8px; align-items: center; }
-    .sv-apikey-row {
-        display: flex; align-items: center; gap: 5px; padding: 6px 10px 8px;
-        background: rgba(227, 179, 65, 0.06); border-top: 1px solid rgba(227, 179, 65, 0.2);
-        flex-wrap: wrap;
-    }
-
-    /* ══════════════════════════════════════════════════════════════
-       MOBILE RESPONSIVENESS (< 600px)
-       ══════════════════════════════════════════════════════════════ */
-    @media (max-width: 600px) {
-        #sv-chain-hud { width: min(310px, calc(100vw - 12px)); max-height: 80vh; }
-        #sv-chain-hud.sv-minimized { max-width: 270px; }
-        .sv-min-up-pill { max-width: 80px; font-size: 9.5px; }
-        .sv-min-badge { font-size: 9.5px; padding: 1px 5px; }
-        .sv-stat-num { font-size: 11px; }
-        .sv-timer-num { font-size: 16px; }
-        .sv-stat-lbl { font-size: 7px; }
-        .sv-toggle-pill { font-size: 8.5px; padding: 1px 4px; }
-    }
+    #sv-reopen-tab { position: fixed; z-index: 99999998; bottom: 86px; right: 0; background: #0f172a; color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.45); border-right: none; border-radius: 8px 0 0 8px; padding: 7px 11px; font-size: 11px; font-weight: 800; cursor: pointer; box-shadow: -4px 0 14px rgba(0,0,0,0.55); }
+    @keyframes svPulse { 0%,100% { opacity: 1; } 50% { opacity: 0.55; } }
+    @keyframes svCrit { 0%,100% { box-shadow: 0 0 12px rgba(239, 68, 68, 0.25); } 50% { box-shadow: 0 0 22px rgba(239, 68, 68, 0.6); } }
     `;
 
-    if (typeof GM_addStyle === 'function') {
-        GM_addStyle(css);
-    } else {
-        const s = document.createElement('style');
-        s.textContent = css;
-        document.head.appendChild(s);
-    }
+    if (typeof GM_addStyle === 'function') GM_addStyle(css);
+    else { const s = document.createElement('style'); s.textContent = css; document.head.appendChild(s); }
 
     // ══════════════════════════════════════════════════════════════
-    //  INITIALIZATION & BOOT
+    //  BOOT (BUG FIX #8: MOUNT ACROSS TORN PAGES)
     // ══════════════════════════════════════════════════════════════
-    // Bug fix #1: Tier 1 & 2 observers run on ALL pages (needed for cross-tab attack detection
-    // on loader.php / attack pages). The HUD, timer, and polling ONLY start on factions.php.
+    load();
     initTier1AttackObserver();
     initTier1HeaderDOMObserver();
     initTier2WebSocketSniffer();
 
-    const _isFactionPage = window.location.pathname.includes('factions.php') ||
-                           window.location.href.includes('factions.php');
+    const _isFactionPage = window.location.href.includes('factions.php');
+    if (!runOnAllPages && !_isFactionPage) return;
 
-    if (!_isFactionPage) {
-        // Not on faction page — observers are active for cross-tab; nothing else needed.
-        return;
-    }
-
-    load();
     const hud = buildHUD();
     wireEvents(hud);
-    setUpdated(false);
+    setDirty(false);
     startLocalTimer();
     scheduleAdaptivePoll();
     fetchFactionMembers();
+    syncBackendTelemetry(true);
+    fetchServerLineupSnapshot();
 
-    // Fetch initial queue from FactionOS server if local queue is empty
-    if (!lineup.length) {
-        try {
-            GM_xmlhttpRequest({
-                method: 'GET',
-                url: `${SERVER_BASE}/api/chain/lineup`,
-                timeout: 4000,
-                onload(res) {
-                    try {
-                        const d = JSON.parse(res.responseText);
-                        if (d?.ok && d?.data?.lineup?.length && !lineup.length) {
-                            lineup = d.data.lineup;
-                            targetHitTime = d.data.targetHitTime || '2:30';
-                            _syncHitTimeUI();
-                            renderLineup();
-                        }
-                    } catch(e) {}
-                },
-                onerror() {}
-            });
-        } catch(e) {}
-    }
-
-    // Background refresh for members
     pollMembersTimer = setInterval(fetchFactionMembers, STATUS_POLL_MS);
-
+    enemyPollTimer = setInterval(pollDirectEnemyFaction, 3500);
 })();
