@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         FactionOS Chain Command
 // @namespace    https://faction-os.duckdns.org/
-// @version      4.3.0
-// @description  FactionOS Tactical Chain HUD — persistent Auto-Call med-out broadcaster (works minimized & without Send ON), sub-second uncached hit detection, wall-clock chain timer, Torn Chat 3.0/2.0 auto-posting, and verified Enemy Med-Out / Revive alerts.
+// @version      4.4.0
+// @description  FactionOS Tactical Chain HUD — sticky Auto-Call med-out broadcaster (single-shot send, minimized tab/chat support, zero duplicate spam), sub-second hit detection, wall-clock chain timer, Torn Chat 3.0/2.0 auto-posting, and verified Enemy Med-Out / Revive alerts.
 // @author       FactionOS
 // @match        https://www.torn.com/*
 // @grant        GM_xmlhttpRequest
@@ -32,33 +32,32 @@
     const LS_KEY_POS       = 'sv_chain_mgr_pos_v4';
     const LS_KEY_APIKEY    = 'sv_chain_apikey';
     const LS_KEY_MEMBERS   = 'sv_chain_members_cache';
-    const LS_KEY_AUTOCALL  = 'sv_autocall_medout';
-    const LS_KEY_AUTOCALL_INIT = 'sv_autocall_v43_init';
+    const LS_KEY_AUTOCALL  = 'sv_autocall_v44';
     const STATUS_POLL_MS   = 45000;
     const CHAIN_BONUSES    = [10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 25000, 50000, 100000];
 
     function getStoredAutoCallMedOut() {
         try {
-            if (!GM_getValue(LS_KEY_AUTOCALL_INIT, false)) {
-                GM_setValue(LS_KEY_AUTOCALL_INIT, true);
-                GM_setValue(LS_KEY_AUTOCALL, true);
-                try { localStorage.setItem(LS_KEY_AUTOCALL, 'true'); } catch (e) {}
-                return true;
-            }
-            const gmVal = GM_getValue(LS_KEY_AUTOCALL, undefined);
-            if (typeof gmVal === 'boolean') return gmVal;
             const lsVal = localStorage.getItem(LS_KEY_AUTOCALL);
             if (lsVal === 'true') return true;
             if (lsVal === 'false') return false;
+            const gmVal = GM_getValue(LS_KEY_AUTOCALL, undefined);
+            if (gmVal === true || gmVal === false) {
+                try { localStorage.setItem(LS_KEY_AUTOCALL, gmVal ? 'true' : 'false'); } catch (e) {}
+                return gmVal;
+            }
+            // Default ON unless explicitly toggled off by the user
+            try { localStorage.setItem(LS_KEY_AUTOCALL, 'true'); } catch (e) {}
+            try { GM_setValue(LS_KEY_AUTOCALL, true); } catch (e) {}
+            return true;
         } catch (e) {}
         return true;
     }
 
     function setStoredAutoCallMedOut(val) {
         const b = Boolean(val);
-        try { GM_setValue(LS_KEY_AUTOCALL_INIT, true); } catch (e) {}
-        try { GM_setValue(LS_KEY_AUTOCALL, b); } catch (e) {}
         try { localStorage.setItem(LS_KEY_AUTOCALL, b ? 'true' : 'false'); } catch (e) {}
+        try { GM_setValue(LS_KEY_AUTOCALL, b); } catch (e) {}
         return b;
     }
 
@@ -336,8 +335,10 @@
     if (typeof GM_addValueChangeListener === 'function') {
         try {
             GM_addValueChangeListener(LS_KEY_AUTOCALL, (_name, _oldVal, newVal, remote) => {
+                if (typeof newVal !== 'boolean') return;
                 if (!remote && newVal === autoCallMedOut) return;
-                autoCallMedOut = Boolean(newVal);
+                autoCallMedOut = newVal;
+                try { localStorage.setItem(LS_KEY_AUTOCALL, newVal ? 'true' : 'false'); } catch (e) {}
                 syncTogglePillsUI();
             });
         } catch (e) {}
@@ -360,7 +361,10 @@
             if (payload.loopMode !== undefined) loopMode = Boolean(payload.loopMode);
             if (payload.autoMode !== undefined) autoMode = Boolean(payload.autoMode);
             if (payload.autoSendOnPost !== undefined) autoSendOnPost = Boolean(payload.autoSendOnPost);
-            if (payload.autoCallMedOut !== undefined) autoCallMedOut = Boolean(payload.autoCallMedOut);
+            if (typeof payload.autoCallMedOut === 'boolean') {
+                autoCallMedOut = payload.autoCallMedOut;
+                setStoredAutoCallMedOut(autoCallMedOut);
+            }
             if (payload.soundEnabled !== undefined) soundEnabled = Boolean(payload.soundEnabled);
             syncTogglePillsUI();
         } else if (payload.type === 'LINEUP_UPDATED' && payload.lineup) {
@@ -369,12 +373,12 @@
             if (payload.loopMode !== undefined) loopMode = payload.loopMode;
             if (payload.autoMode !== undefined) autoMode = payload.autoMode;
             if (payload.autoSendOnPost !== undefined) autoSendOnPost = payload.autoSendOnPost;
-            if (payload.autoCallMedOut !== undefined) autoCallMedOut = payload.autoCallMedOut;
             if (payload.soundEnabled !== undefined) soundEnabled = payload.soundEnabled;
             if (payload.targetHitTime !== undefined) {
                 targetHitTime = payload.targetHitTime;
                 _syncHitTimeUI();
             }
+            autoCallMedOut = getStoredAutoCallMedOut();
             syncTogglePillsUI();
             renderLineup();
             renderChainBar();
@@ -760,7 +764,8 @@
     // ══════════════════════════════════════════════════════════════
     //  INSTANT ENEMY MED-OUT & REVIVE SNIPER
     // ══════════════════════════════════════════════════════════════
-    const LS_KEY_AUTOCALLED_MAP = 'sv_autocalled_medids_v43';
+    const LS_KEY_AUTOCALLED_MAP = 'sv_autocalled_medids_v44';
+    const LS_KEY_LAST_SENT_CHAT = 'sv_last_sent_chat_v44';
     let pendingMedOutAutoCalls = []; // [{ ev, queuedAt }]
 
     function getAutoCallEventKey(ev) {
@@ -770,61 +775,93 @@
     }
 
     function readAutoCalledMap() {
-        let map = {};
-        try {
-            const raw = GM_getValue(LS_KEY_AUTOCALLED_MAP, '') || localStorage.getItem(LS_KEY_AUTOCALLED_MAP) || '{}';
-            const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
-            if (parsed && typeof parsed === 'object') map = parsed;
-        } catch (e) {}
-        const cutoff = Date.now() - 10 * 60 * 1000;
-        const clean = {};
-        for (const [k, ts] of Object.entries(map)) {
-            if (Number(ts) > cutoff) clean[k] = Number(ts);
-        }
-        return clean;
+        const merged = {};
+        const now = Date.now();
+        const cutoff = now - 10 * 60 * 1000;
+        const mergeJson = (raw) => {
+            if (!raw) return;
+            try {
+                const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                if (parsed && typeof parsed === 'object') {
+                    for (const [k, ts] of Object.entries(parsed)) {
+                        const n = Number(ts);
+                        if (n > cutoff && (!merged[k] || n > merged[k])) merged[k] = n;
+                    }
+                }
+            } catch (e) {}
+        };
+        try { mergeJson(localStorage.getItem(LS_KEY_AUTOCALLED_MAP)); } catch (e) {}
+        try { mergeJson(GM_getValue(LS_KEY_AUTOCALLED_MAP, '')); } catch (e) {}
+        return merged;
     }
 
     function writeAutoCalledMap(map) {
-        try { GM_setValue(LS_KEY_AUTOCALLED_MAP, JSON.stringify(map)); } catch (e) {}
-        try { localStorage.setItem(LS_KEY_AUTOCALLED_MAP, JSON.stringify(map)); } catch (e) {}
+        const str = JSON.stringify(map);
+        try { localStorage.setItem(LS_KEY_AUTOCALLED_MAP, str); } catch (e) {}
+        try { GM_setValue(LS_KEY_AUTOCALLED_MAP, str); } catch (e) {}
     }
 
     function hasMedOutBeenAutoCalled(ev) {
+        if (!ev || !ev.playerId) return false;
+        const now = Date.now();
         const key = getAutoCallEventKey(ev);
-        if (!key) return false;
+        const pidStr = String(ev.playerId);
+        const pidKey = `pid_${pidStr}`;
         const map = readAutoCalledMap();
-        if (map[key]) return true;
-        const pidStr = String(ev.playerId || '');
+        if (key && map[key]) return true;
+        if (map[pidKey] && (now - map[pidKey]) <= 45000) return true;
         const lastCall = lastAutoCalledPlayer.get(pidStr) || 0;
-        return (Date.now() - lastCall) <= 15000;
+        return (now - lastCall) <= 45000;
     }
 
     function claimMedOutAutoCall(ev) {
+        if (!ev || !ev.playerId) return false;
         const key = getAutoCallEventKey(ev);
-        const pidStr = String(ev?.playerId || '');
+        const pidStr = String(ev.playerId);
+        const pidKey = `pid_${pidStr}`;
+        const now = Date.now();
         const map = readAutoCalledMap();
         if (key && map[key]) return false;
-        const now = Date.now();
-        if (pidStr && (now - (lastAutoCalledPlayer.get(pidStr) || 0)) <= 15000) return false;
-        if (key) {
-            map[key] = now;
-            writeAutoCalledMap(map);
-        }
-        if (pidStr) lastAutoCalledPlayer.set(pidStr, now);
+        if (map[pidKey] && (now - map[pidKey]) <= 45000) return false;
+        if ((now - (lastAutoCalledPlayer.get(pidStr) || 0)) <= 45000) return false;
+
+        // Synchronous cross-tab lock via localStorage to prevent same-millisecond multi-tab triple-posts
+        const lockKey = `sv_autocall_lock_${pidStr}`;
+        try {
+            const existingRaw = localStorage.getItem(lockKey);
+            if (existingRaw) {
+                const existing = JSON.parse(existingRaw);
+                if (existing && (now - Number(existing.ts || 0)) < 15000 && existing.tabId !== _TAB_ID) {
+                    return false;
+                }
+            }
+            localStorage.setItem(lockKey, JSON.stringify({ tabId: _TAB_ID, ts: now }));
+            const verify = JSON.parse(localStorage.getItem(lockKey) || '{}');
+            if (verify.tabId !== _TAB_ID) return false;
+        } catch (e) {}
+
+        if (key) map[key] = now;
+        map[pidKey] = now;
+        writeAutoCalledMap(map);
+        lastAutoCalledPlayer.set(pidStr, now);
         return true;
     }
 
     function releaseMedOutAutoCallClaim(ev) {
+        if (!ev || !ev.playerId) return;
         const key = getAutoCallEventKey(ev);
-        const pidStr = String(ev?.playerId || '');
-        if (key) {
-            const map = readAutoCalledMap();
-            if (map[key]) {
-                delete map[key];
-                writeAutoCalledMap(map);
-            }
-        }
-        if (pidStr) lastAutoCalledPlayer.delete(pidStr);
+        const pidStr = String(ev.playerId);
+        const pidKey = `pid_${pidStr}`;
+        const map = readAutoCalledMap();
+        if (key) delete map[key];
+        delete map[pidKey];
+        writeAutoCalledMap(map);
+        lastAutoCalledPlayer.delete(pidStr);
+        try {
+            const lockKey = `sv_autocall_lock_${pidStr}`;
+            const cur = JSON.parse(localStorage.getItem(lockKey) || '{}');
+            if (cur.tabId === _TAB_ID) localStorage.removeItem(lockKey);
+        } catch (e) {}
     }
 
     function enqueuePendingAutoCall(ev) {
@@ -1517,13 +1554,13 @@
     // ══════════════════════════════════════════════════════════════
     function save(hitChain = 0) {
         localMutationSeq++;
+        autoCallMedOut = getStoredAutoCallMedOut();
         GM_setValue('sv_state', JSON.stringify({
             lineup, targetHitTime, cycleNum, loopMode, autoMode,
-            autoSendOnPost, soundEnabled, autoCallMedOut, customEnemyFacId, runOnAllPages
+            autoSendOnPost, soundEnabled, customEnemyFacId, runOnAllPages
         }));
         GM_setValue('sv_autosend', autoSendOnPost);
         GM_setValue('sv_sound', soundEnabled);
-        setStoredAutoCallMedOut(autoCallMedOut);
         GM_setValue('sv_enemy_fac_id', customEnemyFacId);
         GM_setValue('sv_all_pages', runOnAllPages);
 
@@ -1538,7 +1575,6 @@
                     loopMode,
                     autoMode,
                     autoSendOnPost,
-                    autoCallMedOut,
                     soundEnabled,
                     targetHitTime,
                     _tabId: _TAB_ID
@@ -2061,16 +2097,12 @@
         if (!el) return;
         const w = win || el.ownerDocument?.defaultView || (typeof unsafeWindow !== 'undefined' ? unsafeWindow : window);
         try {
-            if (typeof w.PointerEvent === 'function') {
-                el.dispatchEvent(new w.PointerEvent('pointerdown', { bubbles: true, cancelable: true, view: w, pointerId: 1 }));
+            // Avoid firing both dispatchEvent('click') AND el.click() which triggers double-clicks in React 18
+            if (typeof el.click === 'function') {
+                el.click();
+            } else {
+                el.dispatchEvent(new w.MouseEvent('click', { bubbles: true, cancelable: true, view: w, buttons: 1 }));
             }
-            el.dispatchEvent(new w.MouseEvent('mousedown', { bubbles: true, cancelable: true, view: w, buttons: 1 }));
-            if (typeof w.PointerEvent === 'function') {
-                el.dispatchEvent(new w.PointerEvent('pointerup', { bubbles: true, cancelable: true, view: w, pointerId: 1 }));
-            }
-            el.dispatchEvent(new w.MouseEvent('mouseup', { bubbles: true, cancelable: true, view: w, buttons: 1 }));
-            el.dispatchEvent(new w.MouseEvent('click', { bubbles: true, cancelable: true, view: w, buttons: 1 }));
-            if (typeof el.click === 'function') el.click();
         } catch (e) {
             try { el.click(); } catch (_) {}
         }
@@ -2078,31 +2110,29 @@
 
     function dispatchPageEnterKey(target, win) {
         const w = win || target.ownerDocument?.defaultView || (typeof unsafeWindow !== 'undefined' ? unsafeWindow : window);
-        for (const type of ['keydown', 'keypress', 'keyup']) {
-            try {
-                const ev = new w.KeyboardEvent(type, {
-                    key: 'Enter',
-                    code: 'Enter',
-                    keyCode: 13,
-                    which: 13,
-                    charCode: 13,
-                    shiftKey: false,
-                    ctrlKey: false,
-                    altKey: false,
-                    metaKey: false,
-                    bubbles: true,
-                    cancelable: true,
-                    composed: true
-                });
-                // Lock keyCode/which/charCode across Tampermonkey unsafeWindow wrappers for React 18 listeners
-                for (const prop of ['keyCode', 'which', 'charCode']) {
-                    try {
-                        if (ev[prop] !== 13) Object.defineProperty(ev, prop, { get: () => 13 });
-                    } catch (_) {}
-                }
-                target.dispatchEvent(ev);
-            } catch (_) {}
-        }
+        try {
+            const ev = new w.KeyboardEvent('keydown', {
+                key: 'Enter',
+                code: 'Enter',
+                keyCode: 13,
+                which: 13,
+                charCode: 13,
+                shiftKey: false,
+                ctrlKey: false,
+                altKey: false,
+                metaKey: false,
+                bubbles: true,
+                cancelable: true,
+                composed: true
+            });
+            // Lock keyCode/which/charCode across Tampermonkey unsafeWindow wrappers for React 18 listeners
+            for (const prop of ['keyCode', 'which', 'charCode']) {
+                try {
+                    if (ev[prop] !== 13) Object.defineProperty(ev, prop, { get: () => 13 });
+                } catch (_) {}
+            }
+            target.dispatchEvent(ev);
+        } catch (_) {}
     }
 
     function getChatInputRemaining(target, isCE) {
@@ -2147,18 +2177,21 @@
         return null;
     }
 
-    function triggerChatSubmit(target, box, win, isCE) {
-        const btn = findFooterSendButton(target, box);
-        if (btn) triggerMouseClick(btn, win);
-        if (getChatInputRemaining(target, isCE).length > 0) {
-            dispatchPageEnterKey(target, win);
-        }
-        if (getChatInputRemaining(target, isCE).length > 0 && target.form) {
-            try {
-                if (typeof target.form.requestSubmit === 'function') target.form.requestSubmit();
-                else target.form.dispatchEvent(new win.Event('submit', { bubbles: true, cancelable: true }));
-            } catch (_) {}
-        }
+    function isDuplicateRecentChatSend(text, isMedCallout) {
+        if (!text) return false;
+        const now = Date.now();
+        const dedupWindowMs = isMedCallout ? 15000 : 3500;
+        try {
+            const prevRaw = localStorage.getItem(LS_KEY_LAST_SENT_CHAT);
+            if (prevRaw) {
+                const prev = JSON.parse(prevRaw);
+                if (prev && prev.text === text && (now - Number(prev.ts || 0)) < dedupWindowMs) {
+                    return true;
+                }
+            }
+            localStorage.setItem(LS_KEY_LAST_SENT_CHAT, JSON.stringify({ text, ts: now }));
+        } catch (e) {}
+        return false;
     }
 
     function openMinimizedFactionChatTab(chatRoot) {
@@ -2195,12 +2228,18 @@
 
     function injectAndSendChatText(target, box, fullText, compactText, customText, shouldSend) {
         const win = target.ownerDocument?.defaultView || (typeof unsafeWindow !== 'undefined' ? unsafeWindow : window);
+        const isCE = Boolean(target.isContentEditable || target.getAttribute('contenteditable') !== null);
+        const textToInject = isCE ? (customText || compactText || fullText.replace(/\n+/g, ' | ')) : fullText;
+
+        if (shouldSend && isDuplicateRecentChatSend(textToInject, Boolean(customText))) {
+            return;
+        }
+
         navigator.clipboard?.writeText(fullText).catch(() => {});
         try { target.focus(); } catch (_) {}
 
-        const isCE = Boolean(target.isContentEditable || target.getAttribute('contenteditable') !== null);
         if (isCE) {
-            const chatStr = customText || compactText || fullText.replace(/\n+/g, ' | ');
+            const chatStr = textToInject;
             try {
                 const sel = win.getSelection();
                 const range = document.createRange();
@@ -2246,20 +2285,22 @@
         if (!customText) setDirty(false);
 
         if (shouldSend) {
-            // Execute synchronously first (critical when browser tab is minimized & timers are throttled)
-            Promise.resolve().then(() => {
-                triggerChatSubmit(target, box, win, isCE);
-            });
+            // Single clean submit: wait 35ms for React input state to commit, fire Enter ONCE; only click Send button at +80ms if text STILL sits unsent
             setTimeout(() => {
-                if (getChatInputRemaining(target, isCE).length > 0) {
-                    triggerChatSubmit(target, box, win, isCE);
-                }
-            }, 45);
-            setTimeout(() => {
-                if (getChatInputRemaining(target, isCE).length > 0) {
-                    triggerChatSubmit(target, box, win, isCE);
-                }
-            }, 125);
+                if (getChatInputRemaining(target, isCE).length === 0) return;
+                dispatchPageEnterKey(target, win);
+                setTimeout(() => {
+                    if (getChatInputRemaining(target, isCE).length === 0) return;
+                    const btn = findFooterSendButton(target, box);
+                    if (btn) triggerMouseClick(btn, win);
+                    else if (target.form) {
+                        try {
+                            if (typeof target.form.requestSubmit === 'function') target.form.requestSubmit();
+                            else target.form.dispatchEvent(new win.Event('submit', { bubbles: true, cancelable: true }));
+                        } catch (_) {}
+                    }
+                }, 80);
+            }, 35);
             flashStatus(customText ? '🚨 Sent med-out callout to Faction Chat!' : '✓ Lineup sent to Faction Chat!', false);
         } else {
             flashStatus('✓ Inserted in Faction Chat — press Enter to send!', false);
@@ -2872,10 +2913,10 @@
 
             <!-- Mode Pills -->
             <div class="sv-pill-bar">
-                <button class="sv-pill ${loopMode ? 'sv-pill-on' : ''}" id="sv-pill-loop" title="Rotate hitter back to bottom">Loop <span class="sv-pill-st">${loopMode ? 'ON' : 'OFF'}</span></button>
-                <button class="sv-pill ${autoMode ? 'sv-pill-on' : ''}" id="sv-pill-auto" title="Auto-rotate when confirmed hit arrives">Auto <span class="sv-pill-st">${autoMode ? 'ON' : 'OFF'}</span></button>
-                <button class="sv-pill ${autoSendOnPost ? 'sv-pill-on' : ''}" id="sv-pill-autosend" title="Press Enter immediately after filling Faction Chat">Send <span class="sv-pill-st">${autoSendOnPost ? 'ON' : 'OFF'}</span></button>
-                <button class="sv-pill ${autoCallMedOut ? 'sv-pill-on' : ''}" id="sv-pill-autocall" title="Auto-post enemy med-outs to Faction Chat">Auto-Call 💊 <span class="sv-pill-st">${autoCallMedOut ? 'ON' : 'OFF'}</span></button>
+                <button tabindex="-1" class="sv-pill ${loopMode ? 'sv-pill-on' : ''}" id="sv-pill-loop" title="Rotate hitter back to bottom">Loop <span class="sv-pill-st">${loopMode ? 'ON' : 'OFF'}</span></button>
+                <button tabindex="-1" class="sv-pill ${autoMode ? 'sv-pill-on' : ''}" id="sv-pill-auto" title="Auto-rotate when confirmed hit arrives">Auto <span class="sv-pill-st">${autoMode ? 'ON' : 'OFF'}</span></button>
+                <button tabindex="-1" class="sv-pill ${autoSendOnPost ? 'sv-pill-on' : ''}" id="sv-pill-autosend" title="Press Enter immediately after filling Faction Chat">Send <span class="sv-pill-st">${autoSendOnPost ? 'ON' : 'OFF'}</span></button>
+                <button tabindex="-1" class="sv-pill ${autoCallMedOut ? 'sv-pill-on' : ''}" id="sv-pill-autocall" title="Auto-post enemy med-outs to Faction Chat">Auto-Call 💊 <span class="sv-pill-st">${autoCallMedOut ? 'ON' : 'OFF'}</span></button>
             </div>
 
             <!-- Navigation Tabs -->
@@ -3013,10 +3054,12 @@
         document.getElementById('sv-post-btn').addEventListener('click', () => postToChat());
         document.getElementById('sv-copy-btn').addEventListener('click', e => copyToClipboard(e.shiftKey ? 'compact' : 'full'));
 
-        document.getElementById('sv-pill-loop').addEventListener('click', () => { loopMode = !loopMode; save(); broadcastSettingsUpdate(); syncTogglePillsUI(); });
-        document.getElementById('sv-pill-auto').addEventListener('click', () => { autoMode = !autoMode; save(); broadcastSettingsUpdate(); syncTogglePillsUI(); renderLineup(); });
-        document.getElementById('sv-pill-autosend').addEventListener('click', () => { autoSendOnPost = !autoSendOnPost; save(); broadcastSettingsUpdate(); syncTogglePillsUI(); });
-        document.getElementById('sv-pill-autocall').addEventListener('click', () => {
+        document.getElementById('sv-pill-loop').addEventListener('click', e => { e.currentTarget?.blur?.(); loopMode = !loopMode; save(); broadcastSettingsUpdate(); syncTogglePillsUI(); });
+        document.getElementById('sv-pill-auto').addEventListener('click', e => { e.currentTarget?.blur?.(); autoMode = !autoMode; save(); broadcastSettingsUpdate(); syncTogglePillsUI(); renderLineup(); });
+        document.getElementById('sv-pill-autosend').addEventListener('click', e => { e.currentTarget?.blur?.(); autoSendOnPost = !autoSendOnPost; save(); broadcastSettingsUpdate(); syncTogglePillsUI(); });
+        document.getElementById('sv-pill-autocall').addEventListener('click', e => {
+            e.currentTarget?.blur?.();
+            if (e.isTrusted === false) return;
             autoCallMedOut = !autoCallMedOut;
             setStoredAutoCallMedOut(autoCallMedOut);
             save();
