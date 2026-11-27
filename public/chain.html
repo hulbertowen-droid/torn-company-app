@@ -716,15 +716,15 @@
 
                     <div class="panel-card" style="padding:18px 20px;border-color:rgba(16,185,129,0.35);background:linear-gradient(180deg, rgba(16,185,129,0.05) 0%, var(--bg-surface) 100%);">
                         <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;flex-wrap:wrap;">
-                            <h3 class="panel-title" style="color:var(--accent-emerald);">⚡ FactionOS Chain Command v4.0 Script</h3>
+                            <h3 class="panel-title" style="color:var(--accent-emerald);">⚡ FactionOS Chain Command v4.1 Script</h3>
                             <span style="font-size:0.72em;font-weight:800;color:var(--accent-emerald);background:rgba(16,185,129,0.14);padding:2px 8px;border-radius:999px;">TAMPERMONKEY / PDA</span>
                         </div>
                         <p style="font-size:0.85em;color:var(--text-secondary);margin:0 0 14px;line-height:1.5;">
-                            Floating glassmorphic Torn HUD with live chain timer, bidirectional queue sync, <strong>instant enemy med-out &amp; revive alerts</strong> with 1-click Attack &amp; Faction Chat callout, and works across all Torn pages.
+                            Floating glassmorphic Torn HUD with wall-clock chain timer, bidirectional queue sync, <strong>verified enemy med-out &amp; revive alerts</strong> with 1-click Attack &amp; Faction Chat callout, and works across all Torn pages.
                         </p>
                         <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
-                            <a href="/torn-chain-lineup.user.js" class="btn-download" target="_blank">📥 Install / Update v4.0</a>
-                            <button class="lineup-btn" onclick="navigator.clipboard.writeText(window.location.origin + '/torn-chain-lineup.user.js'); lineupSetStatus('Copied v4.0 Script URL!');">📋 Copy Script URL</button>
+                            <a href="/torn-chain-lineup.user.js" class="btn-download" target="_blank">📥 Install / Update v4.1</a>
+                            <button class="lineup-btn" onclick="navigator.clipboard.writeText(window.location.origin + '/torn-chain-lineup.user.js'); lineupSetStatus('Copied v4.1 Script URL!');">📋 Copy Script URL</button>
                             <a href="/torn-dibs.user.js" class="lineup-btn" target="_blank">DIBS Script</a>
                         </div>
                     </div>
@@ -755,6 +755,11 @@ function getNextMilestone(c) { for (const m of MILESTONES) { if (c < m) return m
 function getPrevMilestone(c) { let p = 0; for (const m of MILESTONES) { if (c < m) return p; p = m; } return p; }
 
 let currentSeconds = 0;
+let chainDeadlineMs = 0;
+let cooldownDeadlineMs = 0;
+let webChainStart = 0;
+let serverLastProcessedChain = 0;
+let localMutationSeq = 0;
 let localTimer = null;
 let lastChainCount = -1;
 let warned90 = false;
@@ -842,16 +847,35 @@ function updateTimerDisplay() {
     }
 }
 
+function tickWebWallClock() {
+    const nowMs = Date.now();
+    if (isCooldown && cooldownDeadlineMs > 0) {
+        currentSeconds = Math.max(0, Math.round((cooldownDeadlineMs - nowMs) / 1000));
+        if (currentSeconds === 0) cooldownDeadlineMs = 0;
+        updateTimerDisplay();
+    } else if (!isCooldown && chainDeadlineMs > 0) {
+        currentSeconds = Math.max(0, Math.round((chainDeadlineMs - nowMs) / 1000));
+        updateTimerDisplay();
+    } else if (currentSeconds > 0) {
+        currentSeconds--;
+        updateTimerDisplay();
+    }
+    if (hospExitList.length) {
+        const nowSec = Math.floor(nowMs / 1000);
+        hospExitList = hospExitList.map(x => ({ ...x, secondsLeft: Math.max(0, x.until - nowSec) })).filter(x => x.secondsLeft > 0);
+        renderMedOutSniper();
+    }
+}
+
 function startLocalTimer() {
     if (localTimer) clearInterval(localTimer);
-    localTimer = setInterval(() => {
-        if (currentSeconds > 0) { currentSeconds--; updateTimerDisplay(); }
-        if (hospExitList.length) {
-            const nowSec = Math.floor(Date.now() / 1000);
-            hospExitList = hospExitList.map(x => ({ ...x, secondsLeft: Math.max(0, x.until - nowSec) })).filter(x => x.secondsLeft > 0);
-            renderMedOutSniper();
+    localTimer = setInterval(tickWebWallClock, 1000);
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) {
+            tickWebWallClock();
+            fetchChainData();
         }
-    }, 1000);
+    });
 }
 
 function _fmtAgo(ms) {
@@ -988,6 +1012,10 @@ async function fetchChainData() {
         }
         renderMedOutSniper();
 
+        if (data.lastProcessedChain) {
+            serverLastProcessedChain = Math.max(serverLastProcessedChain, Number(data.lastProcessedChain) || 0);
+        }
+
         if (data.lineupVersion) {
             document.getElementById('hero-sync-ver').textContent = `Lineup v${data.lineupVersion}`;
             if (data.lineupVersion > liveServerLineupVersion) {
@@ -998,18 +1026,28 @@ async function fetchChainData() {
         const chain = data.chain;
         if (!chain) return;
 
+        const nowMs = Date.now();
+        const snapSec = Number(chain.snapshotTs) || Math.floor(nowMs / 1000);
+        if (chain.start) webChainStart = Number(chain.start) || webChainStart;
+
         if (chain.cooldown > 0) {
             isCooldown = true;
+            chainDeadlineMs = 0;
+            const targetCdEnd = Number(chain.cooldownEndsAtMs || 0) || ((snapSec + chain.cooldown) * 1000);
+            if (!cooldownDeadlineMs || Math.abs(targetCdEnd - cooldownDeadlineMs) > 2500) {
+                cooldownDeadlineMs = targetCdEnd;
+            }
+            currentSeconds = Math.max(0, Math.round((cooldownDeadlineMs - nowMs) / 1000));
             document.getElementById('chain-display').innerText = 'COOLDOWN';
             document.getElementById('chain-modifier').style.display = 'none';
             document.getElementById('waiting-msg').innerText = 'CHAIN ON COOLDOWN';
             document.getElementById('hero-bonus-rem').innerText = 'Cooldown active';
             document.getElementById('chain-progress-fill').style.width = '0%';
             document.getElementById('timer-title').innerText = 'COOLDOWN REMAINING';
-            if (Math.abs(chain.cooldown - currentSeconds) > 3) currentSeconds = chain.cooldown;
             updateTimerDisplay();
         } else if (chain.current > 0) {
             isCooldown = false;
+            cooldownDeadlineMs = 0;
             const current = chain.current;
             const max = getNextMilestone(current);
             const prev = getPrevMilestone(current);
@@ -1022,17 +1060,23 @@ async function fetchChainData() {
             const pct = ((current - prev) / (max - prev)) * 100;
             document.getElementById('chain-progress-fill').style.width = `${Math.min(100, Math.max(0, pct))}%`;
 
+            const targetExp = Number(chain.expiresAtMs || 0) ||
+                (chain.end > snapSec ? chain.end * 1000 : (snapSec + Number(chain.timeout || 0)) * 1000);
+            if (!chainDeadlineMs || Math.abs(targetExp - chainDeadlineMs) > 2500) {
+                chainDeadlineMs = targetExp;
+            }
+            currentSeconds = Math.max(0, Math.round((chainDeadlineMs - nowMs) / 1000));
+
             if (current !== lastChainCount) {
-                currentSeconds = chain.timeout;
                 lastChainCount = current;
                 warned90 = false;
-                if (typeof pollAttacks === 'function') pollAttacks();
-            } else if (Math.abs(chain.timeout - currentSeconds) > 2) {
-                currentSeconds = chain.timeout;
+                if (typeof pollAttacks === 'function') pollAttacks(current);
             }
             updateTimerDisplay();
         } else {
             isCooldown = false;
+            chainDeadlineMs = 0;
+            cooldownDeadlineMs = 0;
             document.getElementById('chain-display').innerText = '0 / 10';
             document.getElementById('chain-modifier').innerText = '1.00x';
             document.getElementById('waiting-msg').innerText = 'WAITING FOR CHAIN...';
@@ -1096,11 +1140,17 @@ let autoSkipTimer = null;
 let autoSkipSecondsLeft = 0;
 
 async function pullServerLineup() {
+    const seqAtStart = localMutationSeq;
     try {
         const res = await fetch('/api/chain/lineup');
         const json = await res.json();
+        if (seqAtStart !== localMutationSeq) return;
         if (json?.ok && json?.data && Array.isArray(json.data.lineup)) {
             liveServerLineupVersion = json.data.version || liveServerLineupVersion;
+            if (json.data.lastProcessedChain) {
+                serverLastProcessedChain = Math.max(serverLastProcessedChain, Number(json.data.lastProcessedChain) || 0);
+            }
+            if (json.data.chainStart) webChainStart = Number(json.data.chainStart) || webChainStart;
             lineupMembers = json.data.lineup;
             if (json.data.targetHitTime !== undefined) targetHitTime = json.data.targetHitTime;
             if (json.data.cycle) lineupCycleNum = json.data.cycle;
@@ -1130,7 +1180,7 @@ function lineupLoad() {
 }
 
 let _syncDebounce = null;
-function syncLineupToServer() {
+function syncLineupToServer(hitChain = 0) {
     if (_syncDebounce) clearTimeout(_syncDebounce);
     _syncDebounce = setTimeout(async () => {
         try {
@@ -1144,11 +1194,19 @@ function syncLineupToServer() {
                     loopMode,
                     autoMode,
                     formattedCompact: _generateCompactLineupText(),
-                    formattedFull: _generateFullLineupText()
+                    formattedFull: _generateFullLineupText(),
+                    hitChain: hitChain || 0,
+                    chainStart: webChainStart || 0
                 })
             });
             const d = await res.json();
-            if (d && d.version) {
+            if (d && d.alreadyRotated && d.data && Array.isArray(d.data.lineup)) {
+                liveServerLineupVersion = d.version || liveServerLineupVersion;
+                lineupMembers = d.data.lineup;
+                if (d.data.cycle) lineupCycleNum = d.data.cycle;
+                document.getElementById('hero-sync-ver').textContent = `Lineup v${liveServerLineupVersion}`;
+                lineupRender();
+            } else if (d && d.version) {
                 liveServerLineupVersion = d.version;
                 document.getElementById('hero-sync-ver').textContent = `Lineup v${d.version}`;
             }
@@ -1156,12 +1214,13 @@ function syncLineupToServer() {
     }, 200);
 }
 
-function lineupSave() {
+function lineupSave(hitChain = 0) {
+    localMutationSeq++;
     localStorage.setItem(LINEUP_LS, JSON.stringify({
         members: lineupMembers, loop: lineupLoop, cycle: lineupCycleNum, autoMode, hitTime: targetHitTime
     }));
     localStorage.setItem('chain_hit_time', targetHitTime);
-    syncLineupToServer();
+    syncLineupToServer(hitChain);
 }
 
 function isMemberEligible(memberId) {
@@ -1225,17 +1284,24 @@ async function pollMemberStatus() {
     } catch (e) {}
 }
 
-async function pollAttacks() {
+async function pollAttacks(minChain = 0) {
     MY_KEY = getTornApiKey();
     if (!hasChainAccess()) return;
     try {
         const headers = MY_KEY ? { 'x-api-key': MY_KEY } : {};
-        const res = await fetch('/api/chain/attacks', { headers });
+        const qs = minChain > 0 ? `?minChain=${encodeURIComponent(minChain)}` : '';
+        const res = await fetch('/api/chain/attacks' + qs, { headers });
         const data = await res.json();
         const attacks = data && data.attacks ? data.attacks : [];
+        if (data?.lineupVersion && data.lineupVersion > liveServerLineupVersion) {
+            await pullServerLineup();
+        }
+        if (data?.lastProcessedChain) {
+            serverLastProcessedChain = Math.max(serverLastProcessedChain, Number(data.lastProcessedChain) || 0);
+        }
         if (!attacks.length) return;
 
-        const chainAtks = attacks.filter(a => a.chain && a.chain > 0).sort((a, b) => (a.timestamp_ended || 0) - (b.timestamp_ended || 0));
+        const chainAtks = attacks.filter(a => a.chain && a.chain > 0).sort((a, b) => (a.chain - b.chain) || ((a.timestamp_ended || 0) - (b.timestamp_ended || 0)));
         if (isFirstAttackSnapshot) {
             for (const atk of chainAtks) processedAtkIds.add(atk.code || `${atk.attacker_id}_${atk.timestamp_ended}`);
             chainHitLog = chainAtks.slice(-20).reverse().map(a => ({ chain: a.chain, name: a.attacker_name || 'Operative', id: a.attacker_id, ts: a.timestamp_ended }));
@@ -1245,16 +1311,20 @@ async function pollAttacks() {
         }
 
         let stateChanged = false;
+        let maxRotatedChain = 0;
         for (const atk of chainAtks) {
             const uid = atk.code || `${atk.attacker_id}_${atk.timestamp_ended}`;
             if (processedAtkIds.has(uid)) continue;
             processedAtkIds.add(uid);
 
-            chainHitLog.unshift({ chain: atk.chain, name: atk.attacker_name || 'Operative', id: atk.attacker_id, ts: atk.timestamp_ended || Math.floor(Date.now() / 1000) });
+            chainHitLog.unshift({ chain: atk.chain, name: atk.attacker_name || 'Operative', id: a.attacker_id, ts: atk.timestamp_ended || Math.floor(Date.now() / 1000) });
             if (chainHitLog.length > 40) chainHitLog.pop();
             renderHitLog();
 
             if (!lineupMembers.length) continue;
+            if (atk.chain <= serverLastProcessedChain) continue;
+            serverLastProcessedChain = Math.max(serverLastProcessedChain, atk.chain);
+
             const atkId = atk.attacker_id ? String(atk.attacker_id) : null;
             const atkName = (atk.attacker_name || '').toLowerCase().trim();
             const idx = lineupMembers.findIndex(m => (m.id && atkId && String(m.id) === atkId) || (m.name && m.name.toLowerCase().trim() === atkName));
@@ -1263,10 +1333,10 @@ async function pollAttacks() {
                 if (autoMode) {
                     const [hitter] = lineupMembers.splice(idx, 1);
                     hitter.hit = true;
-                    // Bug Fix: honor lineupLoop instead of always pushing back
                     if (lineupLoop) lineupMembers.push(hitter);
                     lineupCycleNum++;
                     stateChanged = true;
+                    maxRotatedChain = Math.max(maxRotatedChain, atk.chain);
                     lineupSetStatus(`✓ ${atk.attacker_name} landed hit #${atk.chain}!`);
                     clearAutoSkipTimer();
                     startAutoSkipTimer();
@@ -1277,7 +1347,7 @@ async function pollAttacks() {
             }
         }
         if (processedAtkIds.size > 1000) processedAtkIds = new Set([...processedAtkIds].slice(-500));
-        if (stateChanged) { lineupSave(); lineupRender(); }
+        if (stateChanged) { lineupSave(maxRotatedChain); lineupRender(); }
     } catch (e) {}
 }
 

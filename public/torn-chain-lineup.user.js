@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         FactionOS Chain Command
 // @namespace    https://faction-os.duckdns.org/
-// @version      4.0.0
-// @description  FactionOS Tactical Chain HUD — multi-tier hit detection, true bidirectional server sync, instant Enemy Med-Out / Revive sniper alerts with 1-click Attack & Faction Chat callouts, smart readiness watchdog, and modern glassmorphic HUD across Torn.
+// @version      4.1.0
+// @description  FactionOS Tactical Chain HUD — multi-tier hit detection, wall-clock chain timer, true bidirectional server sync, verified Enemy Med-Out / Revive sniper alerts with 1-click Attack & Faction Chat callouts, and modern glassmorphic HUD across Torn.
 // @author       FactionOS
 // @match        https://www.torn.com/*
 // @grant        GM_xmlhttpRequest
@@ -75,19 +75,48 @@
     let showHospBanner   = false;
     let showSettings     = !apiKey;
 
-    // Server Sync Versioning
+    // Server Sync Versioning & Wall-Clock Chain State
+    let myFactionId         = GM_getValue('sv_my_fac_id', '') || '';
     let serverLineupVersion = 0;
     let isSavingToServer    = false;
+    let localMutationSeq    = 0;
     let pendingUrgentPoll   = null;
 
+    let chainDeadlineMs       = 0;
+    let cooldownDeadlineMs    = 0;
+    let currentChainStart     = 0;
+    let highestConfirmedChain = 0;
+    let lastLocalChainBumpMs  = 0;
+    let lastProcessedChain    = 0;
+    let lastDirectEnemySnapTs = 0;
+    const pendingHitVerify    = new Set();
+
     // Adaptive Polling & Timers
-    let lastHitUnix         = 0;
     let adaptivePollTimer   = null;
     let enemyPollTimer      = null;
     let pollMembersTimer    = null;
     let timerInterval       = null;
     let lastProcessedHitSig = '';
     let lastProcessedHitTs  = 0;
+
+    function persistChainCursor() {
+        try {
+            GM_setValue('sv_chain_cursor_v4', JSON.stringify({
+                lastProcessedChain,
+                chainStart: currentChainStart,
+                savedAt: Date.now()
+            }));
+        } catch (e) {}
+    }
+    function loadChainCursor() {
+        try {
+            const c = JSON.parse(GM_getValue('sv_chain_cursor_v4', '{}'));
+            if (c && c.savedAt && (Date.now() - c.savedAt) < 15 * 60 * 1000) {
+                if (c.lastProcessedChain) lastProcessedChain = Number(c.lastProcessedChain) || 0;
+                if (c.chainStart) currentChainStart = Number(c.chainStart) || 0;
+            }
+        } catch (e) {}
+    }
 
     // Enemy Med-Out / Revive Sniper State
     let localEnemyHospMap   = {};   // id -> { state, until, online, name, level }
@@ -323,22 +352,44 @@
         }
     }
 
+    function getLoggedInTornPlayer() {
+        try {
+            const wsEl = document.getElementById('websocketConnectionData');
+            if (wsEl && wsEl.textContent) {
+                const parsed = JSON.parse(wsEl.textContent);
+                if (parsed && parsed.userID) {
+                    return { id: String(parsed.userID), name: parsed.playername || '' };
+                }
+            }
+        } catch (e) {}
+        try {
+            const profLink = document.querySelector('a[href*="profiles.php?XID="]');
+            const m = profLink?.getAttribute('href')?.match(/XID=(\d+)/);
+            if (m) return { id: m[1], name: (profLink.textContent || '').trim() };
+        } catch (e) {}
+        return { id: null, name: '' };
+    }
+
     function handleNativeAttackResponse(data) {
         if (!data || typeof data !== 'object') return;
+        const db = data.DB || data.data || {};
         const textLog = JSON.stringify(data);
-        // Bug Fix #3: Never trigger on losses, stalemates, or generic 'respect' mentions
+        // Never trigger on losses, stalemates, or escapes
         if (/\b(lost\s+to|stalemate|escaped|defeated\s+you)\b/i.test(textLog)) return;
 
-        const respectVal = Number(data.respect_gain || data.data?.respect_gain || data.respect || data.data?.respect || 0);
-        const chainVal = Number(data.chain || data.data?.chain || 0);
-        const hasWinAction = /\b(hospitalized|mugged|left\s+them|you\s+hospitalized|you\s+mugged|you\s+left)\b/i.test(textLog);
-        const isConfirmedWin = (respectVal > 0) || (chainVal > chainCount && chainVal > 0) || (hasWinAction && (data.success === true || data.status === 'success'));
+        const respectVal = Number(data.respect_gain || db.respect_gain || db.respectGain || data.respect || db.respect || 0);
+        const chainVal = Number(data.chain || db.chain || 0);
+        const fightRes = String(db.fightResult || data.result || '');
+        const hasWinAction = /\b(hospitalized|mugged|left|won)\b/i.test(fightRes) ||
+            /\b(you\s+hospitalized|you\s+mugged|you\s+left|hospitalized\s+them|mugged\s+them)\b/i.test(textLog);
+        const isConfirmedWin = (respectVal > 0) || (chainVal > Math.max(chainCount, highestConfirmedChain) && chainVal > 0) || (hasWinAction && (data.success === true || data.status === 'success' || Boolean(db.attackerUser)));
 
         if (!isConfirmedWin) return;
 
-        const attackerName = data.attacker_name || data.data?.attacker_name || '';
-        const attackerId = data.attacker_id || data.data?.attacker_id || null;
-        const timeoutVal = data.chainTimeout || data.data?.chainTimeout || null;
+        const selfPlayer = getLoggedInTornPlayer();
+        const attackerName = data.attacker_name || db.attackerUser?.playername || db.attacker_name || selfPlayer.name || '';
+        const attackerId = data.attacker_id || db.attackerUser?.userID || db.attacker_id || selfPlayer.id || null;
+        const timeoutVal = data.chainTimeout || db.chainTimeout || 300;
 
         broadcastHitEvent({
             type: 'HIT_DETECTED',
@@ -356,7 +407,7 @@
 
         function scanDOMChainCounter() {
             try {
-                const chainEl = document.querySelector('[class*="chain-bar"], [class*="chainBar"], [class*="bar-chain"], a[href*="factions.php?step=your#/war"]');
+                const chainEl = document.querySelector('[class*="chain-bar"], [class*="chainBar"], [class*="bar-chain"], a[href*="step=your#/war/chain"], a[aria-label*="Chain" i]');
                 if (!chainEl) return;
 
                 const text = chainEl.innerText || '';
@@ -364,22 +415,25 @@
 
                 const chainMatch = text.match(/(\d{1,6})\s*\/\s*(?:10|25|50|100|250|500|1k|2\.5k|5k|10k|25k|50k|100k|\d{2,6})/i) ||
                     text.match(/chain\s*:?\s*(\d{1,6})/i);
-                const timerMatch = text.match(/(\d{1,2}:\d{2})/);
+                const timerMatch = text.match(/(?:^|[^\d:])([0-5]?\d:\d{2})(?![:\d])/);
 
                 const parsedChain = chainMatch ? parseInt(chainMatch[1], 10) : null;
-                const parsedTimer = timerMatch ? parseTimeToSecs(timerMatch[1]) : null;
+                const parsedTimerRaw = timerMatch ? parseTimeToSecs(timerMatch[1]) : null;
+                const parsedTimer = (parsedTimerRaw !== null && parsedTimerRaw <= 305) ? parsedTimerRaw : null;
 
-                if (parsedChain !== null && parsedChain > 0) {
-                    if (parsedChain > chainCount) {
-                        // Bug Fix #1: tier1_dom notifies chain increment & triggers API check WITHOUT blindly rotating lineup[0]
+                if (parsedChain !== null && parsedChain > 0 && chainCooldown === 0) {
+                    const knownBest = Math.max(chainCount, highestConfirmedChain);
+                    if (parsedChain > knownBest) {
+                        // tier1_dom notifies chain increment & triggers immediate v1/v2 API verification WITHOUT blindly rotating lineup[0]
                         broadcastHitEvent({
                             type: 'HIT_DETECTED',
                             source: 'tier1_dom',
                             chain: parsedChain,
-                            timeout: parsedTimer || null,
+                            timeout: parsedTimer || 300,
                             timestamp: Date.now()
                         });
-                    } else if (parsedChain === chainCount && parsedTimer !== null && Math.abs(parsedTimer - chainTimeout) > 2) {
+                    } else if (parsedChain === chainCount && parsedTimer !== null && Math.abs(parsedTimer - chainTimeout) > 3) {
+                        chainDeadlineMs = Date.now() + (parsedTimer * 1000);
                         chainTimeout = parsedTimer;
                         renderChainBar();
                         updateMinDisplay();
@@ -465,12 +519,29 @@
     // ══════════════════════════════════════════════════════════════
     //  SMART QUEUE ROTATION & HIT ATTRIBUTION
     // ══════════════════════════════════════════════════════════════
-    function triggerUrgentAttackPoll() {
-        if (pendingUrgentPoll) return;
-        pendingUrgentPoll = setTimeout(() => {
-            pendingUrgentPoll = null;
-            pollChainAndAttacks();
-        }, 250);
+    function verifyHitWithRetry(targetChain) {
+        if (!targetChain || pendingHitVerify.has(targetChain)) return;
+        pendingHitVerify.add(targetChain);
+        const delays = [250, 1350, 2900];
+        delays.forEach((ms, idx) => {
+            setTimeout(() => {
+                if (lastProcessedChain >= targetChain) {
+                    pendingHitVerify.delete(targetChain);
+                    return;
+                }
+                pollBackendAttacks(targetChain);
+                if (apiKey && hasAttacksAccess) {
+                    tornGet('/v2/faction/attacks?limit=15&sort=DESC', (err, d) => {
+                        if (!err && d && Array.isArray(d.attacks)) {
+                            processAttacks(d.attacks);
+                        }
+                    });
+                }
+                if (idx === delays.length - 1) {
+                    setTimeout(() => pendingHitVerify.delete(targetChain), 600);
+                }
+            }, ms);
+        });
     }
 
     function recordLiveHit(chainVal, name, id, tsSec) {
@@ -491,47 +562,65 @@
         if (!evt) return;
 
         const now = Date.now();
-        const incomingChain = evt.chain || (chainCount + 1);
+        const incomingChain = Number(evt.chain || (chainCount + 1));
         const hitSig = evt.chain ? `chain_${evt.chain}_${evt.attackerId || evt.attackerName || 'dom'}` : `ts_${Math.floor(now / 1800)}`;
 
         if (hitSig === lastProcessedHitSig && (now - lastProcessedHitTs) < 1200) return;
         lastProcessedHitSig = hitSig;
         lastProcessedHitTs = now;
 
+        const isNewChainStep = incomingChain > Math.max(chainCount, highestConfirmedChain);
         if (incomingChain > chainCount || !chainCount) {
             chainCount = incomingChain;
         }
-        if (evt.timeout && evt.timeout > 0) {
+        if (incomingChain > highestConfirmedChain) {
+            highestConfirmedChain = incomingChain;
+            lastLocalChainBumpMs = now;
+        }
+        if (evt.timeout && evt.timeout > 0 && evt.timeout <= 305) {
             chainTimeout = evt.timeout;
-        } else if (evt.source === 'tier1_dom' || evt.source === 'tier2_ws') {
+            chainDeadlineMs = now + (evt.timeout * 1000);
+        } else if (isNewChainStep && (evt.source === 'tier1_dom' || evt.source === 'tier2_ws' || evt.source === 'tier1_fetch')) {
             chainTimeout = 300;
+            chainDeadlineMs = now + 300000;
         }
         chainActive = true;
+        cooldownDeadlineMs = 0;
+        chainCooldown = 0;
         warnedAt60 = false;
 
         const attackerId = evt.attackerId ? String(evt.attackerId) : null;
         const attackerName = (evt.attackerName || '').trim().toLowerCase();
 
-        // Bug Fix #1: Unattributed DOM counter increments MUST NOT rotate lineup[0]!
-        // Only update timer/chain & immediately poll API to attribute the hit to the true attacker.
+        // Unattributed DOM counter increments NEVER rotate lineup[0] blindly; trigger dual-bucket verification instead
         if (evt.source === 'tier1_dom' && !attackerId && !attackerName) {
             playSuccessChime();
             renderChainBar();
             updateMinDisplay();
-            flashStatus(`⚡ Chain #${chainCount} detected — verifying hitter...`, false);
-            triggerUrgentAttackPoll();
+            flashStatus(`⚡ Chain #${incomingChain} detected — verifying hitter...`, false);
+            verifyHitWithRetry(incomingChain);
             return;
         }
 
         if (evt.attackerName) {
-            recordLiveHit(chainCount, evt.attackerName, evt.attackerId, Math.floor(evt.timestamp / 1000));
+            recordLiveHit(incomingChain, evt.attackerName, evt.attackerId, Math.floor((evt.timestamp || now) / 1000));
         }
+
+        // Idempotency guard: if this exact chain # was already rotated by server or another tier, skip double rotation
+        if (evt.chain && incomingChain <= lastProcessedChain) {
+            renderChainBar();
+            updateMinDisplay();
+            return;
+        }
+        lastProcessedChain = Math.max(lastProcessedChain, incomingChain);
+        persistChainCursor();
 
         if (!lineup.length) {
             playSuccessChime();
-            flashStatus(`✓ Hit #${chainCount} by ${evt.attackerName || 'Member'}`, false);
+            flashStatus(`✓ Hit #${incomingChain} by ${evt.attackerName || 'Member'}`, false);
             setDirty(true);
             renderChainBar();
+            updateMinDisplay();
             return;
         }
 
@@ -546,7 +635,6 @@
 
         if (isAssignedHitter) {
             playSuccessChime();
-            // Bug Fix #2: Honor autoMode toggle! Only splice/rotate when autoMode === true
             if (autoMode) {
                 const [hitter] = lineup.splice(0, 1);
                 hitter.hit = true;
@@ -554,14 +642,14 @@
                 if (loopMode) lineup.push(hitter);
                 cycleNum++;
                 const nextUpName = lineup[0] ? lineup[0].name : 'Lineup Empty';
-                flashStatus(`✅ ${hitter.name} landed #${chainCount}! Next UP: ${nextUpName}`, false);
-                save();
+                flashStatus(`✅ ${hitter.name} landed #${incomingChain}! Next UP: ${nextUpName}`, false);
+                save(incomingChain);
                 if (autoSendOnPost) setTimeout(() => postToChat(), 200);
             } else {
                 up.hit = true;
                 up.hitsSession = (up.hitsSession || 0) + 1;
-                flashStatus(`✅ ${up.name} landed #${chainCount} (Auto-Rotate OFF — click Hit & Next to rotate)`, false);
-                save();
+                flashStatus(`✅ ${up.name} landed #${incomingChain} (Auto-Rotate OFF — click Hit & Next to rotate)`, false);
+                save(incomingChain);
             }
             setDirty(true);
             renderLineup();
@@ -580,15 +668,15 @@
                 if (autoMode) {
                     const [savior] = lineup.splice(saviorIdx, 1);
                     if (loopMode) lineup.push(savior);
-                    flashStatus(`⚡ Jump-in hit #${chainCount} by ${savior.name}! ${lineup[0] ? lineup[0].name : ''} stays UP.`, false);
+                    flashStatus(`⚡ Jump-in hit #${incomingChain} by ${savior.name}! ${lineup[0] ? lineup[0].name : ''} stays UP.`, false);
                 } else {
-                    flashStatus(`⚡ Jump-in hit #${chainCount} by ${targetM.name}!`, false);
+                    flashStatus(`⚡ Jump-in hit #${incomingChain} by ${targetM.name}!`, false);
                 }
-                save();
+                save(incomingChain);
                 renderLineup();
             } else {
                 const displayName = evt.attackerName || 'Faction Savior';
-                flashStatus(`⚡ Savior hit #${chainCount} by ${displayName}! ${lineup[0].name} stays UP.`, false);
+                flashStatus(`⚡ Savior hit #${incomingChain} by ${displayName}! ${lineup[0].name} stays UP.`, false);
             }
             setDirty(true);
             renderChainBar();
@@ -600,30 +688,29 @@
     // ══════════════════════════════════════════════════════════════
     function handleDetectedMedOut(ev, reportToServer = false) {
         if (!ev || !ev.playerId) return;
-        const dedupKey = ev.id || `${ev.playerId}_${Math.floor((ev.detectedAt || Date.now()) / 20000)}`;
+        const pidStr = String(ev.playerId);
+        const dedupKey = ev.id || `${pidStr}_${Math.floor((ev.detectedAt || Date.now()) / 20000)}`;
         if (seenMedOutIds.has(dedupKey)) return;
         seenMedOutIds.add(dedupKey);
         if (seenMedOutIds.size > 200) {
             seenMedOutIds = new Set([...seenMedOutIds].slice(-100));
         }
 
-        // Only treat recent escapes (< 3 minutes old) as fresh live alerts
         const ageMs = Date.now() - (ev.detectedAt || Date.now());
-        enemyMedOuts = [ev, ...enemyMedOuts.filter(x => x.id !== ev.id && x.playerId !== ev.playerId)].slice(0, 25);
+        enemyMedOuts = [ev, ...enemyMedOuts.filter(x => x.id !== ev.id && String(x.playerId) !== pidStr)].slice(0, 25);
         renderTabBadges();
         if (activeTab === 'radar') renderRadarTab();
 
-        if (ageMs < 90000) {
+        if (ageMs < 65000) {
             activeMedAlert = ev;
             playMedOutSniperAlert();
             renderMedOutBanner();
             updateMinDisplay();
 
-            // Auto-call into Faction Chat if enabled (with 15s cooldown per enemy)
             if (autoCallMedOut) {
-                const lastCall = lastAutoCalledPlayer.get(String(ev.playerId)) || 0;
-                if (Date.now() - lastCall > 15000) {
-                    lastAutoCalledPlayer.set(String(ev.playerId), Date.now());
+                const lastCall = lastAutoCalledPlayer.get(pidStr) || 0;
+                if (Date.now() - lastCall > 20000) {
+                    lastAutoCalledPlayer.set(pidStr, Date.now());
                     callOutMedOutToChat(ev);
                 }
             }
@@ -652,7 +739,8 @@
                         factionName: ev.factionName || enemyFacName,
                         onlineStatus: ev.onlineStatus,
                         secondsSaved: ev.secondsSaved,
-                        until: ev.oldUntil
+                        until: ev.oldUntil,
+                        hospSnapTs: ev.hospSnapTs || 0
                     }),
                     timeout: 4000,
                     onerror() {}
@@ -661,17 +749,34 @@
         }
     }
 
-    function processDirectEnemyMembers(membersObj, facId, facName) {
+    function processDirectEnemyMembers(membersObj, facId, facName, snapTs = 0) {
         if (!membersObj || typeof membersObj !== 'object') return;
-        const nowSec = Math.floor(Date.now() / 1000);
+        const sTs = Number(snapTs) || 0;
+        if (sTs > 0 && lastDirectEnemySnapTs > 0 && sTs < lastDirectEnemySnapTs) return;
+        if (sTs > lastDirectEnemySnapTs) lastDirectEnemySnapTs = sTs;
+
+        const nowSec = sTs || Math.floor(Date.now() / 1000);
         const soon = [];
+        let radarDirty = false;
 
         for (const [id, m] of Object.entries(membersObj)) {
             if (!m) continue;
             const st = m.status?.state || 'Okay';
-            const until = m.status?.until || 0;
+            const until = Number(m.status?.until || 0);
             const online = m.last_action?.status || 'Offline';
             const oldRec = localEnemyHospMap[id];
+
+            // Purge any player back in Hospital / Jail / Traveling from HUD alerts immediately
+            if (st !== 'Okay') {
+                const prevLen = enemyMedOuts.length;
+                enemyMedOuts = enemyMedOuts.filter(x => String(x.playerId) !== String(id));
+                if (enemyMedOuts.length !== prevLen) radarDirty = true;
+                if (activeMedAlert && String(activeMedAlert.playerId) === String(id)) {
+                    activeMedAlert = null;
+                    renderMedOutBanner();
+                    updateMinDisplay();
+                }
+            }
 
             if (st === 'Hospital' && until > nowSec && (until - nowSec) <= 300) {
                 soon.push({
@@ -686,37 +791,71 @@
             }
 
             if (oldRec && oldRec.state === 'Hospital' && st === 'Okay') {
-                const leftEarly = oldRec.until && (oldRec.until > nowSec + 15);
-                if (leftEarly) {
-                    const saved = oldRec.until - nowSec;
-                    const ev = {
-                        id: `med_${id}_${nowSec}`,
-                        playerId: String(id),
-                        playerName: m.name || oldRec.name || `Enemy [${id}]`,
-                        level: m.level || oldRec.level || 0,
-                        factionId: String(facId || ''),
-                        factionName: facName || enemyFacName,
-                        onlineStatus: online,
-                        escapeType: online === 'Online' ? 'MEDDED OUT' : 'REVIVED / MEDDED',
-                        secondsSaved: saved,
-                        oldUntil: oldRec.until,
-                        timeSavedStr: fmtSavedTime(saved),
-                        detectedAt: Date.now(),
-                        attackUrl: `https://www.torn.com/page.php?sid=attack&user2ID=${id}`,
-                        profileUrl: `https://www.torn.com/profiles.php?XID=${id}`
-                    };
-                    broadcastMedOutEvent(ev);
+                const monotonicOk = !sTs || !oldRec.hospSnapTs || sTs >= oldRec.hospSnapTs;
+                const leftEarly = monotonicOk && oldRec.until && (oldRec.until > nowSec + 20);
+                if (leftEarly && apiKey) {
+                    const capturedOld = { ...oldRec };
+                    const capturedId = String(id);
+                    const capturedName = m.name || capturedOld.name || `Enemy [${capturedId}]`;
+                    const capturedLvl = m.level || capturedOld.level || 0;
+                    // Verify live uncached user profile before raising any alert
+                    tornGet(`/user/${capturedId}?selections=profile,timestamp`, (err, u) => {
+                        if (err || !u || !u.status) return;
+                        const liveSt = u.status.state || 'Okay';
+                        const liveTs = Number(u.timestamp) || Math.floor(Date.now() / 1000);
+                        if (liveSt !== 'Okay') {
+                            localEnemyHospMap[capturedId] = {
+                                state: liveSt,
+                                until: Number(u.status.until || 0),
+                                online: u.last_action?.status || online,
+                                name: u.name || capturedName,
+                                level: u.level || capturedLvl,
+                                hospSnapTs: liveSt === 'Hospital' ? liveTs : 0
+                            };
+                            return;
+                        }
+                        if (capturedOld.hospSnapTs && liveTs < capturedOld.hospSnapTs) return;
+                        if (!capturedOld.until || capturedOld.until <= liveTs + 20) return;
+
+                        const liveOnline = u.last_action?.status || online;
+                        const lastActTs = Number(u.last_action?.timestamp || 0);
+                        const isSelfMed = liveOnline === 'Online' && lastActTs > 0 && (liveTs - lastActTs) <= 120;
+                        const saved = Math.max(0, capturedOld.until - liveTs);
+                        broadcastMedOutEvent({
+                            id: `med_${capturedId}_${liveTs}`,
+                            playerId: capturedId,
+                            playerName: u.name || capturedName,
+                            level: u.level || capturedLvl,
+                            factionId: String(facId || ''),
+                            factionName: facName || enemyFacName,
+                            onlineStatus: liveOnline,
+                            escapeType: isSelfMed ? 'MEDDED OUT' : 'REVIVED',
+                            secondsSaved: saved,
+                            oldUntil: capturedOld.until,
+                            hospSnapTs: capturedOld.hospSnapTs || 0,
+                            timeSavedStr: fmtSavedTime(saved),
+                            detectedAt: Date.now(),
+                            attackUrl: `https://www.torn.com/page.php?sid=attack&user2ID=${capturedId}`,
+                            profileUrl: `https://www.torn.com/profiles.php?XID=${capturedId}`
+                        });
+                    });
                 }
             }
 
-            localEnemyHospMap[id] = { state: st, until, online, name: m.name, level: m.level };
+            localEnemyHospMap[id] = {
+                state: st,
+                until,
+                online,
+                name: m.name,
+                level: m.level,
+                hospSnapTs: st === 'Hospital' ? ((oldRec?.state === 'Hospital' && oldRec.hospSnapTs) ? oldRec.hospSnapTs : sTs) : 0
+            };
         }
 
         soon.sort((a, b) => a.until - b.until);
-        if (soon.length || !upcomingHospExits.length) {
-            upcomingHospExits = soon.slice(0, 10);
-            if (activeTab === 'radar') renderRadarTab();
-        }
+        upcomingHospExits = soon.slice(0, 10);
+        if (radarDirty) renderTabBadges();
+        if (activeTab === 'radar') renderRadarTab();
     }
 
     function callOutMedOutToChat(ev) {
@@ -758,41 +897,71 @@
         });
     }
 
-    function processAttacks(attacks) {
-        if (!attacks || !attacks.length) return;
-        const chainAtks = attacks
-            .filter(a => a.chain && a.chain > 0)
-            .sort((a, b) => (a.timestamp_ended || 0) - (b.timestamp_ended || 0));
+    function normalizeAttackItem(a) {
+        if (!a) return null;
+        const chainNum = Number(a.chain || 0);
+        if (!chainNum || chainNum <= 0) return null;
+        const atkFac = String(a.attacker_faction ?? a.attacker?.faction?.id ?? '').trim();
+        const defFac = String(a.defender_faction ?? a.defender?.faction?.id ?? '').trim();
+        if (myFactionId) {
+            if (atkFac && atkFac !== '0' && atkFac !== String(myFactionId)) return null;
+            if (defFac && defFac === String(myFactionId)) return null;
+        }
+        const atkId = a.attacker_id ?? a.attacker?.id ?? null;
+        const atkName = String(a.attacker_name ?? a.attacker?.name ?? '').trim();
+        const tsEnd = Number(a.timestamp_ended ?? a.ended ?? 0);
+        const code = String(a.code || a.id || `${atkId || 0}_${tsEnd}_${chainNum}`);
+        return { code, attacker_id: atkId, attacker_name: atkName, timestamp_ended: tsEnd, chain: chainNum };
+    }
+
+    function processAttacks(rawAttacks) {
+        if (!rawAttacks || !rawAttacks.length) return;
+        const chainAtks = rawAttacks
+            .map(normalizeAttackItem)
+            .filter(Boolean)
+            .sort((a, b) => (a.chain - b.chain) || (a.timestamp_ended - b.timestamp_ended));
+        if (!chainAtks.length) return;
+
+        const nowSec = Math.floor(Date.now() / 1000);
 
         if (isFirstPoll) {
+            isFirstPoll = false;
+            const unseenFresh = [];
             for (const atk of chainAtks) {
-                const id = atk.code || `${atk.attacker_id}_${atk.timestamp_ended}`;
-                processedAtkIds.add(id);
-                if (atk.timestamp_ended && atk.timestamp_ended > lastHitUnix) {
-                    lastHitUnix = atk.timestamp_ended;
+                processedAtkIds.add(atk.code);
+                // If we persisted lastProcessedChain across page navigation, do not swallow newer hits!
+                if (lastProcessedChain > 0 && atk.chain > lastProcessedChain && (!atk.timestamp_ended || (nowSec - atk.timestamp_ended) <= 90)) {
+                    unseenFresh.push(atk);
                 }
             }
-            // Seed recent 10 hits into Live Hits tab
+            if (!lastProcessedChain && chainAtks.length) {
+                lastProcessedChain = chainAtks[chainAtks.length - 1].chain;
+                persistChainCursor();
+            }
             liveHits = chainAtks.slice(-15).reverse().map(a => ({
                 chain: a.chain,
                 attackerName: a.attacker_name || 'Operative',
                 attackerId: a.attacker_id || null,
                 timestamp: (a.timestamp_ended || 0) * 1000
             }));
-            isFirstPoll = false;
             renderTabBadges();
             renderChainBar();
+            for (const atk of unseenFresh) {
+                handleIncomingHit({
+                    type: 'HIT_DETECTED',
+                    source: 'tier3_api',
+                    attackerId: atk.attacker_id,
+                    attackerName: atk.attacker_name,
+                    chain: atk.chain,
+                    timestamp: (atk.timestamp_ended || nowSec) * 1000
+                });
+            }
             return;
         }
 
         for (const atk of chainAtks) {
-            const id = atk.code || `${atk.attacker_id}_${atk.timestamp_ended}`;
-            if (processedAtkIds.has(id)) continue;
-            processedAtkIds.add(id);
-
-            if (atk.timestamp_ended && atk.timestamp_ended > lastHitUnix) {
-                lastHitUnix = atk.timestamp_ended;
-            }
+            if (processedAtkIds.has(atk.code)) continue;
+            processedAtkIds.add(atk.code);
             if (processedAtkIds.size > 600) {
                 processedAtkIds = new Set([...processedAtkIds].slice(-300));
             }
@@ -803,22 +972,85 @@
                 attackerId: atk.attacker_id,
                 attackerName: atk.attacker_name,
                 chain: atk.chain,
-                timestamp: (atk.timestamp_ended || 0) * 1000
+                timestamp: (atk.timestamp_ended || nowSec) * 1000
             });
+        }
+    }
+
+    function applyChainStateFromApi(chainObj, apiSnapTs = 0) {
+        if (!chainObj || typeof chainObj !== 'object') return;
+        const nowMs = Date.now();
+        const snapSec = Number(apiSnapTs || chainObj.snapshotTs) || Math.floor(nowMs / 1000);
+        const cStart = Number(chainObj.start || 0);
+        const cCur = Number(chainObj.current || 0);
+        const cCd = Number(chainObj.cooldown || 0);
+        const cTo = Number(chainObj.timeout || 0);
+        const cEnd = Number(chainObj.end || 0);
+
+        if (cStart && currentChainStart && cStart !== currentChainStart) {
+            highestConfirmedChain = 0;
+            lastProcessedChain = 0;
+            persistChainCursor();
+        }
+        if (cStart) currentChainStart = cStart;
+
+        // Stale-API guard: ignore older cached Torn snapshots that lag behind a recent DOM/fetch hit
+        if (cCd === 0 && highestConfirmedChain > 0 && (nowMs - lastLocalChainBumpMs) < 35000 && cCur < highestConfirmedChain) {
+            return;
+        }
+
+        if (cCd > 0) {
+            const cdTargetEnd = Number(chainObj.cooldownEndsAtMs || 0) || ((snapSec + cCd) * 1000);
+            if (!cooldownDeadlineMs || Math.abs(cdTargetEnd - cooldownDeadlineMs) > 2500) {
+                cooldownDeadlineMs = cdTargetEnd;
+            }
+            chainDeadlineMs = 0;
+            chainCooldown = Math.max(0, Math.round((cooldownDeadlineMs - nowMs) / 1000));
+            chainTimeout = 0;
+            chainActive = false;
+            chainCount = cCur;
+            highestConfirmedChain = 0;
+        } else if (cCur > 0) {
+            cooldownDeadlineMs = 0;
+            chainCooldown = 0;
+            chainActive = true;
+            if (cCur > highestConfirmedChain) highestConfirmedChain = cCur;
+            chainCount = Math.max(cCur, highestConfirmedChain);
+
+            const targetEndMs = Number(chainObj.expiresAtMs || 0) ||
+                (cEnd > snapSec ? cEnd * 1000 : (snapSec + cTo) * 1000);
+            if (!chainDeadlineMs || Math.abs(targetEndMs - chainDeadlineMs) > 2500) {
+                chainDeadlineMs = targetEndMs;
+            }
+            chainTimeout = Math.max(0, Math.round((chainDeadlineMs - nowMs) / 1000));
+        } else {
+            chainActive = false;
+            chainCount = 0;
+            chainTimeout = 0;
+            chainCooldown = 0;
+            chainDeadlineMs = 0;
+            cooldownDeadlineMs = 0;
+            highestConfirmedChain = 0;
         }
     }
 
     function fetchServerLineupSnapshot() {
         if (isSavingToServer) return;
+        const seqAtStart = localMutationSeq;
         GM_xmlhttpRequest({
             method: 'GET',
             url: `${SERVER_BASE}/api/chain/lineup`,
             timeout: 4000,
             onload(res) {
+                if (seqAtStart !== localMutationSeq || isSavingToServer) return;
                 try {
                     const d = JSON.parse(res.responseText);
                     if (d?.ok && d?.data && Array.isArray(d.data.lineup)) {
                         const incomingVer = d.data.version || 0;
+                        if (d.data.lastProcessedChain) {
+                            lastProcessedChain = Math.max(lastProcessedChain, Number(d.data.lastProcessedChain) || 0);
+                            persistChainCursor();
+                        }
                         if (incomingVer > serverLineupVersion || (!lineup.length && d.data.lineup.length)) {
                             serverLineupVersion = incomingVer;
                             lineup = d.data.lineup;
@@ -850,11 +1082,12 @@
                 try {
                     const d = JSON.parse(res.responseText);
                     if (!d) return;
+                    if (d.factionId) {
+                        myFactionId = String(d.factionId);
+                        GM_setValue('sv_my_fac_id', myFactionId);
+                    }
                     if (updateChainFields && d.chain) {
-                        chainCount    = d.chain.current || 0;
-                        chainTimeout  = d.chain.timeout || 0;
-                        chainCooldown = d.chain.cooldown || 0;
-                        chainActive   = chainCount > 0 && chainCooldown === 0;
+                        applyChainStateFromApi(d.chain, d.chain.snapshotTs);
                         renderChainBar();
                         updateMinDisplay();
                     }
@@ -864,16 +1097,33 @@
                         updateEnemyBadgeUI();
                     }
                     if (Array.isArray(d.enemyMedOuts)) {
+                        const validIds = new Set(d.enemyMedOuts.map(ev => String(ev.playerId)));
+                        // Drop any re-hospitalized enemies purged by the server
+                        enemyMedOuts = enemyMedOuts.filter(ev => validIds.has(String(ev.playerId)));
+                        if (activeMedAlert && !validIds.has(String(activeMedAlert.playerId))) {
+                            activeMedAlert = null;
+                            renderMedOutBanner();
+                            updateMinDisplay();
+                        }
                         for (const ev of [...d.enemyMedOuts].reverse()) {
                             handleDetectedMedOut(ev, false);
                         }
+                        renderTabBadges();
+                        if (activeTab === 'radar') renderRadarTab();
                     }
-                    if (Array.isArray(d.upcomingHospExits) && d.upcomingHospExits.length) {
+                    if (Array.isArray(d.upcomingHospExits)) {
                         upcomingHospExits = d.upcomingHospExits;
                         if (activeTab === 'radar') renderRadarTab();
                     }
+                    if (d.lastProcessedChain && Number(d.lastProcessedChain) > lastProcessedChain) {
+                        lastProcessedChain = Number(d.lastProcessedChain);
+                        persistChainCursor();
+                    }
                     if (d.lineupVersion && d.lineupVersion > serverLineupVersion && !isSavingToServer) {
                         fetchServerLineupSnapshot();
+                        if (d.lastHitEvent && (Date.now() - d.lastHitEvent.ts) < 12000 && d.lastHitEvent.attackerName) {
+                            flashStatus(`✅ ${d.lastHitEvent.attackerName} landed #${d.lastHitEvent.chain}!${d.lastHitEvent.nextUp ? ' Next UP: ' + d.lastHitEvent.nextUp : ''}`, false);
+                        }
                     }
                 } catch (e) {}
             },
@@ -881,16 +1131,24 @@
         });
     }
 
-    function pollBackendAttacks() {
+    function pollBackendAttacks(minChain = 0) {
+        const qs = minChain > 0 ? `?minChain=${encodeURIComponent(minChain)}` : '';
         GM_xmlhttpRequest({
             method: 'GET',
-            url: `${SERVER_BASE}/api/chain/attacks`,
+            url: `${SERVER_BASE}/api/chain/attacks${qs}`,
             headers: { 'x-api-key': apiKey || '' },
             timeout: 5000,
             onload(res) {
                 try {
                     const d = JSON.parse(res.responseText);
+                    if (d?.factionId) {
+                        myFactionId = String(d.factionId);
+                        GM_setValue('sv_my_fac_id', myFactionId);
+                    }
                     if (d && d.attacks) processAttacks(d.attacks);
+                    if (d?.lineupVersion && d.lineupVersion > serverLineupVersion && !isSavingToServer) {
+                        fetchServerLineupSnapshot();
+                    }
                 } catch (e) {}
             },
             onerror() {}
@@ -900,11 +1158,11 @@
     function pollDirectEnemyFaction() {
         const targetFac = getActiveEnemyFactionId();
         if (!apiKey || !targetFac) return;
-        tornGet(`/faction/${targetFac}?selections=basic`, (err, d) => {
+        tornGet(`/faction/${targetFac}?selections=basic,timestamp`, (err, d) => {
             if (!err && d && d.members) {
                 enemyFacName = d.name || enemyFacName;
                 updateEnemyBadgeUI();
-                processDirectEnemyMembers(d.members, targetFac, enemyFacName);
+                processDirectEnemyMembers(d.members, targetFac, enemyFacName, Number(d.timestamp) || 0);
             }
         });
     }
@@ -912,32 +1170,29 @@
     function pollChainAndAttacks() {
         if (!apiKey) {
             syncBackendTelemetry(true);
-            pollBackendAttacks();
+            pollBackendAttacks(Math.max(chainCount, highestConfirmedChain));
             return;
         }
 
-        // Bug Fix #4: overlap window (-2s) prevents missing same-second Torn attack timestamps
-        const cursorParam = lastHitUnix > 0 ? `&from=${Math.max(0, lastHitUnix - 2)}` : '';
-
         if (hasAttacksAccess) {
-            tornGet(`/faction/?selections=attacks,chain${cursorParam}`, (err, d) => {
+            tornGet('/faction/?selections=basic,attacks,chain,timestamp', (err, d) => {
                 if (err) {
                     if (err.code === 16 || err.code === 7 || (err.error && /access|permission/i.test(err.error))) {
                         hasAttacksAccess = false;
-                        tornGet('/faction/?selections=chain', (err2, d2) => {
+                        tornGet('/faction/?selections=basic,chain,timestamp', (err2, d2) => {
                             if (!err2 && d2) handleChainResponse(d2);
                         });
-                        pollBackendAttacks();
+                        pollBackendAttacks(Math.max(chainCount, highestConfirmedChain));
                     }
                     return;
                 }
                 if (d) handleChainResponse(d);
             });
         } else {
-            tornGet('/faction/?selections=chain', (err, d) => {
+            tornGet('/faction/?selections=basic,chain,timestamp', (err, d) => {
                 if (!err && d) handleChainResponse(d);
             });
-            pollBackendAttacks();
+            pollBackendAttacks(Math.max(chainCount, highestConfirmedChain));
         }
 
         // Always keep server med-outs + lineupVersion synced
@@ -945,21 +1200,30 @@
     }
 
     function handleChainResponse(d) {
-        const chain = d.chain || {};
-        chainCount    = chain.current || 0;
-        chainTimeout  = chain.timeout || 0;
-        chainCooldown = chain.cooldown || 0;
-        chainActive   = chainCount > 0 && chainCooldown === 0;
+        if (d.ID) {
+            myFactionId = String(d.ID);
+            GM_setValue('sv_my_fac_id', myFactionId);
+        }
+        applyChainStateFromApi(d.chain, d.timestamp);
 
         if (d.attacks) processAttacks(Object.values(d.attacks));
-        else {
-            renderChainBar();
-            updateMinDisplay();
+        // If Torn's v1 attacks cache is behind the live chain counter, pull v2 immediately!
+        if (chainActive && chainCount > lastProcessedChain && hasAttacksAccess && apiKey) {
+            tornGet('/v2/faction/attacks?limit=15&sort=DESC', (err2, d2) => {
+                if (!err2 && d2 && Array.isArray(d2.attacks)) processAttacks(d2.attacks);
+            });
         }
+        renderChainBar();
+        updateMinDisplay();
     }
 
     function handleMembersResponse(d) {
         if (!d || !d.members) return;
+        const facIdVal = d.ID || d.factionId;
+        if (facIdVal) {
+            myFactionId = String(facIdVal);
+            GM_setValue('sv_my_fac_id', myFactionId);
+        }
 
         // Auto-detect active ranked war enemy if present
         if (d.rankedwars && !customEnemyFacId) {
@@ -984,6 +1248,14 @@
             until: (m.status || {}).until || 0,
             lastActionTs: (m.last_action || {}).timestamp || 0
         })).sort((a, b) => a.name.localeCompare(b.name));
+
+        // Backfill missing IDs in existing lineup entries
+        for (const lm of lineup) {
+            if (!lm.id && lm.name) {
+                const found = factionMembers.find(fm => fm.name.toLowerCase() === lm.name.toLowerCase());
+                if (found) lm.id = found.id;
+            }
+        }
 
         try {
             localStorage.setItem(LS_KEY_MEMBERS, JSON.stringify(factionMembers));
@@ -1035,7 +1307,8 @@
     // ══════════════════════════════════════════════════════════════
     //  PERSISTENCE & SERVER SYNC
     // ══════════════════════════════════════════════════════════════
-    function save() {
+    function save(hitChain = 0) {
+        localMutationSeq++;
         GM_setValue('sv_state', JSON.stringify({
             lineup, targetHitTime, cycleNum, loopMode, autoMode,
             autoSendOnPost, soundEnabled, autoCallMedOut, customEnemyFacId, runOnAllPages
@@ -1046,7 +1319,7 @@
         GM_setValue('sv_enemy_fac_id', customEnemyFacId);
         GM_setValue('sv_all_pages', runOnAllPages);
 
-        syncToServer();
+        syncToServer(hitChain);
 
         if (broadcastChan) {
             try {
@@ -1064,6 +1337,7 @@
     }
 
     function load() {
+        loadChainCursor();
         try {
             const raw = GM_getValue('sv_state', '{}');
             const d = JSON.parse(raw);
@@ -1090,7 +1364,7 @@
         } catch (e) {}
     }
 
-    function syncToServer() {
+    function syncToServer(hitChain = 0) {
         const full = _buildFullText();
         const compact = _buildCompactText();
         isSavingToServer = true;
@@ -1102,7 +1376,9 @@
                 loopMode,
                 autoMode,
                 formattedFull: full,
-                formattedCompact: compact
+                formattedCompact: compact,
+                hitChain: hitChain || 0,
+                chainStart: currentChainStart || 0
             });
             GM_xmlhttpRequest({
                 method: 'POST',
@@ -1114,7 +1390,15 @@
                     isSavingToServer = false;
                     try {
                         const d = JSON.parse(res.responseText);
-                        if (d && d.version) serverLineupVersion = d.version;
+                        if (d && d.alreadyRotated && d.data && Array.isArray(d.data.lineup)) {
+                            serverLineupVersion = d.version || serverLineupVersion;
+                            lineup = d.data.lineup;
+                            if (d.data.cycle) cycleNum = d.data.cycle;
+                            renderLineup();
+                            renderChainBar();
+                        } else if (d && d.version) {
+                            serverLineupVersion = d.version;
+                        }
                     } catch (e) {}
                 },
                 onerror() { isSavingToServer = false; }
@@ -1318,52 +1602,65 @@
         flashStatus(`Sorted ${ready.length} ready hitter(s) to top.`, false);
     }
 
-    function autoSkipHospedMembers() {
+    function autoSkipUnavailMembers() {
         if (!lineup.length) return;
         let skippedCount = 0;
-        const healthy = [], hosps = [];
+        const ready = [], unavail = [];
         for (const m of lineup) {
-            if (getMemberReadiness(m.id, m.name).state === 'Hospital') {
+            if (!getMemberReadiness(m.id, m.name).isReady) {
                 m.skipped = true;
-                hosps.push(m);
+                unavail.push(m);
                 skippedCount++;
-            } else healthy.push(m);
+            } else ready.push(m);
         }
         if (!skippedCount) return;
-        lineup = [...healthy, ...hosps];
+        lineup = [...ready, ...unavail];
         showHospBanner = false;
         save();
         renderLineup();
-        flashStatus(`Moved ${skippedCount} hospitalized hitter(s) to bottom.`, false);
+        flashStatus(`Moved ${skippedCount} unavailable hitter(s) to bottom.`, false);
     }
 
     // ══════════════════════════════════════════════════════════════
-    //  TIMER & SMART WATCHDOG (BUG FIX #6)
+    //  WALL-CLOCK TIMER & SMART WATCHDOG
     // ══════════════════════════════════════════════════════════════
+    function tickWallClockTimers() {
+        const nowMs = Date.now();
+        if (cooldownDeadlineMs > 0) {
+            chainCooldown = Math.max(0, Math.round((cooldownDeadlineMs - nowMs) / 1000));
+            chainTimeout = 0;
+            if (chainCooldown === 0) cooldownDeadlineMs = 0;
+        } else if (chainActive && chainDeadlineMs > 0) {
+            chainCooldown = 0;
+            chainTimeout = Math.max(0, Math.round((chainDeadlineMs - nowMs) / 1000));
+            if (chainTimeout === 60 && !warnedAt60) {
+                warnedAt60 = true;
+                playPanicWarningBeep();
+            } else if (chainTimeout > 65) {
+                warnedAt60 = false;
+            }
+        }
+        if (upcomingHospExits.length) {
+            const nowSec = Math.floor(nowMs / 1000);
+            upcomingHospExits = upcomingHospExits
+                .map(x => ({ ...x, secondsLeft: Math.max(0, x.until - nowSec) }))
+                .filter(x => x.secondsLeft > 0);
+        }
+        renderChainBar();
+        updateMinDisplay();
+        if (activeTab === 'radar') renderRadarTab();
+        checkAutoSkipWatchdog();
+    }
+
     function startLocalTimer() {
         if (timerInterval) clearInterval(timerInterval);
-        timerInterval = setInterval(() => {
-            if (chainActive && chainTimeout > 0) {
-                chainTimeout--;
-                if (chainTimeout === 60 && !warnedAt60) {
-                    warnedAt60 = true;
-                    playPanicWarningBeep();
-                } else if (chainTimeout > 65) {
-                    warnedAt60 = false;
-                }
+        timerInterval = setInterval(tickWallClockTimers, 1000);
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) {
+                tickWallClockTimers();
+                syncBackendTelemetry(false);
             }
-            // Live countdown for upcoming hospital exits on radar tab
-            if (upcomingHospExits.length) {
-                const nowSec = Math.floor(Date.now() / 1000);
-                upcomingHospExits = upcomingHospExits
-                    .map(x => ({ ...x, secondsLeft: Math.max(0, x.until - nowSec) }))
-                    .filter(x => x.secondsLeft > 0);
-            }
-            renderChainBar();
-            updateMinDisplay();
-            if (activeTab === 'radar') renderRadarTab();
-            checkAutoSkipWatchdog();
-        }, 1000);
+        });
     }
 
     let lastAutoSkipTs = 0;
@@ -1585,7 +1882,7 @@
             <div class="sv-medout-banner">
                 <div class="sv-medout-top">
                     <span class="sv-medout-pill">🚨 ${esc(ev.escapeType || 'MEDDED OUT')}</span>
-                    <span class="sv-medout-saved">-${esc(ev.timeSavedStr || 'Early')}</span>
+                    <span class="sv-medout-saved">Saved ${esc(ev.timeSavedStr || 'Early')}</span>
                     <button class="sv-medout-dismiss" data-action="dismiss-medalert" title="Dismiss">✕</button>
                 </div>
                 <div class="sv-medout-body">
@@ -1623,10 +1920,11 @@
             if (r.state === 'Hospital') hosp++;
             if (r.online === 'Offline') offline++;
         }
+        const unavail = lineup.length - ready;
         return `
             <div class="sv-summary-row">
                 <button class="sv-chip sv-chip-ok" data-action="filter-ready" title="Sort ready hitters to top">🟢 Ready <b>${ready}</b></button>
-                ${hosp > 0 ? `<button class="sv-chip sv-chip-danger" data-action="auto-skip-hosp" title="Move hospitalized hitters to bottom">🏥 Skip Hosp (${hosp})</button>` : '<span class="sv-chip">🏥 Hosp <b>0</b></span>'}
+                ${unavail > 0 ? `<button class="sv-chip sv-chip-danger" data-action="auto-skip-unavail" title="Move unavailable hitters (Hosp/Travel/Offline) to bottom">⏭ Skip Unavail (${unavail})</button>` : '<span class="sv-chip">🏥 Hosp <b>0</b></span>'}
                 <span class="sv-chip">⚫ Off <b>${offline}</b></span>
             </div>
         `;
@@ -2166,6 +2464,14 @@
             document.getElementById('sv-min-btn').textContent = isMinimized ? '▢' : '─';
             updateMinDisplay();
             GM_setValue('sv_min', isMinimized);
+            // Re-clamp inside viewport when expanding near edges
+            requestAnimationFrame(() => {
+                const r = hud.getBoundingClientRect();
+                if (r.right > window.innerWidth - 4 || r.left < 4) {
+                    hud.style.left = 'auto';
+                    hud.style.right = `${Math.max(4, Math.min(window.innerWidth - hud.offsetWidth - 4, window.innerWidth - r.right))}px`;
+                }
+            });
         });
         document.getElementById('sv-close-btn').addEventListener('click', () => {
             hud.style.display = 'none';
@@ -2269,7 +2575,7 @@
             else if (action === 'make-current' && !isNaN(idx)) makeCurrent(idx);
             else if (action === 'prompt-move' && !isNaN(idx)) promptMove(idx);
             else if (action === 'filter-ready') sortReadyToTop();
-            else if (action === 'auto-skip-hosp') autoSkipHospedMembers();
+            else if (action === 'auto-skip-hosp' || action === 'auto-skip-unavail') autoSkipUnavailMembers();
             else if (action === 'dismiss-medalert') { activeMedAlert = null; renderMedOutBanner(); updateMinDisplay(); }
             else if (action === 'call-medout') {
                 const ev = enemyMedOuts.find(x => x.id === act.dataset.medid) || activeMedAlert;
@@ -2312,35 +2618,37 @@
         border-radius: 12px;
         box-shadow: 0 18px 48px rgba(0, 0, 0, 0.78), 0 0 24px rgba(14, 165, 233, 0.08);
         font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-        font-size: 11px; color: #e2e8f0; user-select: none; overflow: hidden;
+        font-size: 11px; color: #e2e8f0; user-select: none; overflow: visible;
     }
+    #sv-chain-hud:not(.sv-minimized) .sv-min-only { display: none !important; }
     #sv-chain-hud.sv-minimized {
-        width: auto; max-width: 620px; border-radius: 999px; max-height: none;
-        border-color: rgba(56, 189, 248, 0.35);
+        width: auto; max-width: calc(100vw - 16px); border-radius: 999px; max-height: none;
+        border-color: rgba(56, 189, 248, 0.35); overflow: hidden;
     }
     #sv-chain-hud.sv-minimized .sv-body, #sv-chain-hud.sv-minimized .sv-full-only { display: none !important; }
     #sv-chain-hud.sv-minimized .sv-min-only { display: flex !important; }
-    #sv-chain-hud.sv-minimized .sv-header { border-bottom: none; padding: 5px 10px; }
+    #sv-chain-hud.sv-minimized .sv-header { border-bottom: none; border-radius: 999px; padding: 5px 10px; }
 
     .sv-header {
         display: flex; align-items: center; justify-content: space-between;
         padding: 8px 12px; cursor: move; flex-shrink: 0; gap: 6px;
         background: linear-gradient(180deg, rgba(30, 41, 59, 0.85), rgba(15, 23, 42, 0.85));
         border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+        border-radius: 12px 12px 0 0;
     }
-    .sv-title { display: flex; align-items: center; gap: 6px; min-width: 0; }
-    .sv-title-text { font-size: 10.5px; font-weight: 800; letter-spacing: 0.9px; color: #f8fafc; }
+    .sv-title { display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1; overflow: hidden; }
+    .sv-title-text { font-size: 10.5px; font-weight: 800; letter-spacing: 0.9px; color: #f8fafc; white-space: nowrap; }
     .sv-sync-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
     .sv-dot-synced { background: #38bdf8; box-shadow: 0 0 6px #38bdf8; }
     .sv-dot-live { background: #10b981; box-shadow: 0 0 8px #10b981; animation: svPulse 1.2s infinite; }
-    .sv-enemy-badge { font-size: 9px; font-weight: 700; color: #fca5a5; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); padding: 1px 6px; border-radius: 999px; white-space: nowrap; }
-    .sv-hdr-controls { display: flex; align-items: center; gap: 2px; }
+    .sv-enemy-badge { font-size: 9px; font-weight: 700; color: #fca5a5; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); padding: 1px 6px; border-radius: 999px; white-space: nowrap; max-width: 112px; overflow: hidden; text-overflow: ellipsis; flex-shrink: 1; }
+    .sv-hdr-controls { display: flex; align-items: center; gap: 2px; flex-shrink: 0; margin-left: auto; }
     .sv-ctrl-btn { background: transparent; border: none; color: #94a3b8; cursor: pointer; padding: 2px 5px; font-size: 11px; border-radius: 5px; }
     .sv-ctrl-btn:hover { color: #f8fafc; background: rgba(255,255,255,0.08); }
 
     /* Minimized Pill */
     .sv-min-only { display: none; }
-    .sv-min-bar { display: flex; align-items: center; gap: 6px; }
+    .sv-min-bar { align-items: center; gap: 5px; min-width: 0; overflow: hidden; }
     .sv-min-chip { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 999px; background: rgba(15, 23, 42, 0.9); border: 1px solid rgba(148, 163, 184, 0.22); }
     .sv-min-chain { color: #38bdf8; }
     .sv-min-pulse { animation: svCrit 0.9s infinite; border-color: rgba(239, 68, 68, 0.7) !important; }
@@ -2349,7 +2657,7 @@
     .sv-min-btn { background: rgba(30, 41, 59, 0.9); border: 1px solid rgba(148, 163, 184, 0.22); color: #e2e8f0; padding: 2px 7px; border-radius: 999px; cursor: pointer; font-size: 10px; font-weight: 700; }
     .sv-min-post { background: #10b981; color: #052e16; border: none; }
 
-    .sv-body { overflow-y: auto; flex: 1; display: flex; flex-direction: column; scrollbar-width: thin; }
+    .sv-body { overflow: visible; flex: 1; min-height: 0; display: flex; flex-direction: column; }
 
     /* Hero Card */
     .sv-hero-card {
@@ -2402,7 +2710,7 @@
 
     /* Tabs */
     .sv-tabs { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; padding: 4px 10px; border-top: 1px solid rgba(148, 163, 184, 0.12); border-bottom: 1px solid rgba(148, 163, 184, 0.12); background: rgba(15, 23, 42, 0.7); }
-    .sv-tab { background: transparent; border: 1px solid transparent; color: #94a3b8; padding: 4px 6px; border-radius: 6px; font-size: 10px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px; }
+    .sv-tab { background: transparent; border: 1px solid transparent; color: #94a3b8; padding: 4px 4px; border-radius: 6px; font-size: 9.5px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 3px; white-space: nowrap; }
     .sv-tab:hover { color: #f8fafc; background: rgba(255,255,255,0.04); }
     .sv-tab-active { background: rgba(56, 189, 248, 0.15); border-color: rgba(56, 189, 248, 0.35); color: #38bdf8; }
     .sv-tab-hot { background: #ef4444; color: #fff; padding: 0 5px; border-radius: 999px; font-size: 9px; font-weight: 800; }
@@ -2475,7 +2783,7 @@
     .sv-btn-del:hover { background: rgba(239, 68, 68, 0.22); color: #fff; }
     .sv-btn-add { background: rgba(16, 185, 129, 0.18); border-color: rgba(16, 185, 129, 0.4); color: #34d399; }
 
-    .sv-footer { padding: 6px 10px 8px; border-top: 1px solid rgba(148, 163, 184, 0.12); background: rgba(15, 23, 42, 0.7); }
+    .sv-footer { padding: 6px 10px 8px; border-top: 1px solid rgba(148, 163, 184, 0.12); background: rgba(15, 23, 42, 0.7); border-radius: 0 0 12px 12px; }
     .sv-add-row { display: flex; gap: 5px; margin-bottom: 5px; }
     .sv-input { flex: 1; min-width: 0; background: #0f172a; border: 1px solid rgba(148, 163, 184, 0.24); color: #f8fafc; padding: 5px 8px; border-radius: 6px; font-size: 11px; outline: none; }
     .sv-input:focus { border-color: #38bdf8; }
