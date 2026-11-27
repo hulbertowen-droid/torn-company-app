@@ -32925,60 +32925,96 @@ function applyServerChainHitsToLineup(attacks, chainStart) {
     return rotated;
 }
 
+let chainAtksInFlight = null;
+let lastSharedChainAtks = null;
+
 async function fetchDualBucketChainAttacks(cleanKey, serverKey, minChain = 0, myFacId = '', reqFac = '') {
-    let usedKey = cleanKey;
-    let r = await fetch(`https://api.torn.com/faction/?selections=basic,attacks,chain,timestamp&key=${usedKey}`, {
-        signal: AbortSignal.timeout(6000)
-    });
-    let data = await r.json();
-
-    const facCfgKey = (reqFac ? getFactionDiscordConfig(reqFac)?.apiKey : null) || serverKey;
-    if (data && data.error && (data.error.code === 7 || data.error.code === 16 || data.error.code === 2) && facCfgKey && facCfgKey !== usedKey) {
-        usedKey = facCfgKey;
-        r = await fetch(`https://api.torn.com/faction/?selections=basic,attacks,chain,timestamp&key=${usedKey}`, {
-            signal: AbortSignal.timeout(6000)
-        });
-        data = await r.json();
-    }
-    if (data && data.error) {
-        return { error: data.error };
+    if (chainAtksInFlight) {
+        return chainAtksInFlight;
     }
 
-    const resolvedFacId = String(data.ID || myFacId || discordConfig.factionId || dynamicFactionId || '52355');
-    const v1Attacks = normalizeOutgoingChainAttacks(data, resolvedFacId);
-    const maxV1Chain = v1Attacks.length ? v1Attacks[v1Attacks.length - 1].chain : 0;
-    const expectedChain = Math.max(Number(minChain || 0), Number(data.chain?.current || 0));
+    chainAtksInFlight = (async () => {
+        const facCfgKey = (reqFac ? getFactionDiscordConfig(reqFac)?.apiKey : null) || serverKey;
+        const candidateKeys = [];
+        if (cleanKey) candidateKeys.push(cleanKey);
+        if (typeof getNextApiKey === 'function') {
+            const k1 = getNextApiKey();
+            const k2 = getNextApiKey();
+            if (k1) candidateKeys.push(k1);
+            if (k2) candidateKeys.push(k2);
+        }
+        if (facCfgKey) candidateKeys.push(facCfgKey);
+        const uniqueKeys = [...new Set(candidateKeys.filter(Boolean))];
 
-    let mergedMap = new Map(v1Attacks.map(a => [a.code, a]));
+        let usedKey = uniqueKeys[0] || cleanKey;
+        let data = null;
 
-    // If Torn v1 attacks cache is behind the live chain counter (29s cache), query v2 (separate cache bucket!)
-    if (expectedChain > maxV1Chain && (Date.now() - chainV2LastFetchMs) > 1000) {
-        chainV2LastFetchMs = Date.now();
-        try {
-            const v2Key = facCfgKey || usedKey;
-            const v2Res = await fetch(`https://api.torn.com/v2/faction/attacks?limit=25&sort=DESC&key=${v2Key}`, {
-                signal: AbortSignal.timeout(5000)
+        for (const k of uniqueKeys) {
+            usedKey = k;
+            const r = await fetch(`https://api.torn.com/faction/?selections=basic,attacks,chain,timestamp&key=${usedKey}`, {
+                signal: AbortSignal.timeout(6000)
             });
-            const v2Data = await v2Res.json();
-            if (v2Data && !v2Data.error && Array.isArray(v2Data.attacks)) {
-                const v2Norm = normalizeOutgoingChainAttacks(v2Data, resolvedFacId);
-                for (const a of v2Norm) {
-                    mergedMap.set(a.code, a);
+            data = await r.json();
+            if (data && !data.error) break;
+            if (!data?.error || ![2, 5, 7, 16].includes(data.error.code)) break;
+        }
+
+        if (!data || data.error) {
+            return { error: data?.error || { error: 'Torn API unavailable', code: 0 } };
+        }
+
+        const resolvedFacId = String(data.ID || myFacId || discordConfig.factionId || dynamicFactionId || '52355');
+        const v1Attacks = normalizeOutgoingChainAttacks(data, resolvedFacId);
+        const maxV1Chain = v1Attacks.length ? v1Attacks[v1Attacks.length - 1].chain : 0;
+        const expectedChain = Math.max(Number(minChain || 0), Number(data.chain?.current || 0));
+
+        let mergedMap = new Map(v1Attacks.map(a => [a.code, a]));
+
+        // If Torn v1 attacks cache is behind the live chain counter (29s cache), query v2 (separate cache bucket!)
+        if (expectedChain > maxV1Chain && (Date.now() - chainV2LastFetchMs) > 1000) {
+            chainV2LastFetchMs = Date.now();
+            try {
+                const v2Key = (typeof getNextApiKey === 'function' ? getNextApiKey() : null) || usedKey || facCfgKey;
+                const v2Res = await fetch(`https://api.torn.com/v2/faction/attacks?limit=25&sort=DESC&key=${v2Key}`, {
+                    signal: AbortSignal.timeout(5000)
+                });
+                const v2Data = await v2Res.json();
+                if (v2Data && !v2Data.error && Array.isArray(v2Data.attacks)) {
+                    const v2Norm = normalizeOutgoingChainAttacks(v2Data, resolvedFacId);
+                    for (const a of v2Norm) {
+                        mergedMap.set(a.code, a);
+                    }
                 }
+            } catch (_) {}
+        }
+
+        const attacks = Array.from(mergedMap.values()).sort((a, b) => (a.chain - b.chain) || (a.timestamp_ended - b.timestamp_ended));
+        applyServerChainHitsToLineup(attacks, data.chain?.start || 0);
+
+        const resultObj = {
+            attacks,
+            chain: data.chain || null,
+            snapshotTs: Number(data.timestamp) || Math.floor(Date.now() / 1000),
+            factionId: resolvedFacId,
+            usedKey
+        };
+        lastSharedChainAtks = {
+            ts: Date.now(),
+            data: {
+                attacks,
+                factionId: resolvedFacId,
+                lastProcessedChain: globalChainLineup.lastProcessedChain || 0,
+                lineupVersion: globalChainLineup.version || 1
             }
-        } catch (_) {}
+        };
+        return resultObj;
+    })();
+
+    try {
+        return await chainAtksInFlight;
+    } finally {
+        chainAtksInFlight = null;
     }
-
-    const attacks = Array.from(mergedMap.values()).sort((a, b) => (a.chain - b.chain) || (a.timestamp_ended - b.timestamp_ended));
-    applyServerChainHitsToLineup(attacks, data.chain?.start || 0);
-
-    return {
-        attacks,
-        chain: data.chain || null,
-        snapshotTs: Number(data.timestamp) || Math.floor(Date.now() / 1000),
-        factionId: resolvedFacId,
-        usedKey
-    };
 }
 
 // GET /api/chain/data — returns chain status + wall-clock deadlines + fast enemy med-out sniper feed + lineupVersion
@@ -32988,7 +33024,7 @@ app.get('/api/chain/data', async (req, res) => {
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-api-key, x-faction-id, Authorization');
     if (req.method === 'OPTIONS') return res.sendStatus(200);
 
-    const serverKey = (discordConfig && discordConfig.apiKey) || TORN_API_KEY || (typeof getNextApiKey === 'function' ? getNextApiKey() : null);
+    const serverKey = (typeof getNextApiKey === 'function' ? getNextApiKey() : null) || (discordConfig && discordConfig.apiKey) || TORN_API_KEY;
     const userKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey;
     const cleanKey = (userKey && userKey !== 'null' && userKey !== 'undefined' && String(userKey).trim()) ? String(userKey).trim() : serverKey;
     if (!cleanKey) {
@@ -33030,13 +33066,17 @@ app.get('/api/chain/data', async (req, res) => {
             signal: AbortSignal.timeout(5000)
         });
         let data = await r.json();
-        if (data && data.error && (data.error.code === 2 || data.error.code === 7 || data.error.code === 16) && serverKey && serverKey !== cleanKey) {
-            r = await fetch(`https://api.torn.com/faction/?selections=basic,chain,rankedwars,timestamp&key=${serverKey}`, {
-                signal: AbortSignal.timeout(5000)
-            });
-            data = await r.json();
+        if (data && data.error && [2, 5, 7, 16].includes(data.error.code)) {
+            const retryKey = (typeof getNextApiKey === 'function' ? getNextApiKey() : null) || serverKey;
+            if (retryKey && retryKey !== cleanKey) {
+                r = await fetch(`https://api.torn.com/faction/?selections=basic,chain,rankedwars,timestamp&key=${retryKey}`, {
+                    signal: AbortSignal.timeout(5000)
+                });
+                data = await r.json();
+            }
         }
         if (data && data.error) {
+            if (cached) return res.json(cached.data);
             return res.status(400).json({ error: data.error.error || 'Torn API error', code: data.error.code });
         }
 
@@ -33217,7 +33257,7 @@ app.get('/api/chain/attacks', async (req, res) => {
     if (req.method === 'OPTIONS') return res.sendStatus(200);
 
     const hostFacId = String(discordConfig.factionId || dynamicFactionId || '');
-    const serverKey = (discordConfig && discordConfig.apiKey) || TORN_API_KEY || (typeof getNextApiKey === 'function' ? getNextApiKey() : null);
+    const serverKey = (typeof getNextApiKey === 'function' ? getNextApiKey() : null) || (discordConfig && discordConfig.apiKey) || TORN_API_KEY;
     const reqFac = String(req.userSession?.factionId || req.headers['x-faction-id'] || '');
     const rawUserKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey;
     const userKey = (rawUserKey && rawUserKey !== 'null' && rawUserKey !== 'undefined' && String(rawUserKey).trim()) ? String(rawUserKey).trim() : serverKey;
@@ -33239,9 +33279,26 @@ app.get('/api/chain/attacks', async (req, res) => {
         });
     }
 
+    const sharedMaxChain = lastSharedChainAtks?.data?.attacks?.length ? lastSharedChainAtks.data.attacks[lastSharedChainAtks.data.attacks.length - 1].chain : 0;
+    if (lastSharedChainAtks && (Date.now() - lastSharedChainAtks.ts) < 1500 && (minChain === 0 || sharedMaxChain >= minChain)) {
+        return res.json({
+            ...lastSharedChainAtks.data,
+            lastProcessedChain: globalChainLineup.lastProcessedChain || 0,
+            lineupVersion: globalChainLineup.version || 1
+        });
+    }
+
     try {
         const result = await fetchDualBucketChainAttacks(cleanKey, serverKey, minChain, hostFacId, reqFac);
         if (result.error) {
+            const fallback = cached?.data || lastSharedChainAtks?.data;
+            if (fallback) {
+                return res.json({
+                    ...fallback,
+                    lastProcessedChain: globalChainLineup.lastProcessedChain || 0,
+                    lineupVersion: globalChainLineup.version || 1
+                });
+            }
             return res.status(400).json({ error: result.error.error || 'Torn API error', code: result.error.code });
         }
         const payload = {
@@ -33253,7 +33310,8 @@ app.get('/api/chain/attacks', async (req, res) => {
         chainAtksCache.set(cacheKey, { data: payload, ts: Date.now() });
         return res.json(payload);
     } catch (err) {
-        if (cached) return res.json(cached.data);
+        const fallback = cached?.data || lastSharedChainAtks?.data;
+        if (fallback) return res.json(fallback);
         return res.status(500).json({ error: err.message });
     }
 });
