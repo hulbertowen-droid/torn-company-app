@@ -32921,20 +32921,104 @@ function applyServerChainHitsToLineup(attacks, chainStart) {
 
     if (rotated) {
         try { fs.writeFileSync('chain_lineup.json', JSON.stringify(globalChainLineup, null, 2)); } catch (e) {}
+        try {
+            if (typeof warboardBroadcaster !== 'undefined' && warboardBroadcaster) {
+                warboardBroadcaster.broadcast('chain_lineup_update', globalChainLineup);
+            }
+        } catch (_) {}
     }
     return rotated;
 }
 
-let chainAtksInFlight = null;
-let lastSharedChainAtks = null;
+const rollingChainAttacksMap = new Map();
+let rollingChainStart = 0;
+let unifiedHostChainCache = { ts: 0, chainPayload: null, rankedwars: null, membersPayload: null, attacks: [], factionId: '', factionName: '' };
+let unifiedHostInFlight = null;
 
-async function fetchDualBucketChainAttacks(cleanKey, serverKey, minChain = 0, myFacId = '', reqFac = '') {
-    if (chainAtksInFlight) {
-        return chainAtksInFlight;
+function computeUnifiedChainPayload(rawChain, snapTs, nowMs) {
+    if (!rawChain) return null;
+    const cStart = Number(rawChain.start || 0);
+    const cCur = Number(rawChain.current || 0);
+    const cCd = Number(rawChain.cooldown || 0);
+    const cTo = Number(rawChain.timeout || 0);
+    const cEnd = Number(rawChain.end || 0);
+
+    let expiresAtMs = 0;
+    let cooldownEndsAtMs = 0;
+
+    if (cCd > 0) {
+        cooldownEndsAtMs = (snapTs + cCd) * 1000;
+        bestServerChainState = { start: cStart, current: cCur, expiresAtMs: 0, updatedAt: nowMs };
+        return {
+            ...rawChain,
+            expiresAtMs: 0,
+            cooldownEndsAtMs,
+            snapshotTs: snapTs,
+            timeout: 0,
+            cooldown: Math.max(0, Math.round((cooldownEndsAtMs - nowMs) / 1000))
+        };
+    } else if (cCur > 0) {
+        expiresAtMs = cEnd > snapTs ? cEnd * 1000 : (snapTs + cTo) * 1000;
+        if (cStart && bestServerChainState.start === cStart && (nowMs - bestServerChainState.updatedAt) < 40000) {
+            if (cCur < bestServerChainState.current) {
+                return {
+                    ...rawChain,
+                    current: bestServerChainState.current,
+                    expiresAtMs: bestServerChainState.expiresAtMs,
+                    cooldownEndsAtMs: 0,
+                    snapshotTs: snapTs,
+                    timeout: Math.max(0, Math.round((bestServerChainState.expiresAtMs - nowMs) / 1000)),
+                    cooldown: 0
+                };
+            }
+            bestServerChainState = {
+                start: cStart,
+                current: cCur,
+                expiresAtMs: Math.max(expiresAtMs, bestServerChainState.expiresAtMs),
+                updatedAt: nowMs
+            };
+        } else {
+            bestServerChainState = { start: cStart, current: cCur, expiresAtMs, updatedAt: nowMs };
+        }
+        const effExp = bestServerChainState.expiresAtMs || expiresAtMs;
+        return {
+            ...rawChain,
+            expiresAtMs: effExp,
+            cooldownEndsAtMs: 0,
+            snapshotTs: snapTs,
+            timeout: effExp > 0 ? Math.max(0, Math.round((effExp - nowMs) / 1000)) : cTo,
+            cooldown: 0
+        };
     }
 
-    chainAtksInFlight = (async () => {
-        const hostFacId = String(myFacId || discordConfig.factionId || dynamicFactionId || '');
+    bestServerChainState = { start: 0, current: 0, expiresAtMs: 0, updatedAt: nowMs };
+    return {
+        ...rawChain,
+        expiresAtMs: 0,
+        cooldownEndsAtMs: 0,
+        snapshotTs: snapTs,
+        timeout: cTo,
+        cooldown: cCd
+    };
+}
+
+async function refreshUnifiedHostChain({ cleanKey = '', serverKey = '', reqFac = '', minChain = 0 } = {}) {
+    const cachedMaxChain = unifiedHostChainCache.attacks.length
+        ? unifiedHostChainCache.attacks[unifiedHostChainCache.attacks.length - 1].chain
+        : 0;
+    const isChainActive = Boolean(unifiedHostChainCache.chainPayload?.current > 0 && !unifiedHostChainCache.chainPayload?.cooldown);
+    const ttlMs = (minChain > cachedMaxChain) ? 400 : (isChainActive ? 1100 : 2400);
+
+    if (unifiedHostChainCache.chainPayload && (Date.now() - unifiedHostChainCache.ts) < ttlMs) {
+        return unifiedHostChainCache;
+    }
+
+    if (unifiedHostInFlight) {
+        return unifiedHostInFlight;
+    }
+
+    unifiedHostInFlight = (async () => {
+        const hostFacId = String(discordConfig.factionId || dynamicFactionId || '');
         const facCfgKey = (reqFac ? getFactionDiscordConfig(reqFac)?.apiKey : null) || serverKey;
         const candidateKeys = [];
         if (cleanKey) candidateKeys.push(cleanKey);
@@ -32943,91 +33027,131 @@ async function fetchDualBucketChainAttacks(cleanKey, serverKey, minChain = 0, my
         if (TORN_API_KEY) candidateKeys.push(TORN_API_KEY);
         const uniqueKeys = [...new Set(candidateKeys.filter(Boolean))];
 
-        let usedKey = uniqueKeys[0] || cleanKey;
+        // Rolling 6-minute `from` parameter bypasses Torn's 29-second cache completely (live TS === NOW)
+        // First call omits `from` so historical bonus hits in the current chain are seeded into rollingChainAttacksMap
+        const fromParam = rollingChainAttacksMap.size > 0
+            ? `&from=${Math.floor(Date.now() / 1000) - 360}`
+            : '';
+
         let data = null;
+        let usedKey = uniqueKeys[0] || cleanKey;
 
         for (const k of uniqueKeys) {
             usedKey = k;
-            const r = await fetch(`https://api.torn.com/faction/?selections=basic,attacks,chain,timestamp&key=${usedKey}`, {
-                signal: AbortSignal.timeout(6000)
-            });
+            const url = `https://api.torn.com/faction/?selections=basic,attacks,chain,rankedwars,timestamp${fromParam}&key=${k}`;
+            const r = await fetch(url, { signal: AbortSignal.timeout(5500) });
             data = await r.json();
             if (data && !data.error) {
-                // Ensure key belongs to our host faction when hostFacId is configured
                 if (hostFacId && data.ID && String(data.ID) !== hostFacId && k !== uniqueKeys[uniqueKeys.length - 1]) {
                     continue;
                 }
                 break;
             }
+            // Retry without attacks only on permission errors (7/16) if no other host AA key succeeded
             if (!data?.error || ![2, 5, 7, 16].includes(data.error.code)) break;
         }
 
+        if ((!data || data.error) && unifiedHostChainCache.chainPayload) {
+            return unifiedHostChainCache;
+        }
         if (!data || data.error) {
             return { error: data?.error || { error: 'Torn API unavailable', code: 0 } };
         }
 
         const resolvedFacId = String(data.ID || hostFacId || '52355');
-        const v1Attacks = normalizeOutgoingChainAttacks(data, resolvedFacId);
-        const maxV1Chain = v1Attacks.length ? v1Attacks[v1Attacks.length - 1].chain : 0;
+        const resolvedFacName = String(data.name || unifiedHostChainCache.factionName || '');
+        const snapTs = Number(data.timestamp) || Math.floor(Date.now() / 1000);
+        const nowMs = Date.now();
+        const cStart = Number(data.chain?.start || 0);
+
+        if (cStart && rollingChainStart && cStart !== rollingChainStart) {
+            rollingChainAttacksMap.clear();
+        }
+        if (cStart) rollingChainStart = cStart;
+
+        const batchAttacks = normalizeOutgoingChainAttacks(data, resolvedFacId);
+        for (const a of batchAttacks) {
+            rollingChainAttacksMap.set(a.code, a);
+        }
+        if (rollingChainAttacksMap.size > 150) {
+            const sortedKeep = Array.from(rollingChainAttacksMap.values())
+                .sort((a, b) => (a.chain - b.chain) || (a.timestamp_ended - b.timestamp_ended))
+                .slice(-150);
+            rollingChainAttacksMap.clear();
+            for (const a of sortedKeep) rollingChainAttacksMap.set(a.code, a);
+        }
+
+        let attacks = Array.from(rollingChainAttacksMap.values())
+            .sort((a, b) => (a.chain - b.chain) || (a.timestamp_ended - b.timestamp_ended));
+
+        // Safety net: if uncached rolling window didn't have latest hit yet vs chain.current, try v2 once
+        const maxChainSeen = attacks.length ? attacks[attacks.length - 1].chain : 0;
         const expectedChain = Math.max(Number(minChain || 0), Number(data.chain?.current || 0));
-
-        let mergedMap = new Map(v1Attacks.map(a => [a.code, a]));
-
-        // If Torn v1 attacks cache is behind the live chain counter (29s cache), query v2 (separate cache bucket!)
-        if (expectedChain > maxV1Chain && (Date.now() - chainV2LastFetchMs) > 1500) {
+        if (expectedChain > maxChainSeen && (Date.now() - chainV2LastFetchMs) > 1500) {
             chainV2LastFetchMs = Date.now();
             try {
                 const v2Key = facCfgKey || usedKey;
-                const v2Res = await fetch(`https://api.torn.com/v2/faction/attacks?limit=25&sort=DESC&key=${v2Key}`, {
-                    signal: AbortSignal.timeout(5000)
+                const v2Res = await fetch(`https://api.torn.com/v2/faction/attacks?limit=15&sort=DESC&key=${v2Key}`, {
+                    signal: AbortSignal.timeout(4500)
                 });
                 const v2Data = await v2Res.json();
                 if (v2Data && !v2Data.error && Array.isArray(v2Data.attacks)) {
                     const v2Norm = normalizeOutgoingChainAttacks(v2Data, resolvedFacId);
-                    for (const a of v2Norm) {
-                        mergedMap.set(a.code, a);
-                    }
+                    for (const a of v2Norm) rollingChainAttacksMap.set(a.code, a);
+                    attacks = Array.from(rollingChainAttacksMap.values())
+                        .sort((a, b) => (a.chain - b.chain) || (a.timestamp_ended - b.timestamp_ended));
                 }
             } catch (_) {}
         }
 
-        const attacks = Array.from(mergedMap.values()).sort((a, b) => (a.chain - b.chain) || (a.timestamp_ended - b.timestamp_ended));
-        applyServerChainHitsToLineup(attacks, data.chain?.start || 0);
+        applyServerChainHitsToLineup(attacks, cStart);
+        const chainPayload = computeUnifiedChainPayload(data.chain, snapTs, nowMs);
 
-        const resultObj = {
-            attacks,
-            chain: data.chain || null,
-            snapshotTs: Number(data.timestamp) || Math.floor(Date.now() / 1000),
-            factionId: resolvedFacId,
-            usedKey
+        const membersPayload = {
+            factionId: data.ID || resolvedFacId,
+            factionName: resolvedFacName || null,
+            members: data.members || {}
         };
-        lastSharedChainAtks = {
+
+        unifiedHostChainCache = {
             ts: Date.now(),
+            chainPayload,
+            rankedwars: data.rankedwars || null,
+            membersPayload,
+            attacks,
+            factionId: resolvedFacId,
+            factionName: resolvedFacName,
+            rawID: data.ID
+        };
+
+        lastSharedChainAtks = {
+            ts: unifiedHostChainCache.ts,
             data: {
                 attacks,
                 factionId: resolvedFacId,
+                lineupData: globalChainLineup,
                 lastProcessedChain: globalChainLineup.lastProcessedChain || 0,
                 lineupVersion: globalChainLineup.version || 1
             }
         };
-        return resultObj;
+
+        return unifiedHostChainCache;
     })();
 
     try {
-        return await chainAtksInFlight;
+        return await unifiedHostInFlight;
     } finally {
-        chainAtksInFlight = null;
+        unifiedHostInFlight = null;
     }
 }
 
-// GET /api/chain/data — returns chain status + wall-clock deadlines + fast enemy med-out sniper feed + lineupVersion
+// GET /api/chain/data — returns uncached live chain status + wall-clock deadlines + recent attacks + inline lineupData + enemy med-out radar
 app.get('/api/chain/data', async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-api-key, x-faction-id, Authorization');
     if (req.method === 'OPTIONS') return res.sendStatus(200);
 
-    const hostFacId = String(discordConfig.factionId || dynamicFactionId || '');
     const serverKey = (discordConfig && discordConfig.apiKey) || ADMIN_API_KEY || TORN_API_KEY || (typeof getNextApiKey === 'function' ? getNextApiKey() : null);
     const userKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey;
     const cleanKey = (userKey && userKey !== 'null' && userKey !== 'undefined' && String(userKey).trim()) ? String(userKey).trim() : serverKey;
@@ -33041,116 +33165,29 @@ app.get('/api/chain/data', async (req, res) => {
     if (reqEnemyId && reqEnemyId !== chainEnemyFactionOverride.id) {
         chainEnemyFactionOverride = { id: reqEnemyId, name: null, updatedAt: Date.now() };
     }
-
-    const cacheKey = `${cleanKey.slice(-8)}_${reqEnemyId || ''}`;
-    const cached = chainDataCache.get(cacheKey);
-    if (cached && (Date.now() - cached.ts) < 2000) {
-        const dyn = { ...cached.data };
-        if (dyn.chain) {
-            const c = { ...dyn.chain };
-            const nowMs = Date.now();
-            if (c.cooldownEndsAtMs && c.cooldownEndsAtMs > 0) {
-                c.cooldown = Math.max(0, Math.round((c.cooldownEndsAtMs - nowMs) / 1000));
-            } else if (c.expiresAtMs && c.expiresAtMs > 0 && c.current > 0) {
-                c.timeout = Math.max(0, Math.round((c.expiresAtMs - nowMs) / 1000));
-            }
-            dyn.chain = c;
-        }
-        dyn.enemyMedOuts = recentEnemyMedOuts.slice(0, 20);
-        dyn.upcomingHospExits = upcomingEnemyHospExits.slice(0, 10);
-        dyn.lineupVersion = globalChainLineup.version || 1;
-        dyn.lineupUpdatedAt = globalChainLineup.updatedAt || 0;
-        dyn.lastProcessedChain = globalChainLineup.lastProcessedChain || 0;
-        dyn.lastHitEvent = globalChainLineup.lastHitEvent || null;
-        return res.json(dyn);
-    }
+    const minChain = Math.max(0, parseInt(req.query.minChain || '0', 10) || 0);
+    const reqFac = String(req.userSession?.factionId || req.headers['x-faction-id'] || '');
 
     try {
-        let r = await fetch(`https://api.torn.com/faction/?selections=basic,chain,rankedwars,timestamp&key=${cleanKey}`, {
-            signal: AbortSignal.timeout(5000)
-        });
-        let data = await r.json();
-        const wrongFac = Boolean(hostFacId && data && data.ID && String(data.ID) !== hostFacId);
-        if (((data && data.error && [2, 5, 7, 16].includes(data.error.code)) || wrongFac) && serverKey && serverKey !== cleanKey) {
-            r = await fetch(`https://api.torn.com/faction/?selections=basic,chain,rankedwars,timestamp&key=${serverKey}`, {
-                signal: AbortSignal.timeout(5000)
-            });
-            data = await r.json();
-        }
-        if (data && data.error) {
-            if (cached) return res.json(cached.data);
-            return res.status(400).json({ error: data.error.error || 'Torn API error', code: data.error.code });
+        const unified = await refreshUnifiedHostChain({ cleanKey, serverKey, reqFac, minChain });
+        if (unified.error) {
+            return res.status(400).json({ error: unified.error.error || 'Torn API error', code: unified.error.code });
         }
 
-        const myFacId = String(data.ID || discordConfig.factionId || dynamicFactionId || '52355');
-        const snapTs = Number(data.timestamp) || Math.floor(Date.now() / 1000);
         const nowMs = Date.now();
-
-        let chainPayload = null;
-        if (data.chain) {
-            const rawChain = data.chain;
-            const cStart = Number(rawChain.start || 0);
-            const cCur = Number(rawChain.current || 0);
-            const cCd = Number(rawChain.cooldown || 0);
-            const cTo = Number(rawChain.timeout || 0);
-            const cEnd = Number(rawChain.end || 0);
-
-            let expiresAtMs = 0;
-            let cooldownEndsAtMs = 0;
-
-            if (cCd > 0) {
-                cooldownEndsAtMs = (snapTs + cCd) * 1000;
-                bestServerChainState = { start: cStart, current: cCur, expiresAtMs: 0, updatedAt: nowMs };
-            } else if (cCur > 0) {
-                expiresAtMs = cEnd > snapTs ? cEnd * 1000 : (snapTs + cTo) * 1000;
-                // Monotonic guard: prevent stale API cache from regressing current chain or timer within the same chain
-                if (cStart && bestServerChainState.start === cStart && (nowMs - bestServerChainState.updatedAt) < 40000) {
-                    if (cCur < bestServerChainState.current) {
-                        chainPayload = {
-                            ...rawChain,
-                            current: bestServerChainState.current,
-                            expiresAtMs: bestServerChainState.expiresAtMs,
-                            cooldownEndsAtMs: 0,
-                            snapshotTs: snapTs,
-                            timeout: Math.max(0, Math.round((bestServerChainState.expiresAtMs - nowMs) / 1000))
-                        };
-                    } else {
-                        bestServerChainState = {
-                            start: cStart,
-                            current: cCur,
-                            expiresAtMs: Math.max(expiresAtMs, bestServerChainState.expiresAtMs),
-                            updatedAt: nowMs
-                        };
-                    }
-                } else {
-                    bestServerChainState = { start: cStart, current: cCur, expiresAtMs, updatedAt: nowMs };
-                }
-            } else {
-                bestServerChainState = { start: 0, current: 0, expiresAtMs: 0, updatedAt: nowMs };
-            }
-
-            if (!chainPayload) {
-                const effExp = bestServerChainState.expiresAtMs || expiresAtMs;
-                chainPayload = {
-                    ...rawChain,
-                    expiresAtMs: effExp,
-                    cooldownEndsAtMs,
-                    snapshotTs: snapTs,
-                    timeout: effExp > 0 ? Math.max(0, Math.round((effExp - nowMs) / 1000)) : cTo,
-                    cooldown: cooldownEndsAtMs > 0 ? Math.max(0, Math.round((cooldownEndsAtMs - nowMs) / 1000)) : cCd
-                };
-            }
-
-            // Trigger server-side dual-bucket hit sync if chain counter has moved past lastProcessedChain
-            if (cCd === 0 && chainPayload.current > (globalChainLineup.lastProcessedChain || 0)) {
-                fetchDualBucketChainAttacks(cleanKey, serverKey, chainPayload.current, myFacId).catch(() => {});
+        let chainOut = unified.chainPayload ? { ...unified.chainPayload } : null;
+        if (chainOut) {
+            if (chainOut.cooldownEndsAtMs && chainOut.cooldownEndsAtMs > 0) {
+                chainOut.cooldown = Math.max(0, Math.round((chainOut.cooldownEndsAtMs - nowMs) / 1000));
+            } else if (chainOut.expiresAtMs && chainOut.expiresAtMs > 0 && chainOut.current > 0) {
+                chainOut.timeout = Math.max(0, Math.round((chainOut.expiresAtMs - nowMs) / 1000));
             }
         }
 
         // Resolve enemy faction ID (explicit query > manual target > active/upcoming RW > background war cache)
         let activeEnemyId = reqEnemyId || (chainEnemyFactionOverride && chainEnemyFactionOverride.id) || null;
-        if (!activeEnemyId && data && data.rankedwars) {
-            const detected = autoDetectEnemyFaction(data);
+        if (!activeEnemyId && unified.rankedwars) {
+            const detected = autoDetectEnemyFaction({ ID: unified.rawID || unified.factionId, rankedwars: unified.rankedwars });
             if (detected) activeEnemyId = String(detected);
         }
         if (!activeEnemyId && typeof currentEnemyFacId !== 'undefined' && currentEnemyFacId) {
@@ -33161,7 +33198,7 @@ app.get('/api/chain/data', async (req, res) => {
             ? chainEnemyFactionOverride.name
             : (typeof enemyFactionNameCache !== 'undefined' ? enemyFactionNameCache : 'Enemy Faction');
 
-        // Fast 3-second enemy hospital transition scan for near-instant med-out / revive detection
+        // Fast 2.8-second enemy hospital transition scan for med-out / revive detection
         if (activeEnemyId) {
             const eCache = chainEnemyCache.get(String(activeEnemyId));
             if (!eCache || (Date.now() - eCache.ts) >= 2800) {
@@ -33186,38 +33223,45 @@ app.get('/api/chain/data', async (req, res) => {
         const cutoffMs = Date.now() - (20 * 60 * 1000);
         recentEnemyMedOuts = recentEnemyMedOuts.filter(ev => ev.detectedAt >= cutoffMs);
 
-        const payload = {
-            factionId: myFacId,
-            chain: chainPayload,
+        return res.json({
+            factionId: unified.factionId,
+            factionName: unified.factionName || null,
+            chain: chainOut,
             enemyFaction: activeEnemyId ? { id: String(activeEnemyId), name: resolvedEnemyName } : null,
             enemyMedOuts: recentEnemyMedOuts.slice(0, 20),
             upcomingHospExits: upcomingEnemyHospExits.slice(0, 10),
+            recentAttacks: (unified.attacks || []).slice(-20),
+            lineupData: globalChainLineup,
             lineupVersion: globalChainLineup.version || 1,
             lineupUpdatedAt: globalChainLineup.updatedAt || 0,
             lastProcessedChain: globalChainLineup.lastProcessedChain || 0,
             lastHitEvent: globalChainLineup.lastHitEvent || null
-        };
-        chainDataCache.set(cacheKey, { data: payload, ts: Date.now() });
-        return res.json(payload);
+        });
     } catch (err) {
-        if (cached) return res.json(cached.data);
         return res.status(500).json({ error: err.message });
     }
 });
 
-// GET /api/chain/members — returns faction member roster with online/hospital/traveling statuses
+// GET /api/chain/members — returns faction member roster (reuses fresh unified host snapshot first)
 app.get('/api/chain/members', async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-api-key, x-session-token, x-faction-id, Authorization');
     if (req.method === 'OPTIONS') return res.sendStatus(200);
 
-    const serverKey = (discordConfig && discordConfig.apiKey) || TORN_API_KEY || (typeof getNextApiKey === 'function' ? getNextApiKey() : null);
+    const serverKey = (discordConfig && discordConfig.apiKey) || ADMIN_API_KEY || TORN_API_KEY || (typeof getNextApiKey === 'function' ? getNextApiKey() : null);
     const rawUserKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey;
     const userKey = (rawUserKey && rawUserKey !== 'null' && rawUserKey !== 'undefined' && String(rawUserKey).trim()) ? String(rawUserKey).trim() : serverKey;
     if (!userKey) {
         return res.status(401).json({ error: 'Authentication required. Torn API key required.' });
     }
+
+    const reqFac = String(req.userSession?.factionId || req.headers['x-faction-id'] || '');
+    const hostFacId = String(discordConfig.factionId || dynamicFactionId || unifiedHostChainCache.factionId || '');
+    if (unifiedHostChainCache.membersPayload && (Date.now() - unifiedHostChainCache.ts) < 15000 && (!reqFac || !hostFacId || reqFac === hostFacId)) {
+        return res.json(unifiedHostChainCache.membersPayload);
+    }
+
     const cleanKey = String(userKey).trim();
     const cacheKey = crypto.createHash('sha256').update(cleanKey).digest('hex').slice(0, 10);
     const cached = chainMembersCache.get(cacheKey);
@@ -33251,14 +33295,13 @@ app.get('/api/chain/members', async (req, res) => {
     }
 });
 
-// GET /api/chain/attacks — returns qualifying outgoing chain attacks (chain > 0) with dual-bucket v1/v2 lookup
+// GET /api/chain/attacks — returns qualifying outgoing chain attacks via unified zero-cache poller
 app.get('/api/chain/attacks', async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-api-key, x-session-token, x-faction-id, Authorization');
     if (req.method === 'OPTIONS') return res.sendStatus(200);
 
-    const hostFacId = String(discordConfig.factionId || dynamicFactionId || '');
     const serverKey = (discordConfig && discordConfig.apiKey) || ADMIN_API_KEY || TORN_API_KEY || (typeof getNextApiKey === 'function' ? getNextApiKey() : null);
     const reqFac = String(req.userSession?.factionId || req.headers['x-faction-id'] || '');
     const rawUserKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey;
@@ -33269,51 +33312,29 @@ app.get('/api/chain/attacks', async (req, res) => {
 
     const minChain = Math.max(0, parseInt(req.query.minChain || '0', 10) || 0);
     const cleanKey = String(userKey).trim();
-    const cacheKey = crypto.createHash('sha256').update(cleanKey).digest('hex').slice(0, 10);
-    const cached = chainAtksCache.get(cacheKey);
-    const cachedMaxChain = cached?.data?.attacks?.length ? cached.data.attacks[cached.data.attacks.length - 1].chain : 0;
-
-    if (cached && (Date.now() - cached.ts) < 1200 && (minChain === 0 || cachedMaxChain >= minChain)) {
-        return res.json({
-            ...cached.data,
-            lastProcessedChain: globalChainLineup.lastProcessedChain || 0,
-            lineupVersion: globalChainLineup.version || 1
-        });
-    }
-
-    const sharedMaxChain = lastSharedChainAtks?.data?.attacks?.length ? lastSharedChainAtks.data.attacks[lastSharedChainAtks.data.attacks.length - 1].chain : 0;
-    if (lastSharedChainAtks && (Date.now() - lastSharedChainAtks.ts) < 1500 && (minChain === 0 || sharedMaxChain >= minChain)) {
-        return res.json({
-            ...lastSharedChainAtks.data,
-            lastProcessedChain: globalChainLineup.lastProcessedChain || 0,
-            lineupVersion: globalChainLineup.version || 1
-        });
-    }
 
     try {
-        const result = await fetchDualBucketChainAttacks(cleanKey, serverKey, minChain, hostFacId, reqFac);
-        if (result.error) {
-            const fallback = cached?.data || lastSharedChainAtks?.data;
-            if (fallback) {
+        const unified = await refreshUnifiedHostChain({ cleanKey, serverKey, reqFac, minChain });
+        if (unified.error) {
+            if (lastSharedChainAtks?.data) {
                 return res.json({
-                    ...fallback,
+                    ...lastSharedChainAtks.data,
+                    lineupData: globalChainLineup,
                     lastProcessedChain: globalChainLineup.lastProcessedChain || 0,
                     lineupVersion: globalChainLineup.version || 1
                 });
             }
-            return res.status(400).json({ error: result.error.error || 'Torn API error', code: result.error.code });
+            return res.status(400).json({ error: unified.error.error || 'Torn API error', code: unified.error.code });
         }
-        const payload = {
-            attacks: result.attacks,
-            factionId: result.factionId,
+        return res.json({
+            attacks: unified.attacks,
+            factionId: unified.factionId,
+            lineupData: globalChainLineup,
             lastProcessedChain: globalChainLineup.lastProcessedChain || 0,
             lineupVersion: globalChainLineup.version || 1
-        };
-        chainAtksCache.set(cacheKey, { data: payload, ts: Date.now() });
-        return res.json(payload);
+        });
     } catch (err) {
-        const fallback = cached?.data || lastSharedChainAtks?.data;
-        if (fallback) return res.json(fallback);
+        if (lastSharedChainAtks?.data) return res.json(lastSharedChainAtks.data);
         return res.status(500).json({ error: err.message });
     }
 });
@@ -33472,6 +33493,11 @@ app.post('/api/chain/lineup', express.json(), (req, res) => {
         try {
             fs.writeFileSync('chain_lineup.json', JSON.stringify(globalChainLineup, null, 2));
         } catch (e) {}
+        try {
+            if (typeof warboardBroadcaster !== 'undefined' && warboardBroadcaster) {
+                warboardBroadcaster.broadcast('chain_lineup_update', globalChainLineup);
+            }
+        } catch (_) {}
     }
     res.json({ ok: true, version: globalChainLineup.version, updatedAt: globalChainLineup.updatedAt });
 });

@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         FactionOS Chain Command
 // @namespace    https://faction-os.duckdns.org/
-// @version      4.1.0
-// @description  FactionOS Tactical Chain HUD — multi-tier hit detection, wall-clock chain timer, true bidirectional server sync, verified Enemy Med-Out / Revive sniper alerts with 1-click Attack & Faction Chat callouts, and modern glassmorphic HUD across Torn.
+// @version      4.2.0
+// @description  FactionOS Tactical Chain HUD — sub-second uncached hit detection, wall-clock chain timer, Torn Chat 3.0/2.0 auto-posting, true bidirectional server sync, and verified Enemy Med-Out / Revive sniper alerts.
 // @author       FactionOS
 // @match        https://www.torn.com/*
 // @grant        GM_xmlhttpRequest
@@ -77,6 +77,7 @@
 
     // Server Sync Versioning & Wall-Clock Chain State
     let myFactionId         = GM_getValue('sv_my_fac_id', '') || '';
+    let myFactionName       = GM_getValue('sv_my_fac_name', '') || '';
     let serverLineupVersion = 0;
     let isSavingToServer    = false;
     let localMutationSeq    = 0;
@@ -447,7 +448,7 @@
             debounceTimer = setTimeout(() => {
                 debounceTimer = null;
                 scanDOMChainCounter();
-            }, 120);
+            }, 35);
         }
 
         const observer = new MutationObserver(() => debouncedScan());
@@ -522,18 +523,21 @@
     function verifyHitWithRetry(targetChain) {
         if (!targetChain || pendingHitVerify.has(targetChain)) return;
         pendingHitVerify.add(targetChain);
-        const delays = [250, 1350, 2900];
+        const delays = [30, 500, 1250];
         delays.forEach((ms, idx) => {
             setTimeout(() => {
                 if (lastProcessedChain >= targetChain) {
                     pendingHitVerify.delete(targetChain);
                     return;
                 }
-                pollBackendAttacks(targetChain);
+                // Fast uncached backend pull (works even with NO personal API key!)
+                syncBackendTelemetry(true, targetChain);
                 if (apiKey && hasAttacksAccess) {
-                    tornGet('/v2/faction/attacks?limit=15&sort=DESC', (err, d) => {
-                        if (!err && d && Array.isArray(d.attacks)) {
-                            processAttacks(d.attacks);
+                    const fromSec = Math.floor(Date.now() / 1000) - 360;
+                    tornGet(`/faction/?selections=attacks,chain,timestamp&from=${fromSec}`, (err, d) => {
+                        if (!err && d) {
+                            if (d.chain) applyChainStateFromApi(d.chain, d.timestamp);
+                            if (d.attacks) processAttacks(Object.values(d.attacks));
                         }
                     });
                 }
@@ -872,7 +876,7 @@
         const targetSecs = parseTimeToSecs(targetHitTime) || 150;
         const isCritical = chainTimeout > 0 && chainTimeout <= 150;
         const nearTarget = chainTimeout > 0 && Math.abs(chainTimeout - targetSecs) <= 30;
-        const nextDelayMs = (isCritical || nearTarget) ? 2000 : 3500;
+        const nextDelayMs = (isCritical || nearTarget) ? 1100 : (chainActive ? 1400 : 2500);
 
         adaptivePollTimer = setTimeout(() => {
             pollChainAndAttacks();
@@ -1034,6 +1038,31 @@
         }
     }
 
+    function applyServerLineupPayload(dataObj, seqAtStart) {
+        if (!dataObj || !Array.isArray(dataObj.lineup)) return false;
+        if (seqAtStart !== localMutationSeq || isSavingToServer) return false;
+        const incomingVer = dataObj.version || 0;
+        if (dataObj.lastProcessedChain) {
+            lastProcessedChain = Math.max(lastProcessedChain, Number(dataObj.lastProcessedChain) || 0);
+            persistChainCursor();
+        }
+        if (incomingVer > serverLineupVersion || (!lineup.length && dataObj.lineup.length)) {
+            serverLineupVersion = incomingVer;
+            lineup = dataObj.lineup;
+            if (dataObj.targetHitTime !== undefined) targetHitTime = dataObj.targetHitTime;
+            if (dataObj.cycle) cycleNum = dataObj.cycle;
+            if (dataObj.loopMode !== undefined) loopMode = dataObj.loopMode;
+            if (dataObj.autoMode !== undefined) autoMode = dataObj.autoMode;
+            GM_setValue('sv_state', JSON.stringify({ lineup, targetHitTime, cycleNum, loopMode, autoMode, autoSendOnPost, soundEnabled, autoCallMedOut, customEnemyFacId, runOnAllPages }));
+            _syncHitTimeUI();
+            syncTogglePillsUI();
+            renderLineup();
+            renderChainBar();
+            return true;
+        }
+        return false;
+    }
+
     function fetchServerLineupSnapshot() {
         if (isSavingToServer) return;
         const seqAtStart = localMutationSeq;
@@ -1042,42 +1071,27 @@
             url: `${SERVER_BASE}/api/chain/lineup`,
             timeout: 4000,
             onload(res) {
-                if (seqAtStart !== localMutationSeq || isSavingToServer) return;
                 try {
                     const d = JSON.parse(res.responseText);
-                    if (d?.ok && d?.data && Array.isArray(d.data.lineup)) {
-                        const incomingVer = d.data.version || 0;
-                        if (d.data.lastProcessedChain) {
-                            lastProcessedChain = Math.max(lastProcessedChain, Number(d.data.lastProcessedChain) || 0);
-                            persistChainCursor();
-                        }
-                        if (incomingVer > serverLineupVersion || (!lineup.length && d.data.lineup.length)) {
-                            serverLineupVersion = incomingVer;
-                            lineup = d.data.lineup;
-                            if (d.data.targetHitTime !== undefined) targetHitTime = d.data.targetHitTime;
-                            if (d.data.cycle) cycleNum = d.data.cycle;
-                            if (d.data.loopMode !== undefined) loopMode = d.data.loopMode;
-                            if (d.data.autoMode !== undefined) autoMode = d.data.autoMode;
-                            GM_setValue('sv_state', JSON.stringify({ lineup, targetHitTime, cycleNum, loopMode, autoMode, autoSendOnPost, soundEnabled, autoCallMedOut, customEnemyFacId, runOnAllPages }));
-                            _syncHitTimeUI();
-                            syncTogglePillsUI();
-                            renderLineup();
-                            renderChainBar();
-                        }
-                    }
+                    if (d?.ok && d?.data) applyServerLineupPayload(d.data, seqAtStart);
                 } catch (e) {}
             },
             onerror() {}
         });
     }
 
-    function syncBackendTelemetry(updateChainFields = false) {
-        const enemyParam = customEnemyFacId ? `?enemyFactionId=${encodeURIComponent(customEnemyFacId)}` : '';
+    function syncBackendTelemetry(updateChainFields = true, minChain = 0) {
+        const params = [];
+        if (customEnemyFacId) params.push(`enemyFactionId=${encodeURIComponent(customEnemyFacId)}`);
+        if (minChain > 0) params.push(`minChain=${encodeURIComponent(minChain)}`);
+        const qs = params.length ? `?${params.join('&')}` : '';
+        const seqAtStart = localMutationSeq;
+
         GM_xmlhttpRequest({
             method: 'GET',
-            url: `${SERVER_BASE}/api/chain/data${enemyParam}`,
+            url: `${SERVER_BASE}/api/chain/data${qs}`,
             headers: { 'x-api-key': apiKey || '' },
-            timeout: 4000,
+            timeout: 4500,
             onload(res) {
                 try {
                     const d = JSON.parse(res.responseText);
@@ -1086,10 +1100,17 @@
                         myFactionId = String(d.factionId);
                         GM_setValue('sv_my_fac_id', myFactionId);
                     }
+                    if (d.factionName) {
+                        myFactionName = String(d.factionName);
+                        GM_setValue('sv_my_fac_name', myFactionName);
+                    }
                     if (updateChainFields && d.chain) {
                         applyChainStateFromApi(d.chain, d.chain.snapshotTs);
                         renderChainBar();
                         updateMinDisplay();
+                    }
+                    if (Array.isArray(d.recentAttacks) && d.recentAttacks.length) {
+                        processAttacks(d.recentAttacks);
                     }
                     if (d.enemyFaction && d.enemyFaction.id) {
                         autoEnemyFacId = String(d.enemyFaction.id);
@@ -1098,7 +1119,6 @@
                     }
                     if (Array.isArray(d.enemyMedOuts)) {
                         const validIds = new Set(d.enemyMedOuts.map(ev => String(ev.playerId)));
-                        // Drop any re-hospitalized enemies purged by the server
                         enemyMedOuts = enemyMedOuts.filter(ev => validIds.has(String(ev.playerId)));
                         if (activeMedAlert && !validIds.has(String(activeMedAlert.playerId))) {
                             activeMedAlert = null;
@@ -1119,7 +1139,13 @@
                         lastProcessedChain = Number(d.lastProcessedChain);
                         persistChainCursor();
                     }
-                    if (d.lineupVersion && d.lineupVersion > serverLineupVersion && !isSavingToServer) {
+                    // Apply inline lineupData immediately without a 2nd round-trip
+                    if (d.lineupData && d.lineupVersion > serverLineupVersion && !isSavingToServer) {
+                        const applied = applyServerLineupPayload(d.lineupData, seqAtStart);
+                        if (applied && d.lastHitEvent && (Date.now() - d.lastHitEvent.ts) < 12000 && d.lastHitEvent.attackerName) {
+                            flashStatus(`✅ ${d.lastHitEvent.attackerName} landed #${d.lastHitEvent.chain}!${d.lastHitEvent.nextUp ? ' Next UP: ' + d.lastHitEvent.nextUp : ''}`, false);
+                        }
+                    } else if (d.lineupVersion && d.lineupVersion > serverLineupVersion && !isSavingToServer) {
                         fetchServerLineupSnapshot();
                         if (d.lastHitEvent && (Date.now() - d.lastHitEvent.ts) < 12000 && d.lastHitEvent.attackerName) {
                             flashStatus(`✅ ${d.lastHitEvent.attackerName} landed #${d.lastHitEvent.chain}!${d.lastHitEvent.nextUp ? ' Next UP: ' + d.lastHitEvent.nextUp : ''}`, false);
@@ -1133,6 +1159,7 @@
 
     function pollBackendAttacks(minChain = 0) {
         const qs = minChain > 0 ? `?minChain=${encodeURIComponent(minChain)}` : '';
+        const seqAtStart = localMutationSeq;
         GM_xmlhttpRequest({
             method: 'GET',
             url: `${SERVER_BASE}/api/chain/attacks${qs}`,
@@ -1146,7 +1173,9 @@
                         GM_setValue('sv_my_fac_id', myFactionId);
                     }
                     if (d && d.attacks) processAttacks(d.attacks);
-                    if (d?.lineupVersion && d.lineupVersion > serverLineupVersion && !isSavingToServer) {
+                    if (d?.lineupData && d.lineupVersion > serverLineupVersion && !isSavingToServer) {
+                        applyServerLineupPayload(d.lineupData, seqAtStart);
+                    } else if (d?.lineupVersion && d.lineupVersion > serverLineupVersion && !isSavingToServer) {
                         fetchServerLineupSnapshot();
                     }
                 } catch (e) {}
@@ -1168,35 +1197,23 @@
     }
 
     function pollChainAndAttacks() {
-        if (!apiKey) {
-            syncBackendTelemetry(true);
-            pollBackendAttacks(Math.max(chainCount, highestConfirmedChain));
-            return;
-        }
+        const targetMin = Math.max(chainCount, highestConfirmedChain);
+        // Single unified uncached backend poll (chain + recent attacks + med-outs + inline lineup)
+        syncBackendTelemetry(true, targetMin > lastProcessedChain ? targetMin : 0);
 
-        if (hasAttacksAccess) {
-            tornGet('/faction/?selections=basic,attacks,chain,timestamp', (err, d) => {
+        // Optional personal uncached direct Torn poll when member has an API key & attacks need catching up
+        if (apiKey && hasAttacksAccess && chainActive && targetMin > lastProcessedChain) {
+            const fromSec = Math.floor(Date.now() / 1000) - 360;
+            tornGet(`/faction/?selections=basic,attacks,chain,timestamp&from=${fromSec}`, (err, d) => {
                 if (err) {
                     if (err.code === 16 || err.code === 7 || (err.error && /access|permission/i.test(err.error))) {
                         hasAttacksAccess = false;
-                        tornGet('/faction/?selections=basic,chain,timestamp', (err2, d2) => {
-                            if (!err2 && d2) handleChainResponse(d2);
-                        });
-                        pollBackendAttacks(Math.max(chainCount, highestConfirmedChain));
                     }
                     return;
                 }
                 if (d) handleChainResponse(d);
             });
-        } else {
-            tornGet('/faction/?selections=basic,chain,timestamp', (err, d) => {
-                if (!err && d) handleChainResponse(d);
-            });
-            pollBackendAttacks(Math.max(chainCount, highestConfirmedChain));
         }
-
-        // Always keep server med-outs + lineupVersion synced
-        syncBackendTelemetry(false);
     }
 
     function handleChainResponse(d) {
@@ -1204,15 +1221,13 @@
             myFactionId = String(d.ID);
             GM_setValue('sv_my_fac_id', myFactionId);
         }
+        if (d.name) {
+            myFactionName = String(d.name);
+            GM_setValue('sv_my_fac_name', myFactionName);
+        }
         applyChainStateFromApi(d.chain, d.timestamp);
 
         if (d.attacks) processAttacks(Object.values(d.attacks));
-        // If Torn's v1 attacks cache is behind the live chain counter, pull v2 immediately!
-        if (chainActive && chainCount > lastProcessedChain && hasAttacksAccess && apiKey) {
-            tornGet('/v2/faction/attacks?limit=15&sort=DESC', (err2, d2) => {
-                if (!err2 && d2 && Array.isArray(d2.attacks)) processAttacks(d2.attacks);
-            });
-        }
         renderChainBar();
         updateMinDisplay();
     }
@@ -1223,6 +1238,11 @@
         if (facIdVal) {
             myFactionId = String(facIdVal);
             GM_setValue('sv_my_fac_id', myFactionId);
+        }
+        const facNameVal = d.name || d.factionName;
+        if (facNameVal) {
+            myFactionName = String(facNameVal);
+            GM_setValue('sv_my_fac_name', myFactionName);
         }
 
         // Auto-detect active ranked war enemy if present
@@ -1724,90 +1744,241 @@
         return parts.join(' | ');
     }
 
-    function findFactionChatInput() {
-        const chatRoot = document.querySelector('#chatRoot');
-        if (!chatRoot) return null;
-
-        // Look inside chat boxes whose header/title/aria indicates Faction Chat
-        const boxes = chatRoot.querySelectorAll('[class*="chat-box"], [class*="chatBox"], [class*="chat-window"], [class*="box___"]');
-        for (const box of boxes) {
-            const header = box.querySelector('[class*="header"], [class*="title"], [class*="name"]');
-            const headerTxt = (header?.textContent || box.getAttribute('aria-label') || '').trim();
-            if (/^faction(\s+chat)?$/i.test(headerTxt) || /\bfaction\b/i.test(headerTxt)) {
-                const inp = box.querySelector('textarea, input[type="text"], [contenteditable="true"]');
-                if (inp) return { target: inp, box };
-            }
-        }
-        return null;
+    function getChatRootEl() {
+        return document.querySelector('#chatRoot, [id*="chatRoot" i], [class*="chat-app" i], [class*="chatRoot" i]');
     }
 
-    function postToChat(customText = null, forceAutoSend = false) {
-        const text = customText || _buildFullText();
-        if (!text) { flashStatus('Lineup is empty.', true); return; }
+    function getVisibleChatInputs(root) {
+        if (!root) return [];
+        const raw = root.querySelectorAll('textarea, [contenteditable="true"], [contenteditable="plaintext-only"], [contenteditable=""], [role="textbox"], input[type="text"]');
+        const out = [];
+        for (const el of raw) {
+            if (el.closest('#sv-chain-hud')) continue;
+            const ph = `${el.getAttribute('placeholder') || ''} ${el.getAttribute('aria-label') || ''}`;
+            if (/\b(search|filter|find\s+player|add\s+person)\b/i.test(ph)) continue;
+            const cs = window.getComputedStyle(el);
+            if (cs.display === 'none' || cs.visibility === 'hidden') continue;
+            const rect = el.getBoundingClientRect();
+            if (rect.width < 40 || rect.height < 12) continue;
+            out.push(el);
+        }
+        return out;
+    }
 
-        const chatRoot = document.querySelector('#chatRoot');
-        if (!chatRoot) {
-            navigator.clipboard.writeText(text).catch(() => {});
-            flashStatus('📋 Faction Chat unavailable here — copied to clipboard!', false);
-            return;
+    function isolateChatPanel(inp, allInputs, root) {
+        let cur = inp.parentElement;
+        let best = inp.parentElement || root;
+        while (cur && cur !== root && cur !== document.body) {
+            const contained = allInputs.filter(o => cur.contains(o)).length;
+            if (contained > 1) break;
+            best = cur;
+            cur = cur.parentElement;
+        }
+        return best;
+    }
+
+    function isNonFactionRoomLabel(txt) {
+        return /^\s*(global|trade|newbies|hospital|jail|poker|politics|elimination|official|travel)\b/i.test((txt || '').trim());
+    }
+
+    function matchesFactionRoomLabel(txt) {
+        const s = (txt || '').trim();
+        if (!s) return false;
+        if (/\bfaction\b/i.test(s)) return true;
+        if (myFactionName && s.toLowerCase().includes(myFactionName.toLowerCase())) return true;
+        return false;
+    }
+
+    function getPanelHeaderText(panel) {
+        if (!panel) return '';
+        const panelRect = panel.getBoundingClientRect();
+        const parts = [];
+        if (panel.getAttribute('aria-label')) parts.push(panel.getAttribute('aria-label'));
+        const labeled = panel.querySelectorAll('[class*="header" i], [class*="title" i], [class*="name" i], [aria-selected="true"], [data-state="active"], [class*="active" i]');
+        for (const el of labeled) {
+            const t = `${el.textContent || ''} ${el.getAttribute('aria-label') || ''} ${el.getAttribute('title') || ''}`.trim();
+            if (t && t.length < 80) parts.push(t);
+        }
+        // Scan elements positioned in the top 70px header bar of the chat panel
+        const topEls = panel.querySelectorAll('div, span, button, p, h1, h2, h3, h4, a');
+        for (const el of topEls) {
+            const r = el.getBoundingClientRect();
+            if (r.height > 0 && r.top >= panelRect.top - 4 && r.top <= panelRect.top + 65 && r.bottom <= panelRect.top + 98) {
+                const t = `${el.textContent || ''} ${el.getAttribute('aria-label') || ''} ${el.getAttribute('title') || ''}`.trim();
+                if (t && t.length < 60) parts.push(t);
+            }
+        }
+        return parts.join(' | ');
+    }
+
+    function findFactionChatInput() {
+        const chatRoot = getChatRootEl();
+        if (!chatRoot) return null;
+
+        const inputs = getVisibleChatInputs(chatRoot);
+        if (!inputs.length) return null;
+
+        // Pass 1: Explicit Faction label match inside each isolated chat panel (works across Chat 2.0, Chat 3.0, PDA)
+        for (const inp of inputs) {
+            const panel = isolateChatPanel(inp, inputs, chatRoot);
+            const inpMeta = `${inp.getAttribute('placeholder') || ''} ${inp.getAttribute('aria-label') || ''}`;
+            const headerTxt = `${getPanelHeaderText(panel)} | ${inpMeta}`;
+            if (matchesFactionRoomLabel(headerTxt)) {
+                return { target: inp, box: panel };
+            }
         }
 
-        // Open Faction Chat tab if minimized / inactive
-        if (!findFactionChatInput()) {
-            const tabs = chatRoot.querySelectorAll('button, div[role="button"], [class*="tab"], [class*="chat-tab"]');
-            for (const tab of tabs) {
-                const lbl = `${tab.textContent || ''} ${tab.getAttribute('aria-label') || ''} ${tab.getAttribute('title') || ''}`;
-                if (/\bfaction\b/i.test(lbl)) {
-                    tab.click();
-                    break;
+        // Pass 2: Single-panel Chat 3.0 fallback (e.g. tabbed chat dock with a single active textarea)
+        if (inputs.length === 1) {
+            const panel = isolateChatPanel(inputs[0], inputs, chatRoot);
+            const activeTabs = chatRoot.querySelectorAll('[aria-selected="true"], [data-state="active"], [class*="active" i]');
+            let sawExplicitNonFaction = false;
+            for (const t of activeTabs) {
+                if (t.contains(inputs[0])) continue;
+                const lbl = `${t.textContent || ''} ${t.getAttribute('aria-label') || ''} ${t.getAttribute('title') || ''}`.trim();
+                if (matchesFactionRoomLabel(lbl)) return { target: inputs[0], box: panel };
+                if (isNonFactionRoomLabel(lbl)) sawExplicitNonFaction = true;
+            }
+            if (!sawExplicitNonFaction) {
+                const headerTxt = getPanelHeaderText(panel);
+                if (!isNonFactionRoomLabel(headerTxt)) {
+                    return { target: inputs[0], box: panel };
                 }
             }
         }
 
-        setTimeout(() => {
-            const found = findFactionChatInput();
-            if (!found || !found.target) {
-                navigator.clipboard.writeText(text).catch(() => {});
-                flashStatus('📋 Open Faction Chat tab to auto-send — copied to clipboard!', false);
-                return;
-            }
+        return null;
+    }
 
-            const { target, box } = found;
-            target.focus();
+    function injectAndSendChatText(target, box, fullText, compactText, customText, shouldSend) {
+        const win = target.ownerDocument?.defaultView || (typeof unsafeWindow !== 'undefined' ? unsafeWindow : window);
+        navigator.clipboard?.writeText(fullText).catch(() => {});
+        target.focus();
 
-            if (target.isContentEditable) {
-                target.textContent = text;
-                target.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: text }));
-            } else {
-                const tracker = target._valueTracker;
-                if (tracker) tracker.setValue('');
-                const proto = target.tagName === 'TEXTAREA' ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype;
-                const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
-                if (setter) setter.call(target, text);
-                else target.value = text;
-                target.dispatchEvent(new Event('input', { bubbles: true }));
-                target.dispatchEvent(new Event('change', { bubbles: true }));
-                try { target.setSelectionRange(text.length, text.length); } catch (e) {}
-            }
-
-            if (!customText) setDirty(false);
-
-            if (autoSendOnPost || forceAutoSend) {
-                setTimeout(() => {
-                    const sendBtn = box.querySelector('button[type="submit"], button[aria-label*="send" i], [class*="send"]');
-                    if (sendBtn && !sendBtn.disabled) {
-                        sendBtn.click();
-                    } else {
-                        target.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true }));
-                        target.dispatchEvent(new KeyboardEvent('keypress', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true }));
-                        target.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true }));
+        const isCE = Boolean(target.isContentEditable || target.getAttribute('contenteditable') !== null);
+        if (isCE) {
+            const chatStr = customText || compactText || fullText.replace(/\n+/g, ' | ');
+            try {
+                const sel = win.getSelection();
+                const range = document.createRange();
+                range.selectNodeContents(target);
+                sel.removeAllRanges();
+                sel.addRange(range);
+                const ok = document.execCommand('insertText', false, chatStr);
+                if (!ok || !(target.textContent || '').trim()) {
+                    try {
+                        const dt = new DataTransfer();
+                        dt.setData('text/plain', chatStr);
+                        target.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: dt }));
+                    } catch (_) {}
+                    if (!(target.textContent || '').trim()) {
+                        target.textContent = chatStr;
                     }
-                    flashStatus(customText ? '🚨 Sent med-out callout to Faction Chat!' : '✓ Lineup sent to Faction Chat!', false);
-                }, 90);
-            } else {
-                flashStatus('✓ Inserted in Faction Chat — press Enter to send!', false);
+                    target.dispatchEvent(new win.InputEvent('input', { bubbles: true, inputType: 'insertText', data: chatStr }));
+                }
+            } catch (_) {
+                target.textContent = chatStr;
+                target.dispatchEvent(new Event('input', { bubbles: true }));
             }
-        }, 120);
+        } else {
+            const prevVal = target.value || '';
+            const proto = Object.getPrototypeOf(target);
+            const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set ||
+                Object.getOwnPropertyDescriptor(win.HTMLTextAreaElement?.prototype || HTMLTextAreaElement.prototype, 'value')?.set ||
+                Object.getOwnPropertyDescriptor(win.HTMLInputElement?.prototype || HTMLInputElement.prototype, 'value')?.set;
+            if (setter) setter.call(target, fullText);
+            else target.value = fullText;
+            if (target._valueTracker) {
+                try { target._valueTracker.setValue(prevVal); } catch (_) {}
+            }
+            try {
+                target.dispatchEvent(new win.InputEvent('input', { bubbles: true, inputType: 'insertText', data: fullText }));
+            } catch (_) {
+                target.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+            target.dispatchEvent(new Event('change', { bubbles: true }));
+            try { target.setSelectionRange(fullText.length, fullText.length); } catch (_) {}
+        }
+
+        if (!customText) setDirty(false);
+
+        if (shouldSend) {
+            setTimeout(() => {
+                const boxRect = box ? box.getBoundingClientRect() : { top: 0 };
+                let sentViaBtn = false;
+                if (box) {
+                    const sendCandidates = box.querySelectorAll('button[type="submit"], button[aria-label*="send" i], button[title*="send" i], [class*="send" i]');
+                    for (const btn of sendCandidates) {
+                        const r = btn.getBoundingClientRect();
+                        if (r.width === 0 || r.height === 0 || btn.disabled) continue;
+                        if (r.top >= boxRect.top + 44) {
+                            btn.click();
+                            sentViaBtn = true;
+                            break;
+                        }
+                    }
+                }
+                setTimeout(() => {
+                    const remaining = isCE ? (target.textContent || '').trim() : (target.value || '').trim();
+                    if (!sentViaBtn || remaining.length > 0) {
+                        target.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, shiftKey: false, bubbles: true, cancelable: true }));
+                        target.dispatchEvent(new win.KeyboardEvent('keypress', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, shiftKey: false, bubbles: true, cancelable: true }));
+                        target.dispatchEvent(new win.KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, shiftKey: false, bubbles: true, cancelable: true }));
+                    }
+                }, 25);
+                flashStatus(customText ? '🚨 Sent med-out callout to Faction Chat!' : '✓ Lineup sent to Faction Chat!', false);
+            }, 65);
+        } else {
+            flashStatus('✓ Inserted in Faction Chat — press Enter to send!', false);
+        }
+    }
+
+    function postToChat(customText = null, forceAutoSend = false) {
+        const fullText = customText || _buildFullText();
+        const compactText = customText || _buildCompactText();
+        if (!fullText) { flashStatus('Lineup is empty.', true); return; }
+
+        const shouldSend = Boolean(autoSendOnPost || forceAutoSend);
+        const chatRoot = getChatRootEl();
+        if (!chatRoot) {
+            navigator.clipboard?.writeText(fullText).catch(() => {});
+            flashStatus('📋 Faction Chat unavailable here — copied to clipboard!', false);
+            return;
+        }
+
+        // Check immediately BEFORE clicking any dock/tab button so an open Faction panel is never minimized!
+        const immediate = findFactionChatInput();
+        if (immediate && immediate.target) {
+            injectAndSendChatText(immediate.target, immediate.box, fullText, compactText, customText, shouldSend);
+            return;
+        }
+
+        // Only try opening a minimized Faction dock/tab when no usable Faction input was found
+        const openInputs = getVisibleChatInputs(chatRoot);
+        const openPanels = openInputs.map(i => isolateChatPanel(i, openInputs, chatRoot));
+        const tabs = chatRoot.querySelectorAll('button, div[role="button"], [role="tab"], [class*="tab" i]');
+        for (const tab of tabs) {
+            if (openPanels.some(p => p.contains(tab))) continue;
+            const lbl = `${tab.textContent || ''} ${tab.getAttribute('aria-label') || ''} ${tab.getAttribute('title') || ''}`;
+            if (matchesFactionRoomLabel(lbl)) {
+                tab.click();
+                break;
+            }
+        }
+
+        let attempts = 0;
+        const tryFindTimer = setInterval(() => {
+            attempts++;
+            const found = findFactionChatInput();
+            if (found && found.target) {
+                clearInterval(tryFindTimer);
+                injectAndSendChatText(found.target, found.box, fullText, compactText, customText, shouldSend);
+            } else if (attempts >= 8) {
+                clearInterval(tryFindTimer);
+                navigator.clipboard?.writeText(fullText).catch(() => {});
+                flashStatus('📋 Open Faction Chat tab to auto-send — copied to clipboard!', false);
+            }
+        }, 75);
     }
 
     function copyToClipboard(type) {
