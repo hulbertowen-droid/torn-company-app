@@ -33428,6 +33428,7 @@ let globalChainLineup = {
     cycle: 1,
     loopMode: true,
     autoMode: true,
+    autoCallMedOut: true,
     formattedCompact: '',
     formattedFull: '',
     chainStart: 0,
@@ -33459,7 +33460,7 @@ app.post('/api/chain/lineup', express.json(), (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-api-key');
-    const { lineup, targetHitTime, cycle, loopMode, autoMode, formattedCompact, formattedFull, hitChain, chainStart } = req.body || {};
+    const { lineup, targetHitTime, cycle, loopMode, autoMode, autoCallMedOut, formattedCompact, formattedFull, hitChain, chainStart } = req.body || {};
 
     // Prevent double-rotation across web + multiple open Torn tabs for the exact same chain hit
     const reqHitChain = Number(hitChain || 0);
@@ -33483,6 +33484,7 @@ app.post('/api/chain/lineup', express.json(), (req, res) => {
             cycle: cycle || 1,
             loopMode: loopMode !== undefined ? Boolean(loopMode) : (globalChainLineup.loopMode !== undefined ? globalChainLineup.loopMode : true),
             autoMode: autoMode !== undefined ? Boolean(autoMode) : (globalChainLineup.autoMode !== undefined ? globalChainLineup.autoMode : true),
+            autoCallMedOut: autoCallMedOut !== undefined ? Boolean(autoCallMedOut) : (globalChainLineup.autoCallMedOut !== undefined ? Boolean(globalChainLineup.autoCallMedOut) : true),
             formattedCompact: formattedCompact || '',
             formattedFull: formattedFull || '',
             chainStart: reqChainStart || globalChainLineup.chainStart || 0,

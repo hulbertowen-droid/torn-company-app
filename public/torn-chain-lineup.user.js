@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         FactionOS Chain Command
 // @namespace    https://faction-os.duckdns.org/
-// @version      4.2.0
-// @description  FactionOS Tactical Chain HUD — sub-second uncached hit detection, wall-clock chain timer, Torn Chat 3.0/2.0 auto-posting, true bidirectional server sync, and verified Enemy Med-Out / Revive sniper alerts.
+// @version      4.3.0
+// @description  FactionOS Tactical Chain HUD — persistent Auto-Call med-out broadcaster (works minimized & without Send ON), sub-second uncached hit detection, wall-clock chain timer, Torn Chat 3.0/2.0 auto-posting, and verified Enemy Med-Out / Revive alerts.
 // @author       FactionOS
 // @match        https://www.torn.com/*
 // @grant        GM_xmlhttpRequest
@@ -32,8 +32,35 @@
     const LS_KEY_POS       = 'sv_chain_mgr_pos_v4';
     const LS_KEY_APIKEY    = 'sv_chain_apikey';
     const LS_KEY_MEMBERS   = 'sv_chain_members_cache';
+    const LS_KEY_AUTOCALL  = 'sv_autocall_medout';
+    const LS_KEY_AUTOCALL_INIT = 'sv_autocall_v43_init';
     const STATUS_POLL_MS   = 45000;
     const CHAIN_BONUSES    = [10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 25000, 50000, 100000];
+
+    function getStoredAutoCallMedOut() {
+        try {
+            if (!GM_getValue(LS_KEY_AUTOCALL_INIT, false)) {
+                GM_setValue(LS_KEY_AUTOCALL_INIT, true);
+                GM_setValue(LS_KEY_AUTOCALL, true);
+                try { localStorage.setItem(LS_KEY_AUTOCALL, 'true'); } catch (e) {}
+                return true;
+            }
+            const gmVal = GM_getValue(LS_KEY_AUTOCALL, undefined);
+            if (typeof gmVal === 'boolean') return gmVal;
+            const lsVal = localStorage.getItem(LS_KEY_AUTOCALL);
+            if (lsVal === 'true') return true;
+            if (lsVal === 'false') return false;
+        } catch (e) {}
+        return true;
+    }
+
+    function setStoredAutoCallMedOut(val) {
+        const b = Boolean(val);
+        try { GM_setValue(LS_KEY_AUTOCALL_INIT, true); } catch (e) {}
+        try { GM_setValue(LS_KEY_AUTOCALL, b); } catch (e) {}
+        try { localStorage.setItem(LS_KEY_AUTOCALL, b ? 'true' : 'false'); } catch (e) {}
+        return b;
+    }
 
     // ══════════════════════════════════════════════════════════════
     //  STATE
@@ -49,7 +76,7 @@
     let autoMode         = true;
     let autoSendOnPost   = GM_getValue('sv_autosend', false);
     let soundEnabled     = GM_getValue('sv_sound', true);
-    let autoCallMedOut   = GM_getValue('sv_autocall_medout', false);
+    let autoCallMedOut   = getStoredAutoCallMedOut();
     let runOnAllPages    = GM_getValue('sv_all_pages', true);
     let isMinimized      = GM_getValue('sv_min', false);
     let isHidden         = false;
@@ -290,17 +317,60 @@
         }
     }
 
+    function broadcastSettingsUpdate() {
+        if (broadcastChan) {
+            try {
+                broadcastChan.postMessage({
+                    type: 'SETTINGS_UPDATED',
+                    loopMode,
+                    autoMode,
+                    autoSendOnPost,
+                    autoCallMedOut,
+                    soundEnabled,
+                    _tabId: _TAB_ID
+                });
+            } catch (e) {}
+        }
+    }
+
+    if (typeof GM_addValueChangeListener === 'function') {
+        try {
+            GM_addValueChangeListener(LS_KEY_AUTOCALL, (_name, _oldVal, newVal, remote) => {
+                if (!remote && newVal === autoCallMedOut) return;
+                autoCallMedOut = Boolean(newVal);
+                syncTogglePillsUI();
+            });
+        } catch (e) {}
+    }
+
+    window.addEventListener('storage', (e) => {
+        if (e && e.key === LS_KEY_AUTOCALL && (e.newValue === 'true' || e.newValue === 'false')) {
+            autoCallMedOut = e.newValue === 'true';
+            syncTogglePillsUI();
+        }
+    });
+
     function handleIncomingBroadcast(payload) {
         if (!payload || !payload.type) return;
         if (payload.type === 'HIT_DETECTED' || payload.type === 'DOM_CHAIN_UPDATE') {
             handleIncomingHit(payload);
         } else if (payload.type === 'MEDOUT_DETECTED' && payload.event) {
             handleDetectedMedOut(payload.event, false);
+        } else if (payload.type === 'SETTINGS_UPDATED') {
+            if (payload.loopMode !== undefined) loopMode = Boolean(payload.loopMode);
+            if (payload.autoMode !== undefined) autoMode = Boolean(payload.autoMode);
+            if (payload.autoSendOnPost !== undefined) autoSendOnPost = Boolean(payload.autoSendOnPost);
+            if (payload.autoCallMedOut !== undefined) autoCallMedOut = Boolean(payload.autoCallMedOut);
+            if (payload.soundEnabled !== undefined) soundEnabled = Boolean(payload.soundEnabled);
+            syncTogglePillsUI();
         } else if (payload.type === 'LINEUP_UPDATED' && payload.lineup) {
             lineup = payload.lineup;
             if (payload.cycleNum) cycleNum = payload.cycleNum;
             if (payload.loopMode !== undefined) loopMode = payload.loopMode;
             if (payload.autoMode !== undefined) autoMode = payload.autoMode;
+            if (payload.autoSendOnPost !== undefined) autoSendOnPost = payload.autoSendOnPost;
+            if (payload.autoCallMedOut !== undefined) autoCallMedOut = payload.autoCallMedOut;
+            if (payload.soundEnabled !== undefined) soundEnabled = payload.soundEnabled;
             if (payload.targetHitTime !== undefined) {
                 targetHitTime = payload.targetHitTime;
                 _syncHitTimeUI();
@@ -690,6 +760,114 @@
     // ══════════════════════════════════════════════════════════════
     //  INSTANT ENEMY MED-OUT & REVIVE SNIPER
     // ══════════════════════════════════════════════════════════════
+    const LS_KEY_AUTOCALLED_MAP = 'sv_autocalled_medids_v43';
+    let pendingMedOutAutoCalls = []; // [{ ev, queuedAt }]
+
+    function getAutoCallEventKey(ev) {
+        if (!ev) return '';
+        if (ev.id) return String(ev.id);
+        return `${ev.playerId}_${Math.floor((ev.detectedAt || Date.now()) / 20000)}`;
+    }
+
+    function readAutoCalledMap() {
+        let map = {};
+        try {
+            const raw = GM_getValue(LS_KEY_AUTOCALLED_MAP, '') || localStorage.getItem(LS_KEY_AUTOCALLED_MAP) || '{}';
+            const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+            if (parsed && typeof parsed === 'object') map = parsed;
+        } catch (e) {}
+        const cutoff = Date.now() - 10 * 60 * 1000;
+        const clean = {};
+        for (const [k, ts] of Object.entries(map)) {
+            if (Number(ts) > cutoff) clean[k] = Number(ts);
+        }
+        return clean;
+    }
+
+    function writeAutoCalledMap(map) {
+        try { GM_setValue(LS_KEY_AUTOCALLED_MAP, JSON.stringify(map)); } catch (e) {}
+        try { localStorage.setItem(LS_KEY_AUTOCALLED_MAP, JSON.stringify(map)); } catch (e) {}
+    }
+
+    function hasMedOutBeenAutoCalled(ev) {
+        const key = getAutoCallEventKey(ev);
+        if (!key) return false;
+        const map = readAutoCalledMap();
+        if (map[key]) return true;
+        const pidStr = String(ev.playerId || '');
+        const lastCall = lastAutoCalledPlayer.get(pidStr) || 0;
+        return (Date.now() - lastCall) <= 15000;
+    }
+
+    function claimMedOutAutoCall(ev) {
+        const key = getAutoCallEventKey(ev);
+        const pidStr = String(ev?.playerId || '');
+        const map = readAutoCalledMap();
+        if (key && map[key]) return false;
+        const now = Date.now();
+        if (pidStr && (now - (lastAutoCalledPlayer.get(pidStr) || 0)) <= 15000) return false;
+        if (key) {
+            map[key] = now;
+            writeAutoCalledMap(map);
+        }
+        if (pidStr) lastAutoCalledPlayer.set(pidStr, now);
+        return true;
+    }
+
+    function releaseMedOutAutoCallClaim(ev) {
+        const key = getAutoCallEventKey(ev);
+        const pidStr = String(ev?.playerId || '');
+        if (key) {
+            const map = readAutoCalledMap();
+            if (map[key]) {
+                delete map[key];
+                writeAutoCalledMap(map);
+            }
+        }
+        if (pidStr) lastAutoCalledPlayer.delete(pidStr);
+    }
+
+    function enqueuePendingAutoCall(ev) {
+        if (!ev || !ev.playerId) return;
+        const key = getAutoCallEventKey(ev);
+        if (pendingMedOutAutoCalls.some(x => getAutoCallEventKey(x.ev) === key)) return;
+        pendingMedOutAutoCalls.push({ ev, queuedAt: Date.now() });
+        if (pendingMedOutAutoCalls.length > 8) pendingMedOutAutoCalls = pendingMedOutAutoCalls.slice(-8);
+    }
+
+    function attemptAutoCallMedOut(ev) {
+        autoCallMedOut = getStoredAutoCallMedOut();
+        syncTogglePillsUI();
+        if (!autoCallMedOut || !ev || !ev.playerId) return;
+        if (hasMedOutBeenAutoCalled(ev)) return;
+        if (!claimMedOutAutoCall(ev)) return;
+
+        callOutMedOutToChat(ev, (sentOk) => {
+            if (!sentOk) {
+                releaseMedOutAutoCallClaim(ev);
+                if ((Date.now() - (ev.detectedAt || Date.now())) < 90000) {
+                    enqueuePendingAutoCall(ev);
+                }
+            }
+        });
+    }
+
+    function flushPendingMedOutAutoCalls() {
+        if (!pendingMedOutAutoCalls.length) return;
+        autoCallMedOut = getStoredAutoCallMedOut();
+        if (!autoCallMedOut) {
+            pendingMedOutAutoCalls = [];
+            return;
+        }
+        const now = Date.now();
+        pendingMedOutAutoCalls = pendingMedOutAutoCalls.filter(item =>
+            (now - item.queuedAt) < 90000 && !hasMedOutBeenAutoCalled(item.ev)
+        );
+        if (!pendingMedOutAutoCalls.length) return;
+        const next = pendingMedOutAutoCalls.shift();
+        if (next && next.ev) attemptAutoCallMedOut(next.ev);
+    }
+
     function handleDetectedMedOut(ev, reportToServer = false) {
         if (!ev || !ev.playerId) return;
         const pidStr = String(ev.playerId);
@@ -711,11 +889,15 @@
             renderMedOutBanner();
             updateMinDisplay();
 
-            if (autoCallMedOut) {
-                const lastCall = lastAutoCalledPlayer.get(pidStr) || 0;
-                if (Date.now() - lastCall > 20000) {
-                    lastAutoCalledPlayer.set(pidStr, Date.now());
-                    callOutMedOutToChat(ev);
+            // Refresh persistent flag so another tab toggling or saving never turns Auto-Call off silently
+            autoCallMedOut = getStoredAutoCallMedOut();
+            syncTogglePillsUI();
+            if (autoCallMedOut && !hasMedOutBeenAutoCalled(ev)) {
+                if (document.hidden) {
+                    // Prefer an active visible Torn tab if one exists; otherwise execute right here even while minimized
+                    setTimeout(() => attemptAutoCallMedOut(ev), 180);
+                } else {
+                    attemptAutoCallMedOut(ev);
                 }
             }
 
@@ -862,10 +1044,14 @@
         if (activeTab === 'radar') renderRadarTab();
     }
 
-    function callOutMedOutToChat(ev) {
-        if (!ev) return;
+    function callOutMedOutToChat(ev, onResult = null) {
+        if (!ev) {
+            if (typeof onResult === 'function') onResult(false);
+            return;
+        }
         const msg = `🚨 ${ev.escapeType}: ${ev.playerName} [${ev.playerId}] (Lv.${ev.level || '?'}, ${ev.onlineStatus}) just left hospital ${ev.timeSavedStr} early! Attack: ${ev.attackUrl}`;
-        postToChat(msg, true);
+        // Always forceAutoSend=true for med-out callouts so Send OFF never blocks them
+        postToChat(msg, true, onResult);
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -1053,6 +1239,8 @@
             if (dataObj.cycle) cycleNum = dataObj.cycle;
             if (dataObj.loopMode !== undefined) loopMode = dataObj.loopMode;
             if (dataObj.autoMode !== undefined) autoMode = dataObj.autoMode;
+            // Never let a secondary tab or server lineup overwrite persistent local Auto-Call setting
+            autoCallMedOut = getStoredAutoCallMedOut();
             GM_setValue('sv_state', JSON.stringify({ lineup, targetHitTime, cycleNum, loopMode, autoMode, autoSendOnPost, soundEnabled, autoCallMedOut, customEnemyFacId, runOnAllPages }));
             _syncHitTimeUI();
             syncTogglePillsUI();
@@ -1335,7 +1523,7 @@
         }));
         GM_setValue('sv_autosend', autoSendOnPost);
         GM_setValue('sv_sound', soundEnabled);
-        GM_setValue('sv_autocall_medout', autoCallMedOut);
+        setStoredAutoCallMedOut(autoCallMedOut);
         GM_setValue('sv_enemy_fac_id', customEnemyFacId);
         GM_setValue('sv_all_pages', runOnAllPages);
 
@@ -1349,6 +1537,9 @@
                     cycleNum,
                     loopMode,
                     autoMode,
+                    autoSendOnPost,
+                    autoCallMedOut,
+                    soundEnabled,
                     targetHitTime,
                     _tabId: _TAB_ID
                 });
@@ -1368,10 +1559,11 @@
             if (d.autoMode !== undefined) autoMode = d.autoMode;
             if (d.autoSendOnPost !== undefined) autoSendOnPost = d.autoSendOnPost;
             if (d.soundEnabled !== undefined) soundEnabled = d.soundEnabled;
-            if (d.autoCallMedOut !== undefined) autoCallMedOut = d.autoCallMedOut;
             if (d.customEnemyFacId !== undefined) customEnemyFacId = d.customEnemyFacId;
             if (d.runOnAllPages !== undefined) runOnAllPages = d.runOnAllPages;
         } catch (e) {}
+        // Dedicated key is always authoritative over sv_state so stale tabs never disable Auto-Call
+        autoCallMedOut = getStoredAutoCallMedOut();
 
         try {
             const cm = localStorage.getItem(LS_KEY_MEMBERS) || GM_getValue(LS_KEY_MEMBERS, '[]');
@@ -1395,6 +1587,7 @@
                 cycle: cycleNum,
                 loopMode,
                 autoMode,
+                autoCallMedOut,
                 formattedFull: full,
                 formattedCompact: compact,
                 hitChain: hitChain || 0,
@@ -1748,18 +1941,32 @@
         return document.querySelector('#chatRoot, [id*="chatRoot" i], [class*="chat-app" i], [class*="chatRoot" i]');
     }
 
+    function isElementHiddenByCSS(el, stopAt) {
+        let cur = el;
+        while (cur && cur !== document.documentElement) {
+            if (cur.hidden) return true;
+            const cs = window.getComputedStyle(cur);
+            if (cs.display === 'none' || cs.visibility === 'hidden') return true;
+            if (stopAt && cur === stopAt) break;
+            cur = cur.parentElement;
+        }
+        return false;
+    }
+
     function getVisibleChatInputs(root) {
         if (!root) return [];
         const raw = root.querySelectorAll('textarea, [contenteditable="true"], [contenteditable="plaintext-only"], [contenteditable=""], [role="textbox"], input[type="text"]');
         const out = [];
+        const docHidden = Boolean(document.hidden);
         for (const el of raw) {
             if (el.closest('#sv-chain-hud')) continue;
             const ph = `${el.getAttribute('placeholder') || ''} ${el.getAttribute('aria-label') || ''}`;
             if (/\b(search|filter|find\s+player|add\s+person)\b/i.test(ph)) continue;
-            const cs = window.getComputedStyle(el);
-            if (cs.display === 'none' || cs.visibility === 'hidden') continue;
-            const rect = el.getBoundingClientRect();
-            if (rect.width < 40 || rect.height < 12) continue;
+            if (isElementHiddenByCSS(el, root)) continue;
+            if (!docHidden) {
+                const rect = el.getBoundingClientRect();
+                if (rect.width < 20 || rect.height < 10) continue;
+            }
             out.push(el);
         }
         return out;
@@ -1850,10 +2057,146 @@
         return null;
     }
 
+    function triggerMouseClick(el, win) {
+        if (!el) return;
+        const w = win || el.ownerDocument?.defaultView || (typeof unsafeWindow !== 'undefined' ? unsafeWindow : window);
+        try {
+            if (typeof w.PointerEvent === 'function') {
+                el.dispatchEvent(new w.PointerEvent('pointerdown', { bubbles: true, cancelable: true, view: w, pointerId: 1 }));
+            }
+            el.dispatchEvent(new w.MouseEvent('mousedown', { bubbles: true, cancelable: true, view: w, buttons: 1 }));
+            if (typeof w.PointerEvent === 'function') {
+                el.dispatchEvent(new w.PointerEvent('pointerup', { bubbles: true, cancelable: true, view: w, pointerId: 1 }));
+            }
+            el.dispatchEvent(new w.MouseEvent('mouseup', { bubbles: true, cancelable: true, view: w, buttons: 1 }));
+            el.dispatchEvent(new w.MouseEvent('click', { bubbles: true, cancelable: true, view: w, buttons: 1 }));
+            if (typeof el.click === 'function') el.click();
+        } catch (e) {
+            try { el.click(); } catch (_) {}
+        }
+    }
+
+    function dispatchPageEnterKey(target, win) {
+        const w = win || target.ownerDocument?.defaultView || (typeof unsafeWindow !== 'undefined' ? unsafeWindow : window);
+        for (const type of ['keydown', 'keypress', 'keyup']) {
+            try {
+                const ev = new w.KeyboardEvent(type, {
+                    key: 'Enter',
+                    code: 'Enter',
+                    keyCode: 13,
+                    which: 13,
+                    charCode: 13,
+                    shiftKey: false,
+                    ctrlKey: false,
+                    altKey: false,
+                    metaKey: false,
+                    bubbles: true,
+                    cancelable: true,
+                    composed: true
+                });
+                // Lock keyCode/which/charCode across Tampermonkey unsafeWindow wrappers for React 18 listeners
+                for (const prop of ['keyCode', 'which', 'charCode']) {
+                    try {
+                        if (ev[prop] !== 13) Object.defineProperty(ev, prop, { get: () => 13 });
+                    } catch (_) {}
+                }
+                target.dispatchEvent(ev);
+            } catch (_) {}
+        }
+    }
+
+    function getChatInputRemaining(target, isCE) {
+        return (isCE ? (target.textContent || '') : (target.value || '')).trim();
+    }
+
+    function findFooterSendButton(target, box) {
+        const scope = box || target.parentElement?.parentElement || target.parentElement;
+        if (!scope) return null;
+        const boxRect = scope.getBoundingClientRect();
+
+        // 1. Semantic send button match inside panel footer
+        const semantic = scope.querySelectorAll('button[type="submit"], button[aria-label*="send" i], button[title*="send" i], [class*="send" i], [data-testid*="send" i]');
+        for (const btn of semantic) {
+            if (btn.disabled || btn === target || btn.closest('#sv-chain-hud')) continue;
+            const cs = window.getComputedStyle(btn);
+            if (cs.display === 'none' || cs.visibility === 'hidden') continue;
+            const r = btn.getBoundingClientRect();
+            if (!document.hidden && (r.width === 0 || r.height === 0)) continue;
+            if (!boxRect.height || document.hidden || r.top >= boxRect.top + 30) {
+                return btn;
+            }
+        }
+
+        // 2. Structural proximity match: footer SVG action button next to the input
+        const inpRow = target.parentElement?.parentElement || target.parentElement;
+        if (inpRow) {
+            const btns = inpRow.querySelectorAll('button, [role="button"]');
+            const candidates = [];
+            for (const btn of btns) {
+                if (btn.disabled || btn === target || btn.contains(target)) continue;
+                const meta = `${btn.getAttribute('aria-label') || ''} ${btn.getAttribute('title') || ''} ${btn.className || ''}`;
+                if (/(close|minim|collapse|emoji|smile|attach|file|upload|setting|clear|trash|mute|search)/i.test(meta)) continue;
+                if (btn.querySelector('svg') || btn.getAttribute('type') === 'submit') {
+                    candidates.push(btn);
+                }
+            }
+            if (candidates.length) {
+                return candidates[candidates.length - 1];
+            }
+        }
+        return null;
+    }
+
+    function triggerChatSubmit(target, box, win, isCE) {
+        const btn = findFooterSendButton(target, box);
+        if (btn) triggerMouseClick(btn, win);
+        if (getChatInputRemaining(target, isCE).length > 0) {
+            dispatchPageEnterKey(target, win);
+        }
+        if (getChatInputRemaining(target, isCE).length > 0 && target.form) {
+            try {
+                if (typeof target.form.requestSubmit === 'function') target.form.requestSubmit();
+                else target.form.dispatchEvent(new win.Event('submit', { bubbles: true, cancelable: true }));
+            } catch (_) {}
+        }
+    }
+
+    function openMinimizedFactionChatTab(chatRoot) {
+        if (!chatRoot) return false;
+        const openInputs = getVisibleChatInputs(chatRoot);
+        const openFactionPanels = openInputs
+            .map(i => isolateChatPanel(i, openInputs, chatRoot))
+            .filter(p => matchesFactionRoomLabel(getPanelHeaderText(p)));
+        const candidates = [];
+        const nodes = chatRoot.querySelectorAll('button, a, [role="button"], [role="tab"], [class*="tab" i], [class*="minimized" i], [class*="channel" i], [class*="room" i], [class*="dock" i], [class*="item" i], [class*="header" i]');
+        for (const el of nodes) {
+            if (el.closest('#sv-chain-hud') || isElementHiddenByCSS(el, chatRoot)) continue;
+            if (el.closest('[class*="message" i], [class*="history" i], [class*="scroll" i], [class*="feed" i], textarea, [contenteditable]')) continue;
+            if (openFactionPanels.some(p => p.contains(el))) continue;
+            const meta = `${el.getAttribute('aria-label') || ''} ${el.getAttribute('title') || ''}`;
+            if (/\b(close|dismiss|setting|mute|search)\b/i.test(meta)) continue;
+            const rawLbl = `${el.textContent || ''} ${meta}`.trim();
+            if (!rawLbl || rawLbl.length > 50 || isNonFactionRoomLabel(rawLbl)) continue;
+            if (matchesFactionRoomLabel(rawLbl)) {
+                candidates.push({ el, len: rawLbl.length });
+            }
+        }
+        if (!candidates.length) return false;
+        // Prefer the tightest label element first, then click both it and its clickable dock wrapper
+        candidates.sort((a, b) => a.len - b.len);
+        const picked = candidates[0].el;
+        const wrapper = picked.closest('button, [role="button"], [role="tab"], [class*="minimized" i], [class*="tab" i], [class*="channel" i], [class*="item" i]');
+        triggerMouseClick(picked);
+        if (wrapper && wrapper !== picked && !openFactionPanels.some(p => p.contains(wrapper))) {
+            triggerMouseClick(wrapper);
+        }
+        return true;
+    }
+
     function injectAndSendChatText(target, box, fullText, compactText, customText, shouldSend) {
         const win = target.ownerDocument?.defaultView || (typeof unsafeWindow !== 'undefined' ? unsafeWindow : window);
         navigator.clipboard?.writeText(fullText).catch(() => {});
-        target.focus();
+        try { target.focus(); } catch (_) {}
 
         const isCE = Boolean(target.isContentEditable || target.getAttribute('contenteditable') !== null);
         if (isCE) {
@@ -1867,9 +2210,9 @@
                 const ok = document.execCommand('insertText', false, chatStr);
                 if (!ok || !(target.textContent || '').trim()) {
                     try {
-                        const dt = new DataTransfer();
+                        const dt = new win.DataTransfer();
                         dt.setData('text/plain', chatStr);
-                        target.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: dt }));
+                        target.dispatchEvent(new win.ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: dt }));
                     } catch (_) {}
                     if (!(target.textContent || '').trim()) {
                         target.textContent = chatStr;
@@ -1878,7 +2221,7 @@
                 }
             } catch (_) {
                 target.textContent = chatStr;
-                target.dispatchEvent(new Event('input', { bubbles: true }));
+                target.dispatchEvent(new win.Event('input', { bubbles: true }));
             }
         } else {
             const prevVal = target.value || '';
@@ -1894,55 +2237,50 @@
             try {
                 target.dispatchEvent(new win.InputEvent('input', { bubbles: true, inputType: 'insertText', data: fullText }));
             } catch (_) {
-                target.dispatchEvent(new Event('input', { bubbles: true }));
+                target.dispatchEvent(new win.Event('input', { bubbles: true }));
             }
-            target.dispatchEvent(new Event('change', { bubbles: true }));
+            target.dispatchEvent(new win.Event('change', { bubbles: true }));
             try { target.setSelectionRange(fullText.length, fullText.length); } catch (_) {}
         }
 
         if (!customText) setDirty(false);
 
         if (shouldSend) {
+            // Execute synchronously first (critical when browser tab is minimized & timers are throttled)
+            Promise.resolve().then(() => {
+                triggerChatSubmit(target, box, win, isCE);
+            });
             setTimeout(() => {
-                const boxRect = box ? box.getBoundingClientRect() : { top: 0 };
-                let sentViaBtn = false;
-                if (box) {
-                    const sendCandidates = box.querySelectorAll('button[type="submit"], button[aria-label*="send" i], button[title*="send" i], [class*="send" i]');
-                    for (const btn of sendCandidates) {
-                        const r = btn.getBoundingClientRect();
-                        if (r.width === 0 || r.height === 0 || btn.disabled) continue;
-                        if (r.top >= boxRect.top + 44) {
-                            btn.click();
-                            sentViaBtn = true;
-                            break;
-                        }
-                    }
+                if (getChatInputRemaining(target, isCE).length > 0) {
+                    triggerChatSubmit(target, box, win, isCE);
                 }
-                setTimeout(() => {
-                    const remaining = isCE ? (target.textContent || '').trim() : (target.value || '').trim();
-                    if (!sentViaBtn || remaining.length > 0) {
-                        target.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, shiftKey: false, bubbles: true, cancelable: true }));
-                        target.dispatchEvent(new win.KeyboardEvent('keypress', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, shiftKey: false, bubbles: true, cancelable: true }));
-                        target.dispatchEvent(new win.KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, shiftKey: false, bubbles: true, cancelable: true }));
-                    }
-                }, 25);
-                flashStatus(customText ? '🚨 Sent med-out callout to Faction Chat!' : '✓ Lineup sent to Faction Chat!', false);
-            }, 65);
+            }, 45);
+            setTimeout(() => {
+                if (getChatInputRemaining(target, isCE).length > 0) {
+                    triggerChatSubmit(target, box, win, isCE);
+                }
+            }, 125);
+            flashStatus(customText ? '🚨 Sent med-out callout to Faction Chat!' : '✓ Lineup sent to Faction Chat!', false);
         } else {
             flashStatus('✓ Inserted in Faction Chat — press Enter to send!', false);
         }
     }
 
-    function postToChat(customText = null, forceAutoSend = false) {
+    function postToChat(customText = null, forceAutoSend = false, onResult = null) {
         const fullText = customText || _buildFullText();
         const compactText = customText || _buildCompactText();
-        if (!fullText) { flashStatus('Lineup is empty.', true); return; }
+        if (!fullText) {
+            flashStatus('Lineup is empty.', true);
+            if (typeof onResult === 'function') onResult(false);
+            return;
+        }
 
-        const shouldSend = Boolean(autoSendOnPost || forceAutoSend);
+        const shouldSend = Boolean(forceAutoSend === true || autoSendOnPost === true);
         const chatRoot = getChatRootEl();
         if (!chatRoot) {
             navigator.clipboard?.writeText(fullText).catch(() => {});
             flashStatus('📋 Faction Chat unavailable here — copied to clipboard!', false);
+            if (typeof onResult === 'function') onResult(false);
             return;
         }
 
@@ -1950,35 +2288,41 @@
         const immediate = findFactionChatInput();
         if (immediate && immediate.target) {
             injectAndSendChatText(immediate.target, immediate.box, fullText, compactText, customText, shouldSend);
+            if (typeof onResult === 'function') onResult(true);
             return;
         }
 
-        // Only try opening a minimized Faction dock/tab when no usable Faction input was found
-        const openInputs = getVisibleChatInputs(chatRoot);
-        const openPanels = openInputs.map(i => isolateChatPanel(i, openInputs, chatRoot));
-        const tabs = chatRoot.querySelectorAll('button, div[role="button"], [role="tab"], [class*="tab" i]');
-        for (const tab of tabs) {
-            if (openPanels.some(p => p.contains(tab))) continue;
-            const lbl = `${tab.textContent || ''} ${tab.getAttribute('aria-label') || ''} ${tab.getAttribute('title') || ''}`;
-            if (matchesFactionRoomLabel(lbl)) {
-                tab.click();
-                break;
-            }
-        }
+        // Un-minimize Faction Chat dock tab when collapsed
+        openMinimizedFactionChatTab(chatRoot);
 
+        let done = false;
         let attempts = 0;
-        const tryFindTimer = setInterval(() => {
-            attempts++;
+        const finishAttempt = () => {
+            if (done) return;
             const found = findFactionChatInput();
             if (found && found.target) {
+                done = true;
                 clearInterval(tryFindTimer);
                 injectAndSendChatText(found.target, found.box, fullText, compactText, customText, shouldSend);
-            } else if (attempts >= 8) {
+                if (typeof onResult === 'function') onResult(true);
+                return;
+            }
+            attempts++;
+            if (attempts === 4 || attempts === 8) {
+                openMinimizedFactionChatTab(chatRoot);
+            }
+            if (attempts >= 14) {
+                done = true;
                 clearInterval(tryFindTimer);
                 navigator.clipboard?.writeText(fullText).catch(() => {});
                 flashStatus('📋 Open Faction Chat tab to auto-send — copied to clipboard!', false);
+                if (typeof onResult === 'function') onResult(false);
             }
-        }, 75);
+        };
+
+        // Fast micro-check in case Torn mounts the chat box immediately after click, plus polling fallback
+        setTimeout(finishAttempt, 25);
+        const tryFindTimer = setInterval(finishAttempt, 90);
     }
 
     function copyToClipboard(type) {
@@ -2652,6 +2996,7 @@
         document.getElementById('sv-mute-btn').addEventListener('click', () => {
             soundEnabled = !soundEnabled;
             save();
+            broadcastSettingsUpdate();
             syncTogglePillsUI();
             flashStatus(soundEnabled ? '🔊 Sound alerts ON' : '🔇 Sound muted', false);
         });
@@ -2668,12 +3013,14 @@
         document.getElementById('sv-post-btn').addEventListener('click', () => postToChat());
         document.getElementById('sv-copy-btn').addEventListener('click', e => copyToClipboard(e.shiftKey ? 'compact' : 'full'));
 
-        document.getElementById('sv-pill-loop').addEventListener('click', () => { loopMode = !loopMode; save(); syncTogglePillsUI(); });
-        document.getElementById('sv-pill-auto').addEventListener('click', () => { autoMode = !autoMode; save(); syncTogglePillsUI(); renderLineup(); });
-        document.getElementById('sv-pill-autosend').addEventListener('click', () => { autoSendOnPost = !autoSendOnPost; save(); syncTogglePillsUI(); });
+        document.getElementById('sv-pill-loop').addEventListener('click', () => { loopMode = !loopMode; save(); broadcastSettingsUpdate(); syncTogglePillsUI(); });
+        document.getElementById('sv-pill-auto').addEventListener('click', () => { autoMode = !autoMode; save(); broadcastSettingsUpdate(); syncTogglePillsUI(); renderLineup(); });
+        document.getElementById('sv-pill-autosend').addEventListener('click', () => { autoSendOnPost = !autoSendOnPost; save(); broadcastSettingsUpdate(); syncTogglePillsUI(); });
         document.getElementById('sv-pill-autocall').addEventListener('click', () => {
             autoCallMedOut = !autoCallMedOut;
+            setStoredAutoCallMedOut(autoCallMedOut);
             save();
+            broadcastSettingsUpdate();
             syncTogglePillsUI();
             flashStatus(autoCallMedOut ? '💊 Auto-Call Med-Outs ON' : 'Auto-Call Med-Outs OFF', false);
         });
@@ -3007,4 +3354,9 @@
 
     pollMembersTimer = setInterval(fetchFactionMembers, STATUS_POLL_MS);
     enemyPollTimer = setInterval(pollDirectEnemyFaction, 3500);
+    setInterval(flushPendingMedOutAutoCalls, 2000);
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) flushPendingMedOutAutoCalls();
+    });
+    window.addEventListener('focus', flushPendingMedOutAutoCalls);
 })();
