@@ -32934,16 +32934,13 @@ async function fetchDualBucketChainAttacks(cleanKey, serverKey, minChain = 0, my
     }
 
     chainAtksInFlight = (async () => {
+        const hostFacId = String(myFacId || discordConfig.factionId || dynamicFactionId || '');
         const facCfgKey = (reqFac ? getFactionDiscordConfig(reqFac)?.apiKey : null) || serverKey;
         const candidateKeys = [];
         if (cleanKey) candidateKeys.push(cleanKey);
-        if (typeof getNextApiKey === 'function') {
-            const k1 = getNextApiKey();
-            const k2 = getNextApiKey();
-            if (k1) candidateKeys.push(k1);
-            if (k2) candidateKeys.push(k2);
-        }
         if (facCfgKey) candidateKeys.push(facCfgKey);
+        if (ADMIN_API_KEY) candidateKeys.push(ADMIN_API_KEY);
+        if (TORN_API_KEY) candidateKeys.push(TORN_API_KEY);
         const uniqueKeys = [...new Set(candidateKeys.filter(Boolean))];
 
         let usedKey = uniqueKeys[0] || cleanKey;
@@ -32955,7 +32952,13 @@ async function fetchDualBucketChainAttacks(cleanKey, serverKey, minChain = 0, my
                 signal: AbortSignal.timeout(6000)
             });
             data = await r.json();
-            if (data && !data.error) break;
+            if (data && !data.error) {
+                // Ensure key belongs to our host faction when hostFacId is configured
+                if (hostFacId && data.ID && String(data.ID) !== hostFacId && k !== uniqueKeys[uniqueKeys.length - 1]) {
+                    continue;
+                }
+                break;
+            }
             if (!data?.error || ![2, 5, 7, 16].includes(data.error.code)) break;
         }
 
@@ -32963,7 +32966,7 @@ async function fetchDualBucketChainAttacks(cleanKey, serverKey, minChain = 0, my
             return { error: data?.error || { error: 'Torn API unavailable', code: 0 } };
         }
 
-        const resolvedFacId = String(data.ID || myFacId || discordConfig.factionId || dynamicFactionId || '52355');
+        const resolvedFacId = String(data.ID || hostFacId || '52355');
         const v1Attacks = normalizeOutgoingChainAttacks(data, resolvedFacId);
         const maxV1Chain = v1Attacks.length ? v1Attacks[v1Attacks.length - 1].chain : 0;
         const expectedChain = Math.max(Number(minChain || 0), Number(data.chain?.current || 0));
@@ -32971,10 +32974,10 @@ async function fetchDualBucketChainAttacks(cleanKey, serverKey, minChain = 0, my
         let mergedMap = new Map(v1Attacks.map(a => [a.code, a]));
 
         // If Torn v1 attacks cache is behind the live chain counter (29s cache), query v2 (separate cache bucket!)
-        if (expectedChain > maxV1Chain && (Date.now() - chainV2LastFetchMs) > 1000) {
+        if (expectedChain > maxV1Chain && (Date.now() - chainV2LastFetchMs) > 1500) {
             chainV2LastFetchMs = Date.now();
             try {
-                const v2Key = (typeof getNextApiKey === 'function' ? getNextApiKey() : null) || usedKey || facCfgKey;
+                const v2Key = facCfgKey || usedKey;
                 const v2Res = await fetch(`https://api.torn.com/v2/faction/attacks?limit=25&sort=DESC&key=${v2Key}`, {
                     signal: AbortSignal.timeout(5000)
                 });
@@ -33024,7 +33027,8 @@ app.get('/api/chain/data', async (req, res) => {
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-api-key, x-faction-id, Authorization');
     if (req.method === 'OPTIONS') return res.sendStatus(200);
 
-    const serverKey = (typeof getNextApiKey === 'function' ? getNextApiKey() : null) || (discordConfig && discordConfig.apiKey) || TORN_API_KEY;
+    const hostFacId = String(discordConfig.factionId || dynamicFactionId || '');
+    const serverKey = (discordConfig && discordConfig.apiKey) || ADMIN_API_KEY || TORN_API_KEY || (typeof getNextApiKey === 'function' ? getNextApiKey() : null);
     const userKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey;
     const cleanKey = (userKey && userKey !== 'null' && userKey !== 'undefined' && String(userKey).trim()) ? String(userKey).trim() : serverKey;
     if (!cleanKey) {
@@ -33040,7 +33044,7 @@ app.get('/api/chain/data', async (req, res) => {
 
     const cacheKey = `${cleanKey.slice(-8)}_${reqEnemyId || ''}`;
     const cached = chainDataCache.get(cacheKey);
-    if (cached && (Date.now() - cached.ts) < 1200) {
+    if (cached && (Date.now() - cached.ts) < 2000) {
         const dyn = { ...cached.data };
         if (dyn.chain) {
             const c = { ...dyn.chain };
@@ -33066,14 +33070,12 @@ app.get('/api/chain/data', async (req, res) => {
             signal: AbortSignal.timeout(5000)
         });
         let data = await r.json();
-        if (data && data.error && [2, 5, 7, 16].includes(data.error.code)) {
-            const retryKey = (typeof getNextApiKey === 'function' ? getNextApiKey() : null) || serverKey;
-            if (retryKey && retryKey !== cleanKey) {
-                r = await fetch(`https://api.torn.com/faction/?selections=basic,chain,rankedwars,timestamp&key=${retryKey}`, {
-                    signal: AbortSignal.timeout(5000)
-                });
-                data = await r.json();
-            }
+        const wrongFac = Boolean(hostFacId && data && data.ID && String(data.ID) !== hostFacId);
+        if (((data && data.error && [2, 5, 7, 16].includes(data.error.code)) || wrongFac) && serverKey && serverKey !== cleanKey) {
+            r = await fetch(`https://api.torn.com/faction/?selections=basic,chain,rankedwars,timestamp&key=${serverKey}`, {
+                signal: AbortSignal.timeout(5000)
+            });
+            data = await r.json();
         }
         if (data && data.error) {
             if (cached) return res.json(cached.data);
@@ -33257,7 +33259,7 @@ app.get('/api/chain/attacks', async (req, res) => {
     if (req.method === 'OPTIONS') return res.sendStatus(200);
 
     const hostFacId = String(discordConfig.factionId || dynamicFactionId || '');
-    const serverKey = (typeof getNextApiKey === 'function' ? getNextApiKey() : null) || (discordConfig && discordConfig.apiKey) || TORN_API_KEY;
+    const serverKey = (discordConfig && discordConfig.apiKey) || ADMIN_API_KEY || TORN_API_KEY || (typeof getNextApiKey === 'function' ? getNextApiKey() : null);
     const reqFac = String(req.userSession?.factionId || req.headers['x-faction-id'] || '');
     const rawUserKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey;
     const userKey = (rawUserKey && rawUserKey !== 'null' && rawUserKey !== 'undefined' && String(rawUserKey).trim()) ? String(rawUserKey).trim() : serverKey;
