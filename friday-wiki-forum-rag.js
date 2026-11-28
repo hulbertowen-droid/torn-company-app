@@ -20,18 +20,65 @@
 
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { CORE_TORN_WIKI_PAGES, isLegacyOrDeprecatedSource } = require('./torn-core-wiki-corpus');
 
 const ENCYCLOPEDIA_CACHE_FILE = path.join(__dirname, 'data', 'torn_encyclopedia_cache.json');
 const FORUM_INDEX_CACHE_FILE = path.join(__dirname, 'data', 'torn_forum_guides_index.json');
 const FORUM_CHUNKS_CACHE_FILE = path.join(__dirname, 'data', 'torn_forum_guide_chunks.json');
+const EMBEDDINGS_CACHE_FILE = path.join(__dirname, 'data', 'torn_rag_embeddings_cache.json');
 
 const EVIDENCE_TTL_MS = 30 * 60 * 1000;
 const FORUM_CHUNK_TTL_MS = 7 * 24 * 3600 * 1000;
-const MIN_CHUNK_SCORE = 0.75;
-const LOCAL_SKIP_SEARCH_THRESHOLD = 0.80;
+const MIN_SIMILARITY_SCORE = 0.72;
+const MIN_CHUNK_SCORE = MIN_SIMILARITY_SCORE;
 
 const evidenceCache = new Map();
+const queryVecCache = new Map();
+const chunkVecCache = new Map();
+
+try {
+    if (fs.existsSync(EMBEDDINGS_CACHE_FILE)) {
+        const rawEmb = JSON.parse(fs.readFileSync(EMBEDDINGS_CACHE_FILE, 'utf8'));
+        if (rawEmb && typeof rawEmb === 'object') {
+            for (const [hash, vec] of Object.entries(rawEmb)) {
+                if (Array.isArray(vec) && vec.length > 0) chunkVecCache.set(hash, vec);
+            }
+        }
+    }
+} catch (_) {}
+
+function persistEmbeddingsCache() {
+    try {
+        const dir = path.dirname(EMBEDDINGS_CACHE_FILE);
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        const obj = {};
+        let count = 0;
+        for (const [k, v] of chunkVecCache.entries()) {
+            obj[k] = v;
+            if (++count >= 600) break;
+        }
+        fs.writeFileSync(EMBEDDINGS_CACHE_FILE, JSON.stringify(obj), 'utf8');
+    } catch (_) {}
+}
+
+function l2Normalize(vec) {
+    let magSq = 0;
+    for (let i = 0; i < vec.length; i++) magSq += vec[i] * vec[i];
+    const mag = Math.sqrt(magSq) || 1;
+    return vec.map(x => Number((x / mag).toFixed(6)));
+}
+
+function cosineDot(a, b) {
+    if (!a || !b || a.length !== b.length) return 0;
+    let sum = 0;
+    for (let i = 0; i < a.length; i++) sum += a[i] * b[i];
+    return sum;
+}
+
+function hashChunkContent(cand) {
+    return crypto.createHash('sha1').update(`${cand.title}\n${cand.sectionHeader || ''}\n${cand.text}`).digest('hex');
+}
 
 let encyclopedia = {
     lastSynced: 0,
@@ -775,127 +822,166 @@ async function prewarmCoreForumGuides(tornApiKey) {
     return warmed;
 }
 
-// ── Hybrid BM25 + Vector Cosine + Phrase Reranker over Local & Forum Chunks ───
-function scoreHybridChunks(query, candidates) {
-    const allowLegacy = /\b(?:stocks?\s*2\.0|crimes?\s*1\.0|old\s+crimes)\b/i.test(query || '');
-    const qLow = String(query || '').toLowerCase()
-        .replace(/e-?dvds?/g, 'edvd')
-        .replace(/10\s*[★*]\s*an\b/g, '10* an adult novelties');
-    const qTokens = tokenizeForSearch(query);
-    if (qTokens.length === 0 || candidates.length === 0) return [];
+// ── Vector Embedding Cosine Similarity Engine (gemini-embedding-001 + Strict Gate) ──
+async function embedQueryVector(question, geminiKeys = []) {
+    if (!Array.isArray(geminiKeys) || geminiKeys.length === 0) return null;
+    const qKey = String(question || '').trim().toLowerCase().slice(0, 260);
+    const cached = queryVecCache.get(qKey);
+    if (cached && (Date.now() - cached.ts) < EVIDENCE_TTL_MS) return cached.vec;
 
-    // Collect key phrases active in this query
-    const activePhrases = KEY_PHRASES.filter(ph => qLow.includes(ph));
-
-    // Precompute TF for every candidate chunk
-    const prepared = [];
-    const df = new Map();
-    let totalLen = 0;
-    for (const cand of candidates) {
-        if (!allowLegacy && isLegacyOrDeprecatedSource(cand.title, cand.url, cand.text)) continue;
-        const { tf, len } = tokenizeListWithFreq(`${cand.sectionHeader || ''} ${(cand.keywords || []).join(' ')} ${cand.text}`);
-        prepared.push({ cand, tf, len });
-        totalLen += len;
-        for (const term of qTokens) {
-            if ((tf.get(term) || 0) > 0) df.set(term, (df.get(term) || 0) + 1);
+    for (const key of geminiKeys) {
+        for (let attempt = 0; attempt < 2; attempt++) {
+            try {
+                const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent?key=${key}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        model: 'models/gemini-embedding-001',
+                        taskType: 'RETRIEVAL_QUERY',
+                        content: { parts: [{ text: String(question || '') }] }
+                    }),
+                    signal: AbortSignal.timeout(4500)
+                });
+                const j = await res.json();
+                if (Array.isArray(j?.embedding?.values) && j.embedding.values.length > 0) {
+                    const norm = l2Normalize(j.embedding.values);
+                    if (queryVecCache.size > 300) queryVecCache.delete(queryVecCache.keys().next().value);
+                    queryVecCache.set(qKey, { ts: Date.now(), vec: norm });
+                    return norm;
+                }
+            } catch (_) {
+                if (attempt === 0) await new Promise(r => setTimeout(r, 350));
+            }
         }
     }
-    if (prepared.length === 0) return [];
+    return null;
+}
 
-    const N = prepared.length;
-    const avgDl = Math.max(1, totalLen / N);
-    const k1 = 1.5;
-    const b = 0.75;
+async function ensureChunkEmbeddingVectors(candidates, geminiKeys = []) {
+    if (!Array.isArray(geminiKeys) || geminiKeys.length === 0) return false;
+    const missing = [];
+    for (const c of candidates) {
+        const h = hashChunkContent(c);
+        c._hash = h;
+        if (!chunkVecCache.has(h)) missing.push(c);
+    }
+    if (missing.length === 0) return true;
 
-    // IDF weights for query tokens
-    const qWeightMap = new Map();
+    for (const key of geminiKeys) {
+        let allOk = true;
+        for (let i = 0; i < missing.length; i += 40) {
+            const batch = missing.slice(i, i + 40);
+            try {
+                const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:batchEmbedContents?key=${key}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        requests: batch.map(d => ({
+                            model: 'models/gemini-embedding-001',
+                            taskType: 'RETRIEVAL_DOCUMENT',
+                            title: `${d.title} :: ${d.sectionHeader || ''}`.slice(0, 140),
+                            content: { parts: [{ text: `${d.title} - ${d.sectionHeader || ''}\n${d.text}`.slice(0, 3500) }] }
+                        }))
+                    }),
+                    signal: AbortSignal.timeout(6500)
+                });
+                const j = await res.json();
+                if (Array.isArray(j?.embeddings) && j.embeddings.length === batch.length) {
+                    for (let k = 0; k < batch.length; k++) {
+                        const vals = j.embeddings[k]?.values;
+                        if (Array.isArray(vals) && vals.length > 0) {
+                            chunkVecCache.set(batch[k]._hash, l2Normalize(vals));
+                        }
+                    }
+                } else {
+                    allOk = false;
+                    break;
+                }
+            } catch (_) {
+                allOk = false;
+                break;
+            }
+        }
+        if (allOk) {
+            persistEmbeddingsCache();
+            return true;
+        }
+    }
+    return false;
+}
+
+function scoreTfIdfCosineFallback(query, candidates) {
+    const qTokens = tokenizeForSearch(query);
+    if (qTokens.length === 0 || candidates.length === 0) return [];
+    const prepared = [];
+    const df = new Map();
+    for (const cand of candidates) {
+        const { tf } = tokenizeListWithFreq(`${cand.sectionHeader || ''} ${cand.text}`);
+        prepared.push({ cand, tf });
+        for (const t of new Set(qTokens)) {
+            if ((tf.get(t) || 0) > 0) df.set(t, (df.get(t) || 0) + 1);
+        }
+    }
+    const N = Math.max(1, prepared.length);
+    const qW = new Map();
     let qNormSq = 0;
     for (const term of qTokens) {
         const termDf = df.get(term) || 0;
         const idf = Math.log(1 + (N - termDf + 0.5) / (termDf + 0.5)) + 0.35;
-        const w = (term.length >= 5 ? 1.25 : 1.0) * idf;
-        qWeightMap.set(term, w);
-        qNormSq += w * w;
+        qW.set(term, idf);
+        qNormSq += idf * idf;
     }
     const qNorm = Math.sqrt(qNormSq) || 1;
 
-    const scored = [];
-    for (const item of prepared) {
-        const { cand, tf, len } = item;
-        const docLow = `${cand.title} ${cand.sectionHeader || ''} ${cand.text}`.toLowerCase();
-
-        // 1. Okapi BM25 over query terms
-        let bm25Raw = 0;
-        let maxIdealBm25 = 0;
-        let matchedUniqueTerms = 0;
-        let dotProduct = 0;
+    return prepared.map(({ cand, tf }) => {
+        let dot = 0;
         let docNormSq = 0;
-
         for (const [term, count] of tf.entries()) {
-            const subTf = 1 + Math.log(Math.max(1, count));
-            docNormSq += subTf * subTf;
+            const sub = 1 + Math.log(Math.max(1, count));
+            docNormSq += sub * sub;
+            if (qW.has(term)) dot += sub * qW.get(term);
         }
-        const docNorm = Math.sqrt(Math.max(1, docNormSq));
+        const rawSim = Math.min(1, Math.max(0, dot / (qNorm * (Math.sqrt(docNormSq) || 1))));
+        return { ...cand, similarity: Number(rawSim.toFixed(4)), score: Number(rawSim.toFixed(4)) };
+    }).sort((a, b) => b.similarity - a.similarity);
+}
 
-        for (const term of qTokens) {
-            const qW = qWeightMap.get(term) || 1;
-            const termDf = df.get(term) || 0;
-            const idf = Math.log(1 + (N - termDf + 0.5) / (termDf + 0.5)) + 0.35;
-            maxIdealBm25 += idf * ((k1 + 1) / 1.8);
+async function scoreChunksBySimilarity(question, rawCandidates, geminiKeys = []) {
+    const allowLegacy = /\b(?:stocks?\s*2\.0|crimes?\s*1\.0|old\s+crimes)\b/i.test(question || '');
+    const candidates = rawCandidates.filter(c => allowLegacy || !isLegacyOrDeprecatedSource(c.title, c.url, c.text));
+    if (candidates.length === 0) return { scoredAll: [], passed: [], method: 'none' };
 
-            const f = tf.get(term) || 0;
-            if (f > 0) {
-                matchedUniqueTerms++;
-                const bm25Term = idf * ((f * (k1 + 1)) / (f + k1 * (1 - b + b * (len / avgDl))));
-                bm25Raw += bm25Term;
+    let scoredAll = [];
+    let method = 'tfidf-fallback';
 
-                const dW = (1 + Math.log(Math.max(1, f))) * idf;
-                dotProduct += qW * dW;
-            }
-        }
-
-        const denomTokens = Math.min(10, qTokens.length);
-        const coverage = Math.min(1, matchedUniqueTerms / Math.max(1, denomTokens));
-        if (matchedUniqueTerms === 0 || (qTokens.length >= 3 && matchedUniqueTerms < 2 && activePhrases.length === 0)) {
-            continue;
-        }
-
-        const bm25Norm = Math.min(1, bm25Raw / Math.max(0.5, maxIdealBm25 * (denomTokens / Math.max(1, qTokens.length))));
-        const cosineSim = Math.min(1, (dotProduct / (qNorm * docNorm)) * 1.55);
-
-        // 2. Reranker Bonus: Exact keyphrases, header/keyword alignment, and Tier authority
-        let phraseMatches = 0;
-        for (const ph of activePhrases) {
-            if (docLow.includes(ph)) phraseMatches++;
-        }
-        const phraseRatio = activePhrases.length > 0 ? Math.min(1, phraseMatches / Math.min(3, activePhrases.length)) : 0;
-
-        let kwTagHits = 0;
-        if (Array.isArray(cand.keywords)) {
-            for (const qT of qTokens) {
-                if (cand.keywords.some(k => k === qT || k.includes(qT))) kwTagHits++;
-            }
-        }
-        const kwTagBonus = qTokens.length > 0 ? Math.min(0.20, (kwTagHits / Math.max(1, denomTokens)) * 0.25) : 0;
-
-        const baseRelevance =
-            0.34 * coverage +
-            0.26 * bm25Norm +
-            0.20 * cosineSim +
-            0.20 * phraseRatio +
-            kwTagBonus;
-
-        // Tier authority boost applies ONLY multiplicatively on positive base relevance!
-        const authority = Number(cand.authorityWeight || 1.0);
-        const finalScore = Math.min(0.99, Number((baseRelevance * authority).toFixed(3)));
-
-        if (finalScore >= MIN_CHUNK_SCORE) {
-            scored.push({ ...cand, score: finalScore });
+    if (Array.isArray(geminiKeys) && geminiKeys.length > 0) {
+        const [qVec, chunksOk] = await Promise.all([
+            embedQueryVector(question, geminiKeys),
+            ensureChunkEmbeddingVectors(candidates, geminiKeys)
+        ]);
+        if (qVec && chunksOk) {
+            method = 'gemini-embedding-001';
+            scoredAll = candidates.map(c => {
+                const cVec = chunkVecCache.get(c._hash || hashChunkContent(c));
+                const sim = cVec ? Math.max(0, Math.min(1, cosineDot(qVec, cVec))) : 0;
+                const rounded = Number(sim.toFixed(4));
+                return { ...c, similarity: rounded, score: rounded };
+            }).sort((a, b) => b.similarity - a.similarity);
         }
     }
 
-    scored.sort((a, b) => b.score - a.score);
-    return scored;
+    if (scoredAll.length === 0) {
+        scoredAll = scoreTfIdfCosineFallback(question, candidates);
+    }
+
+    const passed = scoredAll.filter(c => c.similarity >= MIN_SIMILARITY_SCORE).slice(0, 6);
+    const top5Summary = scoredAll
+        .slice(0, 5)
+        .map(c => `${c.title} :: ${c.sectionHeader || 'Section'}=${c.similarity.toFixed(4)}`)
+        .join(' | ');
+    console.log(`[RAG Similarity] Method=${method} | Cutoff=${MIN_SIMILARITY_SCORE} | Passed=${passed.length}/${scoredAll.length} | Query="${String(question || '').slice(0, 90)}" | RawTop5=[${top5Summary}]`);
+
+    return { scoredAll, passed, method };
 }
 
 // ── LAYER 3: Google Search Grounding Fallback (Used ONLY when local score < threshold) ──
@@ -1098,113 +1184,59 @@ async function gatherTornWikiAndForumEvidence(question, tornApiKey = '', geminiK
         }
     }
 
-    // 4. Score & filter strictly above MIN_CHUNK_SCORE (>= 0.75)
-    let rankedChunks = scoreHybridChunks(question, candidatePool);
+    // 4. Score ALL candidate chunks uniformly with vector cosine similarity & gate >= MIN_SIMILARITY_SCORE (0.72)
+    //    Zero fallback injection if < 0.72 so unrelated Wiki/Forum pages NEVER leak to the LLM or footer.
+    const { passed: rankedChunks } = await scoreChunksBySimilarity(question, candidatePool, geminiKeys);
 
-    // 5. FAST PATH: Only call slow Gemini googleSearch fallback when local hybrid retrieval lacks high confidence
-    const topLocalScore = rankedChunks[0]?.score || 0;
-    let searchFallbackBlock = '';
-    if (topLocalScore < LOCAL_SKIP_SEARCH_THRESHOLD && Array.isArray(geminiKeys) && geminiKeys.length > 0 && rankedChunks.length < 2) {
-        const searchRes = await runTornWikiAndForumSearchPass(question, geminiKeys);
-        if (searchRes.discoveredThreadIds.length > 0 && !searchRes.wikiWasComplete) {
-            const extraTids = searchRes.discoveredThreadIds.filter(id => !seenChunkThreadIds.has(id)).slice(0, 2);
-            const extraEntries = await Promise.all(extraTids.map(tid => fetchAndChunkForumThread(tid, tornApiKey)));
-            for (const entry of extraEntries) {
-                if (!entry) continue;
-                for (const ch of entry.chunks) {
-                    candidatePool.push({
-                        tier: 'Tier 2: Torn Forum Guide',
-                        title: entry.title,
-                        url: entry.url,
-                        sectionHeader: ch.header,
-                        keywords: [],
-                        authorityWeight: 1.0,
-                        text: ch.text
-                    });
-                }
-            }
-            rankedChunks = scoreHybridChunks(question, candidatePool);
-        }
-        if (rankedChunks.length === 0 && searchRes.groundedNotes && searchRes.sources.length > 0) {
-            for (const s of searchRes.sources.slice(0, 3)) {
-                candidatePool.push({
-                    tier: s.url.includes('wiki.torn.com') ? 'Tier 1: Torn Wiki Search' : 'Tier 2: Torn Forum Search',
-                    title: s.title,
-                    url: s.url,
-                    sectionHeader: 'Grounded Web Excerpt',
-                    keywords: extractSearchKeywords(question),
-                    authorityWeight: s.url.includes('wiki.torn.com') ? 1.25 : 1.0,
-                    text: searchRes.groundedNotes.slice(0, 1800)
-                });
-            }
-            rankedChunks = scoreHybridChunks(question, candidatePool);
-            if (rankedChunks.length === 0 && searchRes.wikiWasComplete) {
-                searchFallbackBlock = searchRes.groundedNotes;
-                rankedChunks = searchRes.sources.slice(0, 2).map(s => ({
-                    tier: 'Tier 1: Torn Wiki Search',
-                    title: s.title,
-                    url: s.url,
-                    sectionHeader: 'Grounded Wiki Search',
-                    score: 0.78,
-                    text: searchRes.groundedNotes.slice(0, 1800)
-                }));
-            }
-        }
-    }
-
-    // Limit to top 6 verified chunks, favoring diversity across distinct sources/sections
+    // 5. Assign numeric [1], [2], ... chunk IDs for strict citation tracking
     const finalChunks = rankedChunks.slice(0, 6).map((ch, idx) => ({
-        id: `SRC-${idx + 1}`,
+        id: String(idx + 1),
         title: ch.title,
         url: ch.url,
         tier: ch.tier,
-        score: ch.score,
+        similarity: ch.similarity,
+        score: ch.similarity,
         sectionHeader: ch.sectionHeader,
         text: ch.text
     }));
 
-    // Deduplicate source descriptors preserving SRC-IDs so LLM selection maps 1:1 to citations
-    const sourceCatalog = [];
-    for (const ch of finalChunks) {
-        sourceCatalog.push({
-            id: ch.id,
-            title: ch.title,
-            url: ch.url,
-            score: ch.score
-        });
-    }
+    const sourceCatalog = finalChunks.map(ch => ({
+        id: ch.id,
+        title: ch.title,
+        url: ch.url,
+        similarity: ch.similarity,
+        score: ch.similarity
+    }));
 
     let contextBlock = '';
     if (finalChunks.length > 0) {
-        contextBlock = `═══ VERIFIED TORN WIKI & FORUM KNOWLEDGE BASE (HIGH-RELEVANCE CHUNKS >= ${MIN_CHUNK_SCORE}) ═══\n`;
-        contextBlock += `Cite ONLY the [SRC-k] IDs whose text you actually use at the end of your reply via [[SOURCES_USED: SRC-1, ...]] (or [[SOURCES_USED: NONE]]).\n\n`;
+        contextBlock = `═══ VERIFIED TORN WIKI & FORUM CHUNKS (COSINE SIMILARITY >= ${MIN_SIMILARITY_SCORE}) ═══\n`;
+        contextBlock += `Cite ONLY the chunk numbers [1], [2], etc. that you actually use to answer, and list them on a final line as [[CITED: 1, 2]] (or [[CITED: NONE]] if none were used).\n\n`;
         for (const ch of finalChunks) {
-            contextBlock += `[${ch.id}] (${ch.tier} | Relevance: ${ch.score.toFixed(2)}) ${ch.title} — ${ch.url}\n${ch.text}\n\n`;
+            contextBlock += `[${ch.id}] (${ch.tier} | Cosine Similarity: ${ch.similarity.toFixed(3)}) ${ch.title} — ${ch.url}\n${ch.text}\n\n`;
         }
         contextBlock += `══════════════════════════════════════════════════════════════════════════════\n\n`;
-    } else if (searchFallbackBlock) {
-        contextBlock = `${searchFallbackBlock}\n`;
     }
 
     const value = {
         contextBlock,
         sources: sourceCatalog,
         candidateChunks: finalChunks,
-        usedWikiOrForum: Boolean(contextBlock.trim())
+        emptyContext: finalChunks.length === 0,
+        usedWikiOrForum: finalChunks.length > 0
     };
 
-    if (finalChunks.length > 0) {
-        if (evidenceCache.size > 250) {
-            const oldestKey = evidenceCache.keys().next().value;
-            evidenceCache.delete(oldestKey);
-        }
-        evidenceCache.set(normKey, { ts: Date.now(), value });
+    if (evidenceCache.size > 250) {
+        const oldestKey = evidenceCache.keys().next().value;
+        evidenceCache.delete(oldestKey);
     }
+    evidenceCache.set(normKey, { ts: Date.now(), value });
 
     return value;
 }
 
 module.exports = {
+    MIN_SIMILARITY_SCORE,
     MIN_CHUNK_SCORE,
     needsWikiOrForumLookup,
     isPurePersonalAccountQuery,

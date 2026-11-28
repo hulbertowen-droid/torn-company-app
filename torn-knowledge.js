@@ -714,11 +714,18 @@ function detectTornGameplayIntent(text) {
 /**
  * Build ground-truth intelligence block to inject into the LLM system prompt.
  */
-function buildTornKnowledgeContext(query, userAccountData = null, invokerName = "Member") {
+function buildTornKnowledgeContext(query, userAccountData = null, invokerName = "Member", options = {}) {
     const clean = (query || '').toLowerCase();
     const intent = detectTornGameplayIntent(query);
     const resolvedItem = resolveTornItem(query);
     const perks = liveFactionPerks;
+
+    if (options && options.ragEmpty === true) {
+        const asksOurFactionOrJump = /\b(?:spider-verse|our\s+faction|faction\s+booster|truffle|truffles|happy\s*jump|edvd|e-dvd|erotic\s*dvd|10\s*[*★]\s*an|adult\s*novelt)\b/i.test(clean);
+        if (!asksOurFactionOrJump) {
+            return '';
+        }
+    }
 
     const isTornQuery = intent || resolvedItem || 
         /\b(?:jump|truffle|candy|candies|edvd|xanax|booster|energy|nerve|cooldown|rehab|switz|torn|perk|upgrade|faction|spider-verse)\b/i.test(clean);
