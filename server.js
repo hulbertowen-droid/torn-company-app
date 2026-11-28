@@ -12684,7 +12684,7 @@ async function askTornAI(message, history = [], userAccountData = null, invokerN
             : getFridayTornSystemPrompt();
 
         const citationNote = hasRagChunks
-            ? `\n[CITATION REQUIREMENT: End your response on a new final line with [[CITED: 1, 2]] containing ONLY the numeric chunk IDs [1], [2], etc. you actually relied on above, or [[CITED: NONE]] if none were needed.]`
+            ? `\n[CITATION & PARTIAL-CONTEXT RULE: Only state specific numbers/mechanics EXPLICITLY written inside chunks [1]..[N] or live Torn API tool results above. For any sub-question or mechanic NOT verified in [1]..[N] or tool results, explicitly say "I cannot verify [specific mechanic] in my current sources" rather than guessing from memory. End your response on a new final line with [[CITED: 1, 2]] listing ONLY chunk numbers actually used, or [[CITED: NONE]].]`
             : (enforceEmptyContextFallback ? `\n[EMPTY CONTEXT: ${EMPTY_RAG_FALLBACK_INSTRUCTION}]` : '');
         const sourcingReminder = enforceEmptyContextFallback
             ? citationNote
@@ -12947,7 +12947,7 @@ async function generateChatResponse(convoLines = [], hint = "", invokerName = ""
         : (chatEmptyContextFallback
             ? `\n${EMPTY_RAG_FALLBACK_INSTRUCTION}`
             : (ragUsed
-                ? "\nRespond clearly and accurately using ONLY the verified Wiki/Forum facts and calculations above (verify all numbers first; keep formatting clean):"
+                ? `\nRespond clearly using ONLY facts explicitly present in chunks [1]..[N] or live telemetry above. For any sub-part NOT confirmed in retrieved chunks, explicitly say "I cannot verify [missing part] in my current sources" instead of guessing. End with [[CITED: 1, ...]] or [[CITED: NONE]]:`
                 : "\nNow respond naturally in 1-3 sentences to the latest message. Resolve follow-up references ('who is that?', 'which one?') using the recent messages above and your freeroam tools — NEVER repeat or paraphrase what you already said in the previous message, and NEVER dodge with vague 'everyone is great' answers. If greeting/casual chat, keep it warm and brief:"));
 
     const cleanReplyOutput = (raw) => extractVerifiedCitations(raw, ragUsed ? (ragEvidence?.sources || []) : []).reply;
