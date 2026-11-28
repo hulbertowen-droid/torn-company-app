@@ -728,60 +728,40 @@ function buildTornKnowledgeContext(query, userAccountData = null, invokerName = 
         return `═══ IDENTITY & FACTION CONTEXT ═══\nYou are F.R.I.D.A.Y, the warm, clever, and supportive tactical assistant for faction ${perks.factionName} [${perks.factionId}]. Banter naturally with members, be encouraging, polite, and friendly, and keep conversation flowing.\n═══════════════════════════════════\n\n`;
     }
 
-    let context = "═══ VERIFIED TORN CITY GAMEPLAY INTELLIGENCE (GROUND TRUTH) ═══\n";
-    context += "CRITICAL ANTI-HALLUCINATION & FACTION PERK INSTRUCTIONS:\n";
-    context += `1. FACTION CONTEXT: You are F.R.I.D.A.Y in faction ${perks.factionName} [${perks.factionId}].\n`;
-    const exactTruffles = Math.floor((perks.boosterLimitHours * 60) / 30);
-    const truffleHappyEach = Math.floor(100 * (1 + (perks.voracityPercent || 50) / 100));
-    const totalTruffleHappy = exactTruffles * truffleHappyEach;
-    const preXtc = 5025 + totalTruffleHappy;
-    const postXtc = preXtc * 2;
-    context += `2. LIVE FACTION PERK DATA FEED (VERIFIED FROM TORN API):\n`;
-    context += `   • Booster Cooldown Upgrade: +${perks.tolerationHours} hours.\n`;
-    context += `   • Faction Maximum Booster Cooldown: Exactly ${perks.boosterLimitHours} hours (24h base + ${perks.tolerationHours}h perk = ${perks.boosterLimitHours * 60} minutes).\n`;
-    context += `   • Candy Effect Upgrade: +${perks.voracityPercent}% happy gain from candy.\n`;
-    context += `   • Travel Capacity Upgrade: +${perks.travelCapacityBonus} items.\n`;
-    context += `   • Gym Steadfast Upgrades: Strength +${perks.strengthGymBonus || 0}%, Speed +${perks.speedGymBonus || 0}%, Defense +${perks.defenseGymBonus || 0}%, Dexterity +${perks.dexterityGymBonus || 0}%.\n`;
-    context += `3. MANDATORY TRUFFLES / JUMP DIRECTIVE:\n`;
-    context += `   • NEVER say 'my data feed doesn't specify' or guess a range when answering for our faction: our live faction limit is ${perks.boosterLimitHours} hours!\n`;
-    context += `   • ${perks.boosterLimitHours} hours / 0.5 hours = EXACTLY ${exactTruffles} Bags of Chocolate Truffles.\n`;
-    context += `   • With our +${perks.voracityPercent}% candy perk, each truffle gives ${truffleHappyEach} Happy (${exactTruffles} × ${truffleHappyEach} = ${totalTruffleHappy.toLocaleString()} Happy). Pre-Ecstasy ~${preXtc.toLocaleString()} -> After Ecstasy = ~${postXtc.toLocaleString()} Happy.\n`;
-    context += "4. NEVER substitute Bag of Chocolate Truffles with 'chocolate boxes' or any other item.\n";
-    context += "5. NEVER 'correct' a valid Torn item name into a different item. 'Bag of Chocolate Truffles' is REAL. Do not say 'chocolate boxes'.\n";
-    context += "6. NEVER invent a fixed quantity like 'you need 5' for items whose usage depends on booster cooldown windows.\n\n";
+    const isCandyOrTruffleQuery = /\b(?:truffle|truffles|candy|candies|voracity|chocolate|tootsie|jawbreaker|kisses|lollipop)\b/i.test(clean);
+    const isEdvdOrAnJumpQuery = /\b(?:edvd|e-dvd|erotic\s*dvd|happy\s*jump|99k|adult\s*novelt|10\s*[*★]\s*an|ecstasy|xtc)\b/i.test(clean);
 
-    if (intent === 'happy_jump' || resolvedItem?.type === 'Candy' || resolvedItem?.id === 366 || /booster\s+cooldown\s+perk/i.test(query)) {
+    let context = "═══ VERIFIED TORN CITY GAMEPLAY INTELLIGENCE (GROUND TRUTH) ═══\n";
+    context += `• Faction Baseline: ${perks.factionName} [${perks.factionId}] | Max Booster CD: ${perks.boosterLimitHours}h (24h base + ${perks.tolerationHours}h perk) | Voracity Candy: +${perks.voracityPercent}% | Travel Cap: +${perks.travelCapacityBonus} | Steadfast: STR +${perks.strengthGymBonus || 0}%, SPD +${perks.speedGymBonus || 0}%, DEF +${perks.defenseGymBonus || 0}%, DEX +${perks.dexterityGymBonus || 0}%.\n`;
+
+    if (isCandyOrTruffleQuery) {
+        const exactTruffles = Math.floor((perks.boosterLimitHours * 60) / 30);
+        const truffleHappyEach = Math.floor(100 * (1 + (perks.voracityPercent || 50) / 100));
+        const totalTruffleHappy = exactTruffles * truffleHappyEach;
+        const preXtc = 5025 + totalTruffleHappy;
+        const postXtc = preXtc * 2;
+        context += `• Verified Bag of Chocolate Truffles (ID 529, Real Torn Item): +100 base Happy (+${truffleHappyEach} w/ +${perks.voracityPercent}% perk), 30m booster CD. For our ${perks.boosterLimitHours}h faction booster limit: ${exactTruffles} truffles = +${totalTruffleHappy.toLocaleString()} Happy (Pre-XTC ~${preXtc.toLocaleString()} -> After XTC ~${postXtc.toLocaleString()}). Never substitute 'chocolate boxes'.\n`;
+    }
+
+    if (isEdvdOrAnJumpQuery) {
+        context += `• Verified Erotic DVD & 10★ Adult Novelties (AN) Happy Jump Reference:\n`;
+        context += `  - Standard E-DVD (ID 366): +2,500 Happy, +6h Booster CD.\n`;
+        context += `  - 10★ Adult Novelties (Indecent passive, active-only while employed): +100% E-DVD Happy -> +5,000 Happy per E-DVD, plus 10 JP/day (3★ Voyeur = 20 JP per free E-DVD -> 1 free E-DVD every 2 days = 3.5/week opportunity cost).\n`;
+        context += `  - Maxed Private Island (PI) = 5,025 Happy (4,525 w/o Yacht). 5 E-DVDs in 10★ AN + Ecstasy = (5,025 + 25,000) x 2 = 60,050 Happy (~60k, NOT 99,999!). Reaching 99,999 requires 9 E-DVDs (50,025 x 2 capped, using 48h booster CD window: 8 DVDs -> wait 1m -> 9th DVD -> Ecstasy).\n`;
+    }
+
+    if (isCandyOrTruffleQuery && (intent === 'happy_jump' || resolvedItem?.type === 'Candy' || /booster\s+cooldown\s+perk/i.test(query))) {
         const itemToUse = resolvedItem || TORN_ITEMS_DB[529];
         const jump = calculateHappyJumpDetails({ itemCandidate: itemToUse, userAccountData });
-
         const facUpper = (jump.factionPerks.factionName || 'OUR FACTION').toUpperCase();
-        context += `FACTUAL HAPPY JUMP CALCULATION FOR ${facUpper} [${jump.item.name}] (Item ID ${jump.item.id}):\n`;
-        context += `• Item: ${jump.item.name} (${jump.item.type})\n`;
-        context += `• Base Happy: +${jump.item.baseHappy} Happy each\n`;
-        context += `• Faction Perk (+${jump.factionPerks.voracityPercent}% Voracity): Yields +${jump.item.effectiveHappyWithPerks} Happy each\n`;
-        context += `• Cooldown: ${jump.item.cooldownMinutes} minutes per item\n`;
-        context += `• ${facUpper} EXACT REQUIREMENT: EXACTLY ${jump.jumpFaction.quantity} ${jump.item.name}s (${jump.jumpFaction.quantity} × 30m = ${jump.jumpFaction.totalCooldownHours} hours)\n`;
-        context += `  - Happy added: +${jump.jumpFaction.happyAdded.toLocaleString()} Happy\n`;
-        context += `  - Total before Ecstasy (with ~5k PI): ~${jump.jumpFaction.preEcstasyHappy.toLocaleString()} Happy\n`;
-        context += `  - Total after Ecstasy (doubled): ~${jump.jumpFaction.postEcstasyHappy.toLocaleString()} Happy\n`;
-        context += `  - Estimated Item Cost: ~$${jump.jumpFaction.estimatedCost.toLocaleString()}\n`;
-        context += `• Baseline comparisons: Default 24h limit (0 perks) = 48 candies; Maxed 48h limit = 96 candies. Our faction is currently at ${jump.factionPerks.boosterLimitHours}h = ${jump.jumpFaction.quantity} candies.\n`;
+        context += `• Candy Happy Jump Math [${jump.item.name}] (ID ${jump.item.id}) for ${facUpper}: ${jump.jumpFaction.quantity} items (${jump.jumpFaction.totalCooldownHours}h CD) -> +${jump.jumpFaction.happyAdded.toLocaleString()} Happy -> ~${jump.jumpFaction.postEcstasyHappy.toLocaleString()} post-Ecstasy.\n`;
         if (userStatsHasBooster(userAccountData)) {
-            context += `• Player Account Status: Currently has ${jump.playerContext.currentBoosterUsedMinutes}m booster cooldown used. Can consume ${jump.playerContext.remainingItemsNow} more right now.\n`;
+            context += `  - Player active booster CD: ${jump.playerContext.currentBoosterUsedMinutes}m used (${jump.playerContext.remainingItemsNow} items usable now).\n`;
         }
-        context += `• Proper Protocol: 1) Stack 1,000e with 4 Xanax; 2) Wait for drug CD = 00:00; 3) Eat ${jump.jumpFaction.quantity} ${jump.item.name}s; 4) Take 1 Ecstasy to double to ~${jump.jumpFaction.postEcstasyHappy.toLocaleString()} Happy; 5) Train before the 15-minute clock reset.\n`;
-        context += "═══════════════════════════════════════════════════════════════\n\n";
     } else if (resolvedItem) {
-        context += `VERIFIED ITEM INTEL FOR [${resolvedItem.name}] (Item ID ${resolvedItem.id}):\n`;
-        context += `• Name: ${resolvedItem.name}\n`;
-        context += `• Type: ${resolvedItem.type}\n`;
-        context += `• Effect: ${resolvedItem.effect || 'N/A'}\n`;
-        if (resolvedItem.baseHappy) context += `• Happiness: +${resolvedItem.baseHappy} Happy\n`;
-        if (resolvedItem.baseEnergy) context += `• Energy: +${resolvedItem.baseEnergy} Energy\n`;
-        if (resolvedItem.boosterCooldownMinutes) context += `• Booster Cooldown: ${resolvedItem.boosterCooldownMinutes} minutes\n`;
-        if (resolvedItem.marketValue) context += `• Market Value: ~$${resolvedItem.marketValue.toLocaleString()}\n`;
-        context += "═══════════════════════════════════════════════════════════════\n\n";
+        context += `• Verified Item Intel [${resolvedItem.name}] (ID ${resolvedItem.id}, ${resolvedItem.type}): ${resolvedItem.effect || 'N/A'}${resolvedItem.baseHappy ? ` | +${resolvedItem.baseHappy} Happy` : ''}${resolvedItem.baseEnergy ? ` | +${resolvedItem.baseEnergy} Energy` : ''}${resolvedItem.boosterCooldownMinutes ? ` | ${resolvedItem.boosterCooldownMinutes}m Booster CD` : ''}${resolvedItem.marketValue ? ` | MV ~$${resolvedItem.marketValue.toLocaleString()}` : ''}.\n`;
     }
+    context += "═══════════════════════════════════════════════════════════════\n\n";
 
     return context;
 }

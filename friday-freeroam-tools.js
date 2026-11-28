@@ -514,9 +514,29 @@ function createFreeroamToolExecutor(deps) {
                 const callerKey = (typeof getUserTornKey === 'function' ? getUserTornKey() : '') || tornKey;
                 if (!callerKey) return { error: 'User has not linked their Torn API key yet.' };
 
-                const reqCrimeRaw = String(args.crimeName || '').toLowerCase().replace(/[\s-]+/g, '_');
-                const matchedEntry = reqCrimeRaw
-                    ? CRIMES_V2_LIST.find(([, slug, cname]) => slug === reqCrimeRaw || cname.toLowerCase().includes(reqCrimeRaw.replace(/_/g, ' ')))
+                const CRIME_ALIASES = {
+                    sfc: 'search_for_cash',
+                    search: 'search_for_cash',
+                    bootleg: 'bootlegging',
+                    shoplift: 'shoplifting',
+                    pickpocket: 'pickpocketing',
+                    skim: 'card_skimming',
+                    skimming: 'card_skimming',
+                    burgle: 'burglary',
+                    hustle: 'hustling',
+                    dispose: 'disposal',
+                    crack: 'cracking',
+                    forge: 'forgery',
+                    scam: 'scamming'
+                };
+                const reqCrimeRaw = String(args.crimeName || '').toLowerCase().replace(/[\s-]+/g, '_').trim();
+                const reqCrimeNorm = CRIME_ALIASES[reqCrimeRaw] || reqCrimeRaw;
+                const matchedEntry = reqCrimeNorm
+                    ? CRIMES_V2_LIST.find(([, slug, cname]) =>
+                        slug === reqCrimeNorm ||
+                        cname.toLowerCase().includes(reqCrimeNorm.replace(/_/g, ' ')) ||
+                        reqCrimeNorm.includes(slug)
+                    )
                     : null;
 
                 const [skillsRes, keyInfoRes, profRes] = await Promise.all([
@@ -531,14 +551,22 @@ function createFreeroamToolExecutor(deps) {
                 const hasFullLogs = accessLevel >= 4 || accessType.toLowerCase().includes('full');
 
                 const targetCrimes = matchedEntry ? [matchedEntry] : CRIMES_V2_LIST;
-                const v2List = await Promise.all(
-                    targetCrimes.map(([cid, slug, cname]) =>
-                        fetch(`https://api.torn.com/v2/user/${cid}/crimes?key=${encodeURIComponent(callerKey)}`, { signal: AbortSignal.timeout(6000) })
-                            .then(r => r.json())
-                            .then(d => ({ cid, slug, cname, c: d?.crimes || null }))
-                            .catch(() => ({ cid, slug, cname, c: null }))
-                    )
-                );
+                const v2List = [];
+                for (let idx = 0; idx < targetCrimes.length; idx += 5) {
+                    const batch = targetCrimes.slice(idx, idx + 5);
+                    const batchRes = await Promise.all(
+                        batch.map(([cid, slug, cname]) =>
+                            fetch(`https://api.torn.com/v2/user/${cid}/crimes?key=${encodeURIComponent(callerKey)}`, { signal: AbortSignal.timeout(6000) })
+                                .then(r => r.json())
+                                .then(d => ({ cid, slug, cname, c: d?.crimes || null }))
+                                .catch(() => ({ cid, slug, cname, c: null }))
+                        )
+                    );
+                    v2List.push(...batchRes);
+                    if (idx + 5 < targetCrimes.length) {
+                        await new Promise(r => setTimeout(r, 120));
+                    }
+                }
 
                 // Optional 30-day Full Access log check if caller has a Full Access key linked
                 let log30dSummary = null;
@@ -556,6 +584,26 @@ function createFreeroamToolExecutor(deps) {
 
                 const dailyNerve = Math.max(24, Number(args.dailyNerve || 0) || Math.min(265, Math.max(96, Math.round(Number(profRes?.nerve?.maximum || 60) * 3.9 + 30))));
                 const targetSkill = Math.max(2, Math.min(100, Number(args.targetSkill || 100)));
+
+                const calcAttemptsForSpan = (fromCS, toCS, baseRate) => {
+                    if (fromCS >= toCS) return 0;
+                    const curFloor = Math.floor(fromCS);
+                    const targetFloor = Math.floor(toCS);
+                    const partialStart = fromCS - curFloor;
+                    const partialEnd = toCS - targetFloor;
+                    let sum = 0;
+                    if (curFloor === targetFloor) {
+                        return Math.max(1, baseRate * crimeCurveFactor(curFloor + 0.5) * Math.max(0.05, toCS - fromCS));
+                    }
+                    for (let lvl = curFloor; lvl < targetFloor; lvl++) {
+                        const frac = lvl === curFloor ? Math.max(0.05, 1 - partialStart) : 1;
+                        sum += Math.max(2, baseRate * crimeCurveFactor(lvl + 0.5)) * frac;
+                    }
+                    if (partialEnd > 0.001) {
+                        sum += Math.max(2, baseRate * crimeCurveFactor(targetFloor + 0.5)) * partialEnd;
+                    }
+                    return sum;
+                };
 
                 const crimeReports = [];
                 for (const { slug, cname, c } of v2List) {
@@ -575,22 +623,16 @@ function createFreeroamToolExecutor(deps) {
                         ? Math.max(1.2, totalAtt / cumW)
                         : 11.5;
 
-                    const curFloor = Math.floor(exactCS);
-                    const partial = exactCS - curFloor;
-                    let cleanAttemptsNeeded = 0;
-                    if (exactCS < targetSkill) {
-                        for (let lvl = curFloor; lvl < targetSkill; lvl++) {
-                            const frac = lvl === curFloor ? Math.max(0.05, 1 - partial) : 1;
-                            cleanAttemptsNeeded += Math.max(2, baseRate * crimeCurveFactor(lvl + 0.5)) * frac;
-                        }
-                    }
+                    const nextSkillLevel = exactCS >= 100 ? 100 : Math.min(100, Math.floor(exactCS) + 1);
+                    const nextLevelRaw = calcAttemptsForSpan(exactCS, nextSkillLevel, baseRate);
+                    const estAttemptsToNextLevel = exactCS >= 100 ? 0 : Math.max(1, Math.ceil(nextLevelRaw));
+                    const estNerveToNextLevel = exactCS >= 100 ? 0 : Math.ceil(estAttemptsToNextLevel * avgNerve);
+                    const estHoursToNextLevel = Number(((estNerveToNextLevel / dailyNerve) * 24).toFixed(1));
 
-                    // Each critical failure in Crimes 2.0 sets back ~42% of a level's attempts at that CS.
-                    // Because baseRate is calibrated on totalAtt (which ALREADY includes historical CF drag),
-                    // calculate both: (a) crit-free baseline vs current-CF rate, and (b) extra days attributable to CF drag!
+                    const targetRaw = calcAttemptsForSpan(exactCS, targetSkill, baseRate);
                     const cfDragMultiplier = 1 + cfRate * 3.5;
-                    const attemptsWithCurrentCF = Math.ceil(cleanAttemptsNeeded);
-                    const attemptsWithoutCF = Math.ceil(cleanAttemptsNeeded / cfDragMultiplier);
+                    const attemptsWithCurrentCF = Math.ceil(targetRaw);
+                    const attemptsWithoutCF = Math.ceil(targetRaw / cfDragMultiplier);
                     const extraAttemptsFromCF = Math.max(0, attemptsWithCurrentCF - attemptsWithoutCF);
 
                     const nerveNeeded = Math.ceil(attemptsWithCurrentCF * avgNerve);
@@ -602,6 +644,10 @@ function createFreeroamToolExecutor(deps) {
                         crime: cname,
                         slug,
                         currentSkill: Number(exactCS.toFixed(2)),
+                        nextSkillLevel,
+                        estAttemptsToNextLevel,
+                        estNerveToNextLevel,
+                        estHoursToNextLevel,
                         targetSkill,
                         lifetimeAttempts: totalAtt,
                         successes,
@@ -626,7 +672,7 @@ function createFreeroamToolExecutor(deps) {
                     log30dSummary,
                     note: hasFullLogs
                         ? 'Calculated from your live Torn skills + v2 crime telemetry + Full Access log check.'
-                        : 'Your linked key is Limited Access (which blocks /user/log 30-day filtering), so these exact projections are computed from your real Torn API v2 lifetime crime telemetry (/v2/user/{id}/crimes). You can also sync 30-day logs locally on https://faction-os.duckdns.org/crimes.html.',
+                        : 'Your linked key is Limited Access (which blocks /user/log 30-day filtering), so these projections are computed from your real Torn API v2 lifetime crime telemetry (/v2/user/{id}/crimes).',
                     crimeReports
                 };
             }

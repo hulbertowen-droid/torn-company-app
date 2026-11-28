@@ -11986,6 +11986,87 @@ Keep your advice specific to the data provided. Be concise, punchy, and use emoj
 });
 
 // ─── F.R.I.D.A.Y Torn Wiki & Multi-Forum Consensus AI Intelligence ───────────
+const NEW_TORN_CORE_RULES = `You are an expert Torn City strategist and mechanics analyst. Follow these strict rules on every response:
+
+1. NEVER GUESS OR HALLUCINATE MECHANICS: Only state a specific Torn rule, formula, or threshold if it is explicitly supported by the retrieved Wiki/Forum context or live Torn API telemetry. If the retrieved context does not confirm a specific mechanic, explicitly state "I cannot verify [specific mechanic] in my current sources" rather than guessing or falling back on outdated memory.
+2. VERIFY USER PREMISES & DO THE MATH FIRST: Never blindly trust the user's numbers, cooldowns, or assumptions. Independently calculate totals (happy, energy, drug vs. booster cooldowns, share counts, respect) before answering. If the user's prompt contains a math error or impossible mechanic, correct it first.
+3. CURRENT META ONLY: Always use current Torn mechanics (Stocks 3.0 with doubling share increments for active dividends and non-stacking unclaimed payouts, Crimes 2.0, OC 2.0, Torn API v2). Never mix in outdated Stocks 2.0 or Crimes 1.0 rules.
+4. SEPARATE TEMPORARY VS. PERMANENT: Clearly distinguish between permanent unlocks (e.g., gym experience/unlocks, education, merits) and active-only perks that vanish when leaving a job, faction, or stock block.
+5. FACTOR IN FULL OPPORTUNITY COST: Include job point income (e.g., E-DVDs from 10★ Adult Novelties), cooldowns, and upkeep when comparing strategies.
+6. CLEAN FORMATTING: Check numbered lists and markdown structure before outputting (do not repeat "1." on multiple sections).`;
+
+function extractVerifiedCitations(rawReply, candidateSources = []) {
+    const raw = String(rawReply || '');
+    const markerRx = /\n?\s*\[{1,2}\s*SOURCES_USED\s*:\s*([^\]]+?)\s*\]{1,2}\s*$/i;
+    const match = raw.match(markerRx);
+    const cleanReply = raw.replace(/\n?\s*\[{1,2}\s*SOURCES_USED\s*:[^\]]*\]{1,2}\s*/gi, '').trim();
+
+    if (!match || !Array.isArray(candidateSources) || candidateSources.length === 0) {
+        return { reply: cleanReply, sources: [] };
+    }
+
+    const tokenList = match[1].trim();
+    if (/^(?:none|n\/a|null|empty|0)$/i.test(tokenList)) {
+        return { reply: cleanReply, sources: [] };
+    }
+
+    const citedIds = new Set(
+        (tokenList.match(/SRC-\d+/gi) || []).map(id => id.toUpperCase())
+    );
+    if (citedIds.size === 0) {
+        return { reply: cleanReply, sources: [] };
+    }
+
+    const verified = [];
+    const seenUrls = new Set();
+    for (const src of candidateSources) {
+        if (!src || !src.id || !src.url) continue;
+        if (!citedIds.has(String(src.id).toUpperCase())) continue;
+        if (seenUrls.has(src.url)) continue;
+        seenUrls.add(src.url);
+        verified.push({ title: src.title || 'Torn Reference', url: src.url });
+        if (verified.length >= 4) break;
+    }
+
+    return { reply: cleanReply, sources: verified };
+}
+
+function detectPersonalCrimeQuery(rawMsg = '') {
+    const low = String(rawMsg || '').toLowerCase();
+    const isPersonal = /\b(?:i|my|me|mine|till|until|hits?\s+(?:to|till|until|left)|level\s*up|attempts?\s+(?:left|to|till)|days?\s+(?:to|till)|cs\s*100|crit\s*fail)\b/i.test(low);
+    const mentionsCrime = /\b(?:crime|crimes|cs\b|pickpocket|shoplift|crack|burglar|graffiti|bootleg|search\s+for\s+cash|card\s+skim|skimming|hustl|dispos|forgery|scam|arson)\b/i.test(low);
+    if (!isPersonal || !mentionsCrime) return null;
+
+    const map = [
+        [/pickpocket/i, 'pickpocketing'],
+        [/shoplift/i, 'shoplifting'],
+        [/crack/i, 'cracking'],
+        [/burglar/i, 'burglary'],
+        [/graffiti/i, 'graffiti'],
+        [/bootleg/i, 'bootlegging'],
+        [/search\s*for\s*cash|sfc/i, 'search_for_cash'],
+        [/skim/i, 'card_skimming'],
+        [/hustl/i, 'hustling'],
+        [/dispos/i, 'disposal'],
+        [/forg/i, 'forgery'],
+        [/scam/i, 'scamming'],
+        [/arson/i, 'arson']
+    ];
+    for (const [rx, slug] of map) {
+        if (rx.test(low)) return slug;
+    }
+    return '';
+}
+
+function selectDynamicThinkingLevel(rawMsg = '') {
+    const low = String(rawMsg || '').toLowerCase();
+    const wordCount = low.split(/\s+/).filter(Boolean).length;
+    if (wordCount >= 22 || /\b(?:compare|vs|versus|opportunity cost|temporary|permanent|increment|stack|unclaimed|happy jump|99k|edvd|overseas|chain bonus|chassis|psu|heat|calculate|worth)\b/i.test(low)) {
+        return 'medium';
+    }
+    return 'low';
+}
+
 function getFridayTornSystemPrompt() {
     const fn = discordConfig.factionName || "our faction";
     const fid = discordConfig.factionId || dynamicFactionId || "";
@@ -11993,38 +12074,13 @@ function getFridayTornSystemPrompt() {
     const perks = tornKnowledge.liveFactionPerks || {};
     const bLimit = perks.boosterLimitHours || 48;
     const cBonus = perks.voracityPercent || 50;
-    return `You are F.R.I.D.A.Y, the tactical Torn City intelligence advisor and operations specialist for ${fn}${fidStr}.
+    return `You are F.R.I.D.A.Y., speaking for ${fn}${fidStr}.
+${NEW_TORN_CORE_RULES}
 
-CORE PERSONA & TEMPERAMENT (WARM, POLITE, ENCOURAGING, AND HIGHLY SUPPORTIVE):
-1. WARM, RESPECTFUL & ENCOURAGING:
-   - You are a loyal, encouraging, and supportive teammate. Never roast, mock, demean, patronize, or use sarcasm.
-   - Speak with the sharp competence of Tony Stark's F.R.I.D.A.Y. combined with the precision of a veteran Torn City researcher.
-2. EXCLUSIVELY TORN CITY GAMEPLAY & FACTION OPERATIONS:
-   - You specialize in Torn City gameplay: gym math, stat curves, happy jumps, ranked warfare, chaining, Crimes 2.0 & OC 2.0, travel, trading, stocks, companies, education, properties, honors/merits, and faction operations.
-   - If asked about website source code or server internals, politely decline and refer to leadership.
-   - AUTONOMOUS FREEROAM TOOLS: You have live tool access to the user's own Crimes 2.0 skills & lifetime crime telemetry (get_user_crime_and_level_analytics), FactionOS's warboard, Ranked Wars, FF Scouter stat estimates, OC 2.0/Armory, Market/Travel profits, any public Torn player/faction API endpoint, Torn Wiki, and Torn Forums.
-   - NEVER guess nerve costs or claim you cannot calculate personal crime projections when the user has a linked key! Always call get_user_crime_and_level_analytics for any personal crime skill, attempts/days to CS 100, or crit-fail cost question. Whenever a user asks about an upcoming/active war, enemy faction, specific player, market price, travel run, OC, or Torn mechanic, ALWAYS call your tools first to gather real live facts instead of giving generic advice!
-3. CRISP, HIGH-YIELD FORMATTING:
-   - Lead with the direct, verified answer in the first 1-2 sentences (Bottom-Line Up Front), followed by clean bullet points with exact numbers.
-
-MANDATORY TWO-TIER SOURCING & VERIFICATION PROTOCOL (NON-NEGOTIABLE):
-1. TIER 1 — OFFICIAL TORN WIKI FIRST (wiki.torn.com & Official Torn API Data):
-   - Always prioritize facts directly from the official Torn Wiki (wiki.torn.com) and the Official Torn API Encyclopedia block provided in your prompt.
-   - When Torn Wiki clearly answers the question, base your answer ONLY on Torn Wiki (plus the user's/faction's live Torn API telemetry when personal/faction numbers are asked) and cite the Torn Wiki page (e.g., "📖 Source: Torn Wiki — Drugs / Overdosing").
-   - NEVER mix in mechanics from other games, general internet trivia, or unverified LLM assumptions.
-2. TIER 2 — MULTI-ANSWER TORN FORUMS CONSENSUS FALLBACK (torn.com/forums.php):
-   - ONLY when Torn Wiki does NOT provide a clear or complete answer (e.g., undocumented formulas, Crimes 2.0 / OC 2.0 community research, optimal meta strategies, mugging/war tactics, or player comparisons), turn to the Torn Forums evidence provided in your prompt.
-   - CROSS-CHECK MULTIPLE ANSWERS: Synthesize across MULTIPLE Torn Forum threads and MULTIPLE replies. Weight high-karma veteran authors (e.g., Baldr, Proxima, Emforus, Vladar, Andyman, Chedburn's announcements), posts with strong positive ratings (👍 >> 👎), and recent post-patch dates over single unverified or outdated replies.
-   - Cite the forum consensus clearly (e.g., "💬 Source: Torn Forums Consensus — Tutorials & Guides / Q&A").
-   - If multiple credible forum veterans disagree or a formula isn't 100% settled, state both sides honestly instead of guessing.
-3. ZERO HALLUCINATION GUARANTEE:
-   - If neither Torn Wiki nor Torn Forums confirm an item, mechanic, or number, explicitly state: "This cannot be verified in the official Torn Wiki or Torn Forums." NEVER invent fake items, perks, percentages, or cooldowns.
-
-LIVE FACTION PERK BASELINE (${fn}${fidStr}):
-- Faction Booster Cooldown Limit: ${bLimit} hours (24h base + ${perks.tolerationHours || 24}h Toleration perk = ${Math.floor((bLimit * 60) / 30)} candies max).
-- Faction Candy Effect Perk: +${cBonus}% Happy from candy (e.g. Bag of Chocolate Truffles gives ${Math.floor(100 * (1 + cBonus / 100))} Happy).
-- Faction Travel Capacity Bonus: +${perks.travelCapacityBonus || 8} items.
-`;
+LIVE FACTION & TOOL GROUNDING:
+- Faction Baseline (${fn}${fidStr}): Booster Cooldown Max = ${bLimit}h (24h base + ${perks.tolerationHours || 24}h perk), Voracity Candy Boost = +${cBonus}%, Travel Capacity = +${perks.travelCapacityBonus || 8} items.
+- Live Tools & Telemetry: You have direct access to live personal telemetry (including Crimes 2.0 progression via get_user_crime_and_level_analytics), faction warboards, FF Scouter stats, market/travel data, and retrieved Wiki/Forum chunks. Never guess personal crime/bar numbers or reveal private API keys or server code.
+- Citation Reporting (MANDATORY): If retrieved context chunks tagged [SRC-1], [SRC-2], etc. are provided in the prompt, end your response on a new final line with [[SOURCES_USED: SRC-1, SRC-2]] listing ONLY the exact SRC-k IDs you actually relied on to answer, or [[SOURCES_USED: NONE]] if none were needed (e.g., answered strictly from live Torn API telemetry or general conversation). NEVER cite an unused source.`;
 }
 
 function getGeminiApiKeys() {
@@ -12471,13 +12527,6 @@ async function askTornAI(message, history = [], userAccountData = null, invokerN
     const key = allGemKeys[0] || "";
     const tornIntel = tornKnowledge.buildTornKnowledgeContext(message, userAccountData, invokerName);
 
-    // Stage 1: Fast pre-grounding for Torn Wiki / Multi-Forum evidence (skips if purely war/player/market lookup)
-    const ragEvidence = await fridayWikiForumRag.gatherTornWikiAndForumEvidence(message, primaryKey, allGemKeys).catch(() => ({
-        contextBlock: '',
-        sources: [],
-        usedWikiOrForum: false
-    }));
-
     const toolExecutor = fridayFreeroamTools.createFreeroamToolExecutor({
         getTornApiKey: () => primaryKey || (typeof getNextApiKey === 'function' ? getNextApiKey() : ''),
         getUserTornKey: () => userTornKey || '',
@@ -12500,6 +12549,26 @@ async function askTornAI(message, history = [], userAccountData = null, invokerN
         userFactionId: userAccountData?.faction?.faction_id || discordConfig.factionId || '',
         userTotalStats: Number(userAccountData?.battlestats?.total || 0)
     });
+
+    const crimeSlugRequested = detectPersonalCrimeQuery(message);
+    const shouldPrefetchCrime = crimeSlugRequested !== null && Boolean(userTornKey);
+
+    // Stage 1: Fast parallel pre-grounding (local hybrid RAG + personal Crimes 2.0 telemetry when relevant)
+    const [ragEvidence, crimeAnalyticsPrefetch] = await Promise.all([
+        fridayWikiForumRag.gatherTornWikiAndForumEvidence(message, primaryKey, allGemKeys).catch(() => ({
+            contextBlock: '',
+            sources: [],
+            candidateChunks: [],
+            usedWikiOrForum: false
+        })),
+        shouldPrefetchCrime
+            ? toolExecutor.executeTool('get_user_crime_and_level_analytics', crimeSlugRequested ? { crimeName: crimeSlugRequested } : {}).catch(() => null)
+            : Promise.resolve(null)
+    ]);
+
+    const crimeTelemetryBlock = crimeAnalyticsPrefetch && Array.isArray(crimeAnalyticsPrefetch.crimeReports) && crimeAnalyticsPrefetch.crimeReports.length > 0
+        ? `═══ LIVE USER CRIMES 2.0 TELEMETRY (COMPUTED FROM TORN API v2) ═══\nPlayer: ${crimeAnalyticsPrefetch.player} | Key: ${crimeAnalyticsPrefetch.keyAccessType}\n${JSON.stringify(crimeAnalyticsPrefetch.crimeReports)}\nCRITICAL: Answer directly with the player's live currentSkill, lifetimeAttempts, nextSkillLevel, estAttemptsToNextLevel, estNerveToNextLevel, estHoursToNextLevel, and targetSkill projections above.\n══════════════════════════════════════════════════════════════════\n\n`
+        : '';
 
     // Build real-time account context if provided
     let accountContext = "";
@@ -12567,31 +12636,37 @@ async function askTornAI(message, history = [], userAccountData = null, invokerN
                 }
             }
         }
-        const sourcingReminder = `\n[AUTONOMOUS TOOL & SOURCING DIRECTIVE: You have live freeroam tools (get_user_crime_and_level_analytics, get_faction_war_and_roster, inspect_torn_player_or_faction, get_faction_oc_and_armory, get_torn_market_and_travel, lookup_torn_wiki_and_encyclopedia, search_and_read_torn_forums, fetch_torn_public_endpoint). If the user asks about their crime skills/ETAs/crit fails, war, enemy faction, any player, OCs, armory, market/travel prices, or public Torn data, CALL THE TOOLS FIRST to inspect real live numbers! For Torn game rules/mechanics, answer strictly from Tier 1 (Torn Wiki / Official Torn API) first, or Tier 2 (Multi-Answer Torn Forums consensus) if Wiki is incomplete. Never invent stats or mechanics.]`;
+        const citationNote = Array.isArray(ragEvidence.sources) && ragEvidence.sources.length > 0
+            ? `\n[CITATION REQUIREMENT: End your response on a new final line with [[SOURCES_USED: SRC-1, ...]] containing ONLY the exact SRC-k IDs you actually used above, or [[SOURCES_USED: NONE]] if none were needed.]`
+            : '';
+        const sourcingReminder = `\n[AUTONOMOUS TOOL DIRECTIVE: Call tools first when live Torn API data (player, faction, war, market, crimes) is needed and not already supplied above. Never invent unverified mechanics or attach unrelated sources.]${citationNote}`;
         contents.push({
             role: 'user',
-            parts: [{ text: `${accountContext}${tornIntel}${ragEvidence.contextBlock}\nUser Question: ${message.trim()}${sourcingReminder}` }]
+            parts: [{ text: `${accountContext}${crimeTelemetryBlock}${tornIntel}${ragEvidence.contextBlock}\nUser Question: ${message.trim()}${sourcingReminder}` }]
         });
 
-        // Stage 2: Autonomous Freeroam Tool Loop via Gemini 4 Hydrogen (with multi-model failover)
+        // Stage 2: Autonomous Freeroam Tool Loop via Gemini 4 Hydrogen (with dynamic thinkingLevel)
         result = await runGeminiFreeroamLoop({
             contents,
             systemInstruction: { parts: [{ text: getFridayTornSystemPrompt() }] },
             toolExecutor,
             maxSteps: 4,
             timeoutMs: 16000,
-            thinkingLevel: 'medium'
+            thinkingLevel: selectDynamicThinkingLevel(message)
         });
     }
 
+    const candidateSources = [...(ragEvidence.sources || [])];
+
     if (!result.success && orKey) {
         // Failover to OpenRouter with the exact same Torn Wiki + Multi-Forum evidence!
-        const userPrompt = `${accountContext}${tornIntel}${ragEvidence.contextBlock}\nUser Question: ${message.trim()}`;
+        const userPrompt = `${accountContext}${crimeTelemetryBlock}${tornIntel}${ragEvidence.contextBlock}\nUser Question: ${message.trim()}`;
         const orResult = await callOpenRouterFallback(getFridayTornSystemPrompt(), userPrompt, history);
         if (orResult.success && orResult.text) {
+            const cited = extractVerifiedCitations(orResult.text, candidateSources);
             return {
-                reply: orResult.text.trim(),
-                sources: [...(ragEvidence.sources || []), ...toolExecutor.getCollectedSources()].slice(0, 5),
+                reply: cited.reply,
+                sources: cited.sources,
                 modelUsed: orResult.modelUsed
             };
         }
@@ -12601,34 +12676,21 @@ async function askTornAI(message, history = [], userAccountData = null, invokerN
         // Grounded deterministic fallback
         if (userAccountData && accountIntent) {
             const detStats = userKeys.formatDeterministicStatsReply(userAccountData, invokerName || userAccountData.playerName, accountIntent, message);
-            if (detStats) return { reply: detStats, sources: ragEvidence.sources || [] };
+            if (detStats) return { reply: detStats, sources: [] };
         }
         const detReply = tornKnowledge.formatDeterministicTornAnswer(message, userAccountData, invokerName);
         if (detReply) {
-            return { reply: detReply, sources: ragEvidence.sources || [] };
+            return { reply: detReply, sources: [] };
         }
         throw new Error(result.error || "AI generation failed across all providers.");
     }
 
-    const reply = result.reply || extractGeminiReplyText(result.data) || "I was unable to generate a response. Please try rephrasing your question.";
-
-    const sources = [...(ragEvidence.sources || [])];
-    for (const ts of toolExecutor.getCollectedSources()) {
-        if (ts.url && !sources.some(s => s.url === ts.url)) sources.push(ts);
-    }
-    const chunks = result.data?.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
-    for (const ch of chunks) {
-        if (ch.web?.uri && !sources.some(s => s.url === ch.web.uri)) {
-            sources.push({
-                title: ch.web.title || "Torn City Reference",
-                url: ch.web.uri
-            });
-        }
-    }
+    const rawReply = result.reply || extractGeminiReplyText(result.data) || "I was unable to generate a response. Please try rephrasing your question.";
+    const { reply, sources: verifiedUsedSources } = extractVerifiedCitations(rawReply, candidateSources);
 
     return {
         reply,
-        sources: sources.slice(0, 5),
+        sources: verifiedUsedSources,
         toolsUsed: result.toolsUsed || [],
         modelUsed: result.modelUsed
     };
@@ -12637,49 +12699,15 @@ async function askTornAI(message, history = [], userAccountData = null, invokerN
 // ─── F.R.I.D.A.Y Natural Conversation Responder ──────────────────────────────
 function getFridayResponderSystemPrompt() {
     const fn = discordConfig.factionName || "our faction";
-    return `You are F.R.I.D.A.Y, a warm, clever, highly knowledgeable Torn City faction companion hanging out in the ${fn} Discord server.
-Your job is to jump into the conversation naturally — like a friendly, experienced, supportive teammate with deep Torn City gameplay expertise.
+    return `You are F.R.I.D.A.Y., a warm, loyal, supportive Torn City companion and strategist in the ${fn} Discord server.
 
-═══ PERSONALITY: WARM, SUPPORTIVE, ENCOURAGING & POLITE ═══
-• TONE & DEMEANOR:
-  - You are kind, enthusiastic, warm, and loyal to your faction teammates.
-  - STRICT ZERO-TOLERANCE ON MEANNESS & SARCASM: You NEVER insult, mock, roast, demean, belittle, or use snarky/sarcastic remarks with members. You are never rude or condescending. You are their trusted ally and supportive wingman.
-  - Celebrate wins, encourage members during gym training and ranked wars, and offer helpful tactical guidance with cheerful confidence.
-  - BREVITY: In chat banter and conversation, keep responses short and punchy (1 to 3 sentences).
+${NEW_TORN_CORE_RULES}
 
-═══ CONVERSATION RELEVANCE, DIRECT ANSWERS & ANTI-REPETITION ═══
-• RESPOND DIRECTLY TO THE IMMEDIATE QUESTION OR FOLLOW-UP:
-  - Focus strictly on what the member is saying right now, using the channel history and any replied-to message to resolve pronouns like "that", "they", "who is that?", or "which one?".
-  - NEVER REPEAT YOURSELF: If the recent channel history shows you just made a claim (e.g. "our top stat-builders and leaders") and the user asks "and who is that?" or "give me a real answer", DO NOT rephrase your previous message! Immediately call your freeroam tools (e.g. get_faction_roster_and_leaderboard, get_faction_war_and_roster, inspect_torn_player_or_faction) to fetch and state the actual names and numbers.
-  - NO VAGUE DODGING: Never say "it's hard to pick just one" or give empty platitudes when someone asks for a real answer about faction members, stats, or leaders — pull the live roster/leaderboard and give specific names and facts!
-  - When someone greets you (e.g. "hi friday", "hey", "sup"), greet them back warmly and cheerfully — do not recite game mechanics or numbers unprompted.
-
-═══ CRITICAL TORN CITY KNOWLEDGE & ANTI-HALLUCINATION MANDATES ═══
-1. NEVER "CORRECT" VALID TORN TERMINOLOGY OR ITEMS:
-   - When a user mentions a valid Torn item name (e.g. "chocolate truffles", "tootsie rolls", "jawbreaker", "edvd"), NEVER claim they meant a different item.
-   - "Chocolate truffles" IS Bag of Chocolate Truffles (ID 529, Candy, +100 Happy base, 30m booster cooldown).
-   - "eDVD" IS Erotic DVD (ID 366, Booster, +2,500 Happy base, 6h booster cooldown).
-   - Differentiate similarly named items accurately:
-     * Bag of Chocolate Truffles (+100 Happy, 30m CD) is NOT Box of Chocolate Bars (+25 Happy) or Big Box of Chocolate Bars (+35 Happy).
-     * Bag of Candy Kisses (+50 Happy) is NOT Bag of Chocolate Kisses (+25 Happy).
-
-2. STRICT TORN WIKI FIRST -> MULTI-FORUM CONSENSUS FALLBACK (MANDATORY FOR ALL GAMEPLAY QUESTIONS):
-   - Whenever a member asks about Torn City items, mechanics, perks, crimes, OCs, travel, gyms, wars, companies, or strategy:
-     * TIER 1 (PRIMARY — TORN WIKI): Answer ONLY using facts from the official Torn Wiki (wiki.torn.com) and Official Torn API Encyclopedia block provided in your prompt when Torn Wiki has a clear answer, and briefly credit it (e.g., "per Torn Wiki").
-     * TIER 2 (FALLBACK — TORN FORUMS CONSENSUS): ONLY if Torn Wiki does NOT clearly cover the answer (e.g., player strategy, meta builds, hidden formulas, Crimes 2.0 / OC 2.0 nuances), synthesize from MULTIPLE Torn Forum threads and MULTIPLE player replies provided in your prompt — weighting high-karma veteran guides & upvoted replies over single guesses, and briefly credit "per Torn Forums consensus".
-     * NEVER invent numbers, percentages, cooldowns, or items from memory or other games. If neither Torn Wiki nor Torn Forums confirm something, say so plainly.
-   - If the member is just greeting you or chatting casually (no gameplay question), keep your response warm, friendly, and brief (1-2 sentences) without reciting unprompted game stats.
-
-3. ACCOUNT-AWARE INTEL:
-   - When the player's live account data is provided in the prompt, reference their real numbers (energy, happy, property, cooldowns).
-   - If information is unverified, state what is known and clarify rather than guessing.
-
-4. SOUND LIKE A REAL TEAMMATE IN DISCORD:
-   - Quick, conversational, and natural. Avoid robotic corporate boilerplate ("As an AI...", "Hope this helps!").
-
-5. ZERO SCRIPT OR CODE MODIFICATION POWERS:
-   - You are a Discord chat companion and tactical advisor, NOT a developer or sysadmin. You have NO ability to change bot scripts, mute background systems, alter server settings, or modify code.
-   - If a user asks you to change the script, turn off/mute notifications, edit code, or adjust bot settings via chat, tell them politely that you can't edit bot scripts or settings from chat, and suggest they use the website dashboard or check with leadership. NEVER claim you changed or will change a script or setting!`;
+DISCORD COMPANION & PERSONAL TELEMETRY RULES:
+- For casual greetings or non-mechanics chat banter, stay warm, encouraging, polite, and brief (1-2 sentences) without dumping unprompted stats or sources. NEVER insult, roast, mock, or use sarcasm.
+- Answer directly to the member's immediate question using recent channel history, replied messages, live Torn API account data, or live Crimes 2.0 telemetry (get_user_crime_and_level_analytics). NEVER dodge personal crime level-up questions with generic forum summaries when live telemetry or freeroam tools are available!
+- If asked to edit code, mute bot scripts, or change server settings via chat, politely clarify you cannot modify scripts/settings from chat and direct them to the dashboard or leadership.
+- If retrieved chunks tagged [SRC-1]..[SRC-N] are provided, you may rely on them accurately without attaching raw [[SOURCES_USED: ...]] tags to casual chat unless prompted (if omitted or included, they are handled cleanly).`;
 }
 
 async function generateChatResponse(convoLines = [], hint = "", invokerName = "", replyContext = null, userAccountData = null, detectedIntent = null, userSpeech = "", userTornKey = "") {
@@ -12710,17 +12738,58 @@ async function generateChatResponse(convoLines = [], hint = "", invokerName = ""
         convoPrompt += `Member speaking / pinging you: ${invokerName}\n\n`;
     }
 
-    // ── Verified Ground-Truth Torn City Intelligence + Live Torn Wiki / Multi-Forum RAG ──
+    // ── Verified Ground-Truth Torn City Intelligence + Live Torn Wiki / Forum RAG + Crime Pre-Fetch ──
     const tornIntel = tornKnowledge.buildTornKnowledgeContext(cleanSpeech, userAccountData, invokerName);
     convoPrompt += tornIntel;
 
+    const chatToolExecutor = fridayFreeroamTools.createFreeroamToolExecutor({
+        getTornApiKey: () => primaryTornKey || (typeof getNextApiKey === 'function' ? getNextApiKey() : ''),
+        getUserTornKey: () => userTornKey || '',
+        getGeminiApiKeys,
+        getDefaultFactionId: () => discordConfig.factionId || dynamicFactionId || '52355',
+        getCachedWarboard: (fid) => (fid && lastGoodWarboardByFaction[fid]) || lastGoodWarboardPayload || null,
+        getBatchFFStats: getBatchPlayerStatsFromFFScouter,
+        getSingleFFStats: getPlayerStatsFromFFScouter,
+        getCachedTravelItems: async () => {
+            const cacheKey = 'travel_profits_default';
+            if (globalTornCache[cacheKey]?.data) return globalTornCache[cacheKey].data;
+            const r = await fetch(`http://127.0.0.1:${PORT}/api/travel-profits`, {
+                headers: primaryTornKey ? { 'x-api-key': primaryTornKey } : {},
+                signal: AbortSignal.timeout(5500)
+            }).then(x => x.json()).catch(() => null);
+            if (r && r.items) globalTornCache[cacheKey] = { timestamp: Date.now(), data: r };
+            return r;
+        },
+        formatCompactStats: formatCompactBattleStats,
+        userFactionId: userAccountData?.faction?.faction_id || discordConfig.factionId || '',
+        userTotalStats: Number(userAccountData?.battlestats?.total || 0)
+    });
+
+    const crimeSlugRequested = detectPersonalCrimeQuery(cleanSpeech);
+    const shouldPrefetchCrime = crimeSlugRequested !== null && Boolean(userTornKey);
+    const shouldRunRag = fridayWikiForumRag.needsWikiOrForumLookup(cleanSpeech);
+
+    const [ragEvidence, crimeAnalyticsPrefetch] = await Promise.all([
+        shouldRunRag
+            ? fridayWikiForumRag.gatherTornWikiAndForumEvidence(cleanSpeech, primaryTornKey, allGemKeys).catch(() => null)
+            : Promise.resolve(null),
+        shouldPrefetchCrime
+            ? chatToolExecutor.executeTool('get_user_crime_and_level_analytics', crimeSlugRequested ? { crimeName: crimeSlugRequested } : {}).catch(() => null)
+            : Promise.resolve(null)
+    ]);
+
     let ragUsed = false;
-    if (fridayWikiForumRag.needsWikiOrForumLookup(cleanSpeech)) {
-        const ragEvidence = await fridayWikiForumRag.gatherTornWikiAndForumEvidence(cleanSpeech, primaryTornKey, allGemKeys).catch(() => null);
-        if (ragEvidence && ragEvidence.contextBlock) {
-            convoPrompt += ragEvidence.contextBlock;
-            ragUsed = true;
-        }
+    if (ragEvidence && ragEvidence.contextBlock) {
+        convoPrompt += ragEvidence.contextBlock;
+        ragUsed = true;
+    }
+
+    if (crimeAnalyticsPrefetch && Array.isArray(crimeAnalyticsPrefetch.crimeReports) && crimeAnalyticsPrefetch.crimeReports.length > 0) {
+        convoPrompt += `═══ LIVE USER CRIMES 2.0 TELEMETRY FOR ${invokerName} ═══\n`;
+        convoPrompt += `Player: ${crimeAnalyticsPrefetch.player} | Key: ${crimeAnalyticsPrefetch.keyAccessType}\n`;
+        convoPrompt += `${JSON.stringify(crimeAnalyticsPrefetch.crimeReports)}\n`;
+        convoPrompt += `CRITICAL: Answer directly with the member's real currentSkill, lifetimeAttempts, nextSkillLevel, estAttemptsToNextLevel, estNerveToNextLevel, estHoursToNextLevel, and targetSkill CS 100 figures above. Do NOT dodge with generic "not based on a fixed hit count" advice.\n`;
+        convoPrompt += `═════════════════════════════════════════════════════════════\n\n`;
     }
 
     // ── Verified Real-Time Live Torn Account Data Injection ──
@@ -12795,44 +12864,28 @@ async function generateChatResponse(convoLines = [], hint = "", invokerName = ""
         convoPrompt += `\nExtra direction from member: "${hint.trim()}"\n`;
     }
 
-    convoPrompt += ragUsed
-        ? "\nNow respond naturally in 2-4 crisp sentences to the latest message. Adhere STRICTLY to Tier 1 (Torn Wiki / Official Torn API data) first; if Torn Wiki didn't have a clear answer, synthesize across MULTIPLE replies from Tier 2 (Torn Forums) so you are certain it is accurate, and briefly mention 'per Torn Wiki' or 'per Torn Forums consensus'. Do NOT guess or invent mechanics:"
-        : "\nNow respond naturally in 1-3 sentences to the latest message. Resolve follow-up references ('who is that?', 'which one?') using the recent messages above and your freeroam tools — NEVER repeat or paraphrase what you already said in the previous message, and NEVER dodge with vague 'everyone is great' answers. If greeting/casual chat, keep it warm and brief:";
+    const hasPreFetchedCrime = Boolean(crimeAnalyticsPrefetch && Array.isArray(crimeAnalyticsPrefetch.crimeReports) && crimeAnalyticsPrefetch.crimeReports.length > 0);
+    convoPrompt += hasPreFetchedCrime
+        ? "\nRespond concisely and supportively in 2-4 crisp sentences using the member's verified LIVE USER CRIMES 2.0 TELEMETRY above — state their exact current CS, attempts, and concrete estimated attempts & nerve to reach their next skill level (and optionally CS 100):"
+        : (ragUsed
+            ? "\nRespond clearly and accurately using ONLY the verified Wiki/Forum facts and calculations above (verify all numbers first; keep formatting clean):"
+            : "\nNow respond naturally in 1-3 sentences to the latest message. Resolve follow-up references ('who is that?', 'which one?') using the recent messages above and your freeroam tools — NEVER repeat or paraphrase what you already said in the previous message, and NEVER dodge with vague 'everyone is great' answers. If greeting/casual chat, keep it warm and brief:");
 
-    // 1. Primary AI Provider: Gemini 4 Hydrogen Multi-Key Pool (with Freeroam Tools for live war/player/market/wiki/forum queries)
+    // 1. Primary AI Provider: Gemini 4 Hydrogen Multi-Key Pool (skip freeroam loop if telemetry already pre-fetched for simple personal crime query)
+    const cleanReplyOutput = (raw) => extractVerifiedCitations(raw, []).reply;
+
     if (key) {
-        if (!isCasualGreeting && (ragUsed || replyContext || /\b(war|enemy|target|roster|player|faction|leader|smartest|strongest|stat|who|what|when|which|where|how|that|they|him|her|oc|armory|market|price|stock|travel|fly|wiki|forum|crime|burglar|shoplift|pickpocket|crack|crit|nerve|cs\s*\d+)\b/i.test(cleanSpeech))) {
-            const chatToolExecutor = fridayFreeroamTools.createFreeroamToolExecutor({
-                getTornApiKey: () => primaryTornKey || (typeof getNextApiKey === 'function' ? getNextApiKey() : ''),
-                getUserTornKey: () => userTornKey || '',
-                getGeminiApiKeys,
-                getDefaultFactionId: () => discordConfig.factionId || dynamicFactionId || '52355',
-                getCachedWarboard: (fid) => (fid && lastGoodWarboardByFaction[fid]) || lastGoodWarboardPayload || null,
-                getBatchFFStats: getBatchPlayerStatsFromFFScouter,
-                getSingleFFStats: getPlayerStatsFromFFScouter,
-                getCachedTravelItems: async () => {
-                    const cacheKey = 'travel_profits_default';
-                    if (globalTornCache[cacheKey]?.data) return globalTornCache[cacheKey].data;
-                    const r = await fetch(`http://127.0.0.1:${PORT}/api/travel-profits`, {
-                        headers: primaryTornKey ? { 'x-api-key': primaryTornKey } : {},
-                        signal: AbortSignal.timeout(5500)
-                    }).then(x => x.json()).catch(() => null);
-                    if (r && r.items) globalTornCache[cacheKey] = { timestamp: Date.now(), data: r };
-                    return r;
-                },
-                formatCompactStats: formatCompactBattleStats,
-                userFactionId: userAccountData?.faction?.faction_id || discordConfig.factionId || '',
-                userTotalStats: Number(userAccountData?.battlestats?.total || 0)
-            });
+        const needsTools = !isCasualGreeting && !hasPreFetchedCrime && (ragUsed || replyContext || /\b(war|enemy|target|roster|player|faction|leader|smartest|strongest|stat|who|what|when|which|where|how|that|they|him|her|oc|armory|market|price|stock|travel|fly|wiki|forum|crime|burglar|shoplift|pickpocket|crack|crit|nerve|cs\s*\d+)\b/i.test(cleanSpeech));
+        if (needsTools) {
             const loopRes = await runGeminiFreeroamLoop({
                 contents: [{ role: 'user', parts: [{ text: convoPrompt }] }],
                 systemInstruction: { parts: [{ text: getFridayResponderSystemPrompt() }] },
                 toolExecutor: chatToolExecutor,
                 maxSteps: 3,
                 timeoutMs: 14000,
-                thinkingLevel: 'low'
+                thinkingLevel: selectDynamicThinkingLevel(cleanSpeech)
             });
-            if (loopRes.success && loopRes.reply) return loopRes.reply;
+            if (loopRes.success && loopRes.reply) return cleanReplyOutput(loopRes.reply);
         } else {
             const payload = {
                 contents: [{ role: 'user', parts: [{ text: convoPrompt }] }],
@@ -12840,10 +12893,10 @@ async function generateChatResponse(convoLines = [], hint = "", invokerName = ""
                     parts: [{ text: getFridayResponderSystemPrompt() }]
                 }
             };
-            const result = await callGeminiWithFallback(payload, null, { timeout: 12000, thinkingLevel: 'low' });
+            const result = await callGeminiWithFallback(payload, null, { timeout: 12000, thinkingLevel: selectDynamicThinkingLevel(cleanSpeech) });
             if (result.success) {
                 const reply = extractGeminiReplyText(result.data);
-                if (reply) return reply;
+                if (reply) return cleanReplyOutput(reply);
             }
         }
     }
@@ -12852,7 +12905,7 @@ async function generateChatResponse(convoLines = [], hint = "", invokerName = ""
     if (orKey) {
         const orResult = await callOpenRouterFallback(getFridayResponderSystemPrompt(), convoPrompt);
         if (orResult.success && orResult.text) {
-            return orResult.text.trim();
+            return cleanReplyOutput(orResult.text.trim());
         }
     }
 
@@ -13323,10 +13376,12 @@ Respond ONLY with valid JSON in this exact format:
         const keys = getGeminiApiKeys();
         const primaryTornKey = discordConfig.apiKey || ADMIN_API_KEY || TORN_API_KEY || (apiPoolConfig && apiPoolConfig.keys && apiPoolConfig.keys[0]) || "";
         let webRagBlock = '';
+        let webRagSources = [];
         if (mode === 'tactical' || fridayWikiForumRag.needsWikiOrForumLookup(cleanMsg)) {
             const ragEv = await fridayWikiForumRag.gatherTornWikiAndForumEvidence(cleanMsg, primaryTornKey, keys).catch(() => null);
             if (ragEv && ragEv.contextBlock) {
-                webRagBlock = `\n${ragEv.contextBlock}\nSTRICT SOURCING RULE: For any Torn City gameplay question, answer strictly from Tier 1 (Torn Wiki / Official Torn API data) first; if Torn Wiki lacks a clear answer, synthesize across MULTIPLE replies in Tier 2 (Torn Forums) to confirm consensus. Never invent mechanics.\n`;
+                webRagBlock = `\n${ragEv.contextBlock}\n${NEW_TORN_CORE_RULES}\n`;
+                webRagSources = ragEv.sources || [];
             }
         }
 
@@ -13346,24 +13401,26 @@ Respond ONLY with valid JSON in this exact format:
 
             const payload = {
                 contents,
-                systemInstruction: { parts: [{ text: helperSystemPrompt }] },
+                systemInstruction: { parts: [{ text: `${helperSystemPrompt}\n\n${NEW_TORN_CORE_RULES}` }] },
                 generationConfig: { responseMimeType: 'application/json' }
             };
-            const gRes = await callGeminiWithFallback(payload, null, { timeout: 14000, thinkingLevel: 'low' });
+            const gRes = await callGeminiWithFallback(payload, null, { timeout: 14000, thinkingLevel: selectDynamicThinkingLevel(cleanMsg) });
             if (gRes.success) {
                 const rawText = extractGeminiReplyText(gRes.data);
                 try {
                     const parsed = JSON.parse(rawText);
                     if (parsed && parsed.reply) {
+                        const cleaned = extractVerifiedCitations(parsed.reply, webRagSources);
                         return res.json({
                             success: true,
-                            reply: parsed.reply,
+                            reply: cleaned.reply,
                             action: parsed.action || null
                         });
                     }
                 } catch (_) {
                     if (rawText.trim()) {
-                        return res.json({ success: true, reply: rawText.trim(), action: null });
+                        const cleaned = extractVerifiedCitations(rawText.trim(), webRagSources);
+                        return res.json({ success: true, reply: cleaned.reply, action: null });
                     }
                 }
             }
@@ -28327,7 +28384,7 @@ function setupSlashBotEvents(bot, token) {
             .filter(([uid, ts]) => uid !== bot.user?.id && (now - ts < 3000));
         const totalElapsed = now - state.firstQueuedAt;
 
-        if (activeTypers.length > 0 && totalElapsed < 20000) {
+        if (activeTypers.length > 0 && !hasDirectTrigger && totalElapsed < 20000) {
             state.timer = setTimeout(() => executeChannelConvoDispatch(channelId), 2500);
             return;
         }
@@ -28688,10 +28745,10 @@ function setupSlashBotEvents(bot, token) {
             timestamp: Date.now()
         });
 
-        // Debounce: wait 2500ms for author/typing to settle before dispatching response
+        // Fast pickup (250ms) when directly @mentioned or replied to; short 2.2s settle delay for ambient conversation channels
         if (!state.isReplying) {
             if (state.timer) clearTimeout(state.timer);
-            const delay = 2500;
+            const delay = isDirectTrigger ? 250 : 2200;
             state.timer = setTimeout(() => executeChannelConvoDispatch(msg.channelId), delay);
         }
     });
