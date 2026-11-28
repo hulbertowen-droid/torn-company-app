@@ -867,10 +867,10 @@ async function ensureChunkEmbeddingVectors(candidates, geminiKeys = []) {
     }
     if (missing.length === 0) return true;
 
+    let anyAdded = false;
     for (const key of geminiKeys) {
-        let allOk = true;
-        for (let i = 0; i < missing.length; i += 40) {
-            const batch = missing.slice(i, i + 40);
+        for (let i = 0; i < missing.length; i += 25) {
+            const batch = missing.slice(i, i + 25);
             try {
                 const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:batchEmbedContents?key=${key}`, {
                     method: 'POST',
@@ -891,23 +891,21 @@ async function ensureChunkEmbeddingVectors(candidates, geminiKeys = []) {
                         const vals = j.embeddings[k]?.values;
                         if (Array.isArray(vals) && vals.length > 0) {
                             chunkVecCache.set(batch[k]._hash, l2Normalize(vals));
+                            anyAdded = true;
                         }
                     }
                 } else {
-                    allOk = false;
                     break;
                 }
             } catch (_) {
-                allOk = false;
                 break;
             }
         }
-        if (allOk) {
-            persistEmbeddingsCache();
-            return true;
-        }
+        if (anyAdded) persistEmbeddingsCache();
+        if (candidates.some(c => chunkVecCache.has(c._hash))) return true;
     }
-    return false;
+    if (anyAdded) persistEmbeddingsCache();
+    return candidates.some(c => chunkVecCache.has(c._hash));
 }
 
 function scoreTfIdfCosineFallback(query, candidates) {
@@ -1166,13 +1164,15 @@ async function gatherTornWikiAndForumEvidence(question, tornApiKey = '', geminiK
     const forumFetchPromises = matchedThreadIds.map(tid => fetchAndChunkForumThread(tid, tornApiKey));
     const fetchedEntries = await Promise.all(forumFetchPromises);
 
-    // Also include any already-cached Core Forum Guides (e.g. Cracking 16373016) in local candidate pool
+    // Pre-rank Forum Guide chunks by fast TF-IDF and keep ONLY the top 8 forum chunks for vector scoring
+    // so total chunks sent for embedding stay compact (<= 22 chunks) and NEVER blow free-tier 100 RPM limits!
+    const forumPool = [];
     const seenChunkThreadIds = new Set();
     for (const entry of [...fetchedEntries, ...forumGuideChunksCache.values()]) {
         if (!entry || seenChunkThreadIds.has(entry.tid)) continue;
         seenChunkThreadIds.add(entry.tid);
         for (const ch of (entry.chunks || [])) {
-            candidatePool.push({
+            forumPool.push({
                 tier: 'Tier 2: Torn Forum Guide',
                 title: entry.title,
                 url: entry.url,
@@ -1183,6 +1183,8 @@ async function gatherTornWikiAndForumEvidence(question, tornApiKey = '', geminiK
             });
         }
     }
+    const topForumSubset = scoreTfIdfCosineFallback(question, forumPool).slice(0, 5);
+    candidatePool.push(...topForumSubset);
 
     // 4. Score ALL candidate chunks uniformly with vector cosine similarity & gate >= MIN_SIMILARITY_SCORE (0.72)
     //    Zero fallback injection if < 0.72 so unrelated Wiki/Forum pages NEVER leak to the LLM or footer.
