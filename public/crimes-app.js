@@ -15,7 +15,6 @@
         itemPrices: {},
         itemNames: {},
         analytics: null,
-        demoMode: false,
         timeframe: 'all',
         crimeFilter: 'all',
         recMode: 'fastest',
@@ -24,11 +23,13 @@
         sortCol: 'currentSkill',
         sortAsc: false,
         profitChartMode: 'per_nerve',
+        profitValuationMode: 'all', // 'all' (Cash + Item MV) | 'cash' (Cash Only)
         deepDiveCrimeKey: null,
         deepDiveTarget: 100,
         deepDiveXAxis: 'nerve',
         manualLevelUpTs: null,
         pendingFridayAction: null,
+        _autoSyncedUserId: null,
         charts: {
             outcomes: null,
             profit: null,
@@ -79,10 +80,18 @@
             onProgress: handleSyncProgress
         });
 
-        // Pre-fill browser-only full key if saved
-        const savedFullKey = DB.getBrowserFullKey();
+        // Restore saved Full Access key from localStorage or IndexedDB backup and pre-fill input
+        const savedFullKey = await DB.hydrateBrowserFullKey();
         const keyInp = document.getElementById('browser-full-key');
-        if (keyInp && savedFullKey) keyInp.value = savedFullKey;
+        if (keyInp) {
+            if (savedFullKey) keyInp.value = savedFullKey;
+            keyInp.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    window.saveBrowserFullKey();
+                }
+            });
+        }
 
         // Fetch Torn item market prices from server cache (best-effort)
         fetchItemPricesMap();
@@ -95,7 +104,7 @@
 
         await hydrateUserData();
         window.addEventListener('sv-auth-changed', () => {
-            if (!state.demoMode) hydrateUserData();
+            hydrateUserData();
         });
         if (state.pendingFridayAction) {
             const act = state.pendingFridayAction;
@@ -129,7 +138,7 @@
                 }
                 state.itemPrices = map;
                 state.itemNames = names;
-                if (state.analytics && !state.demoMode && (state.logs.length > 0 || state.snapshot?.v2Crimes)) {
+                if (state.analytics && (state.logs.length > 0 || state.snapshot?.v2Crimes)) {
                     recomputeAndRender();
                 }
             }
@@ -147,11 +156,36 @@
         }
     }
 
+    function hasFullLogAccess() {
+        const DB = window.FactionOSCrimesDB;
+        const hasLocalOrSessionCred = Boolean(DB?.getBrowserFullKey() || (typeof window.getSessionToken === 'function' && window.getSessionToken()));
+        return Boolean(state.keyAccess?.hasLogAccess && hasLocalOrSessionCred);
+    }
+
+    async function maybeAutoSyncLogs() {
+        if (!hasFullLogAccess() || !state.userId || !state.syncer || state.syncer.isRunning) return;
+        const nowSec = Math.floor(Date.now() / 1000);
+        const crimeCount = Number(state.meta?.crimeLogs || 0);
+        const lastSyncTs = Number(state.meta?.lastSyncTs || 0);
+        const needsInitialPull = crimeCount === 0 || !lastSyncTs;
+        const isStale = (nowSec - lastSyncTs) > 900;
+        if (!needsInitialPull && !isStale) return;
+        if (state._autoSyncedUserId === state.userId && !needsInitialPull) return;
+
+        state._autoSyncedUserId = state.userId;
+        try {
+            await window.startLogSync('incremental', {
+                silent: true,
+                maxPages: needsInitialPull ? 15 : 5
+            });
+        } catch (_) {}
+    }
+
     async function hydrateUserData() {
         const DB = window.FactionOSCrimesDB;
-        const fullKey = DB.getBrowserFullKey();
+        const fullKey = await DB.hydrateBrowserFullKey();
 
-        // 1. If user saved a browser-only key, inspect it directly against api.torn.com
+        // 1. If user saved a browser full key, inspect it directly against api.torn.com
         if (fullKey) {
             try {
                 const keyInfo = await DB.inspectKeyAccess(fullKey);
@@ -162,10 +196,11 @@
                 updateKeyScopeUI();
                 await loadCachedLogsForCurrentUser();
                 recomputeAndRender();
+                maybeAutoSyncLogs();
                 return;
             } catch (err) {
                 setSyncStatusBadge('amber', 'Key Check Error');
-                showToast('Browser key error: ' + err.message);
+                showToast('Saved key error: ' + err.message);
             }
         }
 
@@ -185,12 +220,13 @@
                     updateKeyScopeUI();
                     await loadCachedLogsForCurrentUser();
                     recomputeAndRender();
+                    maybeAutoSyncLogs();
                     return;
                 }
             }
         } catch (_) {}
 
-        // 3. Signed-out state: NEVER silently load fake Demo data — show clear Sign-In CTA and only load Demo when explicitly clicked!
+        // 3. Signed-out state
         if (pidHint) {
             state.userId = pidHint;
             await loadCachedLogsForCurrentUser();
@@ -226,22 +262,11 @@
         const banner = document.getElementById('limited-scope-banner');
         const bannerText = document.getElementById('limited-scope-text');
         const signInBtn = document.getElementById('btn-signin-cta');
-        const demoBanner = document.getElementById('demo-active-banner');
         const playerChip = document.getElementById('active-player-chip');
+        const keyInp = document.getElementById('browser-full-key');
         const btnNew = document.getElementById('btn-sync-new');
         const btnBack = document.getElementById('btn-sync-backfill');
 
-        if (state.demoMode) {
-            if (badge) { badge.className = 'cr-badge purple'; badge.textContent = '✨ Preview Demo Mode'; }
-            if (playerChip) { playerChip.className = 'cr-badge purple'; playerChip.textContent = '✨ DEMO PREVIEW (Simulated Lvl 63 — Not Your Account)'; }
-            if (demoBanner) demoBanner.classList.add('visible');
-            if (banner) banner.classList.remove('visible');
-            if (btnNew) btnNew.disabled = true;
-            if (btnBack) btnBack.disabled = true;
-            return;
-        }
-
-        if (demoBanner) demoBanner.classList.remove('visible');
         if (state.snapshot && state.snapshot.name) {
             const uidTxt = state.snapshot.userId ? ` [${state.snapshot.userId}]` : '';
             const pubTag = state.keyAccess?.isPublicFallback ? ' • Public View' : '';
@@ -256,16 +281,21 @@
             }
         }
 
-        const hasFull = Boolean(state.keyAccess?.hasLogAccess && window.FactionOSCrimesDB.getBrowserFullKey());
+        const localKey = window.FactionOSCrimesDB.getBrowserFullKey();
+        const hasFull = hasFullLogAccess();
         if (hasFull) {
-            if (badge) { badge.className = 'cr-badge green'; badge.textContent = `🔓 ${state.keyAccess.accessType} (Browser-Only)`; }
+            if (badge) {
+                badge.className = 'cr-badge green';
+                badge.textContent = localKey ? `🔓 ${state.keyAccess.accessType} (Saved)` : `🔓 ${state.keyAccess.accessType} (Vault Saved)`;
+            }
+            if (keyInp && !localKey) keyInp.placeholder = 'Full Key Saved in Vault ✓';
             if (banner) banner.classList.remove('visible');
             if (btnNew) btnNew.disabled = false;
             if (btnBack) btnBack.disabled = false;
         } else if (state.snapshot && state.keyAccess?.isPublicFallback) {
             if (badge) { badge.className = 'cr-badge amber'; badge.textContent = '🌐 Public Profile Fallback'; }
             if (bannerText) {
-                bannerText.innerHTML = `<strong>🌐 Public Profile Loaded for ${esc(state.snapshot.name)}:</strong> Showing your real integer Crime Skills &amp; 10k Merits from public <code>personalstats</code>. <strong>Sign in with your Torn API key</strong> (Limited or Full) to unlock exact 2-decimal skills, Torn v2 lifetime attempts, nerve, $/nerve profit, and uniques!`;
+                bannerText.innerHTML = `<strong>🌐 Public Profile Loaded for ${esc(state.snapshot.name)}:</strong> Showing your real integer Crime Skills &amp; 10k Merits from public <code>personalstats</code>. <strong>Sign in with your Torn API key</strong> (Limited or Full) to unlock exact 2-decimal skills, Torn v2 lifetime attempts, nerve, $/nerve efficiency, and uniques!`;
             }
             if (signInBtn) signInBtn.style.display = 'inline-flex';
             if (banner) banner.classList.add('visible');
@@ -276,8 +306,8 @@
             if (badge) { badge.className = 'cr-badge cyan'; badge.textContent = `🔐 ${state.keyAccess?.accessType || 'Limited Access'}${hasV2 ? ' (Torn v2 Active)' : ''}`; }
             if (bannerText) {
                 bannerText.innerHTML = hasV2
-                    ? `<strong>✅ Live Torn v1 + v2 Telemetry Active (${esc(state.snapshot.name)}):</strong> Loaded your <strong>exact 2-decimal Crime Skills, lifetime Attempts, Nerve, Cash + Item Rewards, and Uniques</strong>! Paste an optional <strong>Full Access</strong> key above (stored <em>strictly in your browser</em>) only if you want 7d/30d date filtering, daily nerve timeline spikes, and per-level transition histograms.`
-                    : `<strong>🔐 ${esc(state.keyAccess?.accessType || 'Minimal Access')} Active (${esc(state.snapshot.name)}):</strong> Showing your live Crime Skills &amp; offense counts. Use a <strong>Limited Access</strong> key for full Torn v2 crime attempts/profit, or a browser-only <strong>Full Access</strong> key for log history.`;
+                    ? `<strong>✅ Live Torn v1 + v2 Telemetry Active (${esc(state.snapshot.name)}):</strong> Loaded your <strong>exact 2-decimal Crime Skills, lifetime Attempts, Nerve, Cash + Item Rewards, and Uniques</strong>! Paste &amp; save an optional <strong>Full Access</strong> key above to unlock 7d/30d filtering, Daily Nerve Spent timeline spikes, and per-level histograms.`
+                    : `<strong>🔐 ${esc(state.keyAccess?.accessType || 'Minimal Access')} Active (${esc(state.snapshot.name)}):</strong> Showing your live Crime Skills &amp; offense counts. Use a <strong>Limited Access</strong> key for full Torn v2 crime attempts/rewards, or a <strong>Full Access</strong> key for log history.`;
             }
             if (signInBtn) signInBtn.style.display = 'none';
             if (banner) banner.classList.add('visible');
@@ -286,7 +316,7 @@
         } else {
             if (badge) { badge.className = 'cr-badge red'; badge.textContent = '🔑 Sign In to Load Skills'; }
             if (bannerText) {
-                bannerText.innerHTML = `<strong>🔑 Torn Account Not Connected:</strong> Sign in to FactionOS with your Torn API key (or paste a browser-only key above) to load your <strong>real Crime Skills, $/Nerve efficiency, Uniques, and Level Progress</strong> — or click <em>Preview Demo</em> to explore simulated data.`;
+                bannerText.innerHTML = `<strong>🔑 Torn Account Not Connected:</strong> Sign in to FactionOS with your Torn API key (or paste &amp; save a key above) to load your <strong>real Crime Skills, $/Nerve efficiency, Uniques, and Level Progress</strong>.`;
             }
             if (signInBtn) signInBtn.style.display = 'inline-flex';
             if (banner) banner.classList.add('visible');
@@ -298,10 +328,6 @@
     function updateCachedStatsReadout() {
         const el = document.getElementById('sync-stats-text');
         if (!el) return;
-        if (state.demoMode) {
-            el.textContent = `${state.logs.length.toLocaleString()} demo logs • 88-day preview window (not saved to IndexedDB)`;
-            return;
-        }
         const m = state.meta;
         if (!m || !m.totalLogs) {
             if (state.snapshot?.v2Crimes) {
@@ -332,45 +358,66 @@
 
     window.saveBrowserFullKey = async function () {
         const inp = document.getElementById('browser-full-key');
-        const raw = (inp?.value || '').trim();
+        const raw = (inp?.value || '').trim().replace(/['"\s]/g, '');
         if (raw.length < 16) {
             showToast('Enter a valid 16-character Torn API key.');
             return;
         }
-        setSyncStatusBadge('cyan', 'Verifying Key...');
+        setSyncStatusBadge('cyan', 'Verifying & Saving...');
         try {
             const DB = window.FactionOSCrimesDB;
             const info = await DB.inspectKeyAccess(raw);
             DB.setBrowserFullKey(raw);
-            state.demoMode = false;
-            updateDemoBtnState();
             state.keyAccess = info;
             const snap = await DB.fetchDirectSnapshot(raw, state.itemPrices, state.itemNames);
             state.snapshot = snap;
             state.userId = snap.userId || info.userId || 'local';
+
+            // Persist encrypted key in FactionOS session vault so it never gets lost across reloads or logins
+            try {
+                const connRes = await fetch('/api/auth/connect', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ apiKey: raw })
+                });
+                const connData = await connRes.json().catch(() => null);
+                if (connRes.ok && connData?.success && connData.sessionToken) {
+                    localStorage.setItem('sv_session_token', connData.sessionToken);
+                    if (window.svAuth && typeof window.svAuth.persistProfile === 'function' && connData.user) {
+                        window.svAuth.persistProfile(connData.user);
+                    }
+                }
+            } catch (_) {}
+
             await loadCachedLogsForCurrentUser();
             updateKeyScopeUI();
             recomputeAndRender();
-            setSyncStatusBadge(info.hasLogAccess ? 'green' : 'amber', info.hasLogAccess ? 'Ready to Sync' : 'Limited Scope');
-            showToast(info.hasLogAccess
-                ? `Verified ${info.accessType} key for ${snap.name}! Click "Sync New Logs" to pull crime history.`
-                : `Key verified as ${info.accessType} — Full Access is required for /user/log history.`);
+
+            if (info.hasLogAccess) {
+                setSyncStatusBadge('green', 'Saved • Syncing...');
+                showToast(`Saved ${info.accessType} key for ${snap.name}! Syncing crime logs now...`);
+                state._autoSyncedUserId = state.userId;
+                await window.startLogSync('incremental', { maxPages: (state.meta?.crimeLogs || 0) === 0 ? 15 : 10 });
+            } else {
+                setSyncStatusBadge('amber', 'Saved (Limited Scope)');
+                showToast(`Key saved as ${info.accessType} — Full Access is required for /user/log history & Daily Nerve graph.`);
+            }
         } catch (err) {
             setSyncStatusBadge('red', 'Verify Failed');
             showToast('Key verification failed: ' + err.message);
         }
     };
 
-    window.startLogSync = async function (mode) {
+    window.startLogSync = async function (mode, opts = {}) {
         const DB = window.FactionOSCrimesDB;
-        const fullKey = DB.getBrowserFullKey();
-        if (!fullKey || !state.keyAccess?.hasLogAccess) {
-            showToast('Enter & verify a browser-only Full Access key first.');
+        const fullKey = await DB.hydrateBrowserFullKey();
+        const useSessionProxy = !fullKey && Boolean(state.keyAccess?.hasLogAccess);
+        if ((!fullKey && !useSessionProxy) || !state.keyAccess?.hasLogAccess) {
+            if (!opts.silent) showToast('Enter & save a Full Access key first.');
             return;
         }
-        if (state.demoMode) toggleDemoMode(false);
-        const scope = document.getElementById('sync-scope-select')?.value || 'all';
-        const maxPages = parseInt(document.getElementById('sync-pages-select')?.value || '30', 10) || 30;
+        const scope = document.getElementById('sync-scope-select')?.value || 'crimes_smart';
+        const maxPages = Number(opts.maxPages) || parseInt(document.getElementById('sync-pages-select')?.value || '30', 10) || 30;
 
         document.getElementById('btn-sync-pause').style.display = 'inline-flex';
         document.getElementById('btn-sync-stop').style.display = 'inline-flex';
@@ -380,6 +427,7 @@
         try {
             const result = await state.syncer.run({
                 apiKey: fullKey,
+                useSessionProxy,
                 userId: state.userId || state.snapshot?.userId || 'local',
                 mode,
                 scope,
@@ -392,7 +440,7 @@
                 recomputeAndRender();
             }
         } catch (err) {
-            showToast('Sync interrupted: ' + err.message);
+            if (!opts.silent) showToast('Sync interrupted: ' + err.message);
         } finally {
             document.getElementById('btn-sync-pause').style.display = 'none';
             document.getElementById('btn-sync-stop').style.display = 'none';
@@ -444,57 +492,9 @@
     };
 
     window.refreshSnapshotAndRender = async function () {
-        if (state.demoMode) {
-            recomputeAndRender();
-            showToast('Refreshed Demo Analytics');
-            return;
-        }
+        state._autoSyncedUserId = null;
         await hydrateUserData();
         showToast('Refreshed Live Torn Skills & Stats');
-    };
-
-    // ── Demo Preview Mode ────────────────────────────────────────────────────
-    function updateDemoBtnState() {
-        const btn = document.getElementById('btn-demo-toggle');
-        if (!btn) return;
-        btn.classList.toggle('demo-active', state.demoMode);
-        btn.textContent = state.demoMode ? '✨ Exit Demo Preview' : '✨ Preview Demo Data';
-    }
-
-    window.toggleDemoMode = function (forceState, silent = false) {
-        const next = typeof forceState === 'boolean' ? forceState : !state.demoMode;
-        state.demoMode = next;
-        updateDemoBtnState();
-        const dlSlider = document.getElementById('slider-daily-leaves');
-        const dnSlider = document.getElementById('slider-daily-nerve');
-        if (dlSlider) delete dlSlider.dataset.userTouched;
-        if (dnSlider) delete dnSlider.dataset.userTouched;
-        if (state.demoMode) {
-            const demo = window.FactionOSCrimesEngine.generateDemoDataset();
-            state._savedLive = { snapshot: state.snapshot, logs: state.logs, meta: state.meta };
-            state.snapshot = demo.snapshot;
-            state.logs = demo.logs;
-            setSyncStatusBadge('purple', 'Demo Active');
-            const fill = document.getElementById('sync-progress-fill');
-            if (fill) fill.style.width = '100%';
-            updateKeyScopeUI();
-            updateCachedStatsReadout();
-            recomputeAndRender();
-            if (!silent) showToast('Loaded 88-day Crimes 2.0 & Level Estimator Preview Demo!');
-        } else {
-            if (state._savedLive) {
-                state.snapshot = state._savedLive.snapshot;
-                state.logs = state._savedLive.logs || [];
-                state.meta = state._savedLive.meta;
-            } else {
-                state.logs = [];
-            }
-            setSyncStatusBadge('cyan', 'Idle');
-            updateKeyScopeUI();
-            updateCachedStatsReadout();
-            recomputeAndRender();
-            if (!silent) showToast('Returned to Live Account Mode.');
-        }
     };
 
     // ── Manage / Clear Local Data Modal ──────────────────────────────────────
@@ -504,9 +504,9 @@
         const m = state.meta;
         if (sumEl) {
             sumEl.innerHTML = `
-                <div><strong>Browser-Only Full Key:</strong> ${hasKey ? '<span style="color:#34d399;">Saved in localStorage</span>' : 'Not set'}</div>
+                <div><strong>Saved Full Key:</strong> ${hasKey ? '<span style="color:#34d399;">Saved in browser + Vault</span>' : (state.keyAccess?.hasLogAccess ? '<span style="color:#34d399;">Saved in Vault Session</span>' : 'Not set')}</div>
                 <div><strong>IndexedDB Cached Logs:</strong> ${(m?.totalLogs || 0).toLocaleString()} entries (${(m?.crimeLogs || 0).toLocaleString()} crimes, ${(m?.attackLogs || 0).toLocaleString()} attacks, ${m?.levelLogs || 0} level-ups)</div>
-                <div style="margin-top:6px;font-size:11.5px;color:var(--text-tertiary);">All synced log history lives strictly inside your browser's local IndexedDB database and is never uploaded to FactionOS servers.</div>
+                <div style="margin-top:6px;font-size:11.5px;color:var(--text-tertiary);">Synced crime history is cached locally in your browser's IndexedDB database for instant timeline rendering.</div>
             `;
         }
         document.getElementById('manage-data-backdrop')?.classList.add('open');
@@ -523,7 +523,7 @@
         state.keyAccess = { accessType: 'Limited Access', hasLogAccess: false };
         updateKeyScopeUI();
         closeManageDataModal();
-        showToast('Removed saved Full Access key from browser.');
+        showToast('Removed saved Full Access key from browser storage.');
     };
 
     window.clearCachedLogsOnly = async function () {
@@ -532,8 +532,6 @@
         }
         state.logs = [];
         state.meta = null;
-        if (state.demoMode) state.demoMode = false;
-        updateDemoBtnState();
         updateCachedStatsReadout();
         recomputeAndRender();
         closeManageDataModal();
@@ -547,9 +545,7 @@
         if (inp) inp.value = '';
         state.logs = [];
         state.meta = null;
-        state.demoMode = false;
         state.keyAccess = { accessType: 'Not Connected', hasLogAccess: false };
-        updateDemoBtnState();
         updateKeyScopeUI();
         updateCachedStatsReadout();
         recomputeAndRender();
@@ -635,6 +631,15 @@
         renderProfitChart();
     };
 
+    window.setProfitValuationMode = function (valMode) {
+        state.profitValuationMode = valMode === 'cash' ? 'cash' : 'all';
+        document.getElementById('btn-val-all')?.classList.toggle('active', state.profitValuationMode === 'all');
+        document.getElementById('btn-val-cash')?.classList.toggle('active', state.profitValuationMode === 'cash');
+        renderHeroKPIs();
+        renderCrimeEstimatorTable();
+        if (state.activeTab === 'analytics') renderProfitChart();
+    };
+
     // ── Master Recompute & Render ────────────────────────────────────────────
     window.recomputeAndRender = function () {
         if (!window.FactionOSCrimesEngine) return;
@@ -647,6 +652,7 @@
             logs: state.logs,
             snapshot: state.snapshot,
             itemPrices: state.itemPrices,
+            itemNames: state.itemNames,
             timeframe: state.timeframe,
             customFromTs,
             customToTs,
@@ -670,23 +676,33 @@
         document.getElementById('kpi-attempts-sub').textContent = `${kpis.totalSuccesses.toLocaleString()} S • ${kpis.totalFailures.toLocaleString()} F • ${kpis.totalCritFails.toLocaleString()} CF`;
 
         const ratesEl = document.getElementById('kpi-rates');
+        const bar = document.getElementById('kpi-outcome-bar');
         if (kpis.totalAttempts > 0) {
             ratesEl.innerHTML = `<span style="color:#10b981;">${kpis.successRate.toFixed(1)}%</span> / <span style="color:#f59e0b;">${kpis.failRate.toFixed(1)}%</span> / <span style="color:#ef4444;">${kpis.critFailRate.toFixed(1)}%</span>`;
-            const bar = document.getElementById('kpi-outcome-bar');
             bar.querySelector('.seg-s').style.width = `${kpis.successRate}%`;
             bar.querySelector('.seg-f').style.width = `${kpis.failRate}%`;
             bar.querySelector('.seg-cf').style.width = `${kpis.critFailRate}%`;
         } else {
-            ratesEl.textContent = 'No logs';
+            ratesEl.textContent = 'No attempts in range';
+            bar.querySelector('.seg-s').style.width = '0%';
+            bar.querySelector('.seg-f').style.width = '0%';
+            bar.querySelector('.seg-cf').style.width = '0%';
         }
 
-        document.getElementById('kpi-streak').textContent = `${kpis.crimeChain.toLocaleString()} Chain`;
-        document.getElementById('kpi-streak-sub').textContent = `Streak: ${kpis.currentStreak} (Best: ${kpis.longestStreak}) • Max Chain: ${kpis.maxCrimeChain}`;
-
+        const isCashOnly = state.profitValuationMode === 'cash';
+        const profLbl = document.getElementById('kpi-profit-lbl');
         const profEl = document.getElementById('kpi-profit');
-        profEl.textContent = fmtMoney(kpis.totalNetProfit);
-        profEl.style.color = kpis.totalNetProfit >= 0 ? '#10b981' : '#f87171';
-        document.getElementById('kpi-profit-sub').textContent = `Avg ${fmtMoney(kpis.avgProfitPerNerve)} / Nerve`;
+        const profSubEl = document.getElementById('kpi-profit-sub');
+        const totalDisplay = isCashOnly ? kpis.totalCashOnlyProfit : kpis.totalNetProfit;
+        const perNerveDisplay = isCashOnly ? kpis.avgCashPerNerve : kpis.avgProfitPerNerve;
+        if (profLbl) profLbl.textContent = isCashOnly ? 'Direct Cash & $/N' : 'Est. Loot Value & $/N';
+        profEl.textContent = fmtMoney(totalDisplay);
+        profEl.style.color = totalDisplay >= 0 ? '#10b981' : '#f87171';
+        if (profSubEl) {
+            profSubEl.textContent = isCashOnly
+                ? `Cash Only • ${fmtMoney(perNerveDisplay)}/N`
+                : `Cash ${fmtMoney(kpis.totalCashGained)} + Items ${fmtMoney(kpis.totalItemsGainedVal)} • ${fmtMoney(perNerveDisplay)}/N`;
+        }
 
         document.getElementById('kpi-level-pct').textContent = `Lvl ${levelEstimate.currentLevel}→${levelEstimate.nextLevel}: ${levelEstimate.progressPct}%`;
         document.getElementById('kpi-level-sub').textContent = levelEstimate.isLevelHolding
@@ -803,8 +819,8 @@
                 <td>${nextHtml}</td>
                 <td>${targetHtml}</td>
                 <td style="font-family:var(--font-mono);">
-                    <div style="font-weight:800;color:${c.profitPerNerve >= 0 ? '#10b981' : '#f87171'};">${fmtMoney(c.profitPerNerve)}/N</div>
-                    <div style="font-size:11px;color:var(--text-tertiary);">${fmtMoney(c.netProfit)} net</div>
+                    <div style="font-weight:800;color:${(state.profitValuationMode === 'cash' ? c.cashProfitPerNerve : c.profitPerNerve) >= 0 ? '#10b981' : '#f87171'};">${fmtMoney(state.profitValuationMode === 'cash' ? c.cashProfitPerNerve : c.profitPerNerve)}/N</div>
+                    <div style="font-size:11px;color:var(--text-tertiary);" title="Cash: ${fmtMoney(c.cashGained)} • Items MV (${(c.itemsTotalQty || 0).toLocaleString()} pcs): ${fmtMoney(c.itemsGainedVal)}">${state.profitValuationMode === 'cash' ? `${fmtMoney(c.cashOnlyProfit)} cash` : `${fmtMoney(c.netProfit)} (${fmtMoney(c.cashGained)} cash)`}</div>
                 </td>
                 <td>
                     <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;">
@@ -849,6 +865,15 @@
         cb.textContent = `${crime.confidence} Confidence`;
         cb.title = crime.confidenceMath;
         document.getElementById('dd-math-box').innerHTML = `<strong>📐 Model &amp; Confidence Math:</strong> ${esc(crime.confidenceMath)}`;
+
+        const lootEl = document.getElementById('dd-loot-box');
+        if (lootEl) {
+            const topChips = (crime.topRewardItems || []).slice(0, 10).map(it =>
+                `<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:4px;background:rgba(56,189,248,0.08);border:1px solid rgba(56,189,248,0.22);font-family:var(--font-mono);font-size:11px;"><strong>${Number(it.amount || 0).toLocaleString()}×</strong> ${esc(it.name)} <span style="color:#34d399;">(${fmtMoney(it.totalValue)})</span></span>`
+            ).join(' ');
+            const totalLine = `<strong>💰 Rewards Breakdown:</strong> Cash Gained <strong style="color:#10b981;">${fmtMoney(crime.cashGained)}</strong> + Est. Item Market Value <strong style="color:#38bdf8;">${fmtMoney(crime.itemsGainedVal)}</strong> (${(crime.itemsTotalQty || 0).toLocaleString()} items at current Torn MV) = <strong style="color:#f8fafc;">${fmtMoney(crime.netProfit)}</strong> (${fmtMoney(crime.profitPerNerve)}/N)`;
+            lootEl.innerHTML = `${totalLine}${topChips ? `<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:7px;">${topChips}</div>` : ''}`;
+        }
 
         document.getElementById('crime-deepdive-backdrop').classList.add('open');
         updateDeepDiveContent();
@@ -1046,28 +1071,57 @@
 
     function renderProfitChart() {
         if (typeof window.Chart !== 'function') return;
+        const isCashOnly = state.profitValuationMode === 'cash';
+        const isPerNerve = state.profitChartMode === 'per_nerve';
+        const valFor = (c) => {
+            if (isCashOnly) return isPerNerve ? c.cashProfitPerNerve : c.cashOnlyProfit;
+            return isPerNerve ? c.profitPerNerve : c.netProfit;
+        };
         const list = state.analytics.crimes.filter(c => c.attempts > 0)
-            .sort((a, b) => state.profitChartMode === 'per_nerve' ? (b.profitPerNerve - a.profitPerNerve) : (b.netProfit - a.netProfit));
+            .sort((a, b) => valFor(b) - valFor(a));
         const canvas = document.getElementById('chart-profit');
         if (!canvas) return;
         if (state.charts.profit) state.charts.profit.destroy();
 
-        const isPerNerve = state.profitChartMode === 'per_nerve';
         state.charts.profit = new Chart(canvas.getContext('2d'), {
             type: 'bar',
             data: {
                 labels: list.map(c => c.meta.name),
                 datasets: [{
-                    label: isPerNerve ? '$/Nerve' : 'Total Net Profit ($)',
-                    data: list.map(c => Math.round(isPerNerve ? c.profitPerNerve : c.netProfit)),
-                    backgroundColor: list.map(c => (isPerNerve ? c.profitPerNerve : c.netProfit) >= 0 ? 'rgba(56,189,248,0.82)' : 'rgba(239,68,68,0.8)'),
+                    label: isCashOnly
+                        ? (isPerNerve ? 'Cash $/Nerve' : 'Total Cash ($)')
+                        : (isPerNerve ? 'Cash+Items $/Nerve' : 'Total Cash + Items MV ($)'),
+                    data: list.map(c => Math.round(valFor(c))),
+                    backgroundColor: list.map(c => valFor(c) >= 0 ? 'rgba(56,189,248,0.82)' : 'rgba(239,68,68,0.8)'),
                     borderRadius: 4
                 }]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                plugins: { legend: { display: false } },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            afterBody: (items) => {
+                                const idx = items?.[0]?.dataIndex;
+                                const c = idx !== undefined ? list[idx] : null;
+                                if (!c) return [];
+                                const lines = [
+                                    `Cash Gained: $${Math.round(c.cashGained).toLocaleString()}`,
+                                    `Items Est. MV (${(c.itemsTotalQty || 0).toLocaleString()} pcs): $${Math.round(c.itemsGainedVal).toLocaleString()}`
+                                ];
+                                if (c.topRewardItems && c.topRewardItems.length > 0) {
+                                    lines.push('Top Stolen Items (Current MV):');
+                                    for (const it of c.topRewardItems.slice(0, 3)) {
+                                        lines.push(` • ${it.amount.toLocaleString()}× ${it.name}: $${Math.round(it.totalValue).toLocaleString()}`);
+                                    }
+                                }
+                                return lines;
+                            }
+                        }
+                    }
+                },
                 scales: {
                     x: { ticks: { color: '#94a3b8', font: { size: 10 } }, grid: { display: false } },
                     y: { ticks: { color: '#94a3b8', callback: v => fmtMoney(v) }, grid: { color: 'rgba(148,163,184,0.12)' } }
@@ -1078,9 +1132,28 @@
 
     function renderTimelineChart() {
         if (typeof window.Chart !== 'function') return;
-        const days = state.analytics.dailyTimeline;
+        const days = state.analytics.dailyTimeline || [];
         const spanEl = document.getElementById('timeline-span-badge');
         if (spanEl) spanEl.textContent = `${days.length} active days`;
+
+        const emptyNote = document.getElementById('timeline-empty-note');
+        const emptyMsg = document.getElementById('timeline-empty-msg');
+        const emptyCta = document.getElementById('btn-timeline-sync-cta');
+        const hasFull = hasFullLogAccess();
+
+        if (emptyNote) {
+            if (days.length === 0) {
+                emptyNote.style.display = 'flex';
+                if (emptyMsg) {
+                    emptyMsg.innerHTML = hasFull
+                        ? 'No crime activity logs cached in this timeframe yet. Click below to sync your Torn <code>cat=136</code> crime history.'
+                        : '<strong>Daily Nerve Timeline requires Full Access logs:</strong> Limited Access keys only return lifetime totals without timestamps. Enter &amp; save a <strong>Full Access</strong> key in the bar above to populate daily nerve &amp; crit-fail spikes.';
+                }
+                if (emptyCta) emptyCta.style.display = hasFull ? 'inline-flex' : 'none';
+            } else {
+                emptyNote.style.display = 'none';
+            }
+        }
 
         const canvas = document.getElementById('chart-timeline');
         if (!canvas) return;
@@ -1116,11 +1189,26 @@
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                plugins: { legend: { labels: { color: '#94a3b8', boxWidth: 12 } } },
+                plugins: {
+                    legend: { labels: { color: '#94a3b8', boxWidth: 12 } },
+                    tooltip: {
+                        callbacks: {
+                            afterBody: (items) => {
+                                const idx = items?.[0]?.dataIndex;
+                                const d = idx !== undefined ? days[idx] : null;
+                                if (!d) return [];
+                                return [
+                                    `Date (TCT): ${d.date}`,
+                                    `Attempts: ${d.attempts} (${d.successes} S / ${d.failures} F / ${d.critFails} CF)`
+                                ];
+                            }
+                        }
+                    }
+                },
                 scales: {
                     x: { ticks: { color: '#94a3b8', maxTicksLimit: 16 }, grid: { display: false } },
-                    y: { position: 'left', title: { display: true, text: 'Nerve', color: '#94a3b8' }, ticks: { color: '#94a3b8' }, grid: { color: 'rgba(148,163,184,0.1)' } },
-                    y1: { position: 'right', beginAtZero: true, title: { display: true, text: 'Crit Fails', color: '#f87171' }, ticks: { color: '#f87171', stepSize: 1 }, grid: { display: false } }
+                    y: { beginAtZero: true, position: 'left', title: { display: true, text: 'Nerve', color: '#94a3b8' }, ticks: { color: '#94a3b8' }, grid: { color: 'rgba(148,163,184,0.1)' } },
+                    y1: { position: 'right', beginAtZero: true, suggestedMax: 1, title: { display: true, text: 'Crit Fails', color: '#f87171' }, ticks: { color: '#f87171', stepSize: 1 }, grid: { display: false } }
                 }
             }
         });
@@ -1329,7 +1417,7 @@
     window.onManualLevelUpDateChange = async function () {
         const val = document.getElementById('manual-levelup-date')?.value;
         state.manualLevelUpTs = val ? Math.floor(Date.parse(val + 'T00:00:00Z') / 1000) : null;
-        if (state.userId && !state.demoMode && state.meta) {
+        if (state.userId && state.meta) {
             state.meta.manualLevelUpTs = state.manualLevelUpTs;
             await window.FactionOSCrimesDB.saveUserMeta(state.meta).catch(() => {});
         }
@@ -1340,7 +1428,7 @@
         const inp = document.getElementById('manual-levelup-date');
         if (inp) inp.value = '';
         state.manualLevelUpTs = null;
-        if (state.userId && !state.demoMode && state.meta) {
+        if (state.userId && state.meta) {
             state.meta.manualLevelUpTs = null;
             await window.FactionOSCrimesDB.saveUserMeta(state.meta).catch(() => {});
         }
@@ -1423,7 +1511,6 @@
             state.pendingFridayAction = action;
             return;
         }
-        if (action.demo && !state.demoMode) toggleDemoMode(true, true);
         if (action.tab) switchCrimeTab(action.tab);
         if (action.recommendMode) setRecMode(action.recommendMode);
         if (action.timeframe) setTimeframe(action.timeframe);

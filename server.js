@@ -13527,7 +13527,13 @@ app.get('/api/crimes/snapshot', async (req, res) => {
         const ki = keyInfoRaw?.info || keyInfoRaw || {};
         const accessType = String(ki.access_type || 'Limited Access');
         const accessLevel = Number(ki.access_level ?? 3);
-        const hasLogAccess = accessLevel >= 4 || accessType.toLowerCase().includes('full');
+        const userSels = Array.isArray(ki.selections?.user)
+            ? ki.selections.user
+            : Object.keys(ki.selections || {}).filter(k => ki.selections[k]);
+        const hasLogAccess = accessLevel >= 4 ||
+            accessType.toLowerCase().includes('full') ||
+            userSels.includes('log') ||
+            ki.selections?.log === 1;
 
         // Layer 3: Fetch Torn API v2 per-crime lifetime telemetry (/v2/user/{1..13}/crimes) when key has Limited+ scope
         let v2Crimes = null;
@@ -13551,6 +13557,7 @@ app.get('/api/crimes/snapshot', async (req, res) => {
                 }
                 const cashRewards = Number(c.rewards?.money || 0);
                 let itemRewardsValue = 0;
+                let itemsTotalQty = 0;
                 const rewardItemsScored = [];
                 for (const it of (c.rewards?.items || [])) {
                     const idStr = String(it.id || '');
@@ -13559,11 +13566,13 @@ app.get('/api/crimes/snapshot', async (req, res) => {
                     const unitVal = Number(meta?.market_value || meta?.sell_price || 0);
                     const totalVal = amt * unitVal;
                     itemRewardsValue += totalVal;
+                    itemsTotalQty += amt;
                     if (amt > 0) {
                         rewardItemsScored.push({
                             id: Number(it.id),
                             name: meta?.name || `Item #${idStr}`,
                             amount: amt,
+                            unitValue: Math.round(unitVal),
                             totalValue: Math.round(totalVal)
                         });
                     }
@@ -13596,7 +13605,9 @@ app.get('/api/crimes/snapshot', async (req, res) => {
                     },
                     cashRewards,
                     itemRewardsValue: Math.round(itemRewardsValue),
-                    topItems: rewardItemsScored.slice(0, 5),
+                    itemsTotalQty,
+                    rawRewardItems: c.rewards?.items || [],
+                    topItems: rewardItemsScored.slice(0, 15),
                     uniquesCount: uniquesRaw.length,
                     uniquesList: uniquesFormatted,
                     misc: c.miscellaneous || null
@@ -13637,6 +13648,57 @@ app.get('/api/crimes/snapshot', async (req, res) => {
         });
     } catch (err) {
         return res.status(500).json({ success: false, error: err.message || 'Snapshot lookup failed' });
+    }
+});
+
+// Session-backed Torn /user/?selections=log proxy for Crime & Level Analytics (uses encrypted vault key; never returns raw key)
+app.get('/api/crimes/logs', async (req, res) => {
+    try {
+        const rawKey = req.userTornKey || req.headers['x-api-key'] || '';
+        let userKey = (rawKey && rawKey !== 'null' && rawKey !== 'undefined' && String(rawKey).trim().length >= 16)
+            ? String(rawKey).trim()
+            : null;
+        const sessionPlayerId = req.userSession?.playerId ? String(req.userSession.playerId).trim() : '';
+        if (!userKey && sessionPlayerId && userKeys && typeof userKeys.resolveUserApiKeyByTornId === 'function') {
+            const rec = userKeys.resolveUserApiKeyByTornId(sessionPlayerId);
+            if (rec && rec.key && rec.key.length >= 16) userKey = rec.key;
+        }
+        if (!userKey) {
+            return res.status(401).json({ success: false, error: 'Sign in with a Full Access Torn API key to sync logs.' });
+        }
+
+        const params = new URLSearchParams({ selections: 'log', key: userKey });
+        const cat = String(req.query?.cat || '').replace(/[^\d,]/g, '');
+        const logType = String(req.query?.log || '').replace(/[^\d,]/g, '');
+        const toTs = String(req.query?.to || '').replace(/\D+/g, '');
+        const fromTs = String(req.query?.from || '').replace(/\D+/g, '');
+        if (cat) params.set('cat', cat);
+        if (logType) params.set('log', logType);
+        if (toTs) params.set('to', toTs);
+        if (fromTs) params.set('from', fromTs);
+
+        const tornResp = await fetch(`https://api.torn.com/user/?${params.toString()}`, {
+            signal: AbortSignal.timeout(10000)
+        });
+        if (!tornResp.ok) {
+            return res.status(tornResp.status === 429 ? 429 : 502).json({
+                success: false,
+                tornCode: tornResp.status === 429 ? 5 : 0,
+                error: `Torn API HTTP ${tornResp.status}`
+            });
+        }
+        const data = await tornResp.json();
+        if (data && data.error) {
+            const code = Number(data.error.code || 0);
+            return res.status(code === 5 ? 429 : 400).json({
+                success: false,
+                tornCode: code,
+                error: data.error.error || `Torn API Error #${code}`
+            });
+        }
+        return res.json({ success: true, log: data?.log || {} });
+    } catch (err) {
+        return res.status(502).json({ success: false, error: err?.message || 'Log proxy failed' });
     }
 });
 

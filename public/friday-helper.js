@@ -1289,7 +1289,7 @@
                 };
                 hist.push({
                     role: 'assistant',
-                    text: `I don't have synced crime or level telemetry cached in this browser yet. Opening **Crime & Level Analytics** so you can sync your logs (or toggle **Preview Demo Data**).`,
+                    text: `I don't have synced crime or level telemetry cached in this browser yet. Opening **Crime & Level Analytics** so you can view your live Torn v2 stats and sync logs.`,
                     action: openAct
                 });
                 saveHistory(hist);
@@ -1332,10 +1332,9 @@
                     targetSkill: targetCS,
                     label: `Inspect ${c.name} (Target CS ${targetCS})`
                 };
-                const demoNote = crimeIntelObj.isDemo ? ' *(Preview Demo Data)*' : '';
                 const replyTxt = c.currentSkill >= 100
-                    ? `${c.icon} **${c.name}** is already maxed at **CS 100**${demoNote}! Your efficiency is **$${c.profitPerNerve.toLocaleString()}/nerve** (${c.successRate}% success).`
-                    : `${c.icon} **${c.name}** is currently **CS ${c.currentSkill} / 100**${demoNote} (${c.confidence} confidence):\n• **Next Level (CS ${Math.min(100, Math.floor(c.currentSkill) + 1)}):** ~**${c.nextAttempts.toLocaleString()} attempts** (${c.nextNerve.toLocaleString()} nerve)\n• **Target CS ${targetCS}:** ~**${estAtt.toLocaleString()} attempts** • **${estNerve.toLocaleString()} nerve** • ~**${estDays} days** at ${crimeIntelObj.dailyNerveAvg} N/day\n• **Efficiency:** **$${c.profitPerNerve.toLocaleString()}/nerve** (${c.critFailRate}% crit-fail rate)`;
+                    ? `${c.icon} **${c.name}** is already maxed at **CS 100**! Your efficiency is **$${c.profitPerNerve.toLocaleString()}/nerve** (${c.successRate}% success).`
+                    : `${c.icon} **${c.name}** is currently **CS ${c.currentSkill} / 100** (${c.confidence} confidence):\n• **Next Level (CS ${Math.min(100, Math.floor(c.currentSkill) + 1)}):** ~**${c.nextAttempts.toLocaleString()} attempts** (${c.nextNerve.toLocaleString()} nerve)\n• **Target CS ${targetCS}:** ~**${estAtt.toLocaleString()} attempts** • **${estNerve.toLocaleString()} nerve** • ~**${estDays} days** at ${crimeIntelObj.dailyNerveAvg} N/day\n• **Efficiency:** **$${c.profitPerNerve.toLocaleString()}/nerve** (${c.critFailRate}% crit-fail rate)`;
 
                 hist.push({ role: 'assistant', text: replyTxt, action: act });
                 saveHistory(hist);
@@ -1348,7 +1347,6 @@
 
             if (asksLevelProgress) {
                 const lv = crimeIntelObj.levelEstimate;
-                const demoNote = crimeIntelObj.isDemo ? ' *(Preview Demo Data)*' : '';
                 const act = {
                     type: 'crimes_action',
                     page: '/crimes.html#level',
@@ -1356,7 +1354,7 @@
                     label: `Open Level ${lv.currentLevel}→${lv.nextLevel} Estimator`
                 };
                 const holdTxt = lv.isLevelHolding ? `\n🔒 **Heads-up:** Your XP activity suggests you may be **Level Holding** (or have an Upgrade ready).` : '';
-                const replyTxt = `⭐ **Regular Level Progress (Lvl ${lv.currentLevel} → ${lv.nextLevel})**${demoNote}:\n• **Estimated Progress:** **~${lv.progressPct}%**${lv.hofLevelRank ? ` (HoF Rank #${lv.hofLevelRank.toLocaleString()})` : ''}\n• **Remaining Effort:** ~**${lv.leavesRemaining.toLocaleString()} similar-level Leave attacks** OR ~**${lv.crimesRemaining.toLocaleString()} crimes**\n• **Projected ETA:** ~**${lv.estDaysToLevel} days** at your recent pace.${holdTxt}`;
+                const replyTxt = `⭐ **Regular Level Progress (Lvl ${lv.currentLevel} → ${lv.nextLevel})**:\n• **Estimated Progress:** **~${lv.progressPct}%**${lv.hofLevelRank ? ` (HoF Rank #${lv.hofLevelRank.toLocaleString()})` : ''}\n• **Remaining Effort:** ~**${lv.leavesRemaining.toLocaleString()} similar-level Leave attacks** OR ~**${lv.crimesRemaining.toLocaleString()} crimes**\n• **Projected ETA:** ~**${lv.estDaysToLevel} days** at your recent pace.${holdTxt}`;
 
                 hist.push({ role: 'assistant', text: replyTxt, action: act });
                 saveHistory(hist);
@@ -1369,7 +1367,6 @@
 
             if (asksBestCrime) {
                 const allC = Object.values(crimeIntelObj.crimes);
-                const demoNote = crimeIntelObj.isDemo ? ' *(Preview Demo Data)*' : '';
                 let recMode = 'profit';
                 let ranked = [];
                 let heading = '';
@@ -1402,7 +1399,7 @@
                 };
                 hist.push({
                     role: 'assistant',
-                    text: `${heading}${demoNote}:\n${lines.join('\n') || 'Sync logs to rank your crimes.'}`,
+                    text: `${heading}:\n${lines.join('\n') || 'Sync logs to rank your crimes.'}`,
                     action: act
                 });
                 saveHistory(hist);

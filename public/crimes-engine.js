@@ -275,6 +275,35 @@
         return tierMult[crimeMeta?.tier || 2] || 12.0;
     }
 
+    const CRIT_FAIL_LOG_IDS = new Set([9154, 9155, 9158, 9160, 9163, 9165, 9190, 9191]);
+    const FAIL_LOG_IDS = new Set([5700, 5705, 5710, 5715, 9150]);
+    const SUCCESS_LOG_IDS = new Set([5720, 5725, 5730, 5735, 9010, 9015, 9020, 9025, 9027, 9030, 9035, 9050, 9051, 9052, 9053, 9055, 9056, 9060, 9065, 9070, 9071, 9072, 9073]);
+    const SKILL_CHANGE_LOG_IDS = new Set([9005, 9006]);
+    const CRIME_SETUP_LOG_IDS = new Set([9000, 9300, 9301, 9302, 9303, 9304, 9305, 9306, 9308, 9309, 9310, 9350, 9351, 9361, 9362, 9365, 9366]);
+    const ATTACK_RECEIVE_LOG_IDS = new Set([8101, 8106, 8111, 8116, 8141, 8151, 8156, 8161, 8166, 8170, 8180]);
+    const GYM_TRAIN_LOG_IDS = new Set([5300, 5301, 5302, 5303]);
+
+    function isCrimeSkillEvent(log) {
+        const lid = Number(log?.log || 0);
+        const title = String(log?.title || '').toLowerCase();
+        return SKILL_CHANGE_LOG_IDS.has(lid) || title.includes('crime skill level');
+    }
+
+    function isCrimeAttemptLog(log) {
+        if (!log || isCrimeSkillEvent(log)) return false;
+        const lid = Number(log.log || 0);
+        const title = String(log.title || '').toLowerCase();
+        const cat = String(log.category || '').toLowerCase();
+        if (CRIME_SETUP_LOG_IDS.has(lid)) return Number(log.data?.nerve || 0) > 0;
+        if (SUCCESS_LOG_IDS.has(lid) || FAIL_LOG_IDS.has(lid) || CRIT_FAIL_LOG_IDS.has(lid)) return true;
+        if (log.kind === 'crime' || cat === 'crimes' || title.startsWith('crime ')) {
+            // Setup/reputation/migration notifications never spend nerve
+            if (log.data?.nerve !== undefined) return Number(log.data.nerve) > 0;
+            return title.includes('success') || title.includes('fail');
+        }
+        return false;
+    }
+
     function detectCrimeKeyFromLog(log) {
         const d = log.data || {};
         const explicitRaw = String(d.crime || d.crime_type || d.crime_slug || '').toLowerCase().replace(/[\s-]+/g, '_');
@@ -290,6 +319,22 @@
         ].filter(Boolean).join(' ').toLowerCase();
 
         if (!haystack) return null;
+
+        // Disambiguate shared location words first (e.g. "installing a skimmer at a subway station" vs "searching the subway")
+        if (haystack.includes('skimmer') || haystack.includes('card details') || haystack.includes('skimming')) return 'card_skimming';
+        if (haystack.includes('searching the ') || haystack.includes('search for cash')) return 'search_for_cash';
+        if (haystack.includes('counterfeit dvd') || haystack.includes('copying dvd') || haystack.includes('bootlegging') || haystack.includes('online store')) return 'bootlegging';
+        if (haystack.includes('spraying graffiti') || haystack.includes('graffiti')) return 'graffiti';
+        if (haystack.includes('shoplifting') || haystack.includes('shoplift')) return 'shoplifting';
+        if (haystack.includes('pickpocketing') || haystack.includes('pickpocket')) return 'pickpocketing';
+        if (haystack.includes('burgling') || haystack.includes('burglary') || haystack.includes('scouting for a residential')) return 'burglary';
+        if (haystack.includes('hustling') || haystack.includes('shell game') || haystack.includes('three-card')) return 'hustling';
+        if (haystack.includes('dispos') || haystack.includes('dumping') || haystack.includes('dissolv')) return 'disposal';
+        if (haystack.includes('cracking') || haystack.includes('brute forc')) return 'cracking';
+        if (haystack.includes('forging') || haystack.includes('forgery')) return 'forgery';
+        if (haystack.includes('scamming') || haystack.includes('phishing') || haystack.includes('email farm')) return 'scamming';
+        if (haystack.includes('arson') || haystack.includes('torching')) return 'arson';
+
         for (const c of CRIMES_CATALOG) {
             if (haystack.includes(c.name.toLowerCase()) || haystack.includes(c.key)) return c.key;
         }
@@ -307,13 +352,13 @@
         const logId = Number(log.log || 0);
         const d = log.data || {};
 
-        if (title.includes('critical fail') || d.outcome_type === 'critical_failure' || color === 'red' || logId === 9005 || logId === 9055) {
+        if (CRIT_FAIL_LOG_IDS.has(logId) || title.includes('critical fail') || d.outcome_type === 'critical_failure' || color === 'red') {
             return 'critical_failure';
         }
-        if (title.includes('fail') || d.outcome_type === 'failure' || color === 'orange' || color === 'yellow' || logId === 9015) {
+        if (FAIL_LOG_IDS.has(logId) || title.includes('fail') || d.outcome_type === 'failure' || color === 'orange' || color === 'yellow') {
             return 'failure';
         }
-        if (title.includes('success') || title.includes('gain') || d.outcome_type === 'success' || color === 'green' || logId === 9010 || logId === 9020) {
+        if (SUCCESS_LOG_IDS.has(logId) || title.includes('success') || title.includes('gain') || d.outcome_type === 'success' || color === 'green') {
             return 'success';
         }
         return 'success';
@@ -422,8 +467,8 @@
                 (Number(m.group_attack) || 1) *
                 (Number(m.overseas) || 1) *
                 (Number(m.chain_bonus) || 1);
-            // Mugs/Hosps yield ~25% of Leave respect in Torn
-            const outcomeRespectFactor = resStr === 'attacked' ? 1.0 : 0.75;
+            // Mugs yield ~75% of Leave/Hosp respect in Torn
+            const outcomeRespectFactor = resStr === 'mugged' ? 0.75 : 1.0;
             const baseResp = rGain / Math.max(0.25, mult * outcomeRespectFactor);
             if (baseResp > 0.2 && baseResp < 2.0) {
                 const estLvl = Math.round(Math.exp(4 * baseResp - 1));
@@ -434,21 +479,31 @@
     }
 
     function detectAttackOutcomeFromLog(log) {
-        const t = String(log.title || '').toLowerCase();
-        const r = String(log.data?.result || log.data?.outcome || '').toLowerCase();
+        const lid = Number(log?.log || 0);
+        const t = String(log?.title || '').toLowerCase();
+        const r = String(log?.data?.result || log?.data?.outcome || '').toLowerCase();
         const combined = `${t} ${r}`;
-        if (combined.includes('lost') || combined.includes('stalemate') || combined.includes('escape') || combined.includes('defend') || combined.includes('assist')) {
-            if (combined.includes('assist')) return 'assist';
+        if (
+            ATTACK_RECEIVE_LOG_IDS.has(lid) ||
+            combined.includes('receive') ||
+            combined.includes('lost') ||
+            combined.includes('stalemate') ||
+            combined.includes('timeout') ||
+            combined.includes('escape') ||
+            combined.includes('failed') ||
+            combined.includes('defend')
+        ) {
             return 'non_win';
         }
-        if (combined.includes('mug')) return 'mug';
-        if (combined.includes('hosp')) return 'hospitalize';
-        if (combined.includes('leave') || combined.includes('left') || combined.includes('attacked') || combined.includes('won')) return 'leave';
-        return 'leave';
+        if (combined.includes('assist') || lid === 8145) return 'assist';
+        if (combined.includes('mug') || lid === 8155) return 'mug';
+        if (combined.includes('hosp') || lid === 8160) return 'hospitalize';
+        if (combined.includes('leave') || combined.includes('left') || combined.includes('attacked') || combined.includes('won') || combined.includes('arrest') || lid === 8150 || lid === 8165) return 'leave';
+        return 'non_win';
     }
 
     // ── Master Computation Pipeline ──────────────────────────────────────────
-    function computeAnalytics({ logs = [], snapshot = null, itemPrices = {}, timeframe = 'all', customFromTs = null, customToTs = null, crimeFilter = 'all', manualLevelUpTs = null }) {
+    function computeAnalytics({ logs = [], snapshot = null, itemPrices = {}, itemNames = {}, timeframe = 'all', customFromTs = null, customToTs = null, crimeFilter = 'all', manualLevelUpTs = null }) {
         const nowSec = Math.floor(Date.now() / 1000);
         let minFilterTs = 0;
         let maxFilterTs = nowSec + 86400;
@@ -498,10 +553,13 @@
                 cashLost: 0,
                 itemsGainedVal: 0,
                 itemsUsedVal: 0,
+                itemsTotalQty: 0,
                 netProfit: 0,
+                cashOnlyProfit: 0,
                 uniquesFound: new Set(),
                 uniquesUnlockedCount: 0,
                 topRewardItems: [],
+                _loggedItemQtyMap: new Map(),
                 transitions: [], // { fromLvl, toLvl, attempts, nerve, critFailsInSpan, timestamp }
                 historyPoints: [], // { cs, nerve, attempts, ts }
                 critFailPoints: [], // { cs, nerve, attempts, ts }
@@ -522,27 +580,80 @@
         let totalCritFails = 0;
         let totalNerve = 0;
         let totalNetProfit = 0;
-        let currentStreak = 0;
-        let longestStreak = 0;
-        let crimeChain = 0;
-        let maxCrimeChain = 0;
+        let totalCashGained = 0;
+        let totalCashLost = 0;
+        let totalItemsGainedVal = 0;
+        let totalItemsCount = 0;
 
-        const dailyMap = new Map(); // YYYY-MM-DD -> { date, nerve, attempts, successes, failures, critFails, profit }
+        const dailyMap = new Map(); // YYYY-MM-DD (UTC / TCT) -> { date, nerve, attempts, successes, failures, critFails, profit, cashProfit }
         const recent14dStart = nowSec - 14 * 86400;
         const recent30dStart = nowSec - 30 * 86400;
         let nerveLast14d = 0;
         let nerveLast30d = 0;
         const activeDays14d = new Set();
         const activeDays30d = new Set();
+        let earliestLogTs14d = Infinity;
+        let earliestLogTs30d = Infinity;
 
         for (const log of filteredLogs) {
-            if (log.kind !== 'crime') continue;
+            const isSkillEvt = isCrimeSkillEvent(log);
+            const isAttemptEvt = isCrimeAttemptLog(log);
+            if (!isSkillEvt && !isAttemptEvt) continue;
+
             const cKey = detectCrimeKeyFromLog(log);
             if (!cKey || !crimeMap.has(cKey)) continue;
             if (crimeFilter !== 'all' && crimeFilter !== cKey) continue;
 
             const st = crimeMap.get(cKey);
             const d = log.data || {};
+
+            // Handle Torn CS Level Up / Down notifications (log 9005 / 9006) purely for CS progression tracking
+            if (isSkillEvt) {
+                const lvlCS = d.skill_level !== undefined ? Number(d.skill_level) : (d.crime_skill !== undefined ? Number(d.crime_skill) : null);
+                if (lvlCS !== null && !isNaN(lvlCS)) {
+                    if (Number(log.log) === 9006 && st._lastLoggedCS !== null && lvlCS < st._lastLoggedCS) {
+                        st.critSkillLost += (st._lastLoggedCS - lvlCS);
+                    }
+                    const intLvl = Math.floor(lvlCS);
+                    if (st._lastIntLvl === null) {
+                        st._lastIntLvl = intLvl;
+                        st._attemptsSinceLvl = 0;
+                        st._nerveSinceLvl = 0;
+                        st._critsSinceLvl = 0;
+                        st.historyPoints.push({ cs: Number(lvlCS.toFixed(2)), nerve: Math.round(st.totalNerve), attempts: st.attempts, ts: log.timestamp });
+                    } else if (intLvl > st._lastIntLvl) {
+                        const spanLvls = intLvl - st._lastIntLvl;
+                        const attPerLvl = st._attemptsSinceLvl / spanLvls;
+                        const nervePerLvl = st._nerveSinceLvl / spanLvls;
+                        // Only record transition when we actually saw attempts in the interval
+                        if (st._attemptsSinceLvl > 0) {
+                            for (let step = 0; step < spanLvls; step++) {
+                                st.transitions.push({
+                                    fromLvl: st._lastIntLvl + step,
+                                    toLvl: st._lastIntLvl + step + 1,
+                                    attempts: Math.round(attPerLvl),
+                                    nerve: Math.round(nervePerLvl),
+                                    critFailsInSpan: step === 0 ? st._critsSinceLvl : 0,
+                                    timestamp: log.timestamp
+                                });
+                            }
+                        }
+                        st._lastIntLvl = intLvl;
+                        st._attemptsSinceLvl = 0;
+                        st._nerveSinceLvl = 0;
+                        st._critsSinceLvl = 0;
+                        st.historyPoints.push({ cs: Number(lvlCS.toFixed(2)), nerve: Math.round(st.totalNerve), attempts: st.attempts, ts: log.timestamp });
+                    } else if (intLvl < st._lastIntLvl) {
+                        st._lastIntLvl = intLvl;
+                    }
+                    st._lastLoggedCS = lvlCS;
+                    if (!st._hasAuthoritativeSkill && lvlCS > st.currentSkill) {
+                        st.currentSkill = lvlCS;
+                    }
+                }
+                continue;
+            }
+
             const outcome = detectCrimeOutcome(log);
             const nerve = Number(d.nerve ?? st.meta.avgNerve ?? 3);
 
@@ -557,35 +668,45 @@
             if (outcome === 'success') {
                 st.successes++;
                 totalSuccesses++;
-                currentStreak++;
-                if (currentStreak > longestStreak) longestStreak = currentStreak;
-                crimeChain++;
-                if (crimeChain > maxCrimeChain) maxCrimeChain = crimeChain;
             } else if (outcome === 'failure') {
                 st.failures++;
                 totalFailures++;
-                currentStreak = 0;
-                crimeChain = Math.floor(crimeChain / 2);
             } else {
                 st.critFails++;
                 totalCritFails++;
                 st._critsSinceLvl++;
-                currentStreak = 0;
-                crimeChain = 0;
             }
 
-            // Cash & Items Valuation
+            // Cash & Items Valuation (note: d.items_added on prep logs 9300/9301 is prep, never profit!)
             const mGain = Number(d.money_gained || d.cash_gained || 0);
             const mLoss = Number(d.money_lost || d.cash_lost || 0);
-            const iGain = Number(d.items_gained_value ?? computeItemsValue(d.items_gained || d.items_added, itemPrices));
+            const iGain = Number(d.items_gained_value ?? computeItemsValue(d.items_gained, itemPrices));
             const iUsed = Number(d.items_used_value ?? computeItemsValue(d.items_used || d.items_lost, itemPrices));
             const net = (mGain + iGain) - (mLoss + iUsed);
+            const cashNet = mGain - mLoss;
+
+            if (d.items_gained && typeof d.items_gained === 'object') {
+                const entries = Array.isArray(d.items_gained)
+                    ? d.items_gained.map(e => [String(e?.id || e?.item_id || ''), Number(e?.qty || e?.quantity || 1)])
+                    : Object.entries(d.items_gained);
+                for (const [idStr, qtyRaw] of entries) {
+                    const q = Number(qtyRaw || 0);
+                    if (!idStr || q <= 0) continue;
+                    st.itemsTotalQty += q;
+                    totalItemsCount += q;
+                    st._loggedItemQtyMap.set(idStr, (st._loggedItemQtyMap.get(idStr) || 0) + q);
+                }
+            }
 
             st.cashGained += mGain;
             st.cashLost += mLoss;
             st.itemsGainedVal += iGain;
             st.itemsUsedVal += iUsed;
             st.netProfit += net;
+            st.cashOnlyProfit += cashNet;
+            totalCashGained += mGain;
+            totalCashLost += mLoss;
+            totalItemsGainedVal += iGain;
             totalNetProfit += net;
 
             // Unique Outcome Tracking
@@ -596,10 +717,10 @@
                 st.uniquesFound.add(uLabel);
             }
 
-            // Daily Timeline Tracking
+            // Daily Timeline Tracking (TCT / UTC calendar day)
             const dayStr = new Date(log.timestamp * 1000).toISOString().slice(0, 10);
             if (!dailyMap.has(dayStr)) {
-                dailyMap.set(dayStr, { date: dayStr, nerve: 0, attempts: 0, successes: 0, failures: 0, critFails: 0, profit: 0 });
+                dailyMap.set(dayStr, { date: dayStr, nerve: 0, attempts: 0, successes: 0, failures: 0, critFails: 0, profit: 0, cashProfit: 0 });
             }
             const dayRow = dailyMap.get(dayStr);
             dayRow.nerve += nerve;
@@ -608,17 +729,20 @@
             else if (outcome === 'failure') dayRow.failures++;
             else dayRow.critFails++;
             dayRow.profit += net;
+            dayRow.cashProfit += cashNet;
 
             if (log.timestamp >= recent14dStart) {
                 nerveLast14d += nerve;
                 activeDays14d.add(dayStr);
+                if (log.timestamp < earliestLogTs14d) earliestLogTs14d = log.timestamp;
             }
             if (log.timestamp >= recent30dStart) {
                 nerveLast30d += nerve;
                 activeDays30d.add(dayStr);
+                if (log.timestamp < earliestLogTs30d) earliestLogTs30d = log.timestamp;
             }
 
-            // Skill Level Progression & Critical Failure Tracking
+            // Legacy / explicit crime_skill field if present on attempt log
             const loggedCS = d.crime_skill !== undefined && d.crime_skill !== null
                 ? Number(d.crime_skill)
                 : (d.skill_after !== undefined ? Number(d.skill_after) : null);
@@ -661,7 +785,6 @@
                     st.critFailPoints.push({ cs: Number(loggedCS.toFixed(2)), nerve: Math.round(st.totalNerve), attempts: st.attempts, ts: log.timestamp });
                 }
                 st._lastLoggedCS = loggedCS;
-                // Only fall back to loggedCS when live Torn API skill was unavailable (never overwrite post-CF lower live skill!)
                 if (!st._hasAuthoritativeSkill && loggedCS > st.currentSkill) {
                     st.currentSkill = loggedCS;
                 }
@@ -670,8 +793,27 @@
             }
         }
 
+        // Build topRewardItems from logs (when in windowed mode or before v2 override)
+        for (const st of crimeMap.values()) {
+            if (st._loggedItemQtyMap.size > 0) {
+                const scored = [];
+                for (const [idStr, amt] of st._loggedItemQtyMap.entries()) {
+                    const unitVal = Number(itemPrices[idStr] || 0);
+                    scored.push({
+                        id: Number(idStr),
+                        name: (itemNames && itemNames[idStr]) || `Item #${idStr}`,
+                        amount: amt,
+                        unitValue: Math.round(unitVal),
+                        totalValue: Math.round(amt * unitVal)
+                    });
+                }
+                scored.sort((a, b) => b.totalValue - a.totalValue || b.amount - a.amount);
+                st.topRewardItems = scored.slice(0, 15);
+            }
+        }
+
         // Hydrate / supplement per-crime lifetime totals from Torn API v2 (/v2/user/{1..13}/crimes)
-        // Whenever timeframe is 'all' or 'c2' (or zero logs synced), v2Crimes gives 100% exact lifetime Torn counts even on Limited Access!
+        // Whenever timeframe is 'all' or 'c2' (or zero logs synced), v2Crimes gives exact lifetime Torn counts
         const useV2LifetimeTotals = Boolean(v2CrimesMap && (logs.length === 0 || timeframe === 'all' || timeframe === 'c2'));
         if (useV2LifetimeTotals) {
             totalAttempts = 0;
@@ -680,6 +822,10 @@
             totalCritFails = 0;
             totalNerve = 0;
             totalNetProfit = 0;
+            totalCashGained = 0;
+            totalCashLost = 0;
+            totalItemsGainedVal = 0;
+            totalItemsCount = 0;
 
             for (const st of crimeMap.values()) {
                 const v2 = v2CrimesMap[st.key];
@@ -691,14 +837,41 @@
                     st.totalNerve = Number(v2.nerveSpent || 0);
 
                     let itemVal = Number(v2.itemRewardsValue || 0);
+                    let qtyTotal = Number(v2.itemsTotalQty || 0);
+                    let topScored = Array.isArray(v2.topItems) ? v2.topItems : [];
+
                     if (Array.isArray(v2.rawRewardItems) && itemPrices && Object.keys(itemPrices).length > 0) {
-                        itemVal = v2.rawRewardItems.reduce((sum, it) => sum + Number(it.amount || 0) * Number(itemPrices[String(it.id)] || 0), 0);
+                        itemVal = 0;
+                        qtyTotal = 0;
+                        const rebuilt = [];
+                        for (const it of v2.rawRewardItems) {
+                            const idStr = String(it.id || '');
+                            const amt = Number(it.amount || 0);
+                            const unitVal = Number(itemPrices[idStr] || 0);
+                            const totVal = amt * unitVal;
+                            itemVal += totVal;
+                            qtyTotal += amt;
+                            if (amt > 0) {
+                                rebuilt.push({
+                                    id: Number(it.id),
+                                    name: (itemNames && itemNames[idStr]) || `Item #${idStr}`,
+                                    amount: amt,
+                                    unitValue: Math.round(unitVal),
+                                    totalValue: Math.round(totVal)
+                                });
+                            }
+                        }
+                        rebuilt.sort((a, b) => b.totalValue - a.totalValue || b.amount - a.amount);
+                        topScored = rebuilt.slice(0, 15);
                     }
                     st.cashGained = Number(v2.cashRewards || 0);
                     st.itemsGainedVal = Math.round(itemVal);
-                    st.netProfit = (st.cashGained + st.itemsGainedVal) - (st.cashLost + st.itemsUsedVal);
+                    st.itemsTotalQty = qtyTotal;
+                    // Do not mix partial-window log losses into all-time Torn v2 rewards
+                    st.netProfit = st.cashGained + st.itemsGainedVal;
+                    st.cashOnlyProfit = st.cashGained;
                     st.uniquesUnlockedCount = Number(v2.uniquesCount || 0);
-                    st.topRewardItems = v2.topItems || [];
+                    st.topRewardItems = topScored;
                     for (const uLabel of (v2.uniquesList || [])) {
                         st.uniquesFound.add(uLabel);
                     }
@@ -709,6 +882,10 @@
                     totalFailures += st.failures;
                     totalCritFails += st.critFails;
                     totalNerve += st.totalNerve;
+                    totalCashGained += st.cashGained;
+                    totalCashLost += st.cashLost;
+                    totalItemsGainedVal += st.itemsGainedVal;
+                    totalItemsCount += st.itemsTotalQty;
                     totalNetProfit += st.netProfit;
                 }
             }
@@ -716,14 +893,18 @@
 
         // Compute average daily nerve spent (rolling 14d / 30d logs, or realistic NNB/lifetime pace)
         const nnb = Number(snapshot?.bars?.nerve?.maximum || 60);
-        const naturalDailyNerve = Math.min(265, Math.max(96, Math.round(nnb * 3.9 + 30))); // e.g. 50 NNB -> ~225 N/day, 75 NNB -> ~265 N/day
+        const naturalDailyNerve = Math.min(265, Math.max(96, Math.round(nnb * 3.9 + 30)));
         let dailyNerveAvg = naturalDailyNerve;
         let dailyNerveSource = `Est. active regen (${nnb} max nerve)`;
         if (activeDays14d.size >= 3 && nerveLast14d > 0) {
-            dailyNerveAvg = Math.max(24, Math.round(nerveLast14d / Math.min(14, Math.max(activeDays14d.size, 7))));
+            const coveredSpan14 = Number.isFinite(earliestLogTs14d) ? Math.max(1, Math.ceil((nowSec - earliestLogTs14d) / 86400)) : activeDays14d.size;
+            const denom14 = Math.min(14, Math.max(activeDays14d.size, coveredSpan14));
+            dailyNerveAvg = Math.max(24, Math.round(nerveLast14d / denom14));
             dailyNerveSource = `14d rolling avg (${activeDays14d.size} active days)`;
         } else if (activeDays30d.size >= 3 && nerveLast30d > 0) {
-            dailyNerveAvg = Math.max(24, Math.round(nerveLast30d / Math.min(30, Math.max(activeDays30d.size, 10))));
+            const coveredSpan30 = Number.isFinite(earliestLogTs30d) ? Math.max(1, Math.ceil((nowSec - earliestLogTs30d) / 86400)) : activeDays30d.size;
+            const denom30 = Math.min(30, Math.max(activeDays30d.size, coveredSpan30));
+            dailyNerveAvg = Math.max(24, Math.round(nerveLast30d / denom30));
             dailyNerveSource = `30d rolling avg (${activeDays30d.size} active days)`;
         } else if (dailyMap.size >= 2 && totalNerve > 0 && !useV2LifetimeTotals) {
             dailyNerveAvg = Math.max(24, Math.round(totalNerve / dailyMap.size));
@@ -753,6 +934,7 @@
             st.failRate = st.attempts > 0 ? (st.failures / st.attempts) * 100 : 0;
             st.critFailRate = st.attempts > 0 ? (st.critFails / st.attempts) * 100 : 0;
             st.profitPerNerve = st.totalNerve > 0 ? (st.netProfit / st.totalNerve) : 0;
+            st.cashProfitPerNerve = st.totalNerve > 0 ? (st.cashOnlyProfit / st.totalNerve) : 0;
             if (!st.uniquesUnlockedCount) st.uniquesUnlockedCount = st.uniquesFound.size;
 
             // Recency-weighted nonlinear calibration (Log transitions + Torn API v2 lifetime integral calibration)
@@ -905,6 +1087,7 @@
             generatedAt: Date.now(),
             timeframe,
             crimeFilter,
+            useV2LifetimeTotals,
             kpis: {
                 totalNerve,
                 totalAttempts,
@@ -914,12 +1097,14 @@
                 successRate: totalAttempts > 0 ? (totalSuccesses / totalAttempts) * 100 : 0,
                 failRate: totalAttempts > 0 ? (totalFailures / totalAttempts) * 100 : 0,
                 critFailRate: totalAttempts > 0 ? (totalCritFails / totalAttempts) * 100 : 0,
-                currentStreak,
-                longestStreak,
-                crimeChain,
-                maxCrimeChain,
                 totalNetProfit,
+                totalCashGained,
+                totalCashLost,
+                totalItemsGainedVal,
+                totalItemsCount,
+                totalCashOnlyProfit: totalCashGained - (useV2LifetimeTotals ? 0 : totalCashLost),
                 avgProfitPerNerve: totalNerve > 0 ? (totalNetProfit / totalNerve) : 0,
+                avgCashPerNerve: totalNerve > 0 ? ((totalCashGained - (useV2LifetimeTotals ? 0 : totalCashLost)) / totalNerve) : 0,
                 dailyNerveAvg,
                 dailyNerveSource
             },
@@ -943,9 +1128,9 @@
         const totalAttacksWonPS = Number(snapshot?.personalstats?.attackswon || 0);
         const totalCrimesPS = Number(snapshot?.personalstats?.criminaloffenses || 0);
 
-        // Extract Level Up history from logs
+        // Extract real player Level Up history from logs (exclude Crime Skill 9005/9006 logs from legacy IDB caches)
         const levelUpLogs = allSortedLogs
-            .filter(l => l.kind === 'level_up')
+            .filter(l => (l.kind === 'level_up' || Number(l.log) === 5200) && !isCrimeSkillEvent(l))
             .map((l, idx) => ({
                 timestamp: l.timestamp,
                 levelReached: Number(l.data?.level || l.data?.new_level || 0) || null,
@@ -953,6 +1138,17 @@
                 idx
             }))
             .sort((a, b) => a.timestamp - b.timestamp);
+
+        // Index snapshot attacks by timestamp_ended for defender level lookup when log lacks defender_level
+        const attackLookupByTs = new Map();
+        const myId = Number(snapshot?.userId || 0);
+        if (snapshot?.attacks && typeof snapshot.attacks === 'object') {
+            for (const atk of Object.values(snapshot.attacks)) {
+                if (myId && atk.attacker_id && Number(atk.attacker_id) !== myId) continue;
+                const ts = Number(atk.timestamp_ended || atk.timestamp_started || 0);
+                if (ts > 0) attackLookupByTs.set(ts, atk);
+            }
+        }
 
         // Infer levelReached backwards from currentLevel if Torn log omits explicit level integer
         if (levelUpLogs.length > 0 && currentLevel > 1) {
@@ -969,7 +1165,7 @@
         for (let i = 1; i < levelUpLogs.length; i++) {
             const prev = levelUpLogs[i - 1];
             const curr = levelUpLogs[i];
-            const intervalMetrics = tallyXPInRange(allSortedLogs, prev.timestamp, curr.timestamp, prev.levelReached || Math.max(1, currentLevel - 1));
+            const intervalMetrics = tallyXPInRange(allSortedLogs, prev.timestamp, curr.timestamp, prev.levelReached || Math.max(1, currentLevel - 1), attackLookupByTs);
             const daysSpent = Math.max(0.1, (curr.timestamp - prev.timestamp) / 86400);
             historicalIntervals.push({
                 fromLevel: prev.levelReached || (curr.levelReached ? curr.levelReached - 1 : '?'),
@@ -990,7 +1186,7 @@
             : (latestLevelUp ? `Logged Level Up (${new Date(latestLevelUp.timestamp * 1000).toLocaleDateString()})` : 'Earliest Synced Data / HoF Heuristic');
 
         // Count XP actions since last level-up (logs + supplement with recent snapshot attacks if logs sparse)
-        const sinceMetrics = tallyXPInRange(allSortedLogs, effectiveStartTs, nowSec + 60, currentLevel);
+        const sinceMetrics = tallyXPInRange(allSortedLogs, effectiveStartTs, nowSec + 60, currentLevel, attackLookupByTs);
 
         // If user is on Limited Access (no full logs), supplement with snapshot recent attacks using exact respect-derived defender levels
         if (sinceMetrics.attacksTotal === 0 && snapshot?.attacks && Object.keys(snapshot.attacks).length > 0) {
@@ -1140,7 +1336,7 @@
         };
     }
 
-    function tallyXPInRange(sortedLogs, startTs, endTs, userLevel) {
+    function tallyXPInRange(sortedLogs, startTs, endTs, userLevel, attackLookupByTs = null) {
         let xpAttacks = 0;
         let xpCrimes = 0;
         let xpGym = 0;
@@ -1157,14 +1353,19 @@
             if (l.kind === 'attack') {
                 const outcome = detectAttackOutcomeFromLog(l);
                 if (outcome === 'non_win') continue;
-                const defLvl = Number(l.data?.defender_level || l.data?.target_level || userLevel || 50);
+                let defLvl = Number(l.data?.defender_level || l.data?.target_level || 0);
+                if (!defLvl && attackLookupByTs && attackLookupByTs.size > 0) {
+                    const matched = attackLookupByTs.get(l.timestamp) || attackLookupByTs.get(l.timestamp - 1) || attackLookupByTs.get(l.timestamp + 1) || attackLookupByTs.get(l.timestamp - 2) || attackLookupByTs.get(l.timestamp + 2);
+                    if (matched) defLvl = inferDefenderLevelFromAttack(matched, userLevel);
+                }
+                if (!defLvl) defLvl = Number(userLevel || 50);
                 const lvlScale = Math.max(0.35, Math.min(2.25, 0.45 + 0.55 * (defLvl / Math.max(1, userLevel || 50))));
                 if (outcome === 'leave') { leaves++; xpAttacks += 1.0 * lvlScale; }
                 else if (outcome === 'mug') { mugs++; xpAttacks += 0.57 * lvlScale; }
                 else if (outcome === 'hospitalize') { hosps++; xpAttacks += 0.40 * lvlScale; }
                 else if (outcome === 'assist') { xpAttacks += 0.25 * lvlScale; }
                 attacksTotal++;
-            } else if (l.kind === 'crime') {
+            } else if (l.kind === 'crime' && isCrimeAttemptLog(l)) {
                 const outcome = detectCrimeOutcome(l);
                 if (outcome === 'success') {
                     const nerve = Number(l.data?.nerve || 4);
@@ -1172,7 +1373,9 @@
                     xpCrimes += nerve * 0.042;
                 }
             } else if (l.kind === 'gym') {
-                const energy = Number(l.data?.energy_used || l.data?.energy || 10);
+                const lid = Number(l.log || 0);
+                const energy = Number(l.data?.energy_used || 0);
+                if (!GYM_TRAIN_LOG_IDS.has(lid) && energy <= 0) continue;
                 gymTrains++;
                 gymEnergy += energy;
                 xpGym += energy * 0.0045;
@@ -1225,7 +1428,6 @@
             const summary = {
                 updatedAt: Date.now(),
                 playerName: snapshot?.name || 'Operative',
-                isDemo: Boolean(snapshot?.source === 'demo'),
                 dailyNerveAvg: analytics.kpis.dailyNerveAvg,
                 kpis: {
                     totalNerve: analytics.kpis.totalNerve,
@@ -1233,9 +1435,9 @@
                     successRate: Number(analytics.kpis.successRate.toFixed(1)),
                     critFailRate: Number(analytics.kpis.critFailRate.toFixed(1)),
                     totalNetProfit: Math.round(analytics.kpis.totalNetProfit),
-                    avgProfitPerNerve: Math.round(analytics.kpis.avgProfitPerNerve),
-                    crimeChain: analytics.kpis.crimeChain,
-                    longestStreak: analytics.kpis.longestStreak
+                    totalCashGained: Math.round(analytics.kpis.totalCashGained || 0),
+                    totalItemsGainedVal: Math.round(analytics.kpis.totalItemsGainedVal || 0),
+                    avgProfitPerNerve: Math.round(analytics.kpis.avgProfitPerNerve)
                 },
                 crimes: compactCrimes,
                 topProfitCrime: analytics.recommendations.profit[0]?.key || null,
@@ -1272,163 +1474,6 @@
             };
             localStorage.setItem('factionos_crime_intel_summary_v1', JSON.stringify(summary));
         } catch (_) {}
-    }
-
-    // ── Realistic Preview Demo Dataset Generator ─────────────────────────────
-    function generateDemoDataset() {
-        const nowSec = Math.floor(Date.now() / 1000);
-        const demoSpecs = [
-            { key: 'search_for_cash', startCS: 94.0, endCS: 100.0, attempts: 145, cfRate: 0.008, failRate: 0.04, avgProfit: 2250, uniques: ['Subway Lucky Coin', 'Beach Metal Detector'] },
-            { key: 'bootlegging',     startCS: 82.0, endCS: 91.4,  attempts: 210, cfRate: 0.012, failRate: 0.06, avgProfit: 4100, uniques: ['Viral Bootleg Batch', 'Rare Film Master'] },
-            { key: 'graffiti',        startCS: 68.0, endCS: 76.2,  attempts: 135, cfRate: 0.015, failRate: 0.08, avgProfit: 3400, uniques: ['Downtown Masterpiece'] },
-            { key: 'shoplifting',     startCS: 54.0, endCS: 65.5,  attempts: 165, cfRate: 0.022, failRate: 0.09, avgProfit: 11200, uniques: ['Big Al Display Jacket', 'Sweet Shop Vault'] },
-            { key: 'pickpocketing',   startCS: 49.0, endCS: 62.8,  attempts: 195, cfRate: 0.026, failRate: 0.11, avgProfit: 18500, uniques: ['Businessman Rolex', 'Cyclist Stash'] },
-            { key: 'card_skimming',   startCS: 61.0, endCS: 72.1,  attempts: 150, cfRate: 0.014, failRate: 0.07, avgProfit: 16800, uniques: ['Bus Station Jackpot'] },
-            { key: 'burglary',        startCS: 64.0, endCS: 74.6,  attempts: 225, cfRate: 0.024, failRate: 0.10, avgProfit: 42500, uniques: ['Farmhouse Safe', 'Shipyard Crate', 'Printing Works Stash'] },
-            { key: 'hustling',        startCS: 38.0, endCS: 49.5,  attempts: 115, cfRate: 0.018, failRate: 0.12, avgProfit: 5600, uniques: ['High-Roller Shell Win'] },
-            { key: 'disposal',        startCS: 52.0, endCS: 63.2,  attempts: 130, cfRate: 0.021, failRate: 0.08, avgProfit: 54000, uniques: ['Abandoned Vehicle Bounty', 'Bio-Waste Payoff'] },
-            { key: 'cracking',        startCS: 55.0, endCS: 67.4,  attempts: 190, cfRate: 0.016, failRate: 0.07, avgProfit: 47200, uniques: ['Encrypted Offshore Wallet', 'Bank Brute-Force'] },
-            { key: 'forgery',         startCS: 31.0, endCS: 44.3,  attempts: 140, cfRate: 0.025, failRate: 0.11, avgProfit: 31400, uniques: ['Embassy Passport Run'] },
-            { key: 'scamming',        startCS: 19.0, endCS: 32.7,  attempts: 120, cfRate: 0.029, failRate: 0.14, avgProfit: 28900, uniques: ['Whale Investment Mark'] },
-            { key: 'arson',           startCS: 10.0, endCS: 21.4,  attempts: 95,  cfRate: 0.036, failRate: 0.15, avgProfit: 36000, uniques: ['Old Warehouse Insurance Job'] }
-        ];
-
-        // Deterministic PRNG so Demo mode renders smoothly & reproducibly
-        let seed = 421337;
-        const rand = () => {
-            seed = (seed * 1664525 + 1013904223) % 4294967296;
-            return seed / 4294967296;
-        };
-
-        const logs = [];
-        const skills = {};
-        const spanSec = 88 * 86400;
-
-        for (const sp of demoSpecs) {
-            const meta = CRIME_BY_KEY.get(sp.key);
-            skills[sp.key] = sp.endCS;
-            let cs = sp.startCS;
-            const totalCSDelta = sp.endCS - sp.startCS;
-
-            for (let i = 0; i < sp.attempts; i++) {
-                const frac = i / Math.max(1, sp.attempts - 1);
-                const ts = Math.floor(nowSec - spanSec + frac * spanSec + (rand() - 0.5) * 3600);
-                const roll = rand();
-                let outcome = 'success';
-                let title = 'Crime success';
-                let color = 'green';
-                let profit = Math.round(sp.avgProfit * (0.55 + rand() * 0.95));
-
-                if (roll < sp.cfRate) {
-                    outcome = 'critical_failure';
-                    title = 'Crime critical failure';
-                    color = 'red';
-                    profit = -Math.round(sp.avgProfit * 0.35);
-                    cs = Math.max(sp.startCS, cs - 0.42);
-                } else if (roll < sp.cfRate + sp.failRate) {
-                    outcome = 'failure';
-                    title = 'Crime failure';
-                    color = 'orange';
-                    profit = 0;
-                } else {
-                    const stepGain = (totalCSDelta / Math.max(1, sp.attempts * (1 - sp.failRate - sp.cfRate))) * (0.85 + rand() * 0.3);
-                    cs = Math.min(sp.endCS, cs + stepGain);
-                }
-
-                const uniqueHit = (i === Math.floor(sp.attempts * 0.35) && sp.uniques[0])
-                    ? sp.uniques[0]
-                    : (i === Math.floor(sp.attempts * 0.78) && sp.uniques[1] ? sp.uniques[1] : null);
-
-                logs.push({
-                    pk: `demo:c_${sp.key}_${i}`,
-                    userId: 'demo',
-                    timestamp: ts,
-                    log: outcome === 'success' ? 9010 : (outcome === 'failure' ? 9015 : 9005),
-                    title,
-                    category: 'Crimes',
-                    kind: 'crime',
-                    data: {
-                        crime: sp.key,
-                        crime_action: meta.keywords[0] || meta.name,
-                        nerve: meta.avgNerve,
-                        crime_skill: Number(cs.toFixed(2)),
-                        outcome_type: outcome,
-                        money_gained: profit > 0 ? Math.round(profit * 0.55) : 0,
-                        items_gained_value: profit > 0 ? Math.round(profit * 0.45) : 0,
-                        money_lost: profit < 0 ? Math.abs(profit) : 0,
-                        unique: uniqueHit || undefined
-                    },
-                    params: { color }
-                });
-            }
-        }
-
-        // Historical Level Ups (Level 60 -> 61 -> 62 -> 63) + Attacks + Gym Trains
-        const lvl61Ts = nowSec - 72 * 86400;
-        const lvl62Ts = nowSec - 43 * 86400;
-        const lvl63Ts = nowSec - 17 * 86400;
-        logs.push({ pk: 'demo:lvl61', userId: 'demo', timestamp: lvl61Ts, log: 5500, title: 'Level up', category: 'Level', kind: 'level_up', data: { level: 61 } });
-        logs.push({ pk: 'demo:lvl62', userId: 'demo', timestamp: lvl62Ts, log: 5500, title: 'Level up', category: 'Level', kind: 'level_up', data: { level: 62 } });
-        logs.push({ pk: 'demo:lvl63', userId: 'demo', timestamp: lvl63Ts, log: 5500, title: 'Level up', category: 'Level', kind: 'level_up', data: { level: 63 } });
-
-        // Generate ~1,400 attacks across the 88d window (leaves, mugs, hosps)
-        for (let a = 0; a < 1420; a++) {
-            const ts = Math.floor(nowSec - spanSec + (a / 1420) * spanSec);
-            const r = rand();
-            const res = r < 0.62 ? 'Leave' : (r < 0.80 ? 'Mug' : 'Hospitalize');
-            const defLvl = Math.round(52 + rand() * 34);
-            logs.push({
-                pk: `demo:atk_${a}`,
-                userId: 'demo',
-                timestamp: ts,
-                log: 8150,
-                title: `Attack ${res.toLowerCase()}`,
-                category: 'Attacking',
-                kind: 'attack',
-                data: { result: res, defender_level: defLvl }
-            });
-        }
-
-        // Generate gym sessions
-        for (let g = 0; g < 360; g++) {
-            const ts = Math.floor(nowSec - spanSec + (g / 360) * spanSec);
-            logs.push({
-                pk: `demo:gym_${g}`,
-                userId: 'demo',
-                timestamp: ts,
-                log: 5300,
-                title: 'Gym train',
-                category: 'Gym',
-                kind: 'gym',
-                data: { energy_used: 250 }
-            });
-        }
-
-        const snapshot = {
-            source: 'demo',
-            fetchedAt: Date.now(),
-            userId: 'demo',
-            name: 'Demo Operative (Preview)',
-            level: 63,
-            rank: 'Elite Hitman',
-            age: 942,
-            bars: { nerve: { current: 58, maximum: 75 }, energy: { current: 150, maximum: 150 } },
-            skills,
-            personalstats: {
-                attackswon: 4180,
-                criminaloffenses: 38420,
-                theft: 9420,
-                counterfeiting: 6180,
-                fraud: 5210,
-                vandalism: 10450,
-                illicitservices: 3120,
-                cybercrime: 4040
-            },
-            hof: { level: { value: 63, rank: 24810 } },
-            attacks: {}
-        };
-
-        return { logs, snapshot };
     }
 
     // ── Discord Markdown Share Generator & CSV/JSON Exporters ────────────────
@@ -1505,7 +1550,6 @@
         baselineLevelThresholdXP,
         projectCrimeSkillRange,
         computeAnalytics,
-        generateDemoDataset,
         buildDiscordMarkdownSummary,
         buildCsvExport
     };

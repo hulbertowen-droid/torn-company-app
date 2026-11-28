@@ -34,9 +34,9 @@
     <script src="/instant-nav.js?v=4.5.0" defer></script>
     <script src="/friday-helper.js?v=4.5.1" defer></script>
     <script src="/pwa-helper.js?v=1.3.0" defer></script>
-    <script src="/crimes-db.js?v=1.1.0" defer></script>
-    <script src="/crimes-engine.js?v=1.1.0" defer></script>
-    <script src="/crimes-app.js?v=1.1.0" defer></script>
+    <script src="/crimes-db.js?v=1.2.0" defer></script>
+    <script src="/crimes-engine.js?v=1.2.0" defer></script>
+    <script src="/crimes-app.js?v=1.2.0" defer></script>
 
     <style>
     /* ─── Crime & Level Analytics (torn.report Style + FactionOS Theme) ─── */
@@ -110,12 +110,6 @@
         background: rgba(239, 68, 68, 0.12);
         border-color: rgba(239, 68, 68, 0.42);
         color: #f87171;
-    }
-    .cr-btn.demo-active {
-        background: linear-gradient(135deg, #7c3aed, #2563eb);
-        border-color: #a78bfa;
-        color: #ffffff;
-        box-shadow: 0 2px 12px rgba(124, 58, 237, 0.35);
     }
 
     .cr-badge {
@@ -274,15 +268,15 @@
     }
     .cr-input.mono { font-family: var(--font-mono); }
 
-    /* 6-Card Hero KPI Strip */
-    .kpi-grid-6 {
+    /* 5-Card Hero KPI Strip */
+    .kpi-grid-5 {
         display: grid;
-        grid-template-columns: repeat(6, minmax(0, 1fr));
+        grid-template-columns: repeat(5, minmax(0, 1fr));
         gap: 8px;
         margin-bottom: 10px;
     }
-    @media (max-width: 1200px) { .kpi-grid-6 { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-    @media (max-width: 640px)  { .kpi-grid-6 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 1200px) { .kpi-grid-5 { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+    @media (max-width: 640px)  { .kpi-grid-5 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
     .kpi-box {
         background: var(--bg-surface);
         border: 1px solid var(--border-subtle);
@@ -735,38 +729,27 @@
                     <span id="active-player-chip" class="cr-badge cyan" style="font-size:11.5px;padding:3px 9px;">Loading Account...</span>
                 </div>
                 <div class="header-actions">
-                    <button type="button" class="cr-btn" id="btn-demo-toggle" onclick="toggleDemoMode()" title="Preview realistic Crimes 2.0 & Level telemetry without syncing logs">✨ Preview Demo Data</button>
                     <button type="button" class="cr-btn success" onclick="copyDiscordSummary()" title="Copy formatted Discord markdown summary of your crime ETAs and level progress">📋 Copy Discord Summary</button>
                     <button type="button" class="cr-btn" onclick="exportCrimeData('csv')" title="Export parsed crime stats to CSV">📥 CSV</button>
                     <button type="button" class="cr-btn" onclick="exportCrimeData('json')" title="Export complete crime & level-transition JSON">📥 JSON</button>
                 </div>
             </div>
 
-            <!-- Prominent Demo Mode Notice Banner (never confused with real user skills) -->
-            <div class="scope-banner" id="demo-active-banner" style="background:rgba(124,58,237,0.14);border-color:rgba(167,139,250,0.55);color:#e9d5ff;">
-                <div>
-                    <strong>✨ Preview Demo Data Active:</strong> Currently displaying <strong>simulated sample data (Level 63)</strong> — these are <em>not</em> your Torn account's skills. Sign in to FactionOS or exit Demo Preview to view your real Crime Skills &amp; telemetry.
-                </div>
-                <div style="display:flex;gap:6px;flex-wrap:wrap;">
-                    <button type="button" class="cr-btn primary" onclick="if(window.openAuthModal){window.openAuthModal();}else{toggleDemoMode(false);}">🔑 Sign In / Connect Key</button>
-                    <button type="button" class="cr-btn" onclick="toggleDemoMode(false)">✕ Exit Demo</button>
-                </div>
-            </div>
-
-            <!-- Client-Side IndexedDB Log Sync Control Bar -->
+            <!-- Client-Side & Vault-Backed Log Sync Control Bar -->
             <div class="sync-card" id="sync-control-bar">
                 <div class="sync-row">
                     <div class="sync-left">
                         <span id="key-scope-badge" class="cr-badge amber">Detecting Key Scope...</span>
-                        <div class="key-input-wrap" title="Full Access API key is stored strictly in this browser and sent directly to api.torn.com — never to FactionOS servers.">
+                        <div class="key-input-wrap" title="Full Access API key is saved in your browser (localStorage + IndexedDB) and encrypted in your FactionOS session vault so you never lose it.">
                             <span style="font-size:12px;">🔑</span>
-                            <input type="password" id="browser-full-key" placeholder="Full Access Key (Browser-Only)" autocomplete="off">
+                            <input type="password" id="browser-full-key" placeholder="Full Access Key (Auto-Saves)" autocomplete="off">
                             <button type="button" class="cr-btn" style="padding:2px 6px;font-size:11px;" onclick="toggleKeyMask()" id="btn-mask-key" title="Show/Hide key">👁️</button>
-                            <button type="button" class="cr-btn primary" style="padding:2px 8px;font-size:11px;" onclick="saveBrowserFullKey()">Verify</button>
+                            <button type="button" class="cr-btn primary" style="padding:2px 8px;font-size:11px;" onclick="saveBrowserFullKey()">Save &amp; Sync</button>
                         </div>
                         <select id="sync-scope-select" class="cr-select" title="Choose which Torn log streams to pull">
-                            <option value="all" selected>Full Logs (Crimes + Levels + Attacks + Gym)</option>
-                            <option value="crimes_only">Fast Mode (Crimes cat=136 + Level-Ups)</option>
+                            <option value="crimes_smart" selected>Smart Sync (Crimes + Level-Ups + Attacks + Gym)</option>
+                            <option value="crimes_only">Crimes Only (cat=136 + Level-Ups)</option>
+                            <option value="all">Unfiltered Log Feed (All Categories)</option>
                         </select>
                         <select id="sync-pages-select" class="cr-select" title="Pages per sync batch (100 logs per page)">
                             <option value="15">15 pages (~1.5k logs)</option>
@@ -795,11 +778,10 @@
             <!-- Graceful Limited Access / Sign-In Non-Blocking Banner -->
             <div class="scope-banner" id="limited-scope-banner">
                 <div id="limited-scope-text">
-                    <strong>🔐 Limited Access Mode Active:</strong> Loaded your <strong>exact Torn Crime Skills, lifetime Attempts, Nerve, Cash + Item Rewards, and Uniques</strong> via Torn API v2! Paste an optional <strong>Full Access</strong> key above (stored <em>strictly in your browser</em>) only if you want 7d/30d custom date filtering, daily nerve timeline spikes, and per-level transition histograms.
+                    <strong>🔐 Limited Access Mode Active:</strong> Loaded your <strong>exact Torn Crime Skills, lifetime Attempts, Nerve, Cash + Item Rewards, and Uniques</strong> via Torn API v2! Paste and save an optional <strong>Full Access</strong> key above if you want 7d/30d filtering, Daily Nerve timeline charts, and per-level histograms.
                 </div>
                 <div style="display:flex;gap:6px;flex-wrap:wrap;" id="limited-scope-actions">
                     <button type="button" class="cr-btn primary" id="btn-signin-cta" style="display:none;" onclick="if(window.openAuthModal){window.openAuthModal();}">🔑 Sign In with Torn</button>
-                    <button type="button" class="cr-btn" onclick="toggleDemoMode(true)">✨ Preview Demo</button>
                 </div>
             </div>
 
@@ -827,8 +809,8 @@
                 </div>
             </div>
 
-            <!-- 6-Card Hero KPI Strip -->
-            <div class="kpi-grid-6">
+            <!-- 5-Card Hero KPI Strip -->
+            <div class="kpi-grid-5">
                 <div class="kpi-box">
                     <div class="kpi-lbl">Total Nerve Spent</div>
                     <div class="kpi-val" id="kpi-nerve">0</div>
@@ -848,15 +830,10 @@
                         <div class="seg-cf" style="width:0%;"></div>
                     </div>
                 </div>
-                <div class="kpi-box">
-                    <div class="kpi-lbl">Crime Chain / Streak</div>
-                    <div class="kpi-val" id="kpi-streak" style="color:#38bdf8;">0</div>
-                    <div class="kpi-sub" id="kpi-streak-sub">Longest: 0 • Max Chain: 0</div>
-                </div>
-                <div class="kpi-box">
-                    <div class="kpi-lbl">Net Profit &amp; $/Nerve</div>
+                <div class="kpi-box" title="Cash stolen + current Torn Market Value of all crime item drops recorded by Torn API v2 (switch Cash Only in Analytics if preferred)">
+                    <div class="kpi-lbl" id="kpi-profit-lbl">Est. Loot Value &amp; $/N</div>
                     <div class="kpi-val" id="kpi-profit" style="color:#10b981;">$0</div>
-                    <div class="kpi-sub" id="kpi-profit-sub">Avg $0 / Nerve</div>
+                    <div class="kpi-sub" id="kpi-profit-sub">Cash $0 • Items $0</div>
                 </div>
                 <div class="kpi-box clickable" onclick="switchCrimeTab('level')" title="Open Regular In-Game Level Estimator">
                     <div class="kpi-lbl">Est. Level Progress ↗</div>
@@ -938,10 +915,13 @@
                     </div>
                     <div class="panel-card">
                         <div class="panel-head">
-                            <h2 class="panel-title">💵 Profit &amp; Efficiency</h2>
-                            <div class="pill-group">
+                            <h2 class="panel-title">💵 Value &amp; Efficiency</h2>
+                            <div class="pill-group" style="gap:6px;">
+                                <button type="button" class="tf-pill active" id="btn-val-all" onclick="setProfitValuationMode('all')" title="Cash gained + current Torn Market Value of stolen items">Cash + Items MV</button>
+                                <button type="button" class="tf-pill" id="btn-val-cash" onclick="setProfitValuationMode('cash')" title="Direct cash gained only (excludes item market value)">Cash Only</button>
+                                <span style="opacity:0.35;">|</span>
                                 <button type="button" class="tf-pill active" id="btn-prof-nerve" onclick="setProfitChartMode('per_nerve')">$/Nerve</button>
-                                <button type="button" class="tf-pill" id="btn-prof-total" onclick="setProfitChartMode('total')">Total Net $</button>
+                                <button type="button" class="tf-pill" id="btn-prof-total" onclick="setProfitChartMode('total')">Total $</button>
                             </div>
                         </div>
                         <div class="panel-body">
@@ -952,11 +932,17 @@
 
                 <div class="panel-card">
                     <div class="panel-head">
-                        <h2 class="panel-title">📅 Daily Nerve Spent &amp; Crit-Fail Spikes Timeline</h2>
+                        <h2 class="panel-title">📅 Daily Nerve Spent &amp; Crit-Fail Spikes Timeline <span style="font-size:11px;font-weight:500;color:var(--text-tertiary);">(TCT)</span></h2>
                         <span id="timeline-span-badge" class="cr-badge cyan">0 days</span>
                     </div>
                     <div class="panel-body">
-                        <div class="chart-box" style="height:260px;"><canvas id="chart-timeline"></canvas></div>
+                        <div class="chart-box" style="height:260px;">
+                            <canvas id="chart-timeline"></canvas>
+                            <div id="timeline-empty-note" style="display:none;position:absolute;inset:0;flex-direction:column;align-items:center;justify-content:center;gap:8px;text-align:center;background:rgba(13,17,23,0.78);border-radius:8px;padding:16px;">
+                                <div id="timeline-empty-msg" style="font-size:13px;color:var(--text-secondary);max-width:460px;"></div>
+                                <button type="button" class="cr-btn primary" id="btn-timeline-sync-cta" onclick="startLogSync('incremental')" style="display:none;">🔄 Sync Crime Logs Now</button>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -964,6 +950,7 @@
                     <div class="panel-card">
                         <div class="panel-head">
                             <h2 class="panel-title">🏅 10,000-Crime Category Merit Tracker</h2>
+                            <span class="cr-badge cyan">Lifetime Career</span>
                         </div>
                         <div class="panel-body">
                             <div class="merit-grid" id="merit-tracker-grid"></div>
@@ -1146,6 +1133,9 @@
 
                 <!-- Math Confidence Box -->
                 <div id="dd-math-box" style="font-size:12px;color:var(--text-secondary);background:rgba(56,189,248,0.07);border:1px solid rgba(56,189,248,0.25);border-radius:6px;padding:8px 11px;line-height:1.45;"></div>
+
+                <!-- Cash & Itemized Loot Breakdown Box -->
+                <div id="dd-loot-box" style="font-size:12px;color:var(--text-secondary);background:var(--bg-elevated);border:1px solid var(--border-subtle);border-radius:6px;padding:9px 11px;line-height:1.45;"></div>
 
                 <!-- Charts inside Modal -->
                 <div class="charts-grid-2">

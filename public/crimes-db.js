@@ -44,7 +44,9 @@
         return dbPromise;
     }
 
-    // ── Browser-Only Full Access Key Storage ─────────────────────────────────
+    // ── Browser-Only Full Access Key Storage (localStorage + IndexedDB mirror) ─
+    const DEVICE_KEY_META_ID = '__device_full_key__';
+
     function getBrowserFullKey() {
         try {
             const v = (localStorage.getItem(FULL_KEY_STORAGE) || '').trim();
@@ -54,49 +56,84 @@
     }
 
     function setBrowserFullKey(key) {
+        const clean = String(key || '').trim();
         try {
-            const clean = String(key || '').trim();
             if (!clean) localStorage.removeItem(FULL_KEY_STORAGE);
             else localStorage.setItem(FULL_KEY_STORAGE, clean);
         } catch (_) {}
+        openDB().then(db => {
+            const tx = db.transaction([META_STORE], 'readwrite');
+            const store = tx.objectStore(META_STORE);
+            if (!clean) store.delete(DEVICE_KEY_META_ID);
+            else store.put({ userId: DEVICE_KEY_META_ID, apiKey: clean, savedAt: Date.now() });
+        }).catch(() => {});
+    }
+
+    async function hydrateBrowserFullKey() {
+        const existing = getBrowserFullKey();
+        if (existing) return existing;
+        try {
+            const db = await openDB();
+            const rec = await new Promise((resolve) => {
+                const tx = db.transaction([META_STORE], 'readonly');
+                const req = tx.objectStore(META_STORE).get(DEVICE_KEY_META_ID);
+                req.onsuccess = () => resolve(req.result || null);
+                req.onerror = () => resolve(null);
+            });
+            const restored = String(rec?.apiKey || '').trim();
+            if (restored.length >= 16) {
+                try { localStorage.setItem(FULL_KEY_STORAGE, restored); } catch (_) {}
+                return restored;
+            }
+        } catch (_) {}
+        return '';
     }
 
     // ── Log Classification for IndexedDB Tagging ─────────────────────────────
+    const ATTACK_RECEIVE_IDS = new Set([8101, 8106, 8111, 8116, 8141, 8151, 8156, 8161, 8166, 8170, 8180]);
+    const GYM_TRAIN_IDS = new Set([5300, 5301, 5302, 5303]);
+
     function classifyRawLogKind(entry) {
         if (!entry || typeof entry !== 'object') return 'other';
-        const title = String(entry.title || '').toLowerCase();
-        const cat = String(entry.category || '').toLowerCase();
+        const title = String(entry.title || '').toLowerCase().trim();
+        const cat = String(entry.category || '').toLowerCase().trim();
         const logId = Number(entry.log || entry.id || 0);
 
-        if (title === 'level up' || title.includes('level up') || logId === 5500) {
+        // Distinguish player Level Up (log 5200 / category Level up) from Crime skill level up (log 9005/9006)
+        if (logId === 9005 || logId === 9006 || title.includes('crime skill level')) {
+            return 'crime_skill';
+        }
+        if (logId === 5200 || logId === 5500 || (title === 'level up' && !cat.includes('crime'))) {
             return 'level_up';
         }
         if (
             cat === 'crimes' ||
             cat.includes('crime') ||
             title.startsWith('crime ') ||
-            (logId >= 9000 && logId <= 9299) ||
+            (logId >= 9000 && logId <= 9399) ||
+            (logId >= 5700 && logId <= 5739) ||
             (entry.data && (entry.data.crime || entry.data.crime_action || entry.data.crime_skill !== undefined))
         ) {
             return 'crime';
         }
         if (
+            ATTACK_RECEIVE_IDS.has(logId) ||
+            title.includes('receive') ||
+            cat.includes('incoming')
+        ) {
+            return 'other';
+        }
+        if (
             cat === 'attacking' ||
-            cat.includes('attack') ||
+            cat === 'attacks outgoing' ||
             title.startsWith('attack ') ||
-            title.includes('attacked ') ||
-            title.includes('mugged ') ||
-            title.includes('hospitalized ') ||
-            title.includes('left ') ||
             (logId >= 8100 && logId <= 8299)
         ) {
             return 'attack';
         }
         if (
-            cat === 'gym' ||
-            title.startsWith('gym ') ||
-            title.includes('gym train') ||
-            (logId >= 5300 && logId <= 5399)
+            GYM_TRAIN_IDS.has(logId) ||
+            (cat === 'gym' && title.startsWith('gym train') && !title.includes('addict') && Number(entry.data?.energy_used || 0) > 0)
         ) {
             return 'gym';
         }
@@ -210,18 +247,33 @@
         const base = existingMeta || await getUserMeta(userId);
         let minTs = null;
         let maxTs = null;
+        let crimeMinTs = null;
+        let crimeMaxTs = null;
         let crimeLogs = 0;
         let attackLogs = 0;
         let levelLogs = 0;
         let gymLogs = 0;
 
         for (const l of logs) {
+            // Dynamically re-classify in case cached rows predated classifier fixes
+            const kind = classifyRawLogKind(l);
             if (minTs === null || l.timestamp < minTs) minTs = l.timestamp;
             if (maxTs === null || l.timestamp > maxTs) maxTs = l.timestamp;
-            if (l.kind === 'crime') crimeLogs++;
-            else if (l.kind === 'attack') attackLogs++;
-            else if (l.kind === 'level_up') levelLogs++;
-            else if (l.kind === 'gym') gymLogs++;
+            if (kind === 'crime') {
+                // Exclude non-attempt setup/migration rows from displayed crime count when clearly non-attempt
+                const d = l.data || {};
+                const lid = Number(l.log || 0);
+                if (d.nerve !== undefined || (lid >= 9010 && lid <= 9199) || (lid >= 5700 && lid <= 5739)) {
+                    crimeLogs++;
+                }
+                if (crimeMinTs === null || l.timestamp < crimeMinTs) crimeMinTs = l.timestamp;
+                if (crimeMaxTs === null || l.timestamp > crimeMaxTs) crimeMaxTs = l.timestamp;
+            } else if (kind === 'crime_skill') {
+                if (crimeMinTs === null || l.timestamp < crimeMinTs) crimeMinTs = l.timestamp;
+                if (crimeMaxTs === null || l.timestamp > crimeMaxTs) crimeMaxTs = l.timestamp;
+            } else if (kind === 'attack') attackLogs++;
+            else if (kind === 'level_up') levelLogs++;
+            else if (kind === 'gym') gymLogs++;
         }
 
         const updated = {
@@ -229,6 +281,8 @@
             userId: String(userId),
             minTs,
             maxTs,
+            crimeMinTs,
+            crimeMaxTs,
             totalLogs: logs.length,
             crimeLogs,
             attackLogs,
@@ -392,6 +446,7 @@
                 }
                 const cashRewards = Number(c.rewards?.money || 0);
                 let itemRewardsValue = 0;
+                let itemsTotalQty = 0;
                 const rewardItemsScored = [];
                 for (const it of (c.rewards?.items || [])) {
                     const idStr = String(it.id || '');
@@ -399,11 +454,13 @@
                     const unitVal = Number(itemPrices[idStr] || 0);
                     const totalVal = amt * unitVal;
                     itemRewardsValue += totalVal;
+                    itemsTotalQty += amt;
                     if (amt > 0) {
                         rewardItemsScored.push({
                             id: Number(it.id),
                             name: itemNames[idStr] || `Item #${idStr}`,
                             amount: amt,
+                            unitValue: Math.round(unitVal),
                             totalValue: Math.round(totalVal)
                         });
                     }
@@ -435,8 +492,9 @@
                     },
                     cashRewards,
                     itemRewardsValue: Math.round(itemRewardsValue),
+                    itemsTotalQty,
                     rawRewardItems: c.rewards?.items || [],
-                    topItems: rewardItemsScored.slice(0, 5),
+                    topItems: rewardItemsScored.slice(0, 15),
                     uniquesCount: uniquesRaw.length,
                     uniquesList: uniquesFormatted,
                     misc: c.miscellaneous || null
@@ -529,11 +587,46 @@
             }
         }
 
+        async fetchLogPage({ apiKey, useSessionProxy = false, cat = '', logType = '', toTs = null, fromTs = null }) {
+            if (apiKey) {
+                const params = new URLSearchParams({ selections: 'log' });
+                if (cat) params.set('cat', String(cat));
+                if (logType) params.set('log', String(logType));
+                if (toTs) params.set('to', String(toTs));
+                if (fromTs) params.set('from', String(fromTs));
+                return fetchTornDirect(`user/?${params.toString()}`, apiKey, 3);
+            }
+            if (!useSessionProxy) {
+                throw new Error('No Full Access API key configured.');
+            }
+            const params = new URLSearchParams();
+            if (cat) params.set('cat', String(cat));
+            if (logType) params.set('log', String(logType));
+            if (toTs) params.set('to', String(toTs));
+            if (fromTs) params.set('from', String(fromTs));
+            let backoff = 2200;
+            for (let attempt = 0; attempt <= 3; attempt++) {
+                const resp = await fetch(`/api/crimes/logs?${params.toString()}`);
+                const data = await resp.json().catch(() => ({}));
+                if (resp.ok && data && !data.error) return data;
+                const code = Number(data?.tornCode || 0);
+                if ((resp.status === 429 || [5, 8, 9, 17].includes(code)) && attempt < 3) {
+                    await sleep(code === 5 ? Math.max(backoff, 3500) : backoff);
+                    backoff *= 1.8;
+                    continue;
+                }
+                const err = new Error(data?.error || `Log sync HTTP ${resp.status}`);
+                err.tornCode = code;
+                throw err;
+            }
+            throw new Error('Session log sync failed after retries.');
+        }
+
         /**
          * mode: 'incremental' (fetch newest down to maxTs) | 'backfill' (walk older before minTs)
-         * scope: 'all' (full log feed: crimes+levels+attacks+gym) | 'crimes_only' (cat=136 fast crime-only)
+         * scope: 'crimes_smart' (cat=136 + LevelUps + Attacks + Gym) | 'crimes_only' (cat=136 + LevelUps) | 'all' (unfiltered feed)
          */
-        async run({ apiKey, userId, mode = 'incremental', scope = 'all', maxPages = 30 }) {
+        async run({ apiKey = '', useSessionProxy = false, userId, mode = 'incremental', scope = 'crimes_smart', maxPages = 30 }) {
             if (this.isRunning) return null;
             this.isRunning = true;
             this.isPaused = false;
@@ -541,9 +634,14 @@
 
             const uid = String(userId);
             const meta = await getUserMeta(uid);
-            const catQuery = scope === 'crimes_only' ? '&cat=136' : '';
-            let cursorTo = mode === 'backfill' && meta.minTs ? (meta.minTs - 1) : Math.floor(Date.now() / 1000);
-            const stopAtFrom = mode === 'incremental' && meta.maxTs ? (meta.maxTs + 1) : null;
+            const isAllFeed = scope === 'all';
+            const crimeStreamCat = isAllFeed ? '' : '136';
+
+            const refMin = isAllFeed ? meta.minTs : (meta.crimeMinTs ?? meta.minTs);
+            const refMax = isAllFeed ? meta.maxTs : (meta.crimeMaxTs ?? null);
+
+            let cursorTo = mode === 'backfill' && refMin ? (refMin - 1) : Math.floor(Date.now() / 1000);
+            const stopAtFrom = mode === 'incremental' && refMax ? (refMax + 1) : null;
 
             let pagesFetched = 0;
             let totalAdded = 0;
@@ -556,8 +654,8 @@
                 maxPages,
                 totalAdded: 0,
                 message: mode === 'backfill'
-                    ? 'Walking backward through older Torn logs...'
-                    : 'Checking Torn for new logs since last sync...'
+                    ? `Walking backward through older Torn ${isAllFeed ? 'activity' : 'crime'} logs...`
+                    : `Syncing latest Torn ${isAllFeed ? 'activity' : 'crime'} logs...`
             });
 
             try {
@@ -565,12 +663,13 @@
                     await this.waitIfPaused();
                     if (this.abortFlag) break;
 
-                    let q = `user/?selections=log${catQuery}&to=${cursorTo}`;
-                    if (stopAtFrom && mode === 'incremental') {
-                        q += `&from=${stopAtFrom}`;
-                    }
-
-                    const data = await fetchTornDirect(q, apiKey, 3);
+                    const data = await this.fetchLogPage({
+                        apiKey,
+                        useSessionProxy,
+                        cat: crimeStreamCat,
+                        toTs: cursorTo,
+                        fromTs: (stopAtFrom && mode === 'incremental') ? stopAtFrom : null
+                    });
                     const logMap = data.log || {};
                     const keys = Object.keys(logMap);
                     pagesFetched++;
@@ -586,10 +685,12 @@
 
                     if (res.minTs !== null) {
                         if (meta.minTs === null || res.minTs < meta.minTs) meta.minTs = res.minTs;
+                        if (!isAllFeed && (meta.crimeMinTs === null || res.minTs < meta.crimeMinTs)) meta.crimeMinTs = res.minTs;
                         cursorTo = res.minTs - 1;
                     }
                     if (res.maxTs !== null) {
                         if (meta.maxTs === null || res.maxTs > meta.maxTs) meta.maxTs = res.maxTs;
+                        if (!isAllFeed && (meta.crimeMaxTs === null || res.maxTs > meta.crimeMaxTs)) meta.crimeMaxTs = res.maxTs;
                     }
 
                     this.onProgress({
@@ -617,16 +718,22 @@
                     await sleep(this.throttleMs);
                 }
 
-                // When running fast crimes_only mode, also make 1 tiny call for Level Up (log=5500) history!
-                if (!this.abortFlag && scope === 'crimes_only') {
-                    try {
-                        await sleep(this.throttleMs);
-                        const lvlData = await fetchTornDirect('user/?selections=log&log=5500', apiKey, 2);
-                        if (lvlData && lvlData.log && Object.keys(lvlData.log).length > 0) {
-                            const lvRes = await saveLogsBatch(uid, lvlData.log);
-                            totalAdded += lvRes.added;
-                        }
-                    } catch (_) {}
+                // When running targeted crime modes, also pull canonical Level Ups (cat=123), and in Smart mode recent Outgoing Attacks (cat=181) & Gym (cat=125)
+                if (!this.abortFlag && !isAllFeed) {
+                    const auxStreams = scope === 'crimes_smart'
+                        ? [{ cat: '123', label: 'Level-Up' }, { cat: '181', label: 'Attacks' }, { cat: '125', label: 'Gym' }]
+                        : [{ cat: '123', label: 'Level-Up' }];
+                    for (const aux of auxStreams) {
+                        if (this.abortFlag) break;
+                        try {
+                            await sleep(this.throttleMs);
+                            const auxData = await this.fetchLogPage({ apiKey, useSessionProxy, cat: aux.cat });
+                            if (auxData && auxData.log && Object.keys(auxData.log).length > 0) {
+                                const auxRes = await saveLogsBatch(uid, auxData.log);
+                                totalAdded += auxRes.added;
+                            }
+                        } catch (_) {}
+                    }
                 }
 
                 meta.lastSyncTs = Math.floor(Date.now() / 1000);
@@ -641,7 +748,7 @@
                     meta: finalState.meta,
                     message: this.abortFlag
                         ? `Sync stopped (${totalAdded.toLocaleString()} logs saved).`
-                        : `Sync complete • ${finalState.meta.totalLogs.toLocaleString()} total logs cached locally.`
+                        : `Sync complete • ${(finalState.meta.crimeLogs || 0).toLocaleString()} crime logs (${finalState.meta.totalLogs.toLocaleString()} total cached).`
                 });
                 return finalState;
             } catch (err) {
@@ -668,6 +775,7 @@
         openDB,
         getBrowserFullKey,
         setBrowserFullKey,
+        hydrateBrowserFullKey,
         classifyRawLogKind,
         saveLogsBatch,
         getUserLogs,
