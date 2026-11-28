@@ -11999,20 +11999,32 @@ function extractVerifiedCitations(rawReply, candidateSources = []) {
     const raw = String(rawReply || '');
     const markerRx = /\n?\s*\[{1,2}\s*SOURCES_USED\s*:\s*([^\]]+?)\s*\]{1,2}\s*$/i;
     const match = raw.match(markerRx);
-    const cleanReply = raw.replace(/\n?\s*\[{1,2}\s*SOURCES_USED\s*:[^\]]*\]{1,2}\s*/gi, '').trim();
 
-    if (!match || !Array.isArray(candidateSources) || candidateSources.length === 0) {
+    // Strip [[SOURCES_USED: ...]] AND inline [SRC-1] / [SRC-1, SRC-2] bracket tags so user-facing prose is clean
+    const cleanReply = raw
+        .replace(/\n?\s*\[{1,2}\s*SOURCES_USED\s*:[^\]]*\]{1,2}\s*/gi, '')
+        .replace(/\s*\[\s*SRC-\d+(?:\s*,\s*SRC-\d+)*\s*\]/gi, '')
+        .replace(/ +([.,;:!?])/g, '$1')
+        .trim();
+
+    if (!Array.isArray(candidateSources) || candidateSources.length === 0) {
         return { reply: cleanReply, sources: [] };
     }
 
-    const tokenList = match[1].trim();
-    if (/^(?:none|n\/a|null|empty|0)$/i.test(tokenList)) {
+    const tokenList = match ? match[1].trim() : '';
+    if (tokenList && /^(?:none|n\/a|null|empty|0)$/i.test(tokenList)) {
         return { reply: cleanReply, sources: [] };
     }
 
-    const citedIds = new Set(
-        (tokenList.match(/SRC-\d+/gi) || []).map(id => id.toUpperCase())
-    );
+    const citedIds = new Set();
+    if (tokenList) {
+        for (const id of (tokenList.match(/SRC-\d+/gi) || [])) citedIds.add(id.toUpperCase());
+    } else {
+        // Fallback: collect inline [SRC-k] markers only if the model actually referenced them in prose
+        for (const m of raw.matchAll(/\[\s*(SRC-\d+(?:\s*,\s*SRC-\d+)*)\s*\]/gi)) {
+            for (const id of (m[1].match(/SRC-\d+/gi) || [])) citedIds.add(id.toUpperCase());
+        }
+    }
     if (citedIds.size === 0) {
         return { reply: cleanReply, sources: [] };
     }
