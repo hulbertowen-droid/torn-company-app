@@ -13535,18 +13535,34 @@ app.get('/api/crimes/snapshot', async (req, res) => {
             userSels.includes('log') ||
             ki.selections?.log === 1;
 
-        // Layer 3: Fetch Torn API v2 per-crime lifetime telemetry (/v2/user/{1..13}/crimes) when key has Limited+ scope
+        // Layer 3: Fetch Torn API v2 per-crime lifetime telemetry (/v2/user/{1..13}/crimes) in paced batches of 4 to avoid Torn Error #5 burst limits
         let v2Crimes = null;
         if (accessLevel >= 3 || Object.keys(skills).length > 0) {
-            const perCrimeRaw = await Promise.all(
-                CRIMES_V2_META.map(([cid, slug]) =>
-                    cachedTornFetch(
-                        `https://api.torn.com/v2/user/${cid}/crimes?key=${encodeURIComponent(userKey)}`,
-                        `crimes_v2c_${kHash}_${cid}`,
-                        30000
-                    ).then(d => [slug, d?.crimes || null]).catch(() => [slug, null])
-                )
-            );
+            const sleepMs = (ms) => new Promise(r => setTimeout(r, ms));
+            const perCrimeRaw = [];
+            for (let i = 0; i < CRIMES_V2_META.length; i += 4) {
+                const batch = CRIMES_V2_META.slice(i, i + 4);
+                const batchRes = await Promise.all(
+                    batch.map(async ([cid, slug]) => {
+                        let d = await cachedTornFetch(
+                            `https://api.torn.com/v2/user/${cid}/crimes?key=${encodeURIComponent(userKey)}`,
+                            `crimes_v2c_${kHash}_${cid}`,
+                            45000
+                        ).catch(() => null);
+                        if (d?.error?.code === 5) {
+                            await sleepMs(1600);
+                            d = await cachedTornFetch(
+                                `https://api.torn.com/v2/user/${cid}/crimes?key=${encodeURIComponent(userKey)}`,
+                                `crimes_v2c_${kHash}_${cid}`,
+                                45000
+                            ).catch(() => null);
+                        }
+                        return [slug, d?.crimes || null];
+                    })
+                );
+                perCrimeRaw.push(...batchRes);
+                if (i + 4 < CRIMES_V2_META.length) await sleepMs(220);
+            }
             const built = {};
             let anyV2 = false;
             for (const [slug, c] of perCrimeRaw) {

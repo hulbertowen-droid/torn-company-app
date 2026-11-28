@@ -426,16 +426,22 @@
         const ps = profile.personalstats || {};
         const skills = normalizeSkillsPayload(skillsData, v2SkillsData, ps);
 
-        // Fetch Torn v2 per-crime lifetime telemetry (/v2/user/{1..13}/crimes) directly in browser
+        // Fetch Torn v2 per-crime lifetime telemetry (/v2/user/{1..13}/crimes) in paced batches of 4 to avoid Torn Error #5 bursts
         let v2Crimes = null;
         try {
-            const perCrimeRaw = await Promise.all(
-                V2_CRIME_ID_MAP.map(([cid, slug]) =>
-                    fetchTornDirect(`v2/user/${cid}/crimes`, apiKey, 1)
-                        .then(d => [slug, d?.crimes || null])
-                        .catch(() => [slug, null])
-                )
-            );
+            const perCrimeRaw = [];
+            for (let i = 0; i < V2_CRIME_ID_MAP.length; i += 4) {
+                const batch = V2_CRIME_ID_MAP.slice(i, i + 4);
+                const batchRes = await Promise.all(
+                    batch.map(([cid, slug]) =>
+                        fetchTornDirect(`v2/user/${cid}/crimes`, apiKey, 2)
+                            .then(d => [slug, d?.crimes || null])
+                            .catch(() => [slug, null])
+                    )
+                );
+                perCrimeRaw.push(...batchRes);
+                if (i + 4 < V2_CRIME_ID_MAP.length) await sleep(240);
+            }
             const built = {};
             let anyV2 = false;
             for (const [slug, c] of perCrimeRaw) {
