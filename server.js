@@ -472,12 +472,17 @@ async function loadConfigFromMongo() {
             if (saved.ocConfig) {
                 const { ocDm: savedOcDm, ...savedOcBase } = saved.ocConfig;
                 ocConfig = { ...ocConfig, ...savedOcBase };
-                if (savedOcDm && typeof savedOcDm === 'object') {
+                if (discordConfig.ocDm && typeof discordConfig.ocDm === 'object') {
+                    ocConfig.ocDm = discordConfig.ocDm;
+                } else if (savedOcDm && typeof savedOcDm === 'object') {
                     ocConfig.ocDm = savedOcDm;
                 } else {
                     delete ocConfig.ocDm;
                 }
-                ocConfig.ocDm = ocDmEngineModule.mergeOcDmConfig(ocConfig, null);
+                ocConfig.ocDm = ocDmEngineModule.mergeOcDmConfig(ocConfig, discordConfig.ocDm || null);
+                saveOcConfig();
+            } else if (discordConfig.ocDm && typeof discordConfig.ocDm === 'object') {
+                ocConfig.ocDm = ocDmEngineModule.mergeOcDmConfig(ocConfig, discordConfig.ocDm);
                 saveOcConfig();
             }
             if (saved.ocDmState && typeof ocDmEngine !== 'undefined') {
@@ -1455,7 +1460,7 @@ for (const chan of activeConversationChannels) {
 }
 try { if (fs.existsSync('market_config.json')) marketConfig = { ...marketConfig, ...JSON.parse(fs.readFileSync('market_config.json')) }; } catch(e) {}
 try { if (fs.existsSync('oc_config.json')) ocConfig = { ...ocConfig, ...JSON.parse(fs.readFileSync('oc_config.json')) }; } catch(e) {}
-ocConfig.ocDm = ocDmEngineModule.mergeOcDmConfig(ocConfig, null);
+ocConfig.ocDm = ocDmEngineModule.mergeOcDmConfig(ocConfig, (discordConfig.ocDm && typeof discordConfig.ocDm === 'object') ? discordConfig.ocDm : null);
 try { fs.writeFileSync('oc_config.json', JSON.stringify(ocConfig)); } catch(e) {}
 
 try {
@@ -7926,8 +7931,14 @@ app.post('/api/discord/oc-dm-test', async (req, res) => {
         const playerId = String(req.userSession?.playerId || '3776908');
         let resolvedDiscordId = String(targetDiscordId || '').replace(/[^0-9]/g, '');
         if (!resolvedDiscordId) {
-            const look = await ocDmEngine.resolveMemberDiscord(playerId, playerName, { allowTornApiFallback: true });
-            resolvedDiscordId = look.discordId || String(discordConfig.personalDiscordId || '').replace(/[^0-9]/g, '');
+            if (discordConfig.personalDiscordId && /^\d{15,22}$/.test(String(discordConfig.personalDiscordId).trim())) {
+                resolvedDiscordId = String(discordConfig.personalDiscordId).trim();
+            } else if (req.userSession?.discordUserId && /^\d{15,22}$/.test(String(req.userSession.discordUserId).trim())) {
+                resolvedDiscordId = String(req.userSession.discordUserId).trim();
+            } else {
+                const look = await ocDmEngine.resolveMemberDiscord(playerId, playerName, { allowTornApiFallback: true });
+                resolvedDiscordId = look.discordId || '';
+            }
         }
         if (!resolvedDiscordId || resolvedDiscordId.length < 15) {
             return res.status(400).json({
@@ -23905,23 +23916,25 @@ async function checkFactionOrganizedCrimes() {
 
                 await sendChannelMessage(botToken, channelId, embed4h, pingText).catch(() => {});
 
-                // DM each participant individually via OC DM Engine (logs receipt + handles closed DMs)
-                for (const p of participantDiscordData) {
-                    const readyText = crime.time_ready ? `<t:${crime.time_ready}:F> (<t:${crime.time_ready}:R>)` : 'in ~4 hours';
-                    await ocDmEngine.dispatchTrackedOcDm({
-                        tornId: p.id,
-                        playerName: p.name,
-                        explicitDiscordId: p.discordId,
-                        triggerType: 'countdown_4h_dm',
-                        triggerLabel: 'OC 4-Hour Countdown',
-                        context: `${crime.crime_name} • Ready ${crime.time_ready ? `<t:${crime.time_ready}:R>` : 'in ~4h'}`,
-                        messageText: `Hello **${p.name}**, your Organized Crime **${crime.crime_name}** is scheduled to become ready ${readyText}!\n\nPlease remain in Torn City, avoid traveling overseas, and stay out of hospital.\n👉 Manage OC: https://www.torn.com/factions.php?step=your#/tab=crimes`,
-                        embedTitle: `⏰ 4-Hour OC Reminder: ${crime.crime_name}`,
-                        embedColor: UI.COLORS.INFO,
-                        cooldownMs: 4 * 3600000,
-                        allowFallbackPing: false,
-                        source: 'oc_countdown'
-                    }).catch(() => {});
+                // DM each participant individually only when OC Personal DM Automations are enabled
+                if (ocDmEngine.getConfig()?.enabled) {
+                    for (const p of participantDiscordData) {
+                        const readyText = crime.time_ready ? `<t:${crime.time_ready}:F> (<t:${crime.time_ready}:R>)` : 'in ~4 hours';
+                        await ocDmEngine.dispatchTrackedOcDm({
+                            tornId: p.id,
+                            playerName: p.name,
+                            explicitDiscordId: p.discordId,
+                            triggerType: 'countdown_4h_dm',
+                            triggerLabel: 'OC 4-Hour Countdown',
+                            context: `${crime.crime_name} • Ready ${crime.time_ready ? `<t:${crime.time_ready}:R>` : 'in ~4h'}`,
+                            messageText: `Hello **${p.name}**, your Organized Crime **${crime.crime_name}** is scheduled to become ready ${readyText}!\n\nPlease remain in Torn City, avoid traveling overseas, and stay out of hospital.\n👉 Manage OC: https://www.torn.com/factions.php?step=your#/tab=crimes`,
+                            embedTitle: `⏰ 4-Hour OC Reminder: ${crime.crime_name}`,
+                            embedColor: UI.COLORS.INFO,
+                            cooldownMs: 4 * 3600000,
+                            allowFallbackPing: false,
+                            source: 'oc_countdown'
+                        }).catch(() => {});
+                    }
                 }
             } else if (crime.initiated === 0 && timeLeft <= 7200 && !tracker.countdown4h) {
                 tracker.countdown4h = true;
@@ -23975,23 +23988,25 @@ async function checkFactionOrganizedCrimes() {
 
                 await sendChannelMessage(botToken, channelId, embed2h, pingText).catch(() => {});
 
-                // DM each participant individually via OC DM Engine (logs receipt + handles closed DMs)
-                for (const p of participantDiscordData) {
-                    const readyText = crime.time_ready ? `<t:${crime.time_ready}:F> (<t:${crime.time_ready}:R>)` : 'in ~2 hours';
-                    await ocDmEngine.dispatchTrackedOcDm({
-                        tornId: p.id,
-                        playerName: p.name,
-                        explicitDiscordId: p.discordId,
-                        triggerType: 'countdown_2h_dm',
-                        triggerLabel: 'OC 2-Hour Countdown',
-                        context: `${crime.crime_name} • Launch ${crime.time_ready ? `<t:${crime.time_ready}:R>` : 'in ~2h'}`,
-                        messageText: `Hello **${p.name}**, your Organized Crime **${crime.crime_name}** launches ${readyText}!\n\n🚨 **Do not leave Torn City or take flights**, and stay out of hospital. Your crew needs you at launch!\n👉 Manage OC: https://www.torn.com/factions.php?step=your#/tab=crimes`,
-                        embedTitle: `🚨 Final 2-Hour OC Alert: ${crime.crime_name}`,
-                        embedColor: UI.COLORS.WARNING,
-                        cooldownMs: 2 * 3600000,
-                        allowFallbackPing: false,
-                        source: 'oc_countdown'
-                    }).catch(() => {});
+                // DM each participant individually only when OC Personal DM Automations are enabled
+                if (ocDmEngine.getConfig()?.enabled) {
+                    for (const p of participantDiscordData) {
+                        const readyText = crime.time_ready ? `<t:${crime.time_ready}:F> (<t:${crime.time_ready}:R>)` : 'in ~2 hours';
+                        await ocDmEngine.dispatchTrackedOcDm({
+                            tornId: p.id,
+                            playerName: p.name,
+                            explicitDiscordId: p.discordId,
+                            triggerType: 'countdown_2h_dm',
+                            triggerLabel: 'OC 2-Hour Countdown',
+                            context: `${crime.crime_name} • Launch ${crime.time_ready ? `<t:${crime.time_ready}:R>` : 'in ~2h'}`,
+                            messageText: `Hello **${p.name}**, your Organized Crime **${crime.crime_name}** launches ${readyText}!\n\n🚨 **Do not leave Torn City or take flights**, and stay out of hospital. Your crew needs you at launch!\n👉 Manage OC: https://www.torn.com/factions.php?step=your#/tab=crimes`,
+                            embedTitle: `🚨 Final 2-Hour OC Alert: ${crime.crime_name}`,
+                            embedColor: UI.COLORS.WARNING,
+                            cooldownMs: 2 * 3600000,
+                            allowFallbackPing: false,
+                            source: 'oc_countdown'
+                        }).catch(() => {});
+                    }
                 }
             } else if (crime.initiated === 0 && timeLeft <= upcomingSec && !tracker.countdown2h) {
                 tracker.countdown2h = true;
@@ -24180,8 +24195,10 @@ async function checkFactionOrganizedCrimes() {
                         historyChanged = true;
                     }
 
-                    // Trigger 6: Legacy Missing Required Items Check (skipped when OC DM Engine handles missing_item_dm)
-                    if (!dmTickResult.handledMissingItems && ocConfig.alertMissingItems !== false && slot.item_requirement && !slot.item_requirement.is_available) {
+                    // Trigger 6: Legacy Missing Required Items Check (skipped when OC DM Engine owns or disabled missing_item_dm)
+                    const liveOcDmCfg = ocDmEngine.getConfig();
+                    const skipLegacyMissing = dmTickResult.handledMissingItems || liveOcDmCfg?.triggers?.missing_item_dm?.mode === 'off';
+                    if (!skipLegacyMissing && ocConfig.alertMissingItems !== false && slot.item_requirement && !slot.item_requirement.is_available) {
                         const itemId = slot.item_requirement.id;
                         const itemInfo = await getTornItemInfo(itemId, apiKey);
                         const itemName = itemInfo.name || `Item #${itemId}`;
@@ -24204,8 +24221,9 @@ async function checkFactionOrganizedCrimes() {
                         }
                     }
 
-                    // Trigger 7: Legacy Low CPR Alert (skipped when OC DM Engine handles low_cpr_dm)
-                    if (!dmTickResult.handledLowCpr && ocConfig.alertLowCpr !== false && slot.checkpoint_pass_rate !== undefined && slot.checkpoint_pass_rate !== null) {
+                    // Trigger 7: Legacy Low CPR Alert (skipped when OC DM Engine owns or disabled low_cpr_dm)
+                    const skipLegacyLowCpr = dmTickResult.handledLowCpr || liveOcDmCfg?.triggers?.low_cpr_dm?.mode === 'off';
+                    if (!skipLegacyLowCpr && ocConfig.alertLowCpr !== false && slot.checkpoint_pass_rate !== undefined && slot.checkpoint_pass_rate !== null) {
                         const passRate = Number(slot.checkpoint_pass_rate);
                         if (passRate < minCpr) {
                             const trackingId = `lowcpr_${v2Crime.id}_${pId}`;
@@ -24234,8 +24252,8 @@ async function checkFactionOrganizedCrimes() {
                                 };
                                 await sendChannelMessage(botToken, channelId, lowCprEmbed, channelMention).catch(() => {});
 
-                                // 1. Direct Message the Player who joined with Low CPR
-                                if (ocConfig.dmPlayerOnLowCpr !== false && playerDiscordId) {
+                                // 1. Direct Message the Player who joined with Low CPR (only if OC DM Automations enabled)
+                                if (liveOcDmCfg?.enabled && ocConfig.dmPlayerOnLowCpr !== false && playerDiscordId) {
                                     const playerDmEmbed = {
                                         title: `⚠️ Organized Crime Notice: Low CPR Rating`,
                                         description: `Hello **${pName}**,\n\n` +
@@ -24290,9 +24308,10 @@ async function checkFactionOrganizedCrimes() {
             }
         }
 
-        // ── TRIGGER 8: Legacy No OC Participation (uses data.members; skipped when OC DM Engine handles inactive_oc_dm) ──────────
+        // ── TRIGGER 8: Legacy No OC Participation (uses data.members; skipped when OC DM Engine owns or disabled inactive_oc_dm) ──────────
         const factionMembersMap = data.members || {};
-        if (!dmTickResult.handledInactive && ocConfig.alertNoParticipation !== false && Object.keys(factionMembersMap).length > 0) {
+        const skipLegacyInactive = dmTickResult.handledInactive || ocDmEngine.getConfig()?.triggers?.inactive_oc_dm?.mode === 'off';
+        if (!skipLegacyInactive && ocConfig.alertNoParticipation !== false && Object.keys(factionMembersMap).length > 0) {
             const thresholdDays = Math.max(0.1, Number(ocConfig.noParticipationDays) || 1);
             const thresholdSec = thresholdDays * 86400;
 
@@ -27189,6 +27208,7 @@ async function sendDirectMessageToUser(discordUserId, embed, content = "") {
 
     // 1. Try via active Discord.js Client
     const client = getAnyActiveDiscordClient();
+    let clientErrCode = null;
     if (client) {
         try {
             const user = await client.users.fetch(cleanId).catch(() => null);
@@ -27200,7 +27220,8 @@ async function sendDirectMessageToUser(discordUserId, embed, content = "") {
                 return { success: true };
             }
         } catch(e) {
-            if (Number(e?.code) === 50007 || String(e?.message || '').includes('50007')) {
+            clientErrCode = Number(e?.code) || null;
+            if (clientErrCode === 50007 || String(e?.message || '').includes('50007')) {
                 return { success: false, code: 50007, closedDms: true, error: 'Cannot send messages to this user (50007)' };
             }
             console.warn(`[Discord DM] Client user.send failed for ${cleanId}:`, e.message);
@@ -27223,6 +27244,9 @@ async function sendDirectMessageToUser(discordUserId, embed, content = "") {
             if (dmChanData && Number(dmChanData.code) === 50007) {
                 return { success: false, code: 50007, closedDms: true, error: dmChanData.message || 'Cannot send messages to this user (50007)' };
             }
+            if (dmChanData && dmChanData.code && !dmChanData.id) {
+                return { success: false, code: Number(dmChanData.code) || clientErrCode || 'DM_UNREACHABLE', closedDms: false, error: dmChanData.message || `Discord error ${dmChanData.code}` };
+            }
             if (dmChanData && dmChanData.id) {
                 return await executeDiscordSend(botToken, dmChanData.id, embed, content);
             }
@@ -27231,7 +27255,7 @@ async function sendDirectMessageToUser(discordUserId, embed, content = "") {
         }
     }
 
-    return { success: false, code: 'DM_UNREACHABLE', closedDms: false, error: `Could not reach user ${cleanId} via DM. Check Discord DM privacy settings.` };
+    return { success: false, code: clientErrCode || 'DM_UNREACHABLE', closedDms: false, error: `Could not reach user ${cleanId} via DM. Check Discord DM privacy settings.` };
 }
 
 // ── Resolve OC Manager User IDs (Multi-Role + Explicit IDs) ──
@@ -33164,6 +33188,7 @@ app.get('/api/chain/data', async (req, res) => {
         : null;
     if (reqEnemyId && reqEnemyId !== chainEnemyFactionOverride.id) {
         chainEnemyFactionOverride = { id: reqEnemyId, name: null, updatedAt: Date.now() };
+        persistChainEnemyOverride(reqEnemyId, null);
     }
     const minChain = Math.max(0, parseInt(req.query.minChain || '0', 10) || 0);
     const reqFac = String(req.userSession?.factionId || req.headers['x-faction-id'] || '');
@@ -33211,7 +33236,9 @@ app.get('/api/chain/data', async (req, res) => {
                     if (eData && !eData.error && eData.members) {
                         resolvedEnemyName = eData.name || resolvedEnemyName;
                         if (chainEnemyFactionOverride && String(chainEnemyFactionOverride.id) === String(activeEnemyId)) {
+                            const nameChanged = chainEnemyFactionOverride.name !== resolvedEnemyName;
                             chainEnemyFactionOverride.name = resolvedEnemyName;
+                            if (nameChanged) persistChainEnemyOverride(activeEnemyId, resolvedEnemyName);
                         }
                         chainEnemyCache.set(String(activeEnemyId), { ts: Date.now(), name: resolvedEnemyName });
                         await processEnemyHospitalTransitions(eData.members, activeEnemyId, resolvedEnemyName, null, Number(eData.timestamp) || 0);
@@ -33349,6 +33376,7 @@ app.post('/api/chain/target', express.json(), async (req, res) => {
     const rawId = req.body && req.body.enemyFactionId ? String(req.body.enemyFactionId).trim() : '';
     if (!rawId) {
         chainEnemyFactionOverride = { id: null, name: null, updatedAt: Date.now() };
+        persistChainEnemyOverride(null, null);
         chainEnemyCache.clear();
         chainDataCache.clear();
         return res.json({ ok: true, enemyFaction: null });
@@ -33372,6 +33400,7 @@ app.post('/api/chain/target', express.json(), async (req, res) => {
     } catch (_) {}
 
     chainEnemyFactionOverride = { id: rawId, name: facName, updatedAt: Date.now() };
+    persistChainEnemyOverride(rawId, facName);
     chainEnemyCache.set(rawId, { ts: Date.now(), name: facName });
     chainDataCache.clear();
     return res.json({ ok: true, enemyFaction: { id: rawId, name: facName } });
@@ -33441,8 +33470,21 @@ let globalChainLineup = {
 try {
     if (fs.existsSync('chain_lineup.json')) {
         globalChainLineup = { ...globalChainLineup, ...JSON.parse(fs.readFileSync('chain_lineup.json', 'utf8')) };
+        if (globalChainLineup.enemyFactionId) {
+            chainEnemyFactionOverride = {
+                id: String(globalChainLineup.enemyFactionId),
+                name: globalChainLineup.enemyFactionName || null,
+                updatedAt: Date.now()
+            };
+        }
     }
 } catch (e) {}
+
+function persistChainEnemyOverride(id, name) {
+    globalChainLineup.enemyFactionId = id ? String(id) : null;
+    globalChainLineup.enemyFactionName = name || null;
+    try { fs.writeFileSync('chain_lineup.json', JSON.stringify(globalChainLineup, null, 2)); } catch (e) {}
+}
 
 // GET /api/chain/lineup — returns current live lineup & formatted chat string
 app.get('/api/chain/lineup', (req, res) => {

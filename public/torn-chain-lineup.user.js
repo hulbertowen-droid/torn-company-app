@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FactionOS Chain Command
 // @namespace    https://faction-os.duckdns.org/
-// @version      4.4.0
+// @version      4.4.1
 // @description  FactionOS Tactical Chain HUD — sticky Auto-Call med-out broadcaster (single-shot send, minimized tab/chat support, zero duplicate spam), sub-second hit detection, wall-clock chain timer, Torn Chat 3.0/2.0 auto-posting, and verified Enemy Med-Out / Revive alerts.
 // @author       FactionOS
 // @match        https://www.torn.com/*
@@ -1344,8 +1344,11 @@
                     }
                     if (Array.isArray(d.enemyMedOuts)) {
                         const validIds = new Set(d.enemyMedOuts.map(ev => String(ev.playerId)));
-                        enemyMedOuts = enemyMedOuts.filter(ev => validIds.has(String(ev.playerId)));
-                        if (activeMedAlert && !validIds.has(String(activeMedAlert.playerId))) {
+                        const nowMs = Date.now();
+                        enemyMedOuts = enemyMedOuts.filter(ev =>
+                            validIds.has(String(ev.playerId)) || (nowMs - (ev.detectedAt || 0)) < 15000
+                        );
+                        if (activeMedAlert && !validIds.has(String(activeMedAlert.playerId)) && (nowMs - (activeMedAlert.detectedAt || 0)) >= 15000) {
                             activeMedAlert = null;
                             renderMedOutBanner();
                             updateMinDisplay();
@@ -2097,7 +2100,15 @@
         if (!el) return;
         const w = win || el.ownerDocument?.defaultView || (typeof unsafeWindow !== 'undefined' ? unsafeWindow : window);
         try {
-            // Avoid firing both dispatchEvent('click') AND el.click() which triggers double-clicks in React 18
+            if (typeof w.PointerEvent === 'function') {
+                el.dispatchEvent(new w.PointerEvent('pointerdown', { bubbles: true, cancelable: true, view: w, pointerId: 1 }));
+            }
+            el.dispatchEvent(new w.MouseEvent('mousedown', { bubbles: true, cancelable: true, view: w, buttons: 1 }));
+            if (typeof w.PointerEvent === 'function') {
+                el.dispatchEvent(new w.PointerEvent('pointerup', { bubbles: true, cancelable: true, view: w, pointerId: 1 }));
+            }
+            el.dispatchEvent(new w.MouseEvent('mouseup', { bubbles: true, cancelable: true, view: w, buttons: 1 }));
+            // Fire click ONCE (native .click() dispatches the click event; fall back to MouseEvent if absent)
             if (typeof el.click === 'function') {
                 el.click();
             } else {
@@ -2110,29 +2121,31 @@
 
     function dispatchPageEnterKey(target, win) {
         const w = win || target.ownerDocument?.defaultView || (typeof unsafeWindow !== 'undefined' ? unsafeWindow : window);
-        try {
-            const ev = new w.KeyboardEvent('keydown', {
-                key: 'Enter',
-                code: 'Enter',
-                keyCode: 13,
-                which: 13,
-                charCode: 13,
-                shiftKey: false,
-                ctrlKey: false,
-                altKey: false,
-                metaKey: false,
-                bubbles: true,
-                cancelable: true,
-                composed: true
-            });
-            // Lock keyCode/which/charCode across Tampermonkey unsafeWindow wrappers for React 18 listeners
-            for (const prop of ['keyCode', 'which', 'charCode']) {
-                try {
-                    if (ev[prop] !== 13) Object.defineProperty(ev, prop, { get: () => 13 });
-                } catch (_) {}
-            }
-            target.dispatchEvent(ev);
-        } catch (_) {}
+        for (const type of ['keydown', 'keypress', 'keyup']) {
+            try {
+                const ev = new w.KeyboardEvent(type, {
+                    key: 'Enter',
+                    code: 'Enter',
+                    keyCode: 13,
+                    which: 13,
+                    charCode: 13,
+                    shiftKey: false,
+                    ctrlKey: false,
+                    altKey: false,
+                    metaKey: false,
+                    bubbles: true,
+                    cancelable: true,
+                    composed: true
+                });
+                // Lock keyCode/which/charCode across Tampermonkey unsafeWindow wrappers for React 18 listeners
+                for (const prop of ['keyCode', 'which', 'charCode']) {
+                    try {
+                        if (ev[prop] !== 13) Object.defineProperty(ev, prop, { get: () => 13 });
+                    } catch (_) {}
+                }
+                target.dispatchEvent(ev);
+            } catch (_) {}
+        }
     }
 
     function getChatInputRemaining(target, isCE) {
@@ -2285,22 +2298,27 @@
         if (!customText) setDirty(false);
 
         if (shouldSend) {
-            // Single clean submit: wait 35ms for React input state to commit, fire Enter ONCE; only click Send button at +80ms if text STILL sits unsent
+            // Single clean submit after React input commit (+25ms); only fallback after WebSocket RTT (+450ms) if text STILL remains
             setTimeout(() => {
                 if (getChatInputRemaining(target, isCE).length === 0) return;
-                dispatchPageEnterKey(target, win);
+                const btn = findFooterSendButton(target, box);
+                if (btn) {
+                    triggerMouseClick(btn, win);
+                } else {
+                    dispatchPageEnterKey(target, win);
+                }
                 setTimeout(() => {
                     if (getChatInputRemaining(target, isCE).length === 0) return;
-                    const btn = findFooterSendButton(target, box);
-                    if (btn) triggerMouseClick(btn, win);
-                    else if (target.form) {
+                    if (btn) {
+                        dispatchPageEnterKey(target, win);
+                    } else if (target.form) {
                         try {
                             if (typeof target.form.requestSubmit === 'function') target.form.requestSubmit();
                             else target.form.dispatchEvent(new win.Event('submit', { bubbles: true, cancelable: true }));
                         } catch (_) {}
                     }
-                }, 80);
-            }, 35);
+                }, 450);
+            }, 25);
             flashStatus(customText ? '🚨 Sent med-out callout to Faction Chat!' : '✓ Lineup sent to Faction Chat!', false);
         } else {
             flashStatus('✓ Inserted in Faction Chat — press Enter to send!', false);

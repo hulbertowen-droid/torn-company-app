@@ -214,20 +214,6 @@ function mergeOcDmConfig(rawOcConfig = {}, incoming = null) {
     blk.withinMinutesBeforeReady = Math.max(0, Math.min(1440, blk.withinMinutesBeforeReady !== undefined ? Number(blk.withinMinutesBeforeReady) : 60));
     blk.cooldownHours = Math.max(0.5, Math.min(168, Number(blk.cooldownHours) || 4));
 
-    if (!incoming) {
-        if (rawOcConfig.alertMissingItems !== false && miss.mode === 'off') {
-            miss.mode = 'both';
-        }
-        if (rawOcConfig.alertDelayed !== false && blk.mode === 'off') {
-            blk.mode = 'both';
-        }
-    }
-
-    const anyTriggerEnabled = Object.values(merged.triggers).some(t => t && t.mode && t.mode !== 'off');
-    if (anyTriggerEnabled && !(incoming && incoming.enabled === false && incoming._explicitMasterOff === true)) {
-        merged.enabled = true;
-    }
-
     return merged;
 }
 
@@ -394,6 +380,11 @@ function createOcDmEngine(injectedDeps = {}) {
 
     function getConfig() {
         const ocCfg = deps.getOcConfig() || {};
+        const dCfg = deps.getDiscordConfig() || {};
+        const hasDiscordOcDm = Boolean(dCfg && dCfg.ocDm && typeof dCfg.ocDm === 'object' && Object.keys(dCfg.ocDm).length > 0);
+        if (hasDiscordOcDm) {
+            return mergeOcDmConfig(ocCfg, dCfg.ocDm);
+        }
         return mergeOcDmConfig(ocCfg);
     }
 
@@ -521,74 +512,87 @@ function createOcDmEngine(injectedDeps = {}) {
         return state.manualLinks[cleanTorn];
     }
 
-    async function resolveMemberDiscord(tornId, tornName = '', options = {}) {
+    async function resolveMemberDiscordCandidates(tornId, tornName = '', options = {}) {
         const tornStr = String(tornId || '').replace(/[^0-9]/g, '');
-        if (!tornStr) return { discordId: null, source: null, member: null };
+        if (!tornStr) return [];
 
         const guild = getActiveGuild(options.guild || null);
         const membersCache = guild ? await ensureGuildMembers(guild, Boolean(options.forceScan)) : null;
         const pickGuildMember = (dId) => (membersCache && dId ? membersCache.get(dId) || null : null);
 
-        // 1. Saved mapping table (/oc-link, manual overrides, verified map, encrypted userKeys)
+        const candidatesById = new Map();
+        const addCandidate = (discordId, source, priority, ts = 0, explicitMember = null) => {
+            const cleanId = String(discordId || '').replace(/[^0-9]/g, '');
+            if (!/^\d{15,22}$/.test(cleanId)) return;
+            const gm = explicitMember || pickGuildMember(cleanId);
+            if (gm?.user?.bot) return;
+            const inGuild = Boolean(gm);
+            const prev = candidatesById.get(cleanId);
+            if (!prev || inGuild && !prev.inGuild || priority < prev.priority || (priority === prev.priority && ts > prev.ts)) {
+                candidatesById.set(cleanId, {
+                    discordId: cleanId,
+                    source,
+                    member: gm || prev?.member || null,
+                    inGuild: inGuild || Boolean(prev?.inGuild),
+                    priority,
+                    ts: Number(ts || 0)
+                });
+            }
+        };
+
+        // 1. Explicit manual links (/oc-link, manual overrides)
         const manual = state.manualLinks[tornStr];
         if (manual && /^\d{15,22}$/.test(String(manual.discordId || ''))) {
-            return { discordId: manual.discordId, source: manual.source || 'manual_link', member: pickGuildMember(manual.discordId) };
+            addCandidate(manual.discordId, manual.source || 'manual_link', 1, manual.linkedAt || 0);
         }
 
+        // 2. All verified mappings (collect all so stale left-server IDs don't shadow active accounts)
         const verifiedMap = deps.getVerifiedDiscordMap() || {};
         for (const [dId, val] of Object.entries(verifiedMap)) {
             const vTorn = String(val?.tornId || val || '');
             if (vTorn === tornStr && /^\d{15,22}$/.test(dId)) {
-                return { discordId: dId, source: 'verified_map', member: pickGuildMember(dId) };
+                addCandidate(dId, 'verified_map', 2, Number(val?.timestamp || 0));
             }
         }
 
+        // 3. Connected encrypted user API keys
         if (deps.userKeys && typeof deps.userKeys.getAllConnectedMembers === 'function') {
             try {
                 const connected = deps.userKeys.getAllConnectedMembers() || [];
-                const hit = connected.find(m => String(m?.tornId || '') === tornStr && /^\d{15,22}$/.test(String(m?.discordUserId || '')));
-                if (hit) {
-                    return { discordId: String(hit.discordUserId), source: 'user_keys', member: pickGuildMember(String(hit.discordUserId)) };
+                for (const m of connected) {
+                    if (String(m?.tornId || '') === tornStr && /^\d{15,22}$/.test(String(m?.discordUserId || ''))) {
+                        addCandidate(String(m.discordUserId), 'user_keys', 3, Number(m.linkedAt || 0));
+                    }
                 }
             } catch (_) {}
         }
 
-        // 2. Fallback auto-match via Discord guild nicknames/displayNames (`[TornID]` or exact Torn name)
+        // 4. Guild nickname/displayName/username scan ([TornID] or exact Torn name)
         if (membersCache && membersCache.size > 0) {
             const cleanName = String(tornName || '').trim().toLowerCase();
-            let idMatch = null;
-            let nameMatch = null;
-
             for (const [dId, gm] of membersCache) {
                 if (gm.user?.bot) continue;
                 const display = String(gm.displayName || gm.nickname || gm.user?.globalName || gm.user?.username || '');
                 const bracketMatch = display.match(/\[(\d{3,10})\]/);
                 if (bracketMatch && bracketMatch[1] === tornStr) {
-                    idMatch = { discordId: dId, gm };
-                    break;
-                }
-                if (!nameMatch && cleanName) {
+                    addCandidate(dId, 'nickname_scan', 2, Date.now(), gm);
+                } else if (cleanName) {
                     const stripped = display.replace(/\[[^\]]+\]/g, '').trim().toLowerCase();
                     const uname = String(gm.user?.username || '').trim().toLowerCase();
                     if (stripped === cleanName || uname === cleanName) {
-                        nameMatch = { discordId: dId, gm };
+                        addCandidate(dId, 'nickname_scan', 4, 0, gm);
                     }
                 }
             }
-
-            const chosen = idMatch || nameMatch;
-            if (chosen) {
-                saveLink(tornStr, chosen.discordId, tornName, 'nickname_scan', 'Auto-Scan');
-                return { discordId: chosen.discordId, source: 'nickname_scan', member: chosen.gm };
-            }
         }
 
-        // 3. Torn API discord linkage fallback if cached or allowed
+        // 5. Torn API discord linkage cache / fallback
         const cachedId = deps.discordIdCache?.[tornStr];
         if (cachedId && cachedId !== 'none' && /^\d{15,22}$/.test(cachedId)) {
-            return { discordId: cachedId, source: 'torn_api_cache', member: pickGuildMember(cachedId) };
+            addCandidate(cachedId, 'torn_api_cache', 5, 0);
         }
-        if (options.allowTornApiFallback !== false && cachedId !== 'none') {
+        const hasAnyInGuild = Array.from(candidatesById.values()).some(c => c.inGuild);
+        if (options.allowTornApiFallback !== false && cachedId !== 'none' && (!hasAnyInGuild || candidatesById.size === 0)) {
             const k = options.apiKey || (typeof deps.getNextApiKey === 'function' ? deps.getNextApiKey() : null);
             if (k) {
                 try {
@@ -598,15 +602,38 @@ function createOcDmEngine(injectedDeps = {}) {
                     const data = await res.json();
                     const rawD = String(data?.discord?.discordID || data?.discord?.discordId || data?.discord?.discord_id || '').trim();
                     if (/^\d{15,22}$/.test(rawD)) {
-                        saveLink(tornStr, rawD, tornName, 'torn_api', 'Torn Discord Sync');
-                        return { discordId: rawD, source: 'torn_api', member: pickGuildMember(rawD) };
+                        addCandidate(rawD, 'torn_api', 4, Date.now());
+                    } else if (deps.discordIdCache && candidatesById.size === 0) {
+                        deps.discordIdCache[tornStr] = 'none';
                     }
-                    if (deps.discordIdCache) deps.discordIdCache[tornStr] = 'none';
                 } catch (_) {}
             }
         }
 
-        return { discordId: null, source: null, member: null };
+        const list = Array.from(candidatesById.values());
+        list.sort((a, b) => {
+            if (a.inGuild !== b.inGuild) return Number(b.inGuild) - Number(a.inGuild);
+            if (a.priority !== b.priority) return a.priority - b.priority;
+            return b.ts - a.ts;
+        });
+
+        // Auto-save nickname match only when we found a valid in-guild member and no manual link existed
+        const top = list[0];
+        if (top && top.source === 'nickname_scan' && !manual) {
+            try { saveLink(tornStr, top.discordId, tornName, 'nickname_scan', 'Auto-Scan'); } catch (_) {}
+        }
+        return list;
+    }
+
+    async function resolveMemberDiscord(tornId, tornName = '', options = {}) {
+        const candidates = await resolveMemberDiscordCandidates(tornId, tornName, options);
+        if (!candidates.length) return { discordId: null, source: null, member: null, candidates: [] };
+        return {
+            discordId: candidates[0].discordId,
+            source: candidates[0].source,
+            member: candidates[0].member,
+            candidates
+        };
     }
 
     async function scanGuildNicknamesForLinks(factionMembers = {}, options = {}) {
@@ -795,13 +822,24 @@ function createOcDmEngine(injectedDeps = {}) {
         const ocCfg = deps.getOcConfig() || {};
         const ocChannelId = ocCfg.globalChannelId || dCfg.ocChannelId || dCfg.globalChannelId;
 
-        let resolved = explicitDiscordId
-            ? { discordId: String(explicitDiscordId).replace(/[^0-9]/g, ''), source: 'explicit' }
-            : await resolveMemberDiscord(tornId, playerName, { allowTornApiFallback: true });
+        const candidateList = [];
+        const cleanExplicit = explicitDiscordId ? String(explicitDiscordId).replace(/[^0-9]/g, '') : '';
+        if (/^\d{15,22}$/.test(cleanExplicit)) {
+            candidateList.push(cleanExplicit);
+        }
+        const resolved = await resolveMemberDiscord(tornId, playerName, { allowTornApiFallback: true });
+        for (const c of (resolved.candidates || [])) {
+            if (c?.discordId && !candidateList.includes(c.discordId)) {
+                candidateList.push(c.discordId);
+            }
+        }
+        if (resolved.discordId && !candidateList.includes(resolved.discordId)) {
+            candidateList.push(resolved.discordId);
+        }
 
         const nextEligibleAt = cooldownMs > 0 ? Date.now() + cooldownMs : null;
 
-        if (!resolved.discordId) {
+        if (candidateList.length === 0) {
             let fallbackPinged = false;
             if (allowFallbackPing && ocDm.fallbackChannelPingOnClosedDms && ocChannelId && dCfg.globalBotToken) {
                 const fbEmbed = {
@@ -844,13 +882,28 @@ function createOcDmEngine(injectedDeps = {}) {
             timestamp: new Date().toISOString()
         };
 
-        const dmResult = await deps.sendDirectMessageToUser(resolved.discordId, dmEmbed);
+        let targetDiscordId = candidateList[0];
+        let dmResult = null;
+        for (let idx = 0; idx < candidateList.length && idx < 3; idx++) {
+            const tryId = candidateList[idx];
+            targetDiscordId = tryId;
+            dmResult = await deps.sendDirectMessageToUser(tryId, dmEmbed);
+            if (dmResult?.success) {
+                if (idx > 0 && tornId && /^\d+$/.test(String(tornId))) {
+                    try { saveLink(tornId, tryId, playerName, 'auto_heal', 'DM Auto-Heal'); } catch (_) {}
+                }
+                break;
+            }
+            const errNum = Number(dmResult?.code || 0);
+            const isRetryableAccountErr = errNum === 50278 || errNum === 10013 || dmResult?.code === 'DM_UNREACHABLE';
+            if (!isRetryableAccountErr) break;
+        }
 
         if (dmResult?.success) {
             const receipt = recordReceipt({
                 tornId,
                 playerName,
-                discordId: resolved.discordId,
+                discordId: targetDiscordId,
                 triggerType,
                 triggerLabel,
                 context,
@@ -861,27 +914,32 @@ function createOcDmEngine(injectedDeps = {}) {
                 source
             });
             await postReceiptEmbed(receipt);
-            return { success: true, status: 'DELIVERED', discordId: resolved.discordId, receipt };
+            return { success: true, status: 'DELIVERED', discordId: targetDiscordId, receipt };
         }
 
         const isClosedDms = Number(dmResult?.code) === 50007 || dmResult?.closedDms === true || String(dmResult?.error || '').includes('50007');
+        const isNoMutualGuild = Number(dmResult?.code) === 50278 || String(dmResult?.error || '').includes('50278');
         let fallbackPinged = false;
 
-        if (isClosedDms && allowFallbackPing && ocDm.fallbackChannelPingOnClosedDms && ocChannelId && dCfg.globalBotToken) {
+        if ((isClosedDms || isNoMutualGuild) && allowFallbackPing && ocDm.fallbackChannelPingOnClosedDms && ocChannelId && dCfg.globalBotToken) {
             const fbEmbed = {
-                title: `📬 OC Reminder (Closed DMs Fallback): ${playerName}`,
-                description: `${messageText}\n\n🔒 *Could not DM <@${resolved.discordId}> directly (Server DMs disabled).*`,
+                title: isNoMutualGuild
+                    ? `📬 OC Reminder (Unreachable Discord ID Fallback): ${playerName}`
+                    : `📬 OC Reminder (Closed DMs Fallback): ${playerName}`,
+                description: isNoMutualGuild
+                    ? `${messageText}\n\n🔗 *Could not DM <@${targetDiscordId}> (No mutual server / old Discord link — run \`/oc-link torn_id:${tornId}\`).*`
+                    : `${messageText}\n\n🔒 *Could not DM <@${targetDiscordId}> directly (Server DMs disabled).*`,
                 color: 0xf59e0b,
                 timestamp: new Date().toISOString()
             };
-            const fbRes = await deps.sendChannelMessage(dCfg.globalBotToken, ocChannelId, fbEmbed, `<@${resolved.discordId}>`).catch(() => null);
+            const fbRes = await deps.sendChannelMessage(dCfg.globalBotToken, ocChannelId, fbEmbed, `<@${targetDiscordId}>`).catch(() => null);
             fallbackPinged = Boolean(fbRes?.success);
         }
 
         const receipt = recordReceipt({
             tornId,
             playerName,
-            discordId: resolved.discordId,
+            discordId: targetDiscordId,
             triggerType,
             triggerLabel,
             context,
@@ -898,7 +956,7 @@ function createOcDmEngine(injectedDeps = {}) {
             success: false,
             status: receipt.status,
             errorCode: receipt.errorCode,
-            discordId: resolved.discordId,
+            discordId: targetDiscordId,
             fallbackPinged,
             receipt
         };
@@ -1012,38 +1070,54 @@ function createOcDmEngine(injectedDeps = {}) {
             }
         }
 
-        for (const [k, inc] of Object.entries(state.incidents)) {
-            if (inc.triggerType === 'low_cpr_dm' && !activeLowCprKeys.has(k)) {
-                delete state.incidents[k];
-                stateChanged = true;
-            } else if (inc.triggerType === 'inactive_oc_dm' && activeOcMemberIds.has(String(inc.tornId))) {
-                delete state.incidents[k];
-                stateChanged = true;
-            } else if (inc.triggerType === 'missing_item_dm' && !activeMissingKeys.has(k)) {
-                delete state.incidents[k];
-                stateChanged = true;
-            } else if (inc.triggerType === 'ready_blocker_dm' && !activeBlockerKeys.has(k)) {
-                delete state.incidents[k];
-                stateChanged = true;
-            }
-        }
-
-        const anyTriggerActive = Object.values(ocDm.triggers || {}).some(t => t && t.mode && t.mode !== 'off');
-        if (!ocDm.enabled && !anyTriggerActive) {
-            if (stateChanged) saveState();
-            return {
-                handledLowCpr: false,
-                handledMissingItems: false,
-                handledInactive: false,
-                handledReadyBlocker: false,
-                ocMemoryModified
-            };
-        }
-
         const lowCfg = ocDm.triggers.low_cpr_dm;
         const inactCfg = ocDm.triggers.inactive_oc_dm;
         const missCfg = ocDm.triggers.missing_item_dm;
         const blkCfg = ocDm.triggers.ready_blocker_dm;
+
+        for (const [k, inc] of Object.entries(state.incidents)) {
+            if (inc.triggerType === 'low_cpr_dm' && !activeLowCprKeys.has(k)) {
+                const cdMs = (lowCfg?.cooldownHours || 12) * 3600000;
+                if ((nowMs - (inc.lastSentAt || 0)) >= cdMs) {
+                    delete state.incidents[k];
+                    stateChanged = true;
+                } else if (inc.escalatedAt !== null || !inc.resolvedAt) {
+                    inc.escalatedAt = null;
+                    inc.resolvedAt = nowMs;
+                    stateChanged = true;
+                }
+            } else if (inc.triggerType === 'inactive_oc_dm' && activeOcMemberIds.has(String(inc.tornId))) {
+                const cdMs = (inactCfg?.cooldownHours || 48) * 3600000;
+                if ((nowMs - (inc.lastSentAt || 0)) >= cdMs) {
+                    delete state.incidents[k];
+                    stateChanged = true;
+                }
+            } else if (inc.triggerType === 'missing_item_dm' && !activeMissingKeys.has(k)) {
+                const cdMs = (missCfg?.cooldownHours || 24) * 3600000;
+                if ((nowMs - (inc.lastSentAt || 0)) >= cdMs) {
+                    delete state.incidents[k];
+                    stateChanged = true;
+                }
+            } else if (inc.triggerType === 'ready_blocker_dm' && !activeBlockerKeys.has(k)) {
+                const cdMs = (blkCfg?.cooldownHours || 4) * 3600000;
+                if ((nowMs - (inc.lastSentAt || 0)) >= cdMs) {
+                    delete state.incidents[k];
+                    stateChanged = true;
+                }
+            }
+        }
+
+        const anyTriggerActive = Object.values(ocDm.triggers || {}).some(t => t && t.mode && t.mode !== 'off');
+        if (!ocDm.enabled || !anyTriggerActive) {
+            if (stateChanged) saveState();
+            return {
+                handledLowCpr: true,
+                handledMissingItems: true,
+                handledInactive: true,
+                handledReadyBlocker: true,
+                ocMemoryModified
+            };
+        }
 
         const handledLowCpr = lowCfg.mode !== 'off';
         const handledMissingItems = missCfg.mode !== 'off';
@@ -1080,7 +1154,7 @@ function createOcDmEngine(injectedDeps = {}) {
                         const graceMs = lowCfg.graceHours * 3600000;
                         const ctxStr = `${v2Crime.name} (T${tier}) • Slot: ${roleLabel} • CPR: ${cpr}% (Min: ${minCpr}%)`;
 
-                        if (!existing) {
+                        if (!existing || (!existing.resolvedAt && !existing.firstDetectedAt)) {
                             const dmText = renderTemplate(lowCfg.template, {
                                 player_name: pName,
                                 crime_name: v2Crime.name,
@@ -1107,7 +1181,7 @@ function createOcDmEngine(injectedDeps = {}) {
                                     ocMemoryModified = true;
                                 }
                                 if (lowCfg.mode === 'channel_only') {
-                                    const chRec = recordReceipt({
+                                    recordReceipt({
                                         tornId: pId,
                                         playerName: pName,
                                         discordId: resolved.discordId || null,
@@ -1118,7 +1192,6 @@ function createOcDmEngine(injectedDeps = {}) {
                                         messagePreview: dmText,
                                         nextEligibleAt: nowMs + cooldownMs
                                     });
-                                    await postReceiptEmbed(chRec);
                                 }
                             }
 
@@ -1157,7 +1230,7 @@ function createOcDmEngine(injectedDeps = {}) {
                                 lastContext: ctxStr
                             };
                             stateChanged = true;
-                        } else if (lowCfg.escalationEnabled && !existing.escalatedAt && (nowMs - existing.firstDetectedAt) >= graceMs) {
+                        } else if (lowCfg.escalationEnabled && !existing.escalatedAt && !existing.resolvedAt && (nowMs - existing.firstDetectedAt) >= graceMs) {
                             const finalText = `FINAL WARNING: You are still slotted in **${v2Crime.name} (Tier ${tier})** as **${roleLabel}** with **${cpr}% CPR** (Min: **${minCpr}%**) after the **${lowCfg.graceHours}h** grace window. Leadership has been notified that this slot is eligible for removal.`;
                             if (lowCfg.mode === 'dm_only' || lowCfg.mode === 'both') {
                                 await dispatchTrackedOcDm({
@@ -1194,7 +1267,9 @@ function createOcDmEngine(injectedDeps = {}) {
                                 messagePreview: finalText,
                                 escalated: true
                             });
-                            await postReceiptEmbed(escReceipt);
+                            if (lowCfg.mode === 'dm_only' || lowCfg.mode === 'both') {
+                                await postReceiptEmbed(escReceipt);
+                            }
 
                             existing.escalatedAt = nowMs;
                             existing.lastSentAt = nowMs;
@@ -1244,7 +1319,7 @@ function createOcDmEngine(injectedDeps = {}) {
                                     ocMemoryModified = true;
                                 }
                                 if (missCfg.mode === 'channel_only') {
-                                    const chRec = recordReceipt({
+                                    recordReceipt({
                                         tornId: pId,
                                         playerName: pName,
                                         triggerType: 'missing_item_dm',
@@ -1254,7 +1329,6 @@ function createOcDmEngine(injectedDeps = {}) {
                                         messagePreview: dmText,
                                         nextEligibleAt: nowMs + cooldownMs
                                     });
-                                    await postReceiptEmbed(chRec);
                                 }
                             }
 
@@ -1317,7 +1391,7 @@ function createOcDmEngine(injectedDeps = {}) {
                                     timestamp: new Date().toISOString()
                                 }, mention).catch(() => {});
                                 if (blkCfg.mode === 'channel_only') {
-                                    const chRec = recordReceipt({
+                                    recordReceipt({
                                         tornId: pId,
                                         playerName: pName,
                                         triggerType: 'ready_blocker_dm',
@@ -1327,7 +1401,6 @@ function createOcDmEngine(injectedDeps = {}) {
                                         messagePreview: dmText,
                                         nextEligibleAt: nowMs + cooldownMs
                                     });
-                                    await postReceiptEmbed(chRec);
                                 }
                             }
 
@@ -1426,7 +1499,7 @@ function createOcDmEngine(injectedDeps = {}) {
                         ocMemoryModified = true;
                     }
                     if (inactCfg.mode === 'channel_only') {
-                        const chRec = recordReceipt({
+                        recordReceipt({
                             tornId: tidStr,
                             playerName: pName,
                             triggerType: 'inactive_oc_dm',
@@ -1436,7 +1509,6 @@ function createOcDmEngine(injectedDeps = {}) {
                             messagePreview: dmText,
                             nextEligibleAt: nowMs + cooldownMs
                         });
-                        await postReceiptEmbed(chRec);
                     }
                 }
 
